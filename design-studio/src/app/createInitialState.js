@@ -149,6 +149,7 @@ export function createInitialWorkbenchState(activeProjectId = resolveActiveProje
     conceptMapReferenceEditorOpen: false,
     conceptMapGenerating: false,
     conceptMapSeeding: false,
+    conceptMapPulling: false,
     aiConfigOpen: false,
     aiConfig: { status: "idle", config: null },
     aiConfigSaving: false,

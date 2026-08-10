@@ -37,9 +37,18 @@ try {
   assert(controllerSource.includes("applyMapDocumentToConceptMap"), "Live map sync must persist document positions into conceptMap storage");
   assert(controllerSource.includes("parentOrigin"), "Standalone editor URL must pass parentOrigin for postMessage");
   assert(!controllerSource.includes("noopener"), "Standalone editor must keep window.opener for change notifications");
-  assert(viewSource.includes("在独立窗口编辑") && (viewSource.includes("conceptMapFrame") || viewSource.includes("conceptMapFrameMount")), "Preview UI should embed tool and offer standalone edit");
+  assert(
+    (viewSource.includes("打开绘制工具") || viewSource.includes("在独立窗口编辑"))
+      && (viewSource.includes("conceptMapFrame") || viewSource.includes("conceptMapFrameMount")),
+    "Preview UI should embed tool and offer standalone edit"
+  );
   assert(!viewSource.includes("选择项目"), "Preview step is already 1:1 bound — no project picker on concept-map page");
-  assert(viewSource.includes("从规划生成初图") || viewSource.includes("按规划刷新初图"), "Preview UI should offer planning seed without AI wording");
+  assert(
+    viewSource.includes("从规划生成") || viewSource.includes("按规划重建") || viewSource.includes("按规划刷新初图"),
+    "Preview UI should offer planning seed without AI wording"
+  );
+  assert(viewSource.includes("拉取最新") || viewSource.includes("同步工具内容"), "Preview UI should offer manual tool pull as recovery");
+  assert(viewSource.includes("确认并进入 OV-1") || viewSource.includes("进入 OV-1"), "Preview UI should offer confirm/next step");
 
   const mapProjectId = boundMapProjectIdFor("proj-demo-1");
   assert(mapProjectId.startsWith("workbench-"), "Bound map project id must use workbench- prefix");
@@ -124,9 +133,12 @@ try {
   });
   assert(
     (view.includes('id="conceptMapFrame"') || view.includes('id="conceptMapFrameMount"'))
-      && view.includes("在独立窗口编辑")
-      && view.includes(mapProjectId),
-    "Preview must show frame mount, bind id, and external edit"
+      && (view.includes("打开绘制工具") || view.includes("在独立窗口编辑"))
+      && view.includes(mapProjectId)
+      && view.includes("按规划重建")
+      && view.includes("拉取最新")
+      && view.includes("确认并进入 OV-1"),
+    "Preview must show frame mount, bind id, and action toolbar"
   );
   assert(!view.includes("generateWithAi") && !view.includes("ConceptMapInitial") && !view.includes("根据规划生成模糊"), "Preview must not surface AI generation UI");
 

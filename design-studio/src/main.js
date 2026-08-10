@@ -347,7 +347,8 @@ function mountConceptMapFrame() {
 function renderOv1ToolboxFloatHost() {
   const host = $("#ov1ToolboxFloatRoot");
   if (!host) return;
-  const onOv1 = state.activeView === "ov1" || state.activeView === "concept-map";
+  // OV-1 toolbox only on OV-1; concept-map has its own action toolbar.
+  const onOv1 = state.activeView === "ov1";
   const ov1Floating = onOv1 && state.ov1ToolsOpen !== true;
   const onPhaseAction = state.activeView === "phase-action";
   const hasPhases = Array.isArray(state.phaseAction?.phases) && state.phaseAction.phases.length > 0;

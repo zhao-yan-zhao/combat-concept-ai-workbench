@@ -110,8 +110,13 @@ export function createConceptMapController({
       workbenchPreview: false,
       parentOrigin: workbenchOrigin()
     });
-    window.open(url, "concept-map-editor");
-    notify("已打开独立概念图工具；修改会自动同步到预览与工作台（无需点刷新）");
+    const editor = window.open(url, "concept-map-editor");
+    if (!editor) {
+      notify("浏览器拦截了弹窗，请允许本站弹窗后重试「打开绘制工具」");
+      return;
+    }
+    try { editor.focus(); } catch { /* cross-window focus may be blocked */ }
+    notify("已打开绘制工具；保存后会自动同步到预览（一般无需「拉取最新」）");
   }
 
   function handleEditorMessage(event) {
@@ -258,20 +263,36 @@ export function createConceptMapController({
     const itemCount = Array.isArray(map?.document?.items) ? map.document.items.length : 0;
     const phaseCount = Array.isArray(map?.document?.operation?.phases) ? map.document.operation.phases.length : 0;
     if (root) {
-      const meta = root.querySelector(".concept-map-toolbar-meta");
-      if (meta) {
-        const stats = meta.querySelectorAll(".muted");
-        // [0] bind id, [1] object/phase stats (when present)
-        if (stats[1]) stats[1].textContent = `${itemCount} 对象 · ${phaseCount} 阶段`;
-        const tag = meta.querySelector(".status-tag");
-        if (tag) {
-          tag.textContent = "待确认";
-          tag.classList.add("review");
-        }
+      const stats = root.querySelector('[data-concept-map-stat="objects"]');
+      if (stats) stats.textContent = itemCount ? `${itemCount} 对象 · ${phaseCount} 阶段` : "尚未生成初图";
+
+      const tag = root.querySelector("[data-concept-map-status]");
+      if (tag) {
+        tag.textContent = "待确认";
+        tag.classList.add("review");
+        tag.classList.remove("is-ready");
       }
+
+      const seedLabel = root.querySelector("[data-concept-map-seed-label]");
+      if (seedLabel) seedLabel.textContent = itemCount ? "按规划重建" : "从规划生成";
+
       const confirmBtn = root.querySelector('[data-action="confirm-concept-map-step"]');
       if (confirmBtn instanceof HTMLButtonElement) {
-        confirmBtn.disabled = itemCount === 0;
+        const busy = Boolean(getState().conceptMapSeeding || getState().conceptMapPulling);
+        confirmBtn.disabled = itemCount === 0 || busy;
+        confirmBtn.dataset.conceptMapConfirmed = "false";
+        confirmBtn.title = itemCount === 0
+          ? "请先生成或同步地图内容后再确认"
+          : "确认当前概念图作为 OV 参考，并进入 OV-1";
+        const confirmLabel = confirmBtn.querySelector("[data-concept-map-confirm-label]");
+        if (confirmLabel) confirmLabel.textContent = "确认并进入 OV-1";
+      }
+
+      const pullBtn = root.querySelector('[data-action="pull-concept-map-from-tool"]');
+      if (pullBtn instanceof HTMLButtonElement) {
+        pullBtn.title = itemCount
+          ? "从预览/绘制工具主动拉取最新内容（自动同步失败时可手动恢复）。"
+          : "尚无地图内容。请先从规划生成，或在绘制工具中编辑后再拉取。";
       }
     }
 
@@ -367,7 +388,7 @@ export function createConceptMapController({
   async function seedFromPlanning({ silent = false, confirmReplace = false } = {}) {
     const state = getState();
     if (confirmReplace && state.conceptMap?.document?.items?.length
-      && !window.confirm("将按已确认规划重新生成概念图初图（阶段+概念兵力），并写入绑定的绘制项目。是否继续？")) {
+      && !window.confirm("按规划重建会覆盖当前绘制内容（阶段 + 概念兵力），已调整的坐标不会保留。是否继续？")) {
       return null;
     }
     if (state.conceptMapSeeding) {
@@ -385,7 +406,7 @@ export function createConceptMapController({
       const { workbenchProjectId } = bindingMeta(state);
       // No AI — compile stages + concept forces deterministically.
       const plan = buildConceptMapPlanFromPlanning(state, null);
-      // Keep edited force lon/lat unless user explicitly chose "按规划刷新初图".
+      // Keep edited force lon/lat unless user explicitly chose rebuild-from-planning.
       const previousPlacements = confirmReplace
         ? []
         : extractForcePlacements(state.conceptMap?.document)
@@ -404,7 +425,9 @@ export function createConceptMapController({
       invalidateDependents();
       await syncConceptMap(state.conceptMap, { source: "concept-map:planning-seed" });
       if (!silent) {
-        notify(`已生成概念图初图：${plan.phases?.length || 0} 个阶段、${plan.forces?.length || 0} 个概念兵力`);
+        notify(confirmReplace && previousPlacements.length === 0
+          ? `已按规划重建初图：${plan.phases?.length || 0} 个阶段、${plan.forces?.length || 0} 个概念兵力`
+          : `已生成概念图初图：${plan.phases?.length || 0} 个阶段、${plan.forces?.length || 0} 个概念兵力`);
       }
       return state.conceptMap;
     } catch (error) {
@@ -447,18 +470,35 @@ export function createConceptMapController({
 
   async function pullFromTool() {
     const state = getState();
-    const payload = await requestExport();
-    if (!payload?.ok || !payload.document?.items?.length) {
-      notify("未能从绘制工具读取内容，请确认工具已打开且已有对象");
+    if (state.conceptMapPulling || state.conceptMapSeeding) {
+      notify("正在处理地图，请稍候");
       return null;
     }
-    return applyToolDocument(payload, {
-      refreshIframe: false,
-      softUi: true,
-      notifyUser: true,
-      source: "concept-map:tool-sync",
-      toastPrefix: "已同步绘制工具内容"
-    });
+    state.conceptMapPulling = true;
+    render();
+    try {
+      const payload = await requestExport();
+      if (!payload?.ok || !payload.document?.items?.length) {
+        notify("未能读取绘制内容：请确认预览已加载，或先打开绘制工具并保存后再试");
+        return null;
+      }
+      const changeKey = mapDocumentChangeKey(payload.document);
+      if (changeKey === lastAppliedChangeKey) {
+        notify("已是最新内容，无需再次拉取");
+        return getState().conceptMap;
+      }
+      return await applyToolDocument(payload, {
+        refreshIframe: false,
+        softUi: true,
+        notifyUser: true,
+        source: "concept-map:tool-sync",
+        toastPrefix: "已拉取绘制工具最新内容"
+      });
+    } finally {
+      state.conceptMapPulling = false;
+      // Persistent iframe mount survives re-render; restore toolbar enabled state.
+      render();
+    }
   }
 
   async function confirmStep() {
@@ -466,7 +506,7 @@ export function createConceptMapController({
     // Prefer latest tool canvas if available.
     const exported = await requestExport();
     if (exported?.ok && exported.document?.items?.length) {
-      await applyToolDocument(exported, { refreshIframe: false, notifyUser: false });
+      await applyToolDocument(exported, { refreshIframe: false, softUi: true, notifyUser: false });
     }
 
     const map = getState().conceptMap;
@@ -474,8 +514,9 @@ export function createConceptMapController({
       notify("请先从规划生成初图，或在绘制工具中编辑后同步");
       return;
     }
-    if (isCurrentConceptMap(map, state.conceptMapStorage)) {
-      notify("本步已确认");
+    if (isCurrentConceptMap(map, getState().conceptMapStorage)) {
+      notify("本步已确认，进入 OV-1");
+      await onReferenceConfirmed?.(map);
       return;
     }
 

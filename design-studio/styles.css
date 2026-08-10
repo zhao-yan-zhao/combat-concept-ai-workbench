@@ -5134,14 +5134,111 @@ a { color: var(--cyan); }
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  min-height: 36px;
+  gap: 10px 14px;
+  min-height: 40px;
 }
-.concept-map-toolbar-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
-.concept-map-toolbar-meta strong { font-size: 13px; }
+.concept-map-toolbar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+.concept-map-toolbar-meta strong { font-size: 13px; letter-spacing: .01em; }
 .concept-map-toolbar-meta .muted { color: var(--muted); font-size: 12px; }
-.concept-map-toolbar-meta code { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,.06); }
-.concept-map-toolbar-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.concept-map-toolbar-meta code {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,.06);
+}
+.concept-map-toolbar-meta .status-tag.is-ready {
+  border-color: rgba(61, 255, 197, .35);
+  background: rgba(61, 255, 197, .1);
+  color: #9af7d4;
+}
+.concept-map-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 10px;
+}
+.concept-map-toolbar-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.concept-map-toolbar-divider {
+  width: 1px;
+  height: 22px;
+  background: rgba(148, 163, 184, .22);
+  flex: 0 0 auto;
+}
+.concept-map-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 11px;
+  border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 7px;
+  background: rgba(15, 23, 42, .72);
+  color: #cbd5e1;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: .01em;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, color .15s ease, opacity .15s ease;
+}
+.concept-map-tool-btn:hover:not(:disabled) {
+  border-color: rgba(103, 232, 249, .4);
+  background: rgba(34, 211, 238, .08);
+  color: #e2e8f0;
+}
+.concept-map-tool-btn:focus-visible {
+  outline: 2px solid rgba(103, 232, 249, .55);
+  outline-offset: 1px;
+}
+.concept-map-tool-btn:disabled {
+  opacity: .48;
+  cursor: not-allowed;
+}
+.concept-map-tool-btn .concept-map-tool-icon {
+  display: inline-flex;
+  width: 1em;
+  justify-content: center;
+  opacity: .85;
+  font-weight: 700;
+}
+.concept-map-tool-btn.is-emphasis {
+  border-color: rgba(61, 255, 197, .38);
+  background: rgba(61, 255, 197, .1);
+  color: #b7f7df;
+}
+.concept-map-tool-btn.is-emphasis:hover:not(:disabled) {
+  border-color: rgba(61, 255, 197, .55);
+  background: rgba(61, 255, 197, .16);
+  color: #e8fff6;
+}
+.concept-map-tool-btn.is-primary {
+  border-color: rgba(96, 165, 250, .55);
+  background: linear-gradient(180deg, #5b8def 0%, #3b6fd4 100%);
+  color: #f8fbff;
+  font-weight: 750;
+  box-shadow: 0 1px 0 rgba(255,255,255,.12) inset, 0 6px 16px rgba(37, 99, 235, .18);
+}
+.concept-map-tool-btn.is-primary:hover:not(:disabled) {
+  border-color: rgba(147, 197, 253, .7);
+  background: linear-gradient(180deg, #6b9af5 0%, #4579df 100%);
+  color: #fff;
+}
+.concept-map-tool-btn.is-primary:disabled {
+  box-shadow: none;
+}
 .concept-map-preview-hint {
   flex: 0 0 auto;
   margin: 0;
@@ -5149,6 +5246,10 @@ a { color: var(--cyan); }
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+.concept-map-preview-hint strong {
+  color: #94a3b8;
+  font-weight: 700;
 }
 .concept-map-workspace > .planning-banner,
 .concept-map-workspace > .planning-migration-banner {
@@ -5159,8 +5260,22 @@ a { color: var(--cyan); }
   height: 100%;
 }
 .concept-map-draft-slot:empty { display: none; }
-.concept-map-editor-entry { border: 0; padding: 5px 1px; background: transparent; color: var(--green); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
-.concept-map-editor-entry:hover, .concept-map-editor-entry:focus-visible { color: #7df7ce; text-decoration: underline; }
+/* legacy class kept for any external references */
+.concept-map-editor-entry {
+  border: 0;
+  padding: 5px 1px;
+  background: transparent;
+  color: var(--green);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.concept-map-editor-entry:hover,
+.concept-map-editor-entry:focus-visible {
+  color: #7df7ce;
+  text-decoration: underline;
+}
 /* iframe shell takes leftover height after toolbar/hint; keep a little bottom air */
 .concept-map-frame-shell {
   flex: 1 1 auto;
