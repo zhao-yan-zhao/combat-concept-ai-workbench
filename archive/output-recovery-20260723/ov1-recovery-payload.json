@@ -1,0 +1,30 @@
+{
+  "model": {
+    "version": 1,
+    "concept": {
+      "mission": "吕宋岛依托型防空反导概念评估",
+      "objective": "评估吕宋岛作为区域防空反导支撑节点的概念可行性、条件与限制。",
+      "scope": "在不预设具体部署、武器运用或行动方案的前提下，比较预警感知、指挥控制、分层防护、盟伴协同与保障韧性的条件化贡献。",
+      "phase": "总体概念评估与条件比较",
+      "expectedEffects": "形成可追溯的条件、依赖、冗余与失效后果判断框架，识别待验证假设和能力缺口。",
+      "constraints": "不确认具体设施、部署状态、指挥关系、传感器覆盖或拦截能力；结论保持研究级和条件化。"
+    },
+    "nodes": [
+      { "id": "sense", "label": "预警感知与态势融合平台", "detail": "汇聚研究级预警、空情与导弹威胁信息，为概念比较提供持续态势输入，不假定具体传感器覆盖能力。", "category": "装备/平台", "kind": "equipment", "x": "11%", "y": "17%" },
+      { "id": "decide", "label": "联合指挥控制与授权节点", "detail": "在联盟准入、信息权限与互操作约束下形成协同判断和授权边界，连接态势输入与防护协同。", "category": "指挥节点", "kind": "command", "x": "42%", "y": "17%" },
+      { "id": "control", "label": "分层防空反导协同", "detail": "抽象描述预警、指挥、有限防护和保障之间的高层协同，不展开具体部署、武器运用或行动步骤。", "category": "关键动作", "kind": "action", "x": "69%", "y": "43%" },
+      { "id": "opponent", "label": "外部威胁与环境约束", "detail": "记录空中与导弹威胁、政治授权、盟伴关系、信息可得性和环境不确定性等外部影响与待验证条件。", "category": "外部对象", "kind": "external", "x": "10%", "y": "65%" },
+      { "id": "assess", "label": "持续防护与体系韧性效果", "detail": "以预警连续性、协同可用性、有限防护贡献和保障韧性为研究级效果维度，反馈下一轮概念修订。", "category": "预期效果", "kind": "effect", "x": "41%", "y": "56%" }
+    ],
+    "edges": [
+      { "id": "ov1-edge-sense-decide", "sourceId": "sense", "targetId": "decide", "type": "信息流" },
+      { "id": "ov1-edge-decide-control", "sourceId": "decide", "targetId": "control", "type": "控制流" },
+      { "id": "ov1-edge-opponent-decide", "sourceId": "opponent", "targetId": "decide", "type": "态势变化" },
+      { "id": "ov1-edge-control-assess", "sourceId": "control", "targetId": "assess", "type": "反馈" },
+      { "id": "ov1-edge-assess-sense", "sourceId": "assess", "targetId": "sense", "type": "反馈" }
+    ],
+    "provenance": { "mode": "manual", "note": "候选覆盖修复后按项目简报重建，待人工复核。" }
+  },
+  "source": "ov1-recovery-rebuild",
+  "expectedRevision": 8
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:combat-concept:dodaf-2.02-dm2-ov:1#architecture-exchange",
+  "title": "DoDAF 2.02 DM2 Operational Views Exchange Package",
+  "type": "object",
+  "required": ["meta", "architecture", "entities", "relations", "products"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["standard", "profile", "schemaVersion"],
+      "properties": {
+        "standard": { "const": "DoDAF-2.02-DM2" },
+        "profile": { "const": "operational-views" },
+        "schemaVersion": { "type": "integer", "minimum": 1 },
+        "exportedAt": { "type": "string" },
+        "projectId": { "type": "string" },
+        "title": { "type": "string" }
+      }
+    },
+    "architecture": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "dm2Type", "name"],
+        "properties": {
+          "id": { "type": "string" },
+          "dm2Type": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "properties": { "type": "object" }
+        }
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "dm2Type", "sourceId", "targetId"],
+        "properties": {
+          "id": { "type": "string" },
+          "dm2Type": { "type": "string" },
+          "sourceId": { "type": "string" },
+          "targetId": { "type": "string" },
+          "name": { "type": "string" }
+        }
+      }
+    },
+    "products": {
+      "type": "object",
+      "additionalProperties": { "type": "object" }
+    },
+    "lineage": { "type": ["object", "null"] }
+  }
+}

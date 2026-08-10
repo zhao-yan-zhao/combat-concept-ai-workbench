@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Runtime data & local databases
+data/*.sqlite
+data/*.sqlite-*
+data/*.db3
+data/*.db
+data/projects.json
+data/collaboration-identities.json
+data/collaboration-identities.json.*
+data/*-secret.json
+data/*.bak*
+data/*.backup*
+
+# Secrets & local credentials
+data/*secret*
+**/credentials.json
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+.codex-*.log
+.codex-*.err.log
+
+# Local tooling / cache / editor
+.playwright-cli/
+.grok/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Build / temp outputs
+dist/
+build/
+coverage/
+tmp/
+temp/
+*.tmp
+
+# Playwright / screenshot dumps (keep README under output/)
+output/playwright/
+archive/output-playwright-*/
+archive/data-backups/

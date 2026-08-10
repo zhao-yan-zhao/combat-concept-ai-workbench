@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>部署图工具 Demo</title>
+    <link rel="stylesheet" href="./styles.css?v=0.35">
+  </head>
+  <body>
+    <main class="tool-shell">
+      <header class="tool-header"><div><p>Deployment Tool</p><h1>初始态势</h1></div><span id="toolStatus">等待数据</span></header>
+      <section class="tool-map" id="toolMap" aria-label="部署图"></section>
+      <section class="tool-controls"><strong id="selectedEntity">选择实体</strong><div><button data-nudge="0,-4" title="上移" aria-label="上移">↑</button><button data-nudge="-4,0" title="左移" aria-label="左移">←</button><button data-nudge="4,0" title="右移" aria-label="右移">→</button><button data-nudge="0,4" title="下移" aria-label="下移">↓</button></div></section>
+    </main>
+    <script type="module" src="./deployment-tool-demo.js"></script>
+  </body>
+</html>

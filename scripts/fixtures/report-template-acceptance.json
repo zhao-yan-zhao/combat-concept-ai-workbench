@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-07-15T00:00:00.000Z",
+  "reportTemplate": {
+    "id": "review-evidence",
+    "label": "审阅证据",
+    "documentTitle": "作战概念审阅报告",
+    "description": "Template acceptance"
+  },
+  "project": {
+    "title": "Template acceptance",
+    "direction": "Review",
+    "brief": {
+      "objective": "Review",
+      "approach": "Evidence",
+      "assumptions": "Local",
+      "risk": "None"
+    },
+    "citations": []
+  },
+  "ov1": { "nodes": [], "edges": [] },
+  "ov5": { "activities": [], "edges": [] },
+  "ooda": {
+    "lanes": [
+      { "title": "Observe", "subtitle": "观察", "nodes": [{ "title": "Observe state", "duration": "1" }] },
+      { "title": "Orient", "subtitle": "判断", "nodes": [{ "title": "Orient state", "duration": "1" }] },
+      { "title": "Decide", "subtitle": "决策", "nodes": [{ "title": "Decide state", "duration": "1" }] },
+      { "title": "Act", "subtitle": "行动", "nodes": [{ "title": "Act state", "duration": "1" }] }
+    ]
+  },
+  "scenario": null,
+  "deploymentBridge": {},
+  "validation": null,
+  "knowledge": null,
+  "validationMaturity": { "label": "Ready", "readyCount": 1, "totalCount": 1, "checks": [] }
+}

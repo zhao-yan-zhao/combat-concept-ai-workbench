@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <base href="/design-studio/">
+    <title>作战概念设计工具</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css?v=0.55">
+  </head>
+  <body>
+    <div class="studio-shell" id="studioShell">
+      <header class="studio-menubar" aria-label="主导航">
+        <div class="menubar-brand">
+          <div class="brand-glyph" aria-hidden="true">
+            <svg class="brand-glyph-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="brandCore" x1="6" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#7dd3fc"/>
+                  <stop offset=".45" stop-color="#38bdf8"/>
+                  <stop offset="1" stop-color="#2563eb"/>
+                </linearGradient>
+                <linearGradient id="brandRing" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#e0f2fe"/>
+                  <stop offset="1" stop-color="#22d3ee"/>
+                </linearGradient>
+              </defs>
+              <path d="M16 2.8 27.2 9.2v13.6L16 29.2 4.8 22.8V9.2L16 2.8Z" stroke="url(#brandRing)" stroke-width="1.35" opacity=".95"/>
+              <path d="M16 7.2 22.8 11v10L16 24.8 9.2 21V11L16 7.2Z" fill="url(#brandCore)" opacity=".22"/>
+              <circle cx="16" cy="16" r="3.1" fill="url(#brandCore)"/>
+              <circle cx="16" cy="16" r="5.6" stroke="#7dd3fc" stroke-width="1" opacity=".75"/>
+              <path d="M16 6.4v3.2M16 22.4v3.2M6.4 16h3.2M22.4 16h3.2" stroke="#bae6fd" stroke-width="1.1" stroke-linecap="round" opacity=".9"/>
+              <path d="M10.2 10.2l2.1 2.1M19.7 19.7l2.1 2.1M21.8 10.2l-2.1 2.1M12.3 19.7l-2.1 2.1" stroke="#67e8f9" stroke-width=".9" stroke-linecap="round" opacity=".7"/>
+              <circle cx="16" cy="16" r="1.15" fill="#f0f9ff"/>
+            </svg>
+          </div>
+          <div class="menubar-brand-text">
+            <strong>作战概念设计工具</strong>
+            <span>Combat Concept Design</span>
+          </div>
+        </div>
+
+        <div class="menubar-project" id="projectManagerRoot"></div>
+
+        <nav class="menubar-menus" aria-label="功能菜单">
+          <details class="menubar-menu">
+            <summary>研究</summary>
+            <div class="menubar-panel">
+              <button type="button" data-view="brief">概念简报</button>
+              <button type="button" data-view="ov1">OV-1 概念图</button>
+              <button type="button" data-view="ov5">OV-5 活动模型</button>
+              <button type="button" data-view="ooda">OODA 循环</button>
+              <button type="button" data-view="structure-review">结构核对台</button>
+            </div>
+          </details>
+          <details class="menubar-menu">
+            <summary>工具</summary>
+            <div class="menubar-panel">
+              <button type="button" data-action="open-ai-config">AI 服务配置</button>
+              <button type="button" data-action="open-collaboration">协同审阅</button>
+              <button type="button" data-action="open-account-management">账号管理</button>
+              <button type="button" data-view="validate">设计验证</button>
+              <button type="button" data-view="scenario">自动想定</button>
+              <button type="button" data-view="report">成果报告</button>
+              <a id="adminEntry" class="menubar-link" href="./admin.html" hidden>系统管理</a>
+            </div>
+          </details>
+          <details class="menubar-menu">
+            <summary>知识</summary>
+            <div class="menubar-panel">
+              <button type="button" data-action="open-context-panel">打开知识与上下文</button>
+              <button type="button" data-action="connect-knowledge">连接 Obs 知识库</button>
+              <button type="button" data-view="brief">回到简报引用证据</button>
+            </div>
+          </details>
+        </nav>
+
+        <div class="menubar-status">
+          <div class="sync-state" id="projectStorageState"><span></span> 正在检查</div>
+        </div>
+
+        <div class="menubar-actions">
+          <button id="workflowTestModeBtn" class="workflow-test-mode-toggle" type="button" role="switch" data-action="toggle-workflow-test-mode" aria-checked="false" title="启用测试模式，所有阶段可自由访问"><span class="workflow-test-mode-track" aria-hidden="true"></span><span>测试模式</span></button>
+          <button id="collaborationIdentityBtn" class="quiet-button collaboration-identity-button" type="button" data-action="open-account-management">账号管理</button>
+          <button class="quiet-button" id="saveVersionBtn" title="保存当前概念版本" data-action="save-report-version">保存版本</button>
+        </div>
+      </header>
+      <div id="workflowModeOverlay" class="workflow-mode-overlay" hidden aria-live="polite" aria-atomic="true">
+        <div class="workflow-mode-overlay-card">
+          <span class="workflow-mode-spinner" aria-hidden="true"></span>
+          <strong id="workflowModeOverlayTitle">正在切换模式</strong>
+          <p id="workflowModeOverlayDetail">请稍候…</p>
+        </div>
+      </div>
+
+      <div class="studio-body">
+        <aside class="project-rail" aria-label="研究步骤">
+          <div class="step-rail-caption">研究路径</div>
+          <nav class="concept-tree step-rail" id="conceptTree" aria-label="研究视图步骤"></nav>
+          <div class="rail-footer"></div>
+        </aside>
+
+        <main class="studio-workspace">
+          <header class="studio-topbar studio-workflow-bar">
+            <div class="workspace-view-context" id="viewContext" title="概念孵化 / 概念简报">
+              <span id="viewEyebrow">概念孵化</span>
+              <strong id="viewTitle">概念简报</strong>
+            </div>
+            <div class="studio-topbar-end">
+              <div id="workflowGateRoot" class="workflow-gate-root" aria-live="polite"></div>
+              <div id="ov1ToolboxFloatRoot" class="ov1-toolbox-float-root" hidden></div>
+            </div>
+          </header>
+
+          <div id="aiConfigRoot"></div>
+          <section id="viewRoot" class="view-root" aria-live="polite"></section>
+          <!-- Persistent concept-map iframe host: survives viewRoot re-renders (project picker, toasts). -->
+          <div id="conceptMapFramePark" class="concept-map-frame-park" hidden aria-hidden="true"></div>
+        </main>
+
+        <aside class="inspector" aria-label="上下文面板">
+          <div class="inspector-header">
+            <div>
+              <p class="eyebrow">研究基线</p>
+              <h2 id="inspectorTitle">研究简报</h2>
+            </div>
+            <span class="status-tag" id="inspectorStatus">可编辑</span>
+          </div>
+          <div id="inspectorRoot" class="inspector-root"></div>
+        </aside>
+      </div>
+    </div>
+
+    <section id="loginGate" class="login-gate" aria-live="polite"></section>
+    <dialog id="contextPanelDialog" class="context-panel-dialog" aria-label="知识与上下文" hidden>
+      <div class="context-panel-shell">
+        <header class="context-panel-header">
+          <div>
+            <p class="eyebrow" id="contextPanelEyebrow">上下文</p>
+            <h2 id="contextPanelTitle">知识与上下文</h2>
+          </div>
+          <div class="context-panel-header-actions">
+            <span class="status-tag" id="contextPanelStatus">—</span>
+            <button class="quiet-button" type="button" data-action="close-context-panel">关闭</button>
+          </div>
+        </header>
+        <div id="contextPanelBody" class="context-panel-body"></div>
+      </div>
+    </dialog>
+    <dialog id="customDirectionDialog" class="direction-dialog"><form id="customDirectionForm" method="dialog" class="custom-direction-form"><header><h2>新增方向</h2><button class="quiet-button" type="button" data-action="close-custom-direction">关闭</button></header><label><span>名称</span><input name="title" maxlength="80" required></label><label><span>概述</span><textarea name="text" rows="3" maxlength="500" required></textarea></label><label><span>研究依据</span><textarea name="basis" rows="3" maxlength="500" required></textarea></label><div class="editor-actions"><button class="quiet-button" type="button" data-action="close-custom-direction">取消</button><button type="submit">保存方向</button></div></form></dialog>
+    <dialog id="ov1Dialog" class="ov1-dialog" aria-label="OV-1 编辑窗口"></dialog>
+    <div class="toast" id="toast" role="status"></div>
+    <input id="knowledgeVaultInput" type="file" accept=".md,.markdown,.txt" webkitdirectory directory multiple hidden>
+    <script src="./vendor/drawflow-0.0.60.min.js"></script>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
