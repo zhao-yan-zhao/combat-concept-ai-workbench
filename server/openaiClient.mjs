@@ -7,17 +7,51 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
 
   async function callOpenAi(input, base) {
     const body = makeGenerationRequest(input, base, false);
-    const apiResponse = await fetchWithRetry(`${getConfig().baseUrl}/responses`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getAiApiKey()}`
-      },
-      body: JSON.stringify(body)
-    });
+    const timeoutMs = generationTimeoutMs(input);
+    let apiResponse;
+    try {
+      apiResponse = await fetchWithRetry(`${getConfig().baseUrl}/responses`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getAiApiKey()}`
+        },
+        body: JSON.stringify(body)
+      }, { timeoutMs });
+    } catch (error) {
+      throw normalizeUpstreamError(error, timeoutMs);
+    }
     if (!apiResponse.ok) throw new Error(await apiResponse.text());
     const data = await apiResponse.json();
     return parseJsonObject(extractOutputText(data));
+  }
+
+  /** Structured planning drafts need more wall time than short chat replies. */
+  function generationTimeoutMs(input) {
+    const schema = String(input?.workflow?.outputSchema || input?.outputSchema || "");
+    const longSchemas = new Set([
+      "PhaseActionConcept",
+      "ForceMissionPlan",
+      "ConceptGraphicPlan",
+      "ConceptMapInitialPlan",
+      "OperationalConceptGraphic",
+      "CombatFocusOptions",
+      "RuleLibraryDraft"
+    ]);
+    if (longSchemas.has(schema)) return 180000;
+    return 90000;
+  }
+
+  function normalizeUpstreamError(error, timeoutMs = 45000) {
+    const name = String(error?.name || "");
+    const message = String(error?.message || error || "");
+    if (name === "AbortError" || /aborted|abort|timeout/i.test(message)) {
+      const seconds = Math.round(Number(timeoutMs) / 1000) || 45;
+      const err = new Error(`AI 生成超时（>${seconds}s）。阶段草案/对话修订内容较长时较常见，请重试；若反复超时请检查上游模型服务。`);
+      err.statusCode = 504;
+      return err;
+    }
+    return error instanceof Error ? error : new Error(message || "OpenAI-compatible service request failed");
   }
 
   function makeGenerationRequest(input, base, stream = false) {
@@ -29,6 +63,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
     const isPhaseActionConcept = input.workflow?.outputSchema === "PhaseActionConcept";
     const isCombatFocusOptions = input.workflow?.outputSchema === "CombatFocusOptions";
     const isConceptGraphicPlan = input.workflow?.outputSchema === "ConceptGraphicPlan";
+    const isRuleLibraryDraft = input.workflow?.outputSchema === "RuleLibraryDraft";
     const prompt = [
       "你是作战概念研究工作台的专业研究助理。",
       "请基于结构化想定、知识依据和当前工作流，生成可审阅的中文内容。",
@@ -50,6 +85,9 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         '{ "phases": [{ "id": "phase-1", "name": "编队展开", "sequence": 1, "timeWindow": "T+00:00至T+00:40", "objective": "阶段目标一句话", "blueActions": ["蓝方概念级行动叙述"], "redActions": ["红方概念级行动叙述"], "primaryActions": ["与 blueActions 相同"], "secondaryActions": ["与 redActions 相同"], "entryConditions": ["进入门槛"], "exitConditions": ["退出/转换门槛"], "expectedEffects": ["阶段效果"], "forceIds": [] }],',
         '  "transitions": [{ "fromPhaseId": "phase-1", "toPhaseId": "phase-2", "condition": "可观察的转换条件", "note": "T+时点" }],',
         '  "openQuestions": ["待确认的作战判断"], "reviewChecklist": ["复核提示"] }'
+      ] : isRuleLibraryDraft ? [
+        '{ "summary": "1-3 句中文答复（说明改了什么或回答咨询）",',
+        '  "rules": [{ "id": "rule-1", "name": "规则名称（不超过20字）", "type": "约束|前置条件|转换条件|业务规则|其他", "scope": "全局|某阶段|某域", "description": "可复核的规则描述（40-160字）" }] }'
       ] : isConceptGraphicPlan ? [
         '{ "narrative": "总体构想叙述", "nodes": [{ "id": "sense|decide|control|opponent|assess", "label": "节点名", "role": "sense|command|action|external|effect|equipment|environment", "fromForceIds": ["兵力标识"], "fromPhaseIds": ["阶段标识"], "note": "说明" }],',
         '  "edges": [{ "from": "节点标识", "to": "节点标识", "type": "信息流|控制流|态势变化|反馈|协同|保障", "note": "说明" }],',
@@ -78,6 +116,14 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
       ...(isResearchChat ? [
         "研究对话要求：summary 必须直接回答“研究人员问题”，使用 1 至 3 句连贯中文，控制在 120 至 220 字。",
         "不要复述完整简报，不要输出任务阶段、待核实、待交接、最小信息集等报告式标签；bullets 仅在必要时给出不超过两条待澄清项。"
+      ] : []),
+      ...(isRuleLibraryDraft ? [
+        "规则库要求：只维护规则本体（name/type/scope/description），不要输出活动绑定或 OV 品牌字段。",
+        "若研究人员要求起草/增删改：返回完整 rules 列表（保留仍有效的规则并落实本轮改动）；条数按课题需要覆盖，不设固定上下限，禁止为凑数重复或空泛同义改写；description 须可观察、可复核。",
+        "若 analysis 标明首次按简报预生成（pregenerateFromBrief / 修订要求含「首次起草」）：必须输出非空 rules，覆盖约束、前置条件、转换条件、业务规则等维度，回扣任务目标/假设/效果/风险。",
+        "若 analysis.mergeExistingRules=true 或修订要求含「对比」「补充」：在 currentRules 基础上给出完整建议列表；优先写出现有库未覆盖的新规则；名称/语义勿与 currentRules 简单同义重复；客户端会去重后只追加新增项。",
+        "若仅咨询：rules 返回空数组 []，summary 直接回答问题。",
+        "type 只能是：约束、前置条件、转换条件、业务规则、其他。语气克制，禁止空泛套话。"
       ] : []),
       ...(isConceptBrief ? [
         "概念简报要求：summary 写核心思路；sections 必须分别包含“研究目标”“关键假设”“预期效果”三个标题；bullets 仅列出需要进一步验证的条件；risks 列出主要风险。",
@@ -201,11 +247,13 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
                 ? forceMissionPlanSchema()
                 : isPhaseActionConcept
                   ? phaseActionConceptSchema()
-                  : isConceptGraphicPlan
-                    ? conceptGraphicPlanSchema()
-                    : isConceptMapInitialPlan
-                      ? conceptMapInitialPlanSchema()
-                      : genericAiDraftSchema()
+                  : isRuleLibraryDraft
+                    ? ruleLibraryDraftSchema()
+                    : isConceptGraphicPlan
+                      ? conceptGraphicPlanSchema()
+                      : isConceptMapInitialPlan
+                        ? conceptMapInitialPlanSchema()
+                        : genericAiDraftSchema()
         }
       },
       store: false
@@ -218,15 +266,21 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
    */
   async function* streamOpenAi(input, base) {
     const payload = makeGenerationRequest(input, base, true);
-    const apiResponse = await fetchWithRetry(`${getConfig().baseUrl}/responses`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getAiApiKey()}`,
-        Accept: "text/event-stream"
-      },
-      body: JSON.stringify(payload)
-    }, { timeoutMs: 120000 });
+    const timeoutMs = Math.max(generationTimeoutMs(input), 180000);
+    let apiResponse;
+    try {
+      apiResponse = await fetchWithRetry(`${getConfig().baseUrl}/responses`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getAiApiKey()}`,
+          Accept: "text/event-stream"
+        },
+        body: JSON.stringify(payload)
+      }, { timeoutMs });
+    } catch (error) {
+      throw normalizeUpstreamError(error, timeoutMs);
+    }
 
     if (!apiResponse.ok) {
       throw new Error(await apiResponse.text());
@@ -322,7 +376,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
   }
   
   async function fetchWithRetry(url, options, fetchOptions = {}) {
-    const timeoutMs = Number(fetchOptions.timeoutMs) > 0 ? Number(fetchOptions.timeoutMs) : 45000;
+    const timeoutMs = Number(fetchOptions.timeoutMs) > 0 ? Number(fetchOptions.timeoutMs) : 90000;
     let lastError;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const controller = new AbortController();
@@ -333,7 +387,9 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         lastError = new Error(`OpenAI-compatible service returned ${response.status}`);
       } catch (error) {
         lastError = error;
-        if (attempt === 1) throw error;
+        // Do not burn the retry budget on hard aborts/timeouts — surface a clear timeout once.
+        const aborted = error?.name === "AbortError" || /aborted|abort|timeout/i.test(String(error?.message || ""));
+        if (aborted || attempt === 1) throw error;
       } finally {
         clearTimeout(timeout);
       }
@@ -449,7 +505,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
       };
     }
 
-    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan") && draft && typeof draft === "object") {
+    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft") && draft && typeof draft === "object") {
       base.result = draft;
     }
   
@@ -625,6 +681,33 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         transitions: { type: "array", maxItems: 16, items: { type: "object", additionalProperties: false, required: ["fromPhaseId", "toPhaseId", "condition", "note"], properties: { fromPhaseId: { type: "string", maxLength: 60 }, toPhaseId: { type: "string", maxLength: 60 }, condition: { type: "string", maxLength: 300 }, note: { type: "string", maxLength: 240 } } } },
         openQuestions: { type: "array", maxItems: 8, items: { type: "string", maxLength: 240 } },
         reviewChecklist: { type: "array", maxItems: 8, items: { type: "string", maxLength: 240 } }
+      }
+    };
+  }
+
+  function ruleLibraryDraftSchema() {
+    return {
+      type: "object",
+      additionalProperties: false,
+      required: ["summary", "rules"],
+      properties: {
+        summary: { type: "string", maxLength: 400 },
+        rules: {
+          type: "array",
+          maxItems: 240,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "name", "type", "scope", "description"],
+            properties: {
+              id: { type: "string", maxLength: 80 },
+              name: { type: "string", maxLength: 120 },
+              type: { type: "string", enum: ["约束", "前置条件", "转换条件", "业务规则", "其他"] },
+              scope: { type: "string", maxLength: 120 },
+              description: { type: "string", maxLength: 800 }
+            }
+          }
+        }
       }
     };
   }

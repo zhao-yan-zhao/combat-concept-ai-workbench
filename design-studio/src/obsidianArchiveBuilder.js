@@ -53,7 +53,7 @@ function buildIndexNote({ title, generatedAt, payload, report, briefName, activi
     "",
     "## 设计节点索引",
     `- ${link(briefName)}`,
-    `- OV-5 活动：${activityFiles.map((item) => link(item.fileName)).join("、") || "未生成"}`,
+    `- 作战活动：${activityFiles.map((item) => link(item.fileName)).join("、") || "未生成"}`,
     `- OODA 节点：${oodaFiles.map((item) => link(item.fileName)).join("、") || "未生成"}`,
     `- ${link("知识来源反向链接.md")}`,
     "",
@@ -88,7 +88,7 @@ function buildBriefNote({ title, generatedAt, payload, indexName, activityFiles,
     clean(brief.risk, 1600) || "未填写",
     "",
     "## 派生节点",
-    `- OV-5：${activityFiles.map((item) => link(item.fileName)).join("、") || "未生成"}`,
+    `- 作战活动：${activityFiles.map((item) => link(item.fileName)).join("、") || "未生成"}`,
     `- OODA：${oodaFiles.map((item) => link(item.fileName)).join("、") || "未生成"}`
   ].join("\n");
 }
@@ -97,7 +97,7 @@ function buildActivityNote({ item, title, generatedAt, indexName, briefName, ood
   const activity = item.activity || {};
   const ooda = oodaByActivity.get(String(activity.id || "")) || [];
   return [
-    frontmatter("OV-5 活动", title, generatedAt, { design_node_id: activity.id || "" }),
+    frontmatter("作战活动", title, generatedAt, { design_node_id: activity.id || "" }),
     `# ${clean(activity.title, 240) || "未命名活动"}`,
     "",
     `返回：${link(indexName)} · 来源：${link(briefName)}`,

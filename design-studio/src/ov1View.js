@@ -1,6 +1,7 @@
 import { ov1RelationTypes } from "./ov1Store.js";
 import { inspectOv1Model } from "./ov1Diagnostics.js";
 import { computeOv1WorldBounds, logicalToWorldCss, ov1WorldCssSize } from "./ov1Canvas.js";
+import { routeOv1Edges } from "../../shared/ov1EdgeRouting.js";
 import {
   edgeMarkerUrl,
   edgeStyleAttrs,
@@ -315,13 +316,12 @@ function renderNextStep(model, state) {
       <div class="ov1-next-step-copy"><strong>下一步：活动骨架</strong><p>${escapeHtml(hint)}</p></div>
       <div class="ov1-next-step-actions">
         <button class="quiet-button" type="button" data-action="continue-to-ov5" ${busy ? "disabled" : ""}>进入 OV-5</button>
-        <button type="button" data-action="generate-ov5-from-ov1" ${busy ? "disabled" : ""}>${state.ov5Generating ? "正在生成 OV-5" : "基于当前概念生成 OV-5 候选"}</button>
+        <button type="button" data-action="generate-ov5-from-ov1" ${busy ? "disabled" : ""}>${state.ov5Generating ? "正在生成 OV-5" : "基于当前概念生成活动模型候选"}</button>
       </div>
     </aside>`;
 }
 
 function renderConceptMap(model, selectedId, status = {}) {
-  const nodeById = new Map(model.nodes.map((node) => [node.id, node]));
   const concept = model.concept || {};
   const mission = concept.mission || "高层作战概念图";
   const missionTitle = shortenOv1Caption(mission, 22);
@@ -331,8 +331,12 @@ function renderConceptMap(model, selectedId, status = {}) {
   // World expands past 100% when nodes are dragged outward — no fixed multi-screen compression.
   const bounds = computeOv1WorldBounds(model.nodes || []);
   const { widthPct: worldWidth, heightPct: worldHeight } = ov1WorldCssSize(model.nodes || []);
+  const edgeGeometryById = routeOv1Edges(
+    model.edges,
+    new Map(model.nodes.map((node) => [node.id, { id: node.id, ...conceptNodeCenterInWorld(node, bounds) }]))
+  );
   const statusLine = `<span class="ov1-status-line"><span class="mini-tag ${status.generating ? "review" : ""}">${status.generating ? "正在生成" : escapeHtml(status.provenance || "人工维护")}</span><span class="ov1-model-count">${Number(status.nodeCount || 0)} 节点 · ${Number(status.edgeCount || 0)} 关系 · ${isolated || "无"} 孤立</span><span class="ov1-canvas-hint" title="空白处拖动平移；滚轮缩放；画布随内容扩展">滚轮缩放 · 空白平移</span></span>`;
-  return `<figure class="ov1-concept-map dodaf-drafting-canvas" aria-label="OV-1 高层作战概念图" data-dodaf-product="OV-1">
+  return `<figure class="ov1-concept-map dodaf-drafting-canvas" aria-label="高层作战概念图" data-dodaf-product="OV-1">
     <figcaption><strong title="${escapeHtml(mission)}">${escapeHtml(missionTitle)}</strong>${statusLine}</figcaption>
     <div class="ov1-concept-stage" data-ov1-stage title="空白处拖动平移；滚轮缩放；画布随内容扩展">
       <div class="ov1-concept-world" data-ov1-world
@@ -341,9 +345,9 @@ function renderConceptMap(model, selectedId, status = {}) {
         data-world-width="${bounds.width}" data-world-height="${bounds.height}">
         <svg class="ov1-concept-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           <defs>${renderEdgeMarkerDefs("ov1")}</defs>
-          ${model.edges.map((edge) => renderConceptEdge(edge, nodeById, selectedEdgeId, bounds)).join("")}
+          ${model.edges.map((edge) => renderConceptEdge(edge, edgeGeometryById.get(edge.id), selectedEdgeId)).join("")}
         </svg>
-        <div class="ov1-concept-edge-label-layer">${model.edges.map((edge) => renderConceptEdgeLabel(edge, nodeById, selectedEdgeId, bounds)).join("")}</div>
+        <div class="ov1-concept-edge-label-layer">${model.edges.map((edge) => renderConceptEdgeLabel(edge, edgeGeometryById.get(edge.id), selectedEdgeId)).join("")}</div>
         ${model.nodes.map((node) => {
           const entity = entityStyleAttrs({ kind: node.kind, dm2Type: node.dm2Type });
           const typeLabel = String(node.category || entity.label || "").trim();
@@ -369,8 +373,7 @@ function renderConceptMap(model, selectedId, status = {}) {
   </figure>`;
 }
 
-function renderConceptEdge(edge, nodeById, selectedEdgeId = "", bounds = null) {
-  const geometry = conceptEdgeGeometry(edge, nodeById, bounds);
+function renderConceptEdge(edge, geometry, selectedEdgeId = "") {
   if (!geometry) return "";
   const edgeStyle = edgeStyleAttrs(edge.type);
   const selected = selectedEdgeId && selectedEdgeId === edge.id ? " is-selected" : "";
@@ -378,35 +381,12 @@ function renderConceptEdge(edge, nodeById, selectedEdgeId = "", bounds = null) {
   return `<path d="${geometry.path}" class="ov1-concept-edge-hit${selected}" ${shared} fill="none"/><path d="${geometry.path}" class="ov1-concept-edge ${edgeStyle.className}${selected}" ${shared} style="${edgeStyle.inline}" marker-end="${edgeMarkerUrl(edge.type, "ov1")}"/>`;
 }
 
-function renderConceptEdgeLabel(edge, nodeById, selectedEdgeId = "", bounds = null) {
-  const geometry = conceptEdgeGeometry(edge, nodeById, bounds);
+function renderConceptEdgeLabel(edge, geometry, selectedEdgeId = "") {
   if (!geometry) return "";
   const edgeStyle = edgeStyleAttrs(edge.type);
   const selected = selectedEdgeId && selectedEdgeId === edge.id ? " is-selected" : "";
-  return `<button type="button" class="ov1-concept-edge-label dodaf-edge-label ${edgeStyle.className}${selected}" data-ov1-edge-label="${escapeHtml(edge.id)}" style="left:${geometry.label.x}%;top:${geometry.label.y}%;--dodaf-edge-color:${escapeHtml(edgeStyle.color)}" title="查看关系">${escapeHtml(geometry.labelText)}</button>`;
-}
-
-function conceptEdgeGeometry(edge, nodeById, bounds = null) {
-  const source = nodeById.get(edge.sourceId);
-  const target = nodeById.get(edge.targetId);
-  if (!source || !target) return null;
-  const box = bounds || computeOv1WorldBounds([source, target]);
-  const sourceCenter = conceptNodeCenterInWorld(source, box);
-  const targetCenter = conceptNodeCenterInWorld(target, box);
-  const start = conceptNodeAnchor(sourceCenter, targetCenter);
-  const end = conceptNodeAnchor(targetCenter, sourceCenter);
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const distance = Math.hypot(dx, dy) || 1;
-  const normal = { x: -dy / distance, y: dx / distance };
-  const bend = edge.type === "反馈" ? 4 : 2;
-  const control = { x: (start.x + end.x) / 2 + normal.x * bend, y: (start.y + end.y) / 2 + normal.y * bend };
-  const label = {
-    x: (start.x + 2 * control.x + end.x) / 4,
-    y: (start.y + 2 * control.y + end.y) / 4
-  };
-  const labelText = String(edge.type || "关系").trim().slice(0, 14) || "关系";
-  return { path: `M${start.x} ${start.y} Q${control.x} ${control.y} ${end.x} ${end.y}`, label, labelText };
+  const label = String(edge.type || edgeStyle.label || "关系").trim();
+  return `<button type="button" class="ov1-concept-edge-label dodaf-edge-label ${edgeStyle.className}${selected}" data-ov1-edge-label="${escapeHtml(edge.id)}" style="left:${geometry.label.x}%;top:${geometry.label.y}%;--dodaf-edge-color:${escapeHtml(edgeStyle.color)}" title="查看关系">${escapeHtml(label)}</button>`;
 }
 
 function renderConceptEditor(model, brief, options = {}) {
@@ -584,24 +564,18 @@ function conceptNodeCenterInWorld(node, bounds) {
   const css = logicalToWorldCss(node.x, node.y, bounds);
   const left = Number.parseFloat(css.left);
   const top = Number.parseFloat(css.top);
-  // Half-size estimate in world CSS % (home node ≈ 10–12% of a 100-unit viewport).
-  const halfW = Math.max(2, (10 / Math.max(bounds.width, 1)) * 50);
-  const halfH = Math.max(1.5, (8 / Math.max(bounds.height, 1)) * 50);
+  // Match the layout engine's 14% by 12% safety footprint. The controller
+  // replaces this with measured DOM boxes after first paint.
+  const halfW = Math.max(2, (14 / Math.max(bounds.width, 1)) * 50);
+  const halfH = Math.max(1.5, (12 / Math.max(bounds.height, 1)) * 50);
   return {
-    x: (Number.isFinite(left) ? left : 42) + halfW,
-    y: (Number.isFinite(top) ? top : 42) + halfH,
+    center: {
+      x: (Number.isFinite(left) ? left : 42) + halfW,
+      y: (Number.isFinite(top) ? top : 42) + halfH
+    },
     halfW,
     halfH
   };
-}
-
-function conceptNodeAnchor(center, toward) {
-  const dx = toward.x - center.x;
-  const dy = toward.y - center.y;
-  const halfW = center.halfW || 5;
-  const halfH = center.halfH || 5;
-  const scale = 1 / Math.max(Math.abs(dx) / halfW, Math.abs(dy) / halfH, 1);
-  return { x: center.x + dx * scale, y: center.y + dy * scale };
 }
 
 /** Keep the canvas caption compact; full text stays on title hover. */

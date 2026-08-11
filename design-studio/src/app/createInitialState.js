@@ -3,7 +3,7 @@ import { loadConceptBrief, setConceptBriefProjectScope } from "../briefStore.js"
 import { loadInspirationSession, setInspirationProjectScope } from "../inspirationStore.js";
 import { buildDirectionProposals, loadAiDirections, loadCustomDirections, loadSelectedDirection } from "../directionProposalStore.js";
 import { hasPersistedOv5Model, loadOv5Model } from "../ov5Store.js";
-import { hasPersistedOv1Model, loadOv1Model } from "../ov1Store.js";
+import { hasPersistedOv1Model, loadOv1Model, setOv1ProjectScope } from "../ov1Store.js";
 import { hasPersistedOodaModel, loadOodaModel } from "../oodaStore.js";
 import { hasPersistedScenario, loadScenario } from "../scenarioStore.js";
 import { hasPersistedValidation, loadValidation } from "../validationStore.js";
@@ -22,8 +22,10 @@ import { loadForceMission } from "../forceMissionStore.js";
 import { loadPhaseAction } from "../phaseActionStore.js";
 import { loadPhaseActionChat } from "../phaseActionChatStore.js";
 import { loadForceMissionChat } from "../forceMissionChatStore.js";
+import { loadRuleLibraryChat } from "../ruleLibraryChatStore.js";
 import { loadConceptGraphic } from "../conceptGraphicStore.js";
 import { createEmptyDodafProductState, DODAF_PRODUCT_KEYS } from "../dodafProductStore.js";
+import { ensureClientStoragePurged } from "../clientStoragePurge.js";
 
 export function resolveActiveProjectId() {
   return new URLSearchParams(window.location.search).get("project") || "default";
@@ -36,9 +38,13 @@ export function createProjectBriefSeed(activeProjectId) {
 }
 
 export function createInitialWorkbenchState(activeProjectId = resolveActiveProjectId()) {
+  // Server wipe alone is not enough: workbench hydrates drafts from browser storage by project id.
+  ensureClientStoragePurged();
+
   const projectBriefSeed = createProjectBriefSeed(activeProjectId);
   setConceptBriefProjectScope(activeProjectId);
   setInspirationProjectScope(activeProjectId);
+  setOv1ProjectScope(activeProjectId);
 
   const hasLocalOv5Model = hasPersistedOv5Model();
   const ov5Model = loadOv5Model();
@@ -60,6 +66,7 @@ export function createInitialWorkbenchState(activeProjectId = resolveActiveProje
   const phaseAction = loadPhaseAction(activeProjectId);
   const phaseActionChat = loadPhaseActionChat(activeProjectId);
   const forceMissionChat = loadForceMissionChat(activeProjectId);
+  const ruleLibraryChat = loadRuleLibraryChat(activeProjectId);
   const conceptGraphic = loadConceptGraphic(activeProjectId);
   const customDirections = loadCustomDirections(activeProjectId);
   const aiDirections = loadAiDirections(activeProjectId);
@@ -140,6 +147,10 @@ export function createInitialWorkbenchState(activeProjectId = resolveActiveProje
     phaseActionChat,
     phaseActionChatGenerating: false,
     phaseActionChatOpen: false,
+    ruleLibraryChat,
+    ruleLibraryChatGenerating: false,
+    ruleLibraryChatOpen: false,
+    ruleLibraryPregenerating: false,
     conceptGraphic,
     conceptGraphicStorage: { status: "checking", mode: "local", label: "正在检查总体作战概念图", localSaved: Boolean(conceptGraphic.nodes?.length) },
     conceptGraphicGenerating: false,
@@ -155,7 +166,7 @@ export function createInitialWorkbenchState(activeProjectId = resolveActiveProje
     aiConfigSaving: false,
     selection: null,
     ov1: ov1Model,
-    ov1Storage: { status: "checking", mode: "local", label: "正在检查 OV-1", localSaved: hasLocalOv1Model },
+    ov1Storage: { status: "checking", mode: "local", label: "正在检查高层作战概念图", localSaved: hasLocalOv1Model },
     ov1Generating: false,
     ov1Candidate: null,
     ov1Dialog: null,
@@ -179,7 +190,7 @@ export function createInitialWorkbenchState(activeProjectId = resolveActiveProje
     architecture: null,
     architectureStorage: { status: "checking", mode: "local", label: "正在检查 Architecture", localSaved: false },
     ov5: ov5Model,
-    ov5Storage: { status: "checking", mode: "local", label: "正在检查 OV-5", localSaved: hasLocalOv5Model },
+    ov5Storage: { status: "checking", mode: "local", label: "正在检查作战活动模型", localSaved: hasLocalOv5Model },
     ov5Generating: false,
     ooda: oodaModel,
     oodaStorage: { status: "checking", mode: "local", label: "正在检查 OODA", localSaved: hasLocalOodaModel },

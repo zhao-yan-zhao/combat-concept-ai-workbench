@@ -11,15 +11,21 @@ export function createAiHandlers(runtime) {
       return;
     }
 
-    const input = await readJson(request);
-    const base = generateMockOutput({
-      workflow: input.workflow,
-      analysis: input.analysis || {},
-      evidence: input.evidence || []
-    });
-    const aiDraft = await callOpenAi(input, base);
-    const output = mergeAiDraft(base, aiDraft);
-    send(response, 200, JSON.stringify(output), "application/json;charset=utf-8");
+    try {
+      const input = await readJson(request);
+      const base = generateMockOutput({
+        workflow: input.workflow,
+        analysis: input.analysis || {},
+        evidence: input.evidence || []
+      });
+      const aiDraft = await callOpenAi(input, base);
+      const output = mergeAiDraft(base, aiDraft);
+      send(response, 200, JSON.stringify(output), "application/json;charset=utf-8");
+    } catch (error) {
+      const status = Number(error?.statusCode) || 500;
+      const message = String(error?.message || "AI 生成失败").slice(0, 1200);
+      send(response, status, message, "text/plain;charset=utf-8");
+    }
   }
 
   /** SSE stream: start → delta* → done|error */

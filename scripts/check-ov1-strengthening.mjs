@@ -5,6 +5,8 @@ import { renderOv1, renderOv1Dialog } from "../design-studio/src/ov1View.js";
 import { normalizeOv1 } from "../server/projectModelNormalizers.mjs";
 import { computeOv1WorldBounds, repairLegacyCompressedOv1Nodes } from "../shared/ov1Canvas.js";
 import { calculateOv1CameraFit } from "../design-studio/src/ov1ConceptMapController.js";
+import { routeOv1Edge } from "../shared/ov1EdgeRouting.js";
+import { resolveOv1NodePosition } from "../shared/ov1Layout.js";
 
 let model = createOv1Model();
 model = updateOv1Node(model, "sense", { label: "多源感知", detail: "研究级态势输入。", category: "感知", responsibility: "汇聚抽象信息", input: "公开态势", output: "态势摘要", constraints: "证据边界", expectedEffects: "提高可见性", evidenceRefs: "ref-1，ref-2" });
@@ -13,7 +15,7 @@ model = autoLayoutOv1(model);
 assert(model.nodes.every((node) => node.x.endsWith("%") && node.y.endsWith("%")), "Automatic layout did not produce bounded positions");
 const byId = new Map(model.nodes.map((node) => [node.id, node]));
 // Home viewport layout: generated/auto-layout graphs fill the visible stage (0–100).
-assert(byId.get("sense").x === "28%" && byId.get("sense").y === "8%" && byId.get("decide").x === "42%" && byId.get("assess").x === "82%", "Automatic layout did not preserve the readable home-viewport OV-1 arrangement");
+assert(byId.get("sense").x === "22%" && byId.get("sense").y === "48%" && byId.get("opponent").x === "4%" && byId.get("opponent").y === "48%" && byId.get("decide").x === "42%" && byId.get("decide").y === "48%" && byId.get("control").x === "60%" && byId.get("control").y === "48%" && byId.get("assess").x === "84%" && byId.get("assess").y === "48%", "Automatic layout did not preserve the readable home-viewport OV-1 arrangement");
 const variedNodeModel = autoLayoutOv1({
   nodes: Array.from({ length: 16 }, (_, index) => ({
     id: `node-${index + 1}`,
@@ -25,12 +27,40 @@ const variedNodeModel = autoLayoutOv1({
 });
 const variedBounds = computeOv1WorldBounds(variedNodeModel.nodes);
 assert(variedBounds.widthPct === 100 && variedBounds.heightPct === 100, "Automatic layout should keep varied node counts in the home viewport");
+assertNoCardOverlaps(variedNodeModel.nodes, "Mixed-type OV-1 nodes should never overlap");
 const denseLeftModel = autoLayoutOv1({
   nodes: Array.from({ length: 18 }, (_, index) => ({ id: `left-${index + 1}`, label: `Left ${index + 1}`, detail: "layout", kind: index % 2 ? "external" : "equipment" })),
   edges: []
 });
 const denseLeftXs = [...new Set(denseLeftModel.nodes.map((node) => node.x))].map(Number.parseFloat).sort((a, b) => a - b);
-assert(denseLeftXs.length === 3 && denseLeftXs[1] - denseLeftXs[0] >= 12 && denseLeftXs[2] - denseLeftXs[1] >= 12, "Dense left-side nodes should keep safe horizontal card spacing");
+assert(denseLeftXs.length === 2 && denseLeftXs[1] - denseLeftXs[0] >= 14, "External actors and equipment should keep separate safe lanes");
+assert(computeOv1WorldBounds(denseLeftModel.nodes).heightPct > 100, "Dense node groups should extend the free canvas instead of compressing cards");
+assertNoCardOverlaps(denseLeftModel.nodes, "Dense OV-1 nodes should never overlap");
+const actionFan = autoLayoutOv1({
+  nodes: ["hub", "north", "south", "east", "west"].map((id) => ({ id, label: id, detail: "layout", kind: "action" })),
+  edges: ["north", "south", "east", "west"].map((sourceId) => ({ id: `${sourceId}-hub`, sourceId, targetId: "hub", type: "information" }))
+});
+const actionById = new Map(actionFan.nodes.map((node) => [node.id, node]));
+assert(actionById.get("hub").x === "60%" && actionById.get("hub").y === "48%" && ["north", "south", "east", "west"].every((id) => actionById.get(id).x === "60%") && new Set(["hub", "north", "south", "east", "west"].map((id) => actionById.get(id).y)).size === 5 && ["28%", "68%"].every((y) => [...actionById.values()].some((node) => node.y === y)), "Action hubs should keep their first support pair close to the main backbone");
+assertNoCardOverlaps(actionFan.nodes, "Action lanes should keep leaves separate from their hub");
+const routeBoxes = [
+  { id: "left", center: { x: 20, y: 50 }, halfW: 4, halfH: 3 },
+  { id: "right", center: { x: 70, y: 50 }, halfW: 4, halfH: 3 },
+  { id: "top", center: { x: 45, y: 20 }, halfW: 4, halfH: 3 },
+  { id: "bottom", center: { x: 45, y: 70 }, halfW: 4, halfH: 3 },
+  { id: "blocker", center: { x: 45, y: 50 }, halfW: 5, halfH: 5 }
+];
+const horizontalRoute = routeOv1Edge({ edge: { id: "horizontal", sourceId: "left", targetId: "right", type: "information" }, source: routeBoxes[0], target: routeBoxes[1], obstacles: [routeBoxes[0], routeBoxes[1]] });
+const verticalRoute = routeOv1Edge({ edge: { id: "vertical", sourceId: "top", targetId: "bottom", type: "information" }, source: routeBoxes[2], target: routeBoxes[3], obstacles: [routeBoxes[2], routeBoxes[3]] });
+const blockedRoute = routeOv1Edge({ edge: { id: "blocked", sourceId: "left", targetId: "right", type: "information" }, source: routeBoxes[0], target: routeBoxes[1], obstacles: [routeBoxes[0], routeBoxes[1], routeBoxes[4]] });
+const feedbackRoute = routeOv1Edge({ edge: { id: "feedback", sourceId: "left", targetId: "right", type: "\u53cd\u9988" }, source: routeBoxes[0], target: routeBoxes[1], obstacles: routeBoxes });
+assert(horizontalRoute.kind === "straight-horizontal" && horizontalRoute.path.includes(" L") && !horizontalRoute.path.includes(" Q") && !horizontalRoute.path.includes(" C"), "Aligned unobstructed nodes should use a horizontal straight route");
+assert(verticalRoute.kind === "straight-vertical" && verticalRoute.path.includes(" L") && !verticalRoute.path.includes(" Q") && !verticalRoute.path.includes(" C"), "Aligned unobstructed nodes should use a vertical straight route");
+assert(horizontalRoute.label.x === 45 && horizontalRoute.label.y === 50 && verticalRoute.label.x === 45 && verticalRoute.label.y === 45, "Straight relation labels should stay on the middle of their line");
+assert(blockedRoute.kind === "detour-horizontal" && blockedRoute.path.split(" L").length >= 4, "Aligned routes with an intervening node should detour around it");
+assert(feedbackRoute.kind === "feedback-rail" && feedbackRoute.path.split(" L").length === 4, "Long feedback relations should use a compact return rail instead of framing the canvas");
+const overlapResolved = resolveOv1NodePosition([{ id: "anchor", x: "24%", y: "48%" }], "candidate", { x: "24%", y: "48%" });
+assert(overlapResolved.x !== "24%" || overlapResolved.y !== "48%", "Manual node placement should move away from an occupied card");
 const repaired = repairLegacyCompressedOv1Nodes([
   { id: "a", x: "0.33%", y: "0.57%" },
   { id: "b", x: "1.2%", y: "1.4%" },
@@ -100,6 +130,7 @@ assert(!withoutRemote.includes('data-action="load-project-ov1"') && !withoutRemo
 assert(!page.includes("ov1-tools-drawer") && !page.includes("ov1-side-panel"), "OV-1 should not keep scheme D drawer or old side panel");
 assert(page.includes('data-action="generate-ov5-from-ov1"') && page.includes('data-action="continue-to-ov5"'), "OV-1 next-step CTA for OV-5 is missing");
 assert(page.includes("ov1-concept-edge-label-layer") && page.includes("ov1-concept-edge-label"), "OV-1 relation labels are missing their DOM text layer");
+assert(page.includes(">信息流</button>") && page.includes(">控制流</button>") && !page.includes("is-muted"), "OV-1 relation labels should visibly show their relationship type");
 assert(page.includes("ov1-concept-node") && page.includes("data-ov1-port") && page.includes("ov1-connect-port"), "OV-1 canvas node connection ports missing");
 assert(page.includes('markerWidth="9"') && page.includes('refX="10"'), "OV-1 relation arrows are missing their visible arrowhead marker");
 assert(page.includes("marker-end=") && (page.includes("ov1-arrow-") || page.includes("ov1-concept-arrow")), "OV-1 relation arrows are missing from the rendered concept map");
@@ -114,3 +145,19 @@ assert(renderOv1Dialog({ ov1: model, ov1Dialog: { kind: "relations" } }).include
 assert(renderOv1Dialog({ ov1: model, ov1Dialog: { kind: "node", nodeId: "sense" } }).includes('id="ov1NodeForm"'), "OV-1 node dialog helper is incomplete");
 console.log("OV-1 strengthening acceptance passed: metadata, layout, diagnostics, side panel editors, and server normalization.");
 function assert(condition, message) { if (!condition) throw new Error(message); }
+
+function assertNoCardOverlaps(nodes, message) {
+  for (let leftIndex = 0; leftIndex < nodes.length; leftIndex += 1) {
+    const left = nodes[leftIndex];
+    const leftX = Number.parseFloat(left.x);
+    const leftY = Number.parseFloat(left.y);
+    for (let rightIndex = leftIndex + 1; rightIndex < nodes.length; rightIndex += 1) {
+      const right = nodes[rightIndex];
+      const rightX = Number.parseFloat(right.x);
+      const rightY = Number.parseFloat(right.y);
+      const overlap = leftX < rightX + 14 && leftX + 14 > rightX
+        && leftY < rightY + 12 && leftY + 12 > rightY;
+      assert(!overlap, `${message}: ${left.id} overlaps ${right.id}`);
+    }
+  }
+}

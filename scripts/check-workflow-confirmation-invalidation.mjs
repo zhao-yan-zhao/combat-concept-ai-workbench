@@ -39,55 +39,55 @@ try {
 
   await repository.createProject({ id: "brief-ai", title: "Brief AI" });
   const initialBrief = await repository.saveBrief("brief-ai", { source: "manual", direction: "Research", brief: brief("Baseline objective") });
-  await confirmThrough("brief-ai", 5);
+  await confirmThrough("brief-ai", 4);
   await repository.saveBrief("brief-ai", { source: "manual", direction: "Research", brief: initialBrief.brief });
-  await assertCompletedThrough("brief-ai", 5, "An unchanged brief save must preserve confirmation");
+  await assertCompletedThrough("brief-ai", 4, "An unchanged brief save must preserve confirmation");
   await repository.saveBrief("brief-ai", { source: "ai", direction: "Research", brief: brief("AI revised objective") });
   await assertCompletedThrough("brief-ai", -1, "An AI brief revision must revoke the current and later confirmations");
 
   await repository.createProject({ id: "concept-map-ai", title: "Concept map AI" });
-  await confirmThrough("concept-map-ai", 5);
+  await confirmThrough("concept-map-ai", 4);
   await repository.saveConceptMap("concept-map-ai", { source: "concept-map:iframe-save", model: conceptMap });
-  await assertCompletedThrough("concept-map-ai", 0, "A concept-map revision must require concept-map-stage reconfirmation");
+  await assertCompletedThrough("concept-map-ai", 2, "A concept-map revision must require concept-stage reconfirmation");
 
   await repository.createProject({ id: "model-ai", title: "Model AI" });
-  await confirmThrough("model-ai", 5);
+  await confirmThrough("model-ai", 4);
   await repository.saveOv5("model-ai", { source: "ai", model: ov5 });
-  await assertCompletedThrough("model-ai", 1, "An AI OV-5 revision must require model-stage reconfirmation");
+  await assertCompletedThrough("model-ai", 2, "An activity-model revision must require concept-stage reconfirmation");
 
   await repository.createProject({ id: "review-ov2", title: "Review OV-2" });
-  await confirmThrough("review-ov2", 5);
+  await confirmThrough("review-ov2", 4);
   await repository.saveOv2("review-ov2", { source: "manual", model: ov2 });
-  await assertCompletedThrough("review-ov2", 2, "An OV-2 revision must require review-stage reconfirmation");
+  await assertCompletedThrough("review-ov2", 1, "A resource-flow revision must require force-stage reconfirmation");
 
   await repository.createProject({ id: "review-import", title: "Review import" });
-  await confirmThrough("review-import", 5);
+  await confirmThrough("review-import", 4);
   await repository.importArchitecture("review-import", {
     source: "ai-import",
     package: buildArchitectureExchangePackage({ projectId: "review-import", title: "Review import", products: { ov2 } }),
     format: "json",
     mergeStrategy: "replace-products"
   });
-  await assertCompletedThrough("review-import", 2, "An AI architecture import must require review-stage reconfirmation");
+  await assertCompletedThrough("review-import", 1, "An architecture import with force products must require force-stage reconfirmation");
 
   await repository.createProject({ id: "scenario-ai", title: "Scenario AI" });
-  await confirmThrough("scenario-ai", 5);
+  await confirmThrough("scenario-ai", 4);
   await repository.saveScenario("scenario-ai", { source: "generated", model: scenario });
-  await assertCompletedThrough("scenario-ai", 3, "A generated scenario must require evaluation-stage reconfirmation");
+  await assertCompletedThrough("scenario-ai", 3, "A generated scenario must require delivery-stage reconfirmation");
 
   await repository.createProject({ id: "validation-ai", title: "Validation AI" });
-  await confirmThrough("validation-ai", 5);
+  await confirmThrough("validation-ai", 4);
   await repository.saveValidation("validation-ai", { source: "ai", model: validation });
-  await assertCompletedThrough("validation-ai", 3, "An AI validation revision must require evaluation-stage reconfirmation");
+  await assertCompletedThrough("validation-ai", 3, "An AI validation revision must require delivery-stage reconfirmation");
 
   await repository.createProject({ id: "report-change", title: "Report change" });
-  await confirmThrough("report-change", 5);
+  await confirmThrough("report-change", 4);
   await repository.createReportArchive("report-change", { source: "generated", item: report("report-1") });
-  await assertCompletedThrough("report-change", 4, "A generated report archive must require delivery-stage reconfirmation");
+  await assertCompletedThrough("report-change", 3, "A generated report archive must require delivery-stage reconfirmation");
 
   await repository.createProject({ id: "collaboration-change", title: "Collaboration change" });
   const collaborationBrief = await repository.saveBrief("collaboration-change", { source: "manual", direction: "Review", brief: brief("Reviewable objective") });
-  await confirmThrough("collaboration-change", 5);
+  await confirmThrough("collaboration-change", 4);
   const review = await repository.createCollaborationReview("collaboration-change", {
     clientId: "review-workflow-confirmation",
     actorId: "local-researcher",
@@ -97,15 +97,15 @@ try {
     summary: "Record a review event.",
     expectedRevision: collaborationBrief.revision
   });
-  await assertCompletedThrough("collaboration-change", 4, "A collaboration review must require delivery-stage reconfirmation");
-  await confirmThrough("collaboration-change", 5);
+  await assertCompletedThrough("collaboration-change", 3, "A collaboration review must require delivery-stage reconfirmation");
+  await confirmThrough("collaboration-change", 4);
   await repository.resolveCollaborationReview("collaboration-change", review.review.id, {
     actorId: "local-lead",
     outcome: "accepted",
     summary: "Review accepted.",
     expectedRevision: review.revision
   });
-  await assertCompletedThrough("collaboration-change", 4, "A collaboration decision must require delivery-stage reconfirmation");
+  await assertCompletedThrough("collaboration-change", 3, "A collaboration decision must require delivery-stage reconfirmation");
 
   await assertSqlitePersistence();
 
@@ -157,7 +157,7 @@ async function assertSqlitePersistence() {
   try {
     await sqliteRepository.createProject({ id: "sqlite-ai", title: "SQLite AI" });
     const saved = await sqliteRepository.saveBrief("sqlite-ai", { source: "manual", direction: "Research", brief: brief("SQLite baseline") });
-    await sqliteRepository.updateProject("sqlite-ai", { workflow: { mode: "gated", completedThrough: 5 } });
+    await sqliteRepository.updateProject("sqlite-ai", { workflow: { mode: "gated", completedThrough: 4 } });
     await sqliteRepository.saveBrief("sqlite-ai", { source: "ai", direction: "Research", brief: brief("SQLite AI revision") });
   } finally {
     sqliteRepository.close?.();
@@ -177,25 +177,25 @@ function assertStageMap() {
   const expected = {
     brief: 0,
     knowledge: 0,
-    forceMissionPlan: 1,
     phaseActionConcept: 1,
-    conceptMap: 1,
-    conceptGraphicPlan: 1,
-    ov1: 2,
-    ov5: 2,
-    ooda: 2,
-    ov2: 3,
-    ov3: 3,
-    ov4: 3,
+    ov6a: 1,
+    ov6b: 1,
+    ov6c: 1,
+    forceMissionPlan: 2,
+    ov4: 2,
+    ov2: 2,
+    ov3: 2,
+    conceptMap: 3,
+    conceptGraphicPlan: 3,
+    ov1: 3,
+    ov5: 3,
     ov5a: 3,
-    ov6a: 3,
-    ov6b: 3,
-    ov6c: 3,
+    ooda: 3,
     architecture: 3,
     scenario: 4,
     validation: 4,
-    collaboration: 5,
-    reportArchives: 5
+    collaboration: 4,
+    reportArchives: 4
   };
   assert(JSON.stringify(workflowStageByResource) === JSON.stringify(expected), "Workflow resource-to-stage mapping is incomplete");
   for (const [resource, stage] of Object.entries(expected)) {

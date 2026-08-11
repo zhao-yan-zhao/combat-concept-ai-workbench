@@ -7,13 +7,13 @@ export function renderOoda(state) {
     .filter(Boolean)
     .join("、");
 
-  const provenance = state.ooda.provenance?.mode === "ai" ? "AI 草案" : state.ooda.provenance?.mode === "local" ? "本地草案" : "OV-5 派生";
+  const provenance = state.ooda.provenance?.mode === "ai" ? "AI 草案" : state.ooda.provenance?.mode === "local" ? "本地草案" : "活动模型派生";
   const freshness = getOodaFreshness(state.ooda, state.ov5);
   return `
     <section class="surface surface-pad">
-      <div class="section-heading"><div><h2>OODA 行为循环</h2><p>派生来源：${sourceNames || "待选择 OV-5 活动"}${freshness.stale ? " · 相对 OV-5 已过期" : ""}</p></div><div class="activity-toolbar"><span class="mini-tag ${state.oodaGenerating ? "review" : freshness.stale ? "review" : ""}">${state.oodaGenerating ? "生成中" : freshness.stale ? "相对 OV-5 过期" : provenance}</span><span class="mini-tag">周期估算：${state.oodaDuration || "待估算"} 分钟</span><button class="quiet-button" data-action="derive-ooda" ${state.oodaGenerating ? "disabled" : ""}>${freshness.stale ? "从 OV-5 重新派生" : "从 OV-5 重新派生"}</button><button type="button" data-action="generate-ooda" ${state.oodaGenerating ? "disabled" : ""}>${state.oodaGenerating ? "正在生成" : "AI 完善 OODA"}</button></div></div>
+      <div class="section-heading"><div><h2>研究辅助循环</h2><p>派生来源：${sourceNames || "待选择作战活动"}${freshness.stale ? " · 相对活动模型已过期" : ""}</p></div><div class="activity-toolbar"><span class="mini-tag ${state.oodaGenerating ? "review" : freshness.stale ? "review" : ""}">${state.oodaGenerating ? "生成中" : freshness.stale ? "相对活动模型过期" : provenance}</span><span class="mini-tag">周期估算：${state.oodaDuration || "待估算"} 分钟</span><button class="quiet-button" data-action="derive-ooda" ${state.oodaGenerating ? "disabled" : ""}>${freshness.stale ? "从活动模型重新派生" : "从活动模型重新派生"}</button><button type="button" data-action="generate-ooda" ${state.oodaGenerating ? "disabled" : ""}>${state.oodaGenerating ? "正在生成" : "AI 完善研究循环"}</button></div></div>
       ${renderProjectStorageState(state.oodaStorage, { refreshAction: "refresh-project-ooda" })}
-      ${freshness.stale ? `<div class="ooda-stale-banner" role="status"><div><strong>OODA 相对 OV-5 已过期</strong><p>${escapeHtml(freshness.reason)} 可先审阅当前循环，确认后从 OV-5 重新派生或使用 AI 完善。</p></div><button type="button" data-action="derive-ooda" ${state.oodaGenerating ? "disabled" : ""}>立即重新派生</button></div>` : ""}
+      ${freshness.stale ? `<div class="ooda-stale-banner" role="status"><div><strong>研究循环相对活动模型已过期</strong><p>${escapeHtml(freshness.reason)} 可先审阅当前循环，确认后从活动模型重新派生或使用 AI 完善。</p></div><button type="button" data-action="derive-ooda" ${state.oodaGenerating ? "disabled" : ""}>立即重新派生</button></div>` : ""}
       <div class="ooda-board ${freshness.stale ? "is-stale" : ""}">${state.ooda.lanes.map((lane) => `
         <section class="ooda-lane" style="--lane:${lane.color}">
           <div class="ooda-lane-head"><div><h3>${lane.title}</h3><p>${lane.subtitle}</p></div><button class="lane-add" data-add-ooda="${lane.id}" title="新增 ${lane.subtitle} 节点" aria-label="新增 ${lane.subtitle} 节点">+</button></div>

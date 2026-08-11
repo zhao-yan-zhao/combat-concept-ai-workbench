@@ -1,54 +1,198 @@
-export const views = [
-  { id: "brief", number: "01", label: "概念简报", subtitle: "灵感孵化", status: "done" },
-  { id: "ov1", number: "02", label: "OV-1 高层作战概念图", subtitle: "总体概念", status: "done" },
-  { id: "ov2", number: "03", label: "OV-2 作战资源流描述", subtitle: "节点与交换", status: "ready" },
-  { id: "ov3", number: "04", label: "OV-3 作战资源流矩阵", subtitle: "接口与约束", status: "ready" },
-  { id: "ov5", number: "05", label: "OV-5b 作战活动模型", subtitle: "活动与关系", status: "ready" },
-  { id: "ooda", number: "06", label: "研究辅助循环", subtitle: "OODA 行为综合", status: "ready" },
-  { id: "scenario", number: "07", label: "自动想定", subtitle: "部署与时序", status: "ready" },
-  { id: "validate", number: "08", label: "设计验证", subtitle: "规则与对抗", status: "ready" },
-  { id: "collaboration", number: "09", label: "协同审阅", subtitle: "意见与决议", status: "ready" },
-  { id: "report", number: "10", label: "成果报告", subtitle: "归档与导出", status: "" }
+/** Display names for research products. Resource keys stay ov1/ov5… for standard data I/O. */
+/**
+ * Display names for research products.
+ * Resource keys stay ov1/ov5… for standard data I/O.
+ * Step roles and gates: plans/RESEARCH_WORKFLOW_18.md
+ */
+export const productLabels = Object.freeze({
+  brief: "概念简报",
+  "phase-action": "阶段与行动",
+  "force-mission": "兵力与任务",
+  "concept-map": "概念图",
+  ov1: "高层作战概念图",
+  ov2: "作战资源流描述",
+  ov3: "作战资源流矩阵",
+  ov4: "责任关系",
+  ov5: "作战活动模型",
+  ov5a: "作战活动分解树",
+  ov6a: "规则库",
+  ov6b: "状态机校验",
+  ov6c: "时序校验",
+  ooda: "研究辅助循环",
+  "structure-review": "结构核对台",
+  scenario: "自动想定",
+  validate: "设计验证",
+  collaboration: "协同审阅",
+  report: "成果报告"
+});
+
+export const productShortLabels = Object.freeze({
+  brief: "简报",
+  "force-mission": "兵力任务",
+  "phase-action": "阶段行动",
+  "concept-map": "概念图",
+  ov1: "总体图",
+  ov5: "活动",
+  ooda: "循环",
+  "structure-review": "核对台",
+  ov5a: "活动树",
+  ov2: "资源流",
+  ov3: "交换矩阵",
+  ov4: "责任",
+  ov6a: "规则库",
+  ov6b: "状态机",
+  ov6c: "时序",
+  scenario: "想定",
+  validate: "验证",
+  collaboration: "协同",
+  report: "报告"
+});
+
+/** Step role: write = 主写, check = 校验, deliver = 交付. */
+export const workflowStepRoles = Object.freeze({
+  brief: "write",
+  // Phase chain: rule library → phase → bind/state/sequence → reverse check
+  ov6a: "write",
+  "phase-action": "write",
+  ov6b: "check",
+  ov6c: "check",
+  "force-mission": "write",
+  ov4: "check",
+  ov2: "check",
+  ov3: "check",
+  "concept-map": "write",
+  ov1: "write",
+  ov5: "write",
+  ov5a: "check",
+  ooda: "write",
+  "structure-review": "check",
+  scenario: "write",
+  validate: "write",
+  collaboration: "deliver",
+  report: "deliver"
+});
+
+/**
+ * Canonical order. Phase chain is fixed:
+ * 规则库 → 阶段与行动 → 状态机/时序校验 → … → 结构反查
+ */
+export const workflowOrder = [
+  "brief",
+  "ov6a", "phase-action", "ov6b", "ov6c",
+  "force-mission", "ov4", "ov2", "ov3",
+  "concept-map", "ov1", "ov5", "ov5a", "ooda",
+  "structure-review", "scenario", "validate", "collaboration", "report"
 ];
 
-views.splice(6, 0, { id: "ov6c", number: "07", label: "OV-6c 事件序列", subtitle: "时序追溯", status: "ready" });
-views.splice(4, 0, { id: "ov4", number: "05", label: "OV-4 责任关系", subtitle: "抽象职责", status: "ready" });
-views.splice(4, 0, { id: "ov5a", number: "05", label: "OV-5a 作战活动分解树", subtitle: "活动层级", status: "ready" });
-views.splice(7, 0, { id: "ov6a", number: "08", label: "OV-6a 作战规则模型", subtitle: "规则约束", status: "ready" });
-views.splice(8, 0, { id: "ov6b", number: "09", label: "OV-6b 作战状态转换", subtitle: "状态逻辑", status: "ready" });
-views.push({ id: "structure-review", number: "00", label: "结构核对台", subtitle: "问题聚合", status: "ready" });
-views.splice(1, 0, { id: "concept-map", number: "04", label: "概念图", subtitle: "外部绘制工具", status: "ready" });
-views.splice(1, 0, { id: "force-mission", number: "03", label: "兵力与任务", subtitle: "职责设计", status: "ready" });
-views.splice(1, 0, { id: "phase-action", number: "02", label: "阶段与行动", subtitle: "时序构想", status: "ready" });
-views.forEach((view, index) => { view.number = String(index + 1).padStart(2, "0"); });
+export const views = workflowOrder.map((id) => {
+  const meta = {
+    brief: { subtitle: "目标 · 边界 · 假设 · 效果", status: "done" },
+    ov6a: { subtitle: "规则本体 · 词表（可先不绑活动）", status: "ready" },
+    "phase-action": { subtitle: "阶段 · 行动 · 进入退出", status: "ready" },
+    ov6b: { subtitle: "分机状态 · 回改阶段", status: "ready" },
+    ov6c: { subtitle: "跨对象时序 · 回改阶段", status: "ready" },
+    "force-mission": { subtitle: "谁承担 · 覆盖阶段", status: "ready" },
+    ov4: { subtitle: "职责 · 指挥 · 协同", status: "ready" },
+    ov2: { subtitle: "节点与资源交换", status: "ready" },
+    ov3: { subtitle: "接口 · 频率 · 完整性", status: "ready" },
+    "concept-map": { subtitle: "阶段兵力空间表达", status: "ready" },
+    ov1: { subtitle: "总体概念是否闭合", status: "done" },
+    ov5: { subtitle: "横向活动关系", status: "ready" },
+    ov5a: { subtitle: "活动层级与覆盖", status: "ready" },
+    ooda: { subtitle: "行为综合视角", status: "ready" },
+    "structure-review": { subtitle: "反查并定位回改", status: "ready" },
+    scenario: { subtitle: "推演输入", status: "ready" },
+    validate: { subtitle: "规划是否可成立", status: "ready" },
+    collaboration: { subtitle: "意见 · 决策 · 版本", status: "ready" },
+    report: { subtitle: "导出已确认版本", status: "" }
+  }[id] || { subtitle: "", status: "ready" };
+  return {
+    id,
+    number: "00",
+    label: productLabels[id] || id,
+    subtitle: meta.subtitle,
+    status: meta.status,
+    role: workflowStepRoles[id] || "check"
+  };
+});
+
+/**
+ * Five research stages — same as left-rail tracks.
+ * Gate confirm unlocks the next stage; mid-stage “下一步” walks the primary path.
+ */
+export const workflowPhases = ["研究建模", "阶段行动", "兵力任务", "概念图", "推演演示"];
 
 const workflowPhaseById = {
-  "phase-action": "作战概念规划",
-  "force-mission": "作战概念规划",
-  "concept-map": "作战概念规划",
-  brief: "研究准备",
-  ov1: "概念建模", ov5: "概念建模", ooda: "概念建模",
-  "structure-review": "结构校核", ov5a: "结构校核", ov2: "结构校核", ov3: "结构校核", ov4: "结构校核", ov6a: "结构校核", ov6b: "结构校核", ov6c: "结构校核",
-  scenario: "推演评估", validate: "推演评估",
-  collaboration: "审阅交付", report: "审阅交付"
+  brief: "研究建模",
+  ov6a: "阶段行动",
+  "phase-action": "阶段行动",
+  ov6b: "阶段行动",
+  ov6c: "阶段行动",
+  "force-mission": "兵力任务",
+  ov4: "兵力任务",
+  ov2: "兵力任务",
+  ov3: "兵力任务",
+  "concept-map": "概念图",
+  ov1: "概念图",
+  ov5: "概念图",
+  ov5a: "概念图",
+  ooda: "概念图",
+  "structure-review": "推演演示",
+  scenario: "推演演示",
+  validate: "推演演示",
+  collaboration: "推演演示",
+  report: "推演演示"
 };
-/** 主写路径在前；简报后先定阶段时序，再定兵力职责，概念图确认后直接进入 OV-1。 */
-const workflowOrder = ["brief", "phase-action", "force-mission", "concept-map", "ov1", "ov5", "ooda", "structure-review", "ov5a", "ov2", "ov3", "ov4", "ov6a", "ov6b", "ov6c", "scenario", "validate", "collaboration", "report"];
-export const workflowPhases = ["研究准备", "概念建模", "结构校核", "推演评估", "审阅交付"];
 
-/** 导航三轨：写 / 看 / 用。阶段门禁仍按 workflowPhases，不按轨道。 */
-workflowPhases.splice(1, 0, "作战概念规划");
-
-export const workflowTracks = [
-  { id: "model", label: "研究建模", summary: "写：简报 · 规划 · 活动 · 循环", viewIds: ["brief", "ov1", "ov5", "ooda"], defaultOpen: true },
-  { id: "review", label: "结构核对", summary: "看：问题聚合与派生诊断", viewIds: ["structure-review", "ov5a", "ov2", "ov3", "ov4", "ov6a", "ov6b", "ov6c"] },
-  { id: "deliver", label: "推演交付", summary: "用：想定 · 验证 · 审阅 · 报告", viewIds: ["scenario", "validate", "collaboration", "report"] }
+/**
+ * Linear research path for the top gate capsule.
+ * Phase chain: 规则库 → 阶段 → 状态机 → 时序 → … → 结构反查
+ */
+export const workflowPrimaryStepIds = [
+  "brief",
+  "ov6a",
+  "phase-action",
+  "ov6b",
+  "ov6c",
+  "force-mission",
+  "ov4",
+  "ov2",
+  "ov3",
+  "concept-map",
+  "ov1",
+  "ov5",
+  "ov5a",
+  "ooda",
+  "structure-review",
+  "scenario",
+  "validate",
+  "collaboration",
+  "report"
 ];
 
-workflowTracks[0].viewIds.splice(1, 0, "phase-action", "force-mission", "concept-map");
+/** Navigation five tracks — phase track follows fixed chain order. */
+export const workflowTracks = [
+  { id: "model", label: "研究建模", summary: "简报：目标 · 边界 · 假设 · 效果", viewIds: ["brief"], defaultOpen: true },
+  { id: "phase", label: "阶段行动", summary: "规则库 → 阶段 → 状态/时序 → 反查", viewIds: ["ov6a", "phase-action", "ov6b", "ov6c"], defaultOpen: false },
+  { id: "force", label: "兵力任务", summary: "兵力 · 责任 · 资源流", viewIds: ["force-mission", "ov4", "ov2", "ov3"], defaultOpen: false },
+  { id: "concept", label: "概念图", summary: "概念图 · 总体 · 活动 · 循环", viewIds: ["concept-map", "ov1", "ov5", "ov5a", "ooda"], defaultOpen: false },
+  { id: "deliver", label: "推演演示", summary: "反查 · 想定 · 验证 · 审阅 · 报告", viewIds: ["structure-review", "scenario", "validate", "collaboration", "report"], defaultOpen: false }
+];
+
 views.forEach((view) => { view.phase = workflowPhaseById[view.id] || "其他"; });
 views.sort((left, right) => workflowOrder.indexOf(left.id) - workflowOrder.indexOf(right.id));
-views.forEach((view, index) => { view.number = String(index + 1).padStart(2, "0"); });
+// Rail numbers follow visible navigation order continuously: 01, 02, 03…
+views.forEach((view, index) => {
+  view.number = String(index + 1).padStart(2, "0");
+});
+
+export function productLabel(id, fallback = "") {
+  return productLabels[id] || fallback || String(id || "");
+}
+
+export function productShortLabel(id, fallback = "") {
+  return productShortLabels[id] || fallback || productLabel(id, String(id || "")).slice(0, 8);
+}
 
 export const project = {
   title: "联合封控概念研究",

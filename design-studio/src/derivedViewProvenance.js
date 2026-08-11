@@ -1,127 +1,127 @@
 /**
- * Shared DoDAF / workbench provenance copy for OV products.
- * Products are DoDAF 2.02/DM2 editable persisted models; upstream views remain seed sources.
+ * Shared provenance copy for derived research products.
+ * Resource keys remain ov* for standard data I/O; UI labels avoid OV branding.
  */
 
 const CATALOG = {
   "structure-review": {
     id: "structure-review",
     title: "结构核对台",
-    dodaf: "DoDAF 2.02/DM2：聚合作战视图诊断与产品一致性检查，不单独建模。",
-    workbench: "工作台：问题聚合台。读取可写源模型（OV-1/OV-5b/OODA/想定）与可编辑持久化 OV 产品诊断。",
+    dodaf: "研究级一致性检查：聚合各产品诊断，不单独建模。",
+    workbench: "工作台：问题聚合台。读取可写源模型（高层概念图/活动模型/研究循环/想定）与可编辑产品诊断。",
     sources: [
-      { view: "ov1", label: "OV-1", fields: "nodes/edges" },
-      { view: "ov5", label: "OV-5b", fields: "activities/edges/sourceOv1NodeIds" },
-      { view: "ov2", label: "OV-2～OV-6c", fields: "persisted DM2 products" }
+      { view: "ov1", label: "高层作战概念图", fields: "nodes/edges" },
+      { view: "ov5", label: "作战活动模型", fields: "activities/edges/sourceOv1NodeIds" },
+      { view: "ov2", label: "资源流/规则/状态/事件产品", fields: "persisted DM2 products" }
     ],
-    revise: "按问题跳回对应可写源模型或可编辑 OV 产品进行修订。",
+    revise: "按问题跳回对应可写源模型或可编辑产品进行修订。",
     reviseActions: [
-      { view: "ov1", label: "打开 OV-1" },
-      { view: "ov5", label: "打开 OV-5b" },
+      { view: "ov1", label: "打开高层作战概念图" },
+      { view: "ov5", label: "打开作战活动模型" },
       { view: "structure-review", label: "回到核对台" }
     ]
   },
   ov2: {
     id: "ov2",
-    title: "OV-2 作战资源流描述",
-    dodaf: "DoDAF 2.02/DM2：Performer 节点与 Needline/ResourceFlow 交换需求，不规定通信实现。",
-    workbench: "工作台：可编辑持久化产品。可从 OV-1 节点 × OV-5b 活动边 × sourceOv1NodeIds 种子生成；保存后独立修订。",
+    title: "作战资源流描述",
+    dodaf: "研究级产品：Performer 节点与 Needline/ResourceFlow 交换需求投影，不规定通信实现。",
+    workbench: "工作台：可编辑持久化产品。可从高层概念图节点 × 活动边 × sourceOv1NodeIds 种子生成 Needline 投影；保存后独立修订。",
     sources: [
-      { view: "ov1", label: "OV-1", fields: "nodes（作战节点）" },
-      { view: "ov5", label: "OV-5b", fields: "edges、activities.output/input、sourceOv1NodeIds" }
+      { view: "ov1", label: "高层作战概念图", fields: "nodes（作战节点）" },
+      { view: "ov5", label: "作战活动模型", fields: "edges、activities.output/input、sourceOv1NodeIds" }
     ],
     revise: "可在本页直接编辑交换字段并保存；也可重新种子后覆盖。",
     reviseActions: [
-      { view: "ov2", label: "编辑 OV-2" },
-      { view: "ov1", label: "打开 OV-1" },
-      { view: "ov5", label: "打开 OV-5b" }
+      { view: "ov2", label: "编辑资源流描述" },
+      { view: "ov1", label: "打开高层作战概念图" },
+      { view: "ov5", label: "打开作战活动模型" }
     ]
   },
   ov3: {
     id: "ov3",
-    title: "OV-3 作战资源流矩阵",
-    dodaf: "DoDAF 2.02/DM2：资源流明细表/矩阵；跟踪逻辑交换属性。",
-    workbench: "工作台：可编辑持久化产品。可从 OV-5b 有向边与 I/O 种子生成。",
+    title: "作战资源流矩阵",
+    dodaf: "研究级产品：资源流明细表/矩阵；跟踪逻辑交换属性。",
+    workbench: "工作台：可编辑持久化产品。可从活动模型有向边与 I/O 种子生成。",
     sources: [
-      { view: "ov5", label: "OV-5b", fields: "edges、activities.input/output、edge.type" }
+      { view: "ov5", label: "作战活动模型", fields: "edges、activities.input/output、edge.type" }
     ],
-    revise: "可在本页编辑输入/输出契约并保存；或从 OV-5b 重新种子。",
+    revise: "可在本页编辑输入/输出契约并保存；或从活动模型重新种子。",
     reviseActions: [
-      { view: "ov3", label: "编辑 OV-3" },
-      { view: "ov5", label: "打开 OV-5b" }
+      { view: "ov3", label: "编辑资源流矩阵" },
+      { view: "ov5", label: "打开作战活动模型" }
     ]
   },
   ov4: {
     id: "ov4",
-    title: "OV-4 组织/责任关系",
-    dodaf: "DoDAF 2.02/DM2：Organization / responsibleFor 抽象责任关系。",
-    workbench: "工作台：可编辑持久化产品。可从 OV-1 节点与 OV-5b 归属关系种子生成。",
+    title: "责任关系",
+    dodaf: "研究级产品：抽象责任关系。",
+    workbench: "工作台：可编辑持久化产品。可从高层概念图节点与活动归属关系种子生成。",
     sources: [
-      { view: "ov1", label: "OV-1", fields: "nodes" },
-      { view: "ov5", label: "OV-5b", fields: "sourceOv1NodeIds、edges" }
+      { view: "ov1", label: "高层作战概念图", fields: "nodes" },
+      { view: "ov5", label: "作战活动模型", fields: "sourceOv1NodeIds、edges" }
     ],
     revise: "可在本页编辑角色说明并保存；或从上游重新种子。",
     reviseActions: [
-      { view: "ov4", label: "编辑 OV-4" },
-      { view: "ov1", label: "打开 OV-1" },
-      { view: "ov5", label: "打开 OV-5b" }
+      { view: "ov4", label: "编辑责任关系" },
+      { view: "ov1", label: "打开高层作战概念图" },
+      { view: "ov5", label: "打开作战活动模型" }
     ]
   },
   ov5a: {
     id: "ov5a",
-    title: "OV-5a 作战活动分解树",
-    dodaf: "DoDAF 2.02/DM2：Activity 层次分解（activityPartOfActivity / wholePart）。",
-    workbench: "工作台：可编辑持久化产品。与 OV-5b Activity 双向同步（parentId / 标题 / 类型）。",
+    title: "作战活动分解树",
+    dodaf: "研究级产品：活动层次分解。",
+    workbench: "工作台：可编辑持久化产品。与作战活动模型 Activity 双向同步（parentId / 标题 / 类型）。",
     sources: [
-      { view: "ov5", label: "OV-5b", fields: "activities、parentId、title/type" }
+      { view: "ov5", label: "作战活动模型", fields: "activities、parentId、title/type" }
     ],
-    revise: "在本页改父级后保存会写回 OV-5b；在 OV-5b 改 parentId 后可「从 OV-5b 同步」。",
+    revise: "在本页改父级后保存会写回活动模型；在活动模型改 parentId 后可「从活动模型同步」。",
     reviseActions: [
-      { view: "ov5a", label: "编辑 OV-5a" },
-      { view: "ov5", label: "打开 OV-5b" }
+      { view: "ov5a", label: "编辑活动分解树" },
+      { view: "ov5", label: "打开作战活动模型" }
     ]
   },
   ov6a: {
     id: "ov6a",
-    title: "OV-6a 作战规则模型",
-    dodaf: "DoDAF 2.02/DM2：Rule 实体约束作战/业务开展。",
+    title: "作战规则模型",
+    dodaf: "研究级产品：规则约束。",
     workbench: "工作台：可编辑持久化产品。可从活动 preconditions/constraints 与边 condition 种子生成。",
     sources: [
-      { view: "ov5", label: "OV-5b", fields: "preconditions、constraints、edge.condition" }
+      { view: "ov5", label: "作战活动模型", fields: "preconditions、constraints、edge.condition" }
     ],
     revise: "可在本页直接编辑规则文本并保存。",
     reviseActions: [
-      { view: "ov6a", label: "编辑 OV-6a" },
-      { view: "ov5", label: "打开 OV-5b" }
+      { view: "ov6a", label: "编辑规则模型" },
+      { view: "ov5", label: "打开作战活动模型" }
     ]
   },
   ov6b: {
     id: "ov6b",
-    title: "OV-6b 作战状态转换",
-    dodaf: "DoDAF 2.02/DM2：State 与 stateTransition。",
-    workbench: "工作台：可编辑持久化产品。可从 OODA 研究循环种子生成；OODA 不再是唯一真源。",
+    title: "作战状态转换",
+    dodaf: "研究级产品：状态与转换。",
+    workbench: "工作台：可编辑持久化产品。可从研究辅助循环种子生成。",
     sources: [
-      { view: "ooda", label: "OODA", fields: "lanes/nodes/rule" }
+      { view: "ooda", label: "研究辅助循环", fields: "lanes/nodes/rule" }
     ],
-    revise: "可在本页编辑转换条件并保存；或从 OODA 重新种子。",
+    revise: "可在本页编辑转换条件并保存；或从研究循环重新种子。",
     reviseActions: [
-      { view: "ov6b", label: "编辑 OV-6b" },
-      { view: "ooda", label: "打开 OODA" }
+      { view: "ov6b", label: "编辑状态转换" },
+      { view: "ooda", label: "打开研究辅助循环" }
     ]
   },
   ov6c: {
     id: "ov6c",
-    title: "OV-6c 事件序列",
-    dodaf: "DoDAF 2.02/DM2：Event 时序与追溯。",
-    workbench: "工作台：可编辑持久化产品。可从 OODA 与想定时间线种子生成。",
+    title: "事件序列",
+    dodaf: "研究级产品：事件时序与追溯。",
+    workbench: "工作台：可编辑持久化产品。可从研究循环与想定时间线种子生成。",
     sources: [
-      { view: "ooda", label: "OODA", fields: "nodes" },
+      { view: "ooda", label: "研究辅助循环", fields: "nodes" },
       { view: "scenario", label: "想定", fields: "timeline" }
     ],
     revise: "可在本页编辑事件时间/标题并保存；或从上游重新种子。",
     reviseActions: [
-      { view: "ov6c", label: "编辑 OV-6c" },
-      { view: "ooda", label: "打开 OODA" },
+      { view: "ov6c", label: "编辑事件序列" },
+      { view: "ooda", label: "打开研究辅助循环" },
       { view: "scenario", label: "打开想定" }
     ]
   }

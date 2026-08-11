@@ -56,7 +56,7 @@ export function createOodaController({ getState, getModels, render, selectOoda, 
         invalidateDerivedArtifacts();
         void syncOoda?.(state.ooda, { source: "derived" });
         state.selection = null;
-        notify("已根据当前 OV-5 活动重新派生 OODA");
+        notify("已根据当前活动模型重新派生研究循环");
         render();
         return true;
       }

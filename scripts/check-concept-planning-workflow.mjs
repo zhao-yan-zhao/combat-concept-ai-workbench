@@ -31,8 +31,10 @@ const directory = await mkdtemp(join(tmpdir(), "combat-concept-planning-"));
 const filePath = join(directory, "projects.json");
 
 try {
-  assert(workflowStageByResource.forceMissionPlan === 1 && workflowStageByResource.phaseActionConcept === 1, "Planning resources must map to workflow stage 1");
-  assert(workflowPhases.includes("作战概念规划"), "Workflow phases must include 作战概念规划");
+  assert(workflowStageByResource.phaseActionConcept === 1, "Phase-action resource must map to workflow stage 1");
+  assert(workflowStageByResource.forceMissionPlan === 2, "Force-mission resource must map to workflow stage 2");
+  assert(workflowStageByResource.conceptMap === 3, "Concept-map resource must map to workflow stage 3");
+  assert(workflowPhases.includes("阶段行动") && workflowPhases.includes("兵力任务") && workflowPhases.includes("概念图"), "Workflow phases must include the five research steps");
   assert(views.some((view) => view.id === "force-mission") && views.some((view) => view.id === "phase-action") && views.some((view) => view.id === "concept-map"), "Navigation must include planning views");
   assert(!views.some((view) => view.id === "concept-graphic"), "Concept-graphic should no longer appear as a navigation step");
 
@@ -103,7 +105,15 @@ try {
   assert(loadedPhase.exists && loadedPhase.model.phases.length === phaseConfirmed.phases.length, "Phase action did not reload");
   assert(loadedGraphic.exists && loadedGraphic.model.nodes.length === graphicConfirmed.nodes.length, "Concept graphic did not reload");
 
-  const incomplete = getWorkflowStageIncompleteReasons({
+  assert(getWorkflowStageIncompleteReasons({
+    phaseAction: loadedPhase.model,
+    phaseActionStorage: { stale: false }
+  }, 1).length === 0, "Stage 1 should complete after phase-action confirmation");
+  assert(getWorkflowStageIncompleteReasons({
+    forceMission: loadedForce.model,
+    forceMissionStorage: { stale: false }
+  }, 2).length === 0, "Stage 2 should complete after force-mission confirmation");
+  const incompleteConcept = getWorkflowStageIncompleteReasons({
     forceMission: loadedForce.model,
     forceMissionStorage: { stale: false },
     phaseAction: loadedPhase.model,
@@ -111,24 +121,23 @@ try {
     conceptGraphic: loadedGraphic.model,
     conceptGraphicStorage: { stale: false },
     conceptMap: { document: { items: [] }, reference: { status: "empty" } },
-    conceptMapStorage: { stale: false }
-  }, 1);
-  assert(incomplete.some((item) => item.includes("概念图") || item.includes("OV")), "Stage 1 should still require concept map confirmation");
-  assert(!incomplete.some((item) => item.includes("兵力") || item.includes("阶段") || item.includes("总体")), "Confirmed planning steps should not remain incomplete");
-  const completeStage1 = getWorkflowStageIncompleteReasons({
-    forceMission: loadedForce.model,
-    forceMissionStorage: { stale: false },
-    phaseAction: loadedPhase.model,
-    phaseActionStorage: { stale: false },
+    conceptMapStorage: { stale: false },
+    ov1: { nodes: [] },
+    ov5: { activities: [], edges: [] },
+    ooda: { lanes: [] }
+  }, 3);
+  assert(incompleteConcept.some((item) => item.includes("概念图") || item.includes("活动") || item.includes("循环")), "Stage 3 should still require concept products");
+  const completeStage3 = getWorkflowStageIncompleteReasons({
     conceptMap: {
       document: { items: [{ id: "m1" }] },
       reference: { status: "confirmed", entities: [{ id: "e1", label: "感知", role: "equipment" }] }
     },
     conceptMapStorage: { stale: false },
-    conceptGraphic: { status: "empty", nodes: [] },
-    conceptGraphicStorage: { stale: false }
-  }, 1);
-  assert(completeStage1.length === 0, "Stage 1 should complete after concept-map confirmation without concept-graphic");
+    ov1: { nodes: [{ id: "sense" }] },
+    ov5: { activities: [{ id: "a1" }], edges: [{ id: "e1" }] },
+    ooda: { lanes: [{ nodes: [{ id: "n1" }] }] }
+  }, 3);
+  assert(completeStage3.length === 0, "Stage 3 should complete after concept-map + overall graphic + activities + cycle");
 
   await reopened.saveBrief("planning-test", {
     direction: "test",

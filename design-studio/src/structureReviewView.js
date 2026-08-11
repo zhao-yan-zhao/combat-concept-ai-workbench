@@ -1,28 +1,31 @@
 import { applyStructureReviewFilter, buildStructureReview, defaultStructureReviewFilter } from "./structureReviewBuilder.js";
 import { renderDerivedViewProvenance } from "./derivedViewProvenance.js";
 import { renderProjectStorageState } from "./projectStorageView.js";
+import { renderPhaseChainGuide } from "./phaseChainGuide.js";
 
 const GROUP_HINT = {
-  mapping: "优先补 OV-5 活动的 OV-1 来源，再查交换与责任覆盖。",
+  mapping: "优先补活动模型的总体图来源，再查交换与责任覆盖。",
   validation: "来自最近一次设计验证的规则问题；过期结果会标注并建议重跑。",
-  concept: "回到 OV-1 补节点关系或语义字段。",
-  contract: "在 OV-5 对齐活动输入/输出与约束条件。",
-  sequence: "在 OODA / 想定中核时序映射，非阻断建模主路径。"
+  concept: "回到高层概念图补节点关系或语义字段。",
+  contract: "在活动模型对齐输入/输出与约束条件。",
+  sequence: "阶段行动链反查：规则绑定、状态出口、时序来源；点问题跳回源头回改。"
 };
 
 const VIEW_LABEL = {
-  ov1: "OV-1",
-  ov5: "OV-5b",
-  ooda: "OODA",
+  ov1: "高层作战概念图",
+  ov5: "作战活动模型",
+  ooda: "研究辅助循环",
   scenario: "想定",
   validate: "设计验证",
-  ov2: "OV-2",
-  ov3: "OV-3",
-  ov4: "OV-4",
-  ov5a: "OV-5a",
-  ov6a: "OV-6a",
-  ov6b: "OV-6b",
-  ov6c: "OV-6c",
+  ov2: "作战资源流描述",
+  ov3: "作战资源流矩阵",
+  ov4: "责任关系",
+  ov5a: "作战活动分解树",
+  ov6a: "规则库",
+  ov6b: "状态机校验",
+  ov6c: "时序校验",
+  "phase-action": "阶段与行动",
+  "force-mission": "兵力与任务",
   "structure-review": "核对台"
 };
 
@@ -57,16 +60,17 @@ export function renderStructureReview(state) {
       : `验证 ${summary.validationIssueCount} 项 · ${formatTime(summary.validationGeneratedAt)}`;
   return `
     <section class="surface surface-pad structure-review">
+      ${renderPhaseChainGuide(state, "structure-review")}
       <div class="section-heading">
         <div>
           <h2>结构核对台</h2>
-          <p>汇聚可编辑 OV 产品与设计验证问题，支持过滤、跳回源模型与架构包导入。不替代各 OV 深读页与完整验证报告。</p>
+          <p>阶段行动链终点：汇聚规则/状态/时序反查与其他产品问题，点条目跳回源头回改。</p>
         </div>
         <div class="activity-toolbar">
           <span class="mini-tag ${summary.alert ? "alert" : summary.review ? "review" : ""}">${summary.alert || 0} 高优 · ${summary.review} 复核</span>
           <span class="mini-tag ${summary.validationStale ? "review" : ""}">${escapeHtml(validationNote)}</span>
           <button class="quiet-button" type="button" data-action="run-validation">${summary.validationStale ? "重新运行验证" : "运行设计验证"}</button>
-          <button class="quiet-button" type="button" data-action="attach-ov1-sources" ${summary.unmappedActivityCount ? "" : "disabled"} title="为缺少来源的 OV-5 活动按 OV-1 类型补挂 sourceOv1NodeIds">补挂 OV-1 来源${summary.unmappedActivityCount ? ` (${summary.unmappedActivityCount})` : ""}</button>
+          <button class="quiet-button" type="button" data-action="attach-ov1-sources" ${summary.unmappedActivityCount ? "" : "disabled"} title="为缺少来源的 OV-5 活动按 OV-1 类型补挂 sourceOv1NodeIds">补挂总体图来源${summary.unmappedActivityCount ? ` (${summary.unmappedActivityCount})` : ""}</button>
           <button class="quiet-button" type="button" data-action="apply-mapping-quality" ${summary.mappingQualityCanApply ? "" : "disabled"} title="补全空输入/输出、按类型建议浅层父活动；不覆盖已有正文">补全映射质量${summary.blankIoCount ? ` (${summary.blankIoCount} I/O)` : ""}</button>
           <button class="quiet-button" type="button" data-action="export-structure-review-markdown" title="按当前过滤导出 Markdown 审阅清单">导出清单</button>
           <button class="quiet-button" type="button" data-action="export-structure-review-json" title="按当前过滤导出 JSON">导出 JSON</button>
@@ -155,7 +159,7 @@ function renderConsistencyStrip(consistency, summary) {
 
 function renderEmpty(summary) {
   if (!summary.ov1NodeCount && !summary.ov5ActivityCount) {
-    return `<p class="structure-review-empty">尚未建立 OV-1 / OV-5 模型。请先在「研究建模」中完成概念图与活动骨架。</p>`;
+    return `<p class="structure-review-empty">尚未建立高层概念图 / 活动模型。请先在「概念图」步骤完成作战概念图与活动骨架。</p>`;
   }
   return `<p class="structure-review-empty ready">当前未发现高优先级结构或验证问题。仍可打开 OV 产品页编辑，或重新运行设计验证。</p>`;
 }

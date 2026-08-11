@@ -19,7 +19,7 @@ export function renderScenario(state) {
   return `
     <section class="surface surface-pad">
       <div class="section-heading"><div><h2>自动想定</h2><p>生成于 ${new Date(scenario.generatedAt).toLocaleString("zh-CN", { hour12: false })}${freshness.stale ? " · 相对 OV-5/OODA 已过期" : ""}</p></div><div class="activity-toolbar"><span class="mini-tag ${freshness.stale ? "review" : ""}">${freshness.stale ? "相对上游过期" : "与上游一致"}</span><button class="quiet-button" data-action="recommend-deployment" ${freshness.stale ? "disabled" : ""}>优化部署</button><button data-action="generate-scenario">${freshness.stale ? "重新生成想定" : "重新生成想定"}</button></div></div>
-      ${freshness.stale ? `<div class="scenario-stale-banner ooda-stale-banner" role="status"><div><strong>想定相对 OV-5 / OODA 已过期</strong><p>${escapeHtml(freshness.reason)} 可先审阅当前实体与时间线，确认后重新生成。</p></div><button type="button" data-action="generate-scenario">立即重新生成</button></div>` : ""}
+      ${freshness.stale ? `<div class="scenario-stale-banner ooda-stale-banner" role="status"><div><strong>想定相对活动模型 / 研究循环已过期</strong><p>${escapeHtml(freshness.reason)} 可先审阅当前实体与时间线，确认后重新生成。</p></div><button type="button" data-action="generate-scenario">立即重新生成</button></div>` : ""}
       ${renderProjectStorageState(state.scenarioStorage, { refreshAction: "refresh-project-scenario" })}
       <div class="scenario-grid ${freshness.stale ? "is-stale" : ""}">
         <div class="scenario-map">

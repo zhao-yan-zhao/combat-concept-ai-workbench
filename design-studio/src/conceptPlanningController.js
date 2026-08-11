@@ -1464,7 +1464,7 @@ export function createConceptPlanningController({
       const next = confirmPhaseActionConcept(applyPhaseActionReviewNotes(state.phaseAction, reviewNotes), { reviewNotes });
       state.phaseAction = persistPhaseAction(next, projectId);
       await syncPhaseAction(state.phaseAction, { source: "phase-action:confirm" });
-      notify("阶段与行动已确认，正在自动生成兵力与任务草案");
+      notify("阶段与行动已确认。请绑定规则到活动，再补状态机与时序，最后到结构核对反查。");
       render();
       await onPhaseActionConfirmed?.(state.phaseAction);
     } catch (error) {
@@ -1479,7 +1479,7 @@ export function createConceptPlanningController({
       return null;
     }
     if (!upstreamPlanningReady(state)) {
-      if (!silent) notify("请先确认兵力、阶段与概念图 OV 参考");
+      if (!silent) notify("请先确认兵力、阶段与概念图研究参考");
       return null;
     }
     const reviewNotes = withNotes
@@ -1546,7 +1546,7 @@ export function createConceptPlanningController({
       state.conceptGraphic = persistConceptGraphic(next, projectId);
       await syncConceptGraphic(state.conceptGraphic, { source: "concept-graphic:confirm" });
       const ov1Draft = conceptGraphicToOv1Draft(state.conceptGraphic, state.brief);
-      notify("总体作战概念图已确认，正在种子化 OV-1");
+      notify("总体作战概念图已确认，正在种子化高层作战概念图");
       render();
       await onConceptGraphicConfirmed?.(state.conceptGraphic, ov1Draft);
     } catch (error) {

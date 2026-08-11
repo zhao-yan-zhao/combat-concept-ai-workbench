@@ -2,8 +2,8 @@ import { renderProjectStorageState } from "./projectStorageView.js";
 
 const RESOURCE_LABELS = {
   brief: "概念简报",
-  ov1: "OV-1",
-  ov5: "OV-5",
+  ov1: "高层作战概念图",
+  ov5: "作战活动模型",
   ooda: "OODA",
   scenario: "自动想定",
   validation: "设计验证",
@@ -268,7 +268,7 @@ function renderAccountManagementBody(state) {
 function renderPendingReviewDraft(state) {
   const draft = state.collaboration?.reviewDraft;
   if (!draft) return "";
-  const resource = RESOURCE_LABELS[draft.resource] || draft.resource || "OV-5";
+  const resource = RESOURCE_LABELS[draft.resource] || draft.resource || "作战活动模型";
   return `<aside class="collaboration-draft-banner" data-collaboration-draft="pending" role="status">
     <div>
       <strong>待提交：结构审阅清单草稿</strong>
@@ -299,7 +299,7 @@ function renderProjectAudit(entries) {
   if (!entries.length) return `<p class="report-empty">尚无项目变更审计记录。</p>`;
   return entries.map((entry) => `<article><div><strong>${escapeHtml(projectAuditLabel(entry.action))}</strong><span>项目 r${Number(entry.revision || 0)} · ${escapeHtml(entry.actor?.label || entry.actor?.id || entry.source || "本地来源")}</span></div><p>${escapeHtml(entry.summary)}</p><small>${escapeHtml(entry.occurredAt)}</small></article>`).join("");
 }
-function projectAuditLabel(action) { return ({ "concept_brief.updated": "更新概念简报", "ov1.updated": "更新 OV-1", "ov5.updated": "更新 OV-5", "ooda.updated": "更新 OODA", "scenario.updated": "更新自动想定", "validation.updated": "更新设计验证", "knowledge.updated": "更新知识库", "report.archive.created": "归档成果报告", "report.archive.deleted": "删除成果归档", "model.snapshot.created": "创建模型快照", "model.snapshot.deleted": "删除模型快照", "collaboration.review.created": "提交协同审阅", "collaboration.review.resolved": "登记审阅决议" })[action] || action || "项目变更"; }
+function projectAuditLabel(action) { return ({ "concept_brief.updated": "更新概念简报", "ov1.updated": "更新高层作战概念图", "ov5.updated": "更新作战活动模型", "ooda.updated": "更新 OODA", "scenario.updated": "更新自动想定", "validation.updated": "更新设计验证", "knowledge.updated": "更新知识库", "report.archive.created": "归档成果报告", "report.archive.deleted": "删除成果归档", "model.snapshot.created": "创建模型快照", "model.snapshot.deleted": "删除模型快照", "collaboration.review.created": "提交协同审阅", "collaboration.review.resolved": "登记审阅决议" })[action] || action || "项目变更"; }
 
 function renderLegacyReviewForm(state) {
   const options = Object.entries(RESOURCE_LABELS).map(([resource, label]) => `<option value="${resource}" data-resource-revision="${resourceRevision(state, resource)}">${label} · r${resourceRevision(state, resource)}</option>`).join("");

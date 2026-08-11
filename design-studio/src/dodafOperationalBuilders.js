@@ -9,7 +9,7 @@ export function buildOv5aModel({ ov5 } = {}) {
   });
   const tree = roots.map((activity) => toTree(activity, byParent, new Set()));
   const ungroupedCount = roots.length;
-  return { kind: "derived-ov5a-operational-activity-decomposition", generatedAt: new Date().toISOString(), tree, diagnostics: [check("activities", "活动来源", activities.length ? "ready" : "pending", activities.length ? `已从 OV-5b 读取 ${activities.length} 项活动` : "尚未定义活动"), check("hierarchy", "活动分解", activities.length && ungroupedCount === activities.length ? "review" : activities.length ? "ready" : "pending", activities.length && ungroupedCount === activities.length ? "尚未设置父级活动；当前以并列活动显示" : activities.length ? "已识别活动分解关系" : "等待活动定义")] };
+  return { kind: "derived-ov5a-operational-activity-decomposition", generatedAt: new Date().toISOString(), tree, diagnostics: [check("activities", "活动来源", activities.length ? "ready" : "pending", activities.length ? `已从活动模型读取 ${activities.length} 项活动` : "尚未定义活动"), check("hierarchy", "活动分解", activities.length && ungroupedCount === activities.length ? "review" : activities.length ? "ready" : "pending", activities.length && ungroupedCount === activities.length ? "尚未设置父级活动；当前以并列活动显示" : activities.length ? "已识别活动分解关系" : "等待活动定义")] };
 }
 
 export function buildOv6aModel({ ov5 } = {}) {
@@ -40,7 +40,19 @@ export function buildOv6bModel({ ooda } = {}) {
 }
 
 function toTree(activity, byParent, visited) { const id = String(activity.id); if (visited.has(id)) return { id, title: label(activity), cycle: true, children: [] }; const next = new Set(visited); next.add(id); return { id, title: label(activity), type: clean(activity.type), children: (byParent.get(id) || []).map((child) => toTree(child, byParent, next)) }; }
-function rule(activity, type, text) { return { id: `${activity.id}-${type}`, subject: label(activity), type, text: clean(text) }; }
+/** Seed rule body from activity text; activityId becomes a pending binding after normalize (not a create gate). */
+function rule(activity, type, text) {
+  return {
+    id: `${activity.id}-${type}`,
+    name: label(activity),
+    subject: label(activity),
+    type,
+    description: clean(text),
+    text: clean(text),
+    scope: clean(activity.type) || "活动约束",
+    activityId: String(activity.id || "")
+  };
+}
 function transition(source, target, condition) { return { id: `${source.id}-${target.id}`, sourceId: String(source.id), targetId: String(target.id), sourceLabel: clean(source.title) || String(source.id), targetLabel: clean(target.title) || String(target.id), condition }; }
 function label(value) { return clean(value?.title) || String(value?.id || "待定义活动"); }
 function check(id, label, state, detail) { return { id, label, state, statusLabel: ({ ready: "已满足", review: "需复核", pending: "未完成" })[state], detail }; }

@@ -519,62 +519,280 @@ export function normalizeDodafOv5a(value) {
   });
 }
 
+const OV6A_BINDING_STATUSES = ["pending", "verified", "rejected", "stale"];
+const OV6B_SUBJECT_TYPES = ["task", "object", "force", "phase", "other"];
+const OV6B_STATE_KINDS = ["initial", "normal", "final"];
+const OV6C_MESSAGE_TYPES = ["message", "response", "status", "exception", "timeout"];
+const OV6C_FRAGMENT_KINDS = ["alt", "loop", "par", "break", "opt"];
+
+/** Rule status for UI: unbound rules are 待校验, not invalid. */
+export function ov6aRuleReviewStatus(rule) {
+  const bindings = Array.isArray(rule?.activityBindings) ? rule.activityBindings : [];
+  if (!bindings.length) return "pending-validation";
+  if (bindings.some((item) => item.bindingStatus === "stale")) return "stale";
+  if (bindings.every((item) => item.bindingStatus === "verified")) return "verified";
+  if (bindings.some((item) => item.bindingStatus === "rejected")) return "rejected";
+  return "pending-validation";
+}
+
+export function ov6aRuleReviewLabel(status) {
+  return ({
+    "pending-validation": "待校验",
+    verified: "已绑定",
+    rejected: "已驳回",
+    stale: "绑定过期"
+  })[status] || "待校验";
+}
+
+function normalizeOv6aBinding(value, index = 0) {
+  const status = clean(value?.bindingStatus, 40);
+  return {
+    activityRef: clean(value?.activityRef || value?.activityId, 160),
+    bindingStatus: OV6A_BINDING_STATUSES.includes(status) ? status : "pending",
+    constraintNote: clean(value?.constraintNote || value?.note, 800)
+  };
+}
+
+function normalizeOv6aRule(rule, index) {
+  const name = clean(rule?.name || rule?.subject, 240) || `规则 ${index + 1}`;
+  const description = clean(rule?.description || rule?.text, 4000) || "TBD";
+  const type = clean(rule?.type, 120) || "约束";
+  const scope = clean(rule?.scope, 240) || "研究级";
+  let activityBindings = (Array.isArray(rule?.activityBindings) ? rule.activityBindings : [])
+    .map((item, bindingIndex) => normalizeOv6aBinding(item, bindingIndex))
+    .filter((item) => item.activityRef)
+    .slice(0, 40);
+  // Legacy single activityId → one pending/verified binding (not a create-time requirement).
+  const legacyActivityId = clean(rule?.activityId, 160);
+  if (legacyActivityId && !activityBindings.some((item) => item.activityRef === legacyActivityId)) {
+    activityBindings = [
+      ...activityBindings,
+      { activityRef: legacyActivityId, bindingStatus: "pending", constraintNote: "" }
+    ].slice(0, 40);
+  }
+  const id = clean(rule?.id, 180) || `rule-${index + 1}`;
+  const reviewStatus = ov6aRuleReviewStatus({ activityBindings });
+  return {
+    id,
+    name,
+    description,
+    scope,
+    type,
+    activityBindings,
+    reviewStatus,
+    reviewLabel: ov6aRuleReviewLabel(reviewStatus),
+    // Legacy UI aliases
+    subject: name,
+    text: description,
+    activityId: activityBindings[0]?.activityRef || ""
+  };
+}
+
+function buildOv6aDiagnostics(rules, provided) {
+  const diagnostics = normalizeDiagnostics(provided);
+  const unbound = rules.filter((rule) => !rule.activityBindings.length).length;
+  const bound = rules.length - unbound;
+  if (!diagnostics.some((item) => item.id === "rules")) {
+    diagnostics.push({
+      id: "rules",
+      label: "规则库",
+      state: rules.length ? "ready" : "review",
+      statusLabel: rules.length ? "已建立" : "需复核",
+      detail: rules.length ? `已有 ${rules.length} 条规则（绑定 ${bound} · 待校验 ${unbound}）` : "尚未建立规则；可先独立建规则库，不必绑定活动"
+    });
+  }
+  if (unbound > 0 && !diagnostics.some((item) => item.id === "bindings-pending")) {
+    diagnostics.push({
+      id: "bindings-pending",
+      label: "活动绑定",
+      state: "review",
+      statusLabel: "待校验",
+      detail: `${unbound} 条规则尚未绑定活动；未绑定不等于规则无效，可在阶段校验时补绑定`
+    });
+  }
+  return diagnostics.slice(0, 40);
+}
+
 export function normalizeDodafOv6a(value) {
-  const rules = (Array.isArray(value?.rules) ? value.rules : []).slice(0, 240).map((rule, index) => ({
-    id: clean(rule?.id, 180) || `ov6a-rule-${index + 1}`,
-    subject: clean(rule?.subject, 240) || "Rule subject",
-    type: clean(rule?.type, 120) || "约束",
-    text: clean(rule?.text, 4000) || "TBD",
-    activityId: clean(rule?.activityId, 160)
-  }));
+  const rules = (Array.isArray(value?.rules) ? value.rules : []).slice(0, 240).map((rule, index) => normalizeOv6aRule(rule, index));
   const entities = rules.map((rule, index) => normalizeDm2Entity({
     id: rule.id,
     dm2Type: "Rule",
-    name: rule.subject,
-    description: rule.text,
-    properties: { type: rule.type, activityId: rule.activityId }
+    name: rule.name,
+    description: rule.description,
+    properties: {
+      type: rule.type,
+      scope: rule.scope,
+      reviewStatus: rule.reviewStatus,
+      activityId: rule.activityId,
+      activityBindings: rule.activityBindings
+    }
   }, index, "Rule"));
+  const relations = rules.flatMap((rule) => rule.activityBindings.map((binding, index) => ({
+    id: `${rule.id}-bind-${index + 1}`,
+    dm2Type: "constrains",
+    sourceId: rule.id,
+    targetId: binding.activityRef,
+    name: binding.constraintNote || "constrains",
+    properties: { bindingStatus: binding.bindingStatus }
+  }))).filter((item) => item.sourceId && item.targetId).slice(0, 480);
+
   return createProductEnvelope({
     product: "OV-6a",
     architectureId: value?.architectureId,
     entities,
-    relations: [],
+    relations,
     view: value?.view,
     provenance: normalizeProvenanceObject(value?.provenance),
-    derivedFrom: value?.derivedFrom || value?.kind ? { mode: "seeded", sources: ["ov5"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null,
+    derivedFrom: value?.derivedFrom || value?.kind ? { mode: "seeded", sources: value?.derivedFrom?.sources || ["ov5"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null,
     extra: {
-      version: 1,
+      version: 2,
       kind: "persisted-ov6a-operational-rules",
       generatedAt: nowIso(value?.generatedAt),
       rules,
-      diagnostics: normalizeDiagnostics(value?.diagnostics)
+      diagnostics: buildOv6aDiagnostics(rules, value?.diagnostics)
     }
   });
 }
 
-export function normalizeDodafOv6b(value) {
-  const states = (Array.isArray(value?.states) ? value.states : []).slice(0, 240).map((state, index) => ({
-    id: clean(state?.id, 160) || `ov6b-state-${index + 1}`,
-    label: clean(state?.label || state?.name || state?.title, 240) || `State ${index + 1}`,
+function normalizeOv6bState(state, index) {
+  const kindRaw = clean(state?.kind, 40);
+  const kind = OV6B_STATE_KINDS.includes(kindRaw)
+    ? kindRaw
+    : index === 0
+      ? "initial"
+      : "normal";
+  const name = clean(state?.name || state?.label || state?.title, 240) || `状态 ${index + 1}`;
+  return {
+    id: clean(state?.id, 160) || `state-${index + 1}`,
+    name,
+    kind,
     phase: clean(state?.phase, 160),
-    rule: clean(state?.rule, 4000)
-  }));
-  const stateIds = new Set(states.map((state) => state.id));
-  const transitions = (Array.isArray(value?.transitions) ? value.transitions : []).slice(0, 480).map((item, index) => ({
-    id: clean(item?.id, 180) || `ov6b-transition-${index + 1}`,
-    sourceId: clean(item?.sourceId, 160),
-    targetId: clean(item?.targetId, 160),
-    sourceLabel: clean(item?.sourceLabel, 240),
-    targetLabel: clean(item?.targetLabel, 240),
-    condition: clean(item?.condition, 4000) || "TBD"
-  })).filter((item) => item.sourceId && item.targetId && item.sourceId !== item.targetId);
+    rule: clean(state?.rule, 4000),
+    // Legacy alias
+    label: name
+  };
+}
 
+function normalizeOv6bTransition(item, index, stateById) {
+  const fromStateRef = clean(item?.fromStateRef || item?.sourceId, 160);
+  const toStateRef = clean(item?.toStateRef || item?.targetId, 160);
+  if (!fromStateRef || !toStateRef || fromStateRef === toStateRef) return null;
+  const condition = clean(item?.condition, 4000) || "TBD";
+  return {
+    id: clean(item?.id, 180) || `transition-${index + 1}`,
+    fromStateRef,
+    toStateRef,
+    condition,
+    ruleRefs: normalizeStringList(item?.ruleRefs, 12, 160),
+    eventRefs: normalizeStringList(item?.eventRefs, 12, 160),
+    // Legacy aliases for current UI
+    sourceId: fromStateRef,
+    targetId: toStateRef,
+    sourceLabel: clean(item?.sourceLabel, 240) || stateById.get(fromStateRef)?.name || fromStateRef,
+    targetLabel: clean(item?.targetLabel, 240) || stateById.get(toStateRef)?.name || toStateRef
+  };
+}
+
+function diagnoseStateMachine(machine) {
+  const states = machine.states || [];
+  const transitions = machine.transitions || [];
+  const hasInitial = states.some((state) => state.kind === "initial");
+  const hasFinal = states.some((state) => state.kind === "final");
+  const hasNormal = states.some((state) => state.kind === "normal");
+  const issues = [];
+  if (!hasInitial) issues.push("缺少开始状态");
+  if (!hasFinal) issues.push("缺少结束状态");
+  if (!hasNormal) issues.push("缺少中间状态");
+  if (!transitions.length) issues.push("尚无转换");
+  return {
+    id: `machine-${machine.id}`,
+    label: machine.name || machine.id,
+    state: issues.length ? "review" : "ready",
+    statusLabel: issues.length ? "需复核" : "已满足",
+    detail: issues.length ? issues.join("；") : `状态 ${states.length} · 转换 ${transitions.length}`
+  };
+}
+
+function normalizeOv6bStateMachine(machine, index) {
+  const states = (Array.isArray(machine?.states) ? machine.states : []).slice(0, 80).map((state, stateIndex) => normalizeOv6bState(state, stateIndex));
+  // Ensure at least structural kinds when only 3+ unlabeled legacy states exist
+  if (states.length >= 3) {
+    if (!states.some((state) => state.kind === "initial")) states[0].kind = "initial";
+    if (!states.some((state) => state.kind === "final")) states[states.length - 1].kind = "final";
+    states.forEach((state, stateIndex) => {
+      if (stateIndex > 0 && stateIndex < states.length - 1 && state.kind === "initial") state.kind = "normal";
+    });
+  }
+  const stateById = new Map(states.map((state) => [state.id, state]));
+  const transitions = (Array.isArray(machine?.transitions) ? machine.transitions : [])
+    .map((item, transitionIndex) => normalizeOv6bTransition(item, transitionIndex, stateById))
+    .filter(Boolean)
+    .filter((item) => stateById.has(item.fromStateRef) && stateById.has(item.toStateRef))
+    .slice(0, 160);
+  const subjectType = clean(machine?.subjectType, 40);
+  return {
+    id: clean(machine?.id, 180) || `state-machine-${index + 1}`,
+    subjectRef: clean(machine?.subjectRef, 160),
+    subjectType: OV6B_SUBJECT_TYPES.includes(subjectType) ? subjectType : "other",
+    name: clean(machine?.name, 240) || `状态机 ${index + 1}`,
+    states,
+    transitions
+  };
+}
+
+function legacyFlatToStateMachines(value) {
+  const states = Array.isArray(value?.states) ? value.states : [];
+  const transitions = Array.isArray(value?.transitions) ? value.transitions : [];
+  if (!states.length && !transitions.length) return [];
+  return [{
+    id: "state-machine-legacy",
+    subjectRef: "",
+    subjectType: "other",
+    name: "遗留状态链",
+    states,
+    transitions
+  }];
+}
+
+export function normalizeDodafOv6b(value) {
+  const rawMachines = Array.isArray(value?.stateMachines) && value.stateMachines.length
+    ? value.stateMachines
+    : legacyFlatToStateMachines(value);
+  const stateMachines = rawMachines.slice(0, 48).map((machine, index) => normalizeOv6bStateMachine(machine, index));
+
+  // Flatten for current UI / builders that still read states + transitions.
+  const states = [];
+  const transitions = [];
+  stateMachines.forEach((machine) => {
+    machine.states.forEach((state) => {
+      states.push({
+        ...state,
+        machineId: machine.id,
+        subjectRef: machine.subjectRef
+      });
+    });
+    machine.transitions.forEach((item) => {
+      transitions.push({
+        ...item,
+        machineId: machine.id
+      });
+    });
+  });
+
+  const stateIds = new Set(states.map((state) => state.id));
   const entities = states.map((state, index) => normalizeDm2Entity({
     id: state.id,
     dm2Type: "State",
-    name: state.label,
+    name: state.name,
     description: state.rule,
-    properties: { phase: state.phase, rule: state.rule }
+    properties: {
+      kind: state.kind,
+      phase: state.phase,
+      rule: state.rule,
+      machineId: state.machineId,
+      subjectRef: state.subjectRef
+    }
   }, index, "State"));
   const relations = transitions
     .filter((item) => stateIds.has(item.sourceId) && stateIds.has(item.targetId))
@@ -584,8 +802,30 @@ export function normalizeDodafOv6b(value) {
       sourceId: item.sourceId,
       targetId: item.targetId,
       name: item.condition,
-      properties: { condition: item.condition }
+      properties: {
+        condition: item.condition,
+        ruleRefs: item.ruleRefs,
+        eventRefs: item.eventRefs,
+        machineId: item.machineId
+      }
     }));
+
+  const machineDiagnostics = stateMachines.map(diagnoseStateMachine);
+  const diagnostics = [
+    ...normalizeDiagnostics(value?.diagnostics),
+    ...machineDiagnostics.filter((item) => !normalizeDiagnostics(value?.diagnostics).some((existing) => existing.id === item.id))
+  ].slice(0, 40);
+  if (!diagnostics.some((item) => item.id === "state-machines")) {
+    diagnostics.unshift({
+      id: "state-machines",
+      label: "状态机",
+      state: stateMachines.length ? "ready" : "pending",
+      statusLabel: stateMachines.length ? "已建立" : "未完成",
+      detail: stateMachines.length
+        ? `${stateMachines.length} 台状态机（任务/对象分机，不合并成一条全项目链）`
+        : "尚未建立状态机；应为关键任务或对象各建一台"
+    });
+  }
 
   return createProductEnvelope({
     product: "OV-6b",
@@ -594,39 +834,160 @@ export function normalizeDodafOv6b(value) {
     relations,
     view: value?.view,
     provenance: normalizeProvenanceObject(value?.provenance),
-    derivedFrom: value?.derivedFrom || value?.kind ? { mode: "seeded", sources: ["ooda"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null,
+    derivedFrom: value?.derivedFrom || value?.kind ? { mode: "seeded", sources: value?.derivedFrom?.sources || ["ooda"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null,
     extra: {
-      version: 1,
+      version: 2,
       kind: "persisted-ov6b-state-transition",
       generatedAt: nowIso(value?.generatedAt),
+      stateMachines,
       states,
       transitions,
-      diagnostics: normalizeDiagnostics(value?.diagnostics)
+      diagnostics
     }
   });
 }
 
+function normalizeOv6cParticipant(item, index) {
+  return {
+    id: clean(item?.id, 160) || `participant-${index + 1}`,
+    name: clean(item?.name || item?.label, 240) || `参与方 ${index + 1}`,
+    ref: clean(item?.ref || item?.sourceNodeId || item?.objectId, 160)
+  };
+}
+
+function normalizeOv6cMessage(item, index) {
+  const type = clean(item?.type, 40);
+  const name = clean(item?.name || item?.title, 240) || `消息 ${index + 1}`;
+  const relatedActivityRefs = normalizeStringList(
+    item?.relatedActivityRefs || (item?.sourceActivityId ? [item.sourceActivityId] : []),
+    12,
+    160
+  );
+  return {
+    id: clean(item?.id, 180) || `event-${index + 1}`,
+    sequence: clampNumber(item?.sequence, 1, 10000, index + 1),
+    fromRef: clean(item?.fromRef || item?.from || item?.sourceNodeId, 160),
+    toRef: clean(item?.toRef || item?.to, 160),
+    name,
+    type: OV6C_MESSAGE_TYPES.includes(type) ? type : "message",
+    condition: clean(item?.condition, 800),
+    relatedActivityRefs,
+    ruleRefs: normalizeStringList(item?.ruleRefs, 12, 160),
+    stateTransitionRefs: normalizeStringList(item?.stateTransitionRefs, 12, 160),
+    // Legacy event-table aliases
+    title: name,
+    description: clean(item?.description, 800),
+    time: clean(item?.time, 120) || "Unscheduled",
+    offsetMinutes: item?.offsetMinutes === null || item?.offsetMinutes === undefined
+      ? null
+      : clampNumber(item.offsetMinutes, -100000, 100000, 0),
+    sourceNodeId: clean(item?.sourceNodeId || item?.fromRef, 160),
+    sourceActivityId: relatedActivityRefs[0] || "",
+    phase: clean(item?.phase, 160),
+    entityCount: clampNumber(item?.entityCount, 0, 10000, 0),
+    state: ["ready", "review", "pending"].includes(clean(item?.state, 40)) ? clean(item.state, 40) : "pending",
+    outOfOrder: Boolean(item?.outOfOrder),
+    reviewReasons: normalizeStringList(item?.reviewReasons, 8, 240)
+  };
+}
+
+function normalizeOv6cFragment(item, index) {
+  const kind = clean(item?.kind, 40);
+  return {
+    id: clean(item?.id, 180) || `fragment-${index + 1}`,
+    kind: OV6C_FRAGMENT_KINDS.includes(kind) ? kind : "opt",
+    label: clean(item?.label || item?.name, 240),
+    messageRefs: normalizeStringList(item?.messageRefs, 40, 180)
+  };
+}
+
+function normalizeOv6cSequence(sequence, index) {
+  const participants = (Array.isArray(sequence?.participants) ? sequence.participants : [])
+    .slice(0, 40)
+    .map((item, participantIndex) => normalizeOv6cParticipant(item, participantIndex));
+  const participantIds = new Set(participants.map((item) => item.id));
+  let messages = (Array.isArray(sequence?.messages) ? sequence.messages : Array.isArray(sequence?.events) ? sequence.events : [])
+    .slice(0, 500)
+    .map((item, messageIndex) => normalizeOv6cMessage(item, messageIndex));
+  // Stable strict sequence: sort then re-number uniquely.
+  messages = messages
+    .sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id))
+    .map((message, messageIndex) => ({ ...message, sequence: messageIndex + 1 }));
+  const fragments = (Array.isArray(sequence?.fragments) ? sequence.fragments : [])
+    .slice(0, 40)
+    .map((item, fragmentIndex) => normalizeOv6cFragment(item, fragmentIndex));
+  return {
+    id: clean(sequence?.id, 180) || `sequence-${index + 1}`,
+    name: clean(sequence?.name || sequence?.title, 240) || `事件序列 ${index + 1}`,
+    participants,
+    messages,
+    fragments,
+    participantIds: [...participantIds]
+  };
+}
+
+function legacyEventsToSequences(value) {
+  const events = Array.isArray(value?.events) ? value.events : [];
+  if (!events.length) return [];
+  const participantMap = new Map();
+  events.forEach((event, index) => {
+    const fromId = clean(event?.sourceNodeId, 160) || clean(event?.fromRef, 160);
+    if (fromId && !participantMap.has(fromId)) {
+      participantMap.set(fromId, { id: fromId, name: fromId, ref: fromId });
+    }
+    const toId = clean(event?.toRef, 160);
+    if (toId && !participantMap.has(toId)) {
+      participantMap.set(toId, { id: toId, name: toId, ref: toId });
+    }
+    if (!fromId && !toId) {
+      const fallback = `participant-legacy-${index + 1}`;
+      if (!participantMap.has(fallback)) participantMap.set(fallback, { id: fallback, name: "未命名参与方", ref: "" });
+    }
+  });
+  if (!participantMap.size) {
+    participantMap.set("participant-legacy", { id: "participant-legacy", name: "未命名参与方", ref: "" });
+  }
+  return [{
+    id: "sequence-legacy",
+    name: "遗留事件序列",
+    participants: [...participantMap.values()],
+    messages: events.map((event) => ({
+      ...event,
+      fromRef: clean(event?.fromRef || event?.sourceNodeId, 160) || [...participantMap.keys()][0],
+      toRef: clean(event?.toRef, 160) || [...participantMap.keys()][0]
+    })),
+    fragments: []
+  }];
+}
+
 export function normalizeDodafOv6c(value) {
-  const events = (Array.isArray(value?.events) ? value.events : []).slice(0, 500).map((event, index) => ({
-    id: clean(event?.id, 180) || `ov6c-event-${index + 1}`,
-    sequence: clampNumber(event?.sequence, 1, 10000, index + 1),
-    time: clean(event?.time, 120) || "Unscheduled",
-    offsetMinutes: event?.offsetMinutes === null || event?.offsetMinutes === undefined ? null : clampNumber(event.offsetMinutes, -100000, 100000, 0),
-    title: clean(event?.title || event?.name, 240) || `Event ${index + 1}`,
-    description: clean(event?.description, 800),
-    sourceNodeId: clean(event?.sourceNodeId, 160),
-    sourceActivityId: clean(event?.sourceActivityId, 160),
-    phase: clean(event?.phase, 160),
-    entityCount: clampNumber(event?.entityCount, 0, 10000, 0),
-    state: ["ready", "review", "pending"].includes(clean(event?.state, 40)) ? clean(event.state, 40) : "pending",
-    outOfOrder: Boolean(event?.outOfOrder),
-    reviewReasons: normalizeStringList(event?.reviewReasons, 8, 240)
-  }));
+  const rawSequences = Array.isArray(value?.sequences) && value.sequences.length
+    ? value.sequences
+    : legacyEventsToSequences(value);
+  const sequences = rawSequences.slice(0, 24).map((sequence, index) => normalizeOv6cSequence(sequence, index));
+
+  // Flatten messages → events for current table UI / diagnostics.
+  const events = [];
+  sequences.forEach((sequence) => {
+    sequence.messages.forEach((message) => {
+      events.push({
+        ...message,
+        sequenceId: sequence.id,
+        sequenceName: sequence.name
+      });
+    });
+  });
+  // Global sequence uniqueness for legacy table
+  events.sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id));
+  events.forEach((event, index) => {
+    event.sequence = index + 1;
+  });
+
   const entities = events.map((event, index) => normalizeDm2Entity({
     id: event.id,
     dm2Type: "Event",
-    name: event.title,
-    description: event.description,
+    name: event.title || event.name,
+    description: event.description || event.condition,
     properties: event
   }, index, "Event"));
   const relations = events
@@ -637,8 +998,25 @@ export function normalizeDodafOv6c(value) {
       sourceId: event.id,
       targetId: event.sourceActivityId,
       name: "results-in",
-      properties: { sourceNodeId: event.sourceNodeId }
+      properties: { sourceNodeId: event.sourceNodeId, sequenceId: event.sequenceId }
     }));
+
+  const diagnostics = normalizeDiagnostics(value?.diagnostics);
+  if (!diagnostics.some((item) => item.id === "sequences")) {
+    diagnostics.unshift({
+      id: "sequences",
+      label: "时序图",
+      state: sequences.length ? "ready" : "pending",
+      statusLabel: sequences.length ? "已建立" : "未完成",
+      detail: sequences.length
+        ? `${sequences.length} 幅时序图 · ${events.length} 条消息（生命线/消息模型）`
+        : "尚未建立事件时序图"
+    });
+  }
+
+  const unresolved = value?.unresolved && typeof value.unresolved === "object"
+    ? value.unresolved
+    : { unscheduledNodeIds: [], orphanTimelineIds: [], outOfOrderIds: [] };
 
   return createProductEnvelope({
     product: "OV-6c",
@@ -647,15 +1025,16 @@ export function normalizeDodafOv6c(value) {
     relations,
     view: value?.view,
     provenance: normalizeProvenanceObject(value?.provenance),
-    derivedFrom: value?.derivedFrom || value?.kind ? { mode: "seeded", sources: ["ooda", "scenario"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null,
+    derivedFrom: value?.derivedFrom || value?.kind ? { mode: "seeded", sources: value?.derivedFrom?.sources || ["ooda", "scenario"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null,
     extra: {
-      version: 1,
+      version: 2,
       kind: "persisted-ov6c-event-trace",
       generatedAt: nowIso(value?.generatedAt),
       source: normalizeSourceSummary(value?.source),
+      sequences,
       events,
-      diagnostics: normalizeDiagnostics(value?.diagnostics),
-      unresolved: value?.unresolved && typeof value.unresolved === "object" ? value.unresolved : { unscheduledNodeIds: [], orphanTimelineIds: [], outOfOrderIds: [] }
+      diagnostics,
+      unresolved
     }
   });
 }

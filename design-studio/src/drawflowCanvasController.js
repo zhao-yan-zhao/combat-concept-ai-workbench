@@ -39,7 +39,7 @@ export function createOv1DrawflowController({ getState, render, notify, selectNo
         state.ov1 = next;
         invalidateValidation?.();
         void syncOv1?.(next, { source: "canvas-drag" });
-        notify("OV-1 节点位置已更新");
+        notify("概念图节点位置已更新");
       });
     }
   };

@@ -1,6 +1,6 @@
 import { normalizeDodafOv1 } from "../../shared/dodaf/products.js";
 import { conceptForcesToOv1Draft } from "../../shared/conceptPlanning.js";
-import { viewportLayoutToWorldPercent } from "../../shared/ov1Canvas.js";
+import { layoutOv1Nodes } from "../../shared/ov1Layout.js";
 
 const ROLE_ORDER = ['sense', 'decide', 'control', 'opponent', 'assess'];
 
@@ -20,21 +20,7 @@ const DEFAULT_EDGES = [
   { id: 'ov1-edge-assess-sense', sourceId: 'assess', targetId: 'sense', type: '反馈' }
 ];
 
-const LAYOUTS = {
-  // Keep cards inside ~8–78 left so wide labels are not clipped on the right.
-  default: {
-    sense: [10, 16], decide: [40, 18], control: [68, 36], opponent: [10, 72], assess: [68, 72]
-  },
-  pressure: {
-    sense: [10, 14], decide: [40, 16], control: [68, 34], opponent: [10, 72], assess: [68, 72]
-  },
-  diversion: {
-    sense: [10, 24], decide: [40, 14], control: [68, 28], opponent: [40, 72], assess: [68, 72]
-  }
-};
-
 export function createAiOv1Draft({ brief, direction, draft, forceMission }) {
-  const layout = layoutFor(direction);
   const forceSeed = forceMission?.forces?.length ? conceptForcesToOv1Draft(forceMission, brief) : null;
   const forceNodes = new Map(Array.isArray(forceSeed?.nodes) ? forceSeed.nodes.map((node) => [node?.id, node]) : []);
   const generated = new Map(Array.isArray(draft?.nodes) ? draft.nodes.map((node) => [node?.id, node]) : []);
@@ -46,6 +32,8 @@ export function createAiOv1Draft({ brief, direction, draft, forceMission }) {
   // AI free-form 5-role sketches must not collapse or rename those equipment nodes.
   if (hasSubjectForces) {
     const seedNodes = Array.isArray(forceSeed.nodes) ? forceSeed.nodes : [];
+    const edges = normalizeEdges(forceSeed.edges, seedNodes);
+    const fallbackPositions = new Map(layoutOv1Nodes(seedNodes, edges).map((node) => [node.id, node]));
     return asDm2Ov1({
       version: 1,
       provenance: {
@@ -57,11 +45,8 @@ export function createAiOv1Draft({ brief, direction, draft, forceMission }) {
       nodes: seedNodes.map((forceNode, index) => {
         const id = textOf(forceNode.id, 80) || `ov1-force-${index + 1}`;
         const kind = validKind(forceNode.kind, forceNode.kind || "equipment");
-        // Force seed already carries first-screen world coords from conceptForcesToOv1Draft.
-        const fallback = viewportLayoutToWorldPercent(
-          layout[id]?.[0] ?? (12 + (index % 4) * 20),
-          layout[id]?.[1] ?? (14 + Math.floor(index / 4) * 18)
-        );
+        // Keep inherited force positions; only missing coordinates use the shared layout.
+        const fallback = fallbackPositions.get(id) || {};
         return {
           id,
           label: labelOf(forceNode.label, labels[id] || `概念装备${index + 1}`),
@@ -75,7 +60,7 @@ export function createAiOv1Draft({ brief, direction, draft, forceMission }) {
           sourceConceptForceIds: Array.isArray(forceNode.sourceConceptForceIds) ? forceNode.sourceConceptForceIds : []
         };
       }),
-      edges: normalizeEdges(forceSeed.edges, seedNodes)
+      edges
     });
   }
 
@@ -89,25 +74,24 @@ export function createAiOv1Draft({ brief, direction, draft, forceMission }) {
       concept: normalizeConcept(draft?.concept, brief)
     });
   }
+  const edges = normalizeEdges(draft?.edges);
+  const nodes = ROLE_ORDER.map((id) => {
+    const node = generated.get(id) || {};
+    return {
+      id,
+      label: labelOf(node.label, DEFAULT_LABELS[id]),
+      detail: textOf(node.detail, 800) || details[id],
+      category: textOf(node.category, 80) || kindLabel(node.kind, id),
+      kind: validKind(node.kind, id),
+      className: id === "opponent" ? "blue" : id === "assess" ? "gold" : ""
+    };
+  });
   return asDm2Ov1({
     version: 1,
     provenance: { mode: "ai", note: "AI 根据当前简报生成的 OV-1 草案，需人工复核。", generatedAt: new Date().toISOString() },
     concept: normalizeConcept(draft?.concept, brief),
-    nodes: ROLE_ORDER.map((id) => {
-      const node = generated.get(id) || {};
-      const pos = viewportLayoutToWorldPercent(layout[id][0], layout[id][1]);
-      return {
-        id,
-        label: labelOf(node.label, DEFAULT_LABELS[id]),
-        detail: textOf(node.detail, 800) || details[id],
-        category: textOf(node.category, 80) || kindLabel(node.kind, id),
-        kind: validKind(node.kind, id),
-        className: id === "opponent" ? "blue" : id === "assess" ? "gold" : "",
-        x: pos.x,
-        y: pos.y
-      };
-    }),
-    edges: normalizeEdges(draft?.edges)
+    nodes: layoutOv1Nodes(nodes, edges),
+    edges
   });
 }
 
@@ -219,24 +203,21 @@ function withExpectedEffects(details, expectedEffects) {
 }
 
 function createOv1Draft({ details, direction, labels, provenance, concept }) {
-  const layout = layoutFor(direction);
   const model = {
     version: 1,
     provenance: { ...provenance, generatedAt: new Date().toISOString() },
     nodes: ROLE_ORDER.map((id) => {
-      const pos = viewportLayoutToWorldPercent(layout[id][0], layout[id][1]);
       return {
         id,
         label: textOf(labels[id], 60) || DEFAULT_LABELS[id],
         detail: textOf(details[id], 800) || `请补充${DEFAULT_LABELS[id]}的说明。`,
         kind: id === "sense" ? "equipment" : id === "decide" ? "command" : id === "control" ? "action" : id === "opponent" ? "external" : "effect",
-        className: id === "opponent" ? "blue" : id === "assess" ? "gold" : "",
-        x: pos.x,
-        y: pos.y
+        className: id === "opponent" ? "blue" : id === "assess" ? "gold" : ""
       };
     }),
     edges: DEFAULT_EDGES.map((edge) => ({ ...edge }))
   };
+  model.nodes = layoutOv1Nodes(model.nodes, model.edges);
   if (concept) model.concept = concept;
   return asDm2Ov1(model);
 }
@@ -308,13 +289,6 @@ function applyDetails(model, details) {
 
 function toList(value) {
   return Array.isArray(value) ? value.map((item) => textOf(item, 220)).filter(Boolean) : [];
-}
-
-function layoutFor(direction) {
-  const value = textOf(direction, 80);
-  if (value.includes('体系压制')) return LAYOUTS.pressure;
-  if (value.includes('诱导牵制')) return LAYOUTS.diversion;
-  return LAYOUTS.default;
 }
 
 function labelOf(value, fallback) {

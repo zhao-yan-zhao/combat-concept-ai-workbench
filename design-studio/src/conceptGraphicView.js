@@ -32,17 +32,17 @@ export function renderConceptGraphic(state) {
     <div class="section-heading">
       <div>
         <h2>作战概念图设计</h2>
-        <p>AI 汇总兵力、阶段与模糊图，形成总体作战构想；人工复核确认后自动种子化 OV-1。</p>
+        <p>AI 汇总兵力、阶段与模糊图，形成总体作战构想；人工复核确认后自动种子化高层作战概念图。</p>
       </div>
       <span class="mini-tag ${confirmed ? "ready" : generating ? "review" : ""}">${escapeHtml(status)}${generating ? " · 生成中" : ""}</span>
     </div>
 
     ${renderPlanningMigrationBanner(state)}
-    ${upstreamReady ? "" : `<p class="planning-banner">请先确认兵力与任务、阶段与行动，并确认作战概念图 OV 参考。完成后将自动汇总本步草案。</p>`}
+    ${upstreamReady ? "" : `<p class="planning-banner">请先确认兵力与任务、阶段与行动，并确认作战概念图研究参考。完成后将自动汇总本步草案。</p>`}
 
     <div class="planning-actions">
       <button type="button" data-action="generate-concept-graphic" ${generating || !upstreamReady ? "disabled" : ""}>${generating ? "正在汇总…" : nodes.length ? "按规划重生成总体概念图" : "汇总生成总体作战概念图"}</button>
-      <button type="button" class="quiet-button" data-action="confirm-concept-graphic" ${generating || !nodes.length || confirmed ? "disabled" : ""}>确认总体概念图并进入 OV-1</button>
+      <button type="button" class="quiet-button" data-action="confirm-concept-graphic" ${generating || !nodes.length || confirmed ? "disabled" : ""}>确认总体概念图并进入高层作战概念图</button>
     </div>
 
     <div class="planning-grid">
@@ -52,7 +52,7 @@ export function renderConceptGraphic(state) {
       </article>
 
       <article class="planning-card">
-        <header><h3>总体节点（${nodes.length}）</h3><small>将映射到 OV-1</small></header>
+        <header><h3>总体节点（${nodes.length}）</h3><small>将映射到高层作战概念图</small></header>
         ${nodes.length ? `<div class="planning-list">${nodes.map((node) => `
           <article class="planning-item">
             <b>${escapeHtml(node.label)}</b>

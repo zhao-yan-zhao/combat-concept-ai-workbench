@@ -5,9 +5,9 @@ export function renderValidation(state) {
   if (!result) {
     return `
       <section class="surface surface-pad scenario-empty">
-        <div class="section-heading"><div><h2>设计验证</h2><p>检查 OV-5 连通性、信息定义、OODA 时效和想定来源覆盖。</p></div><div class="activity-toolbar"><button class="quiet-button" type="button" data-action="open-structure-review">结构核对台</button><button data-action="run-validation">运行设计验证</button></div></div>
+        <div class="section-heading"><div><h2>设计验证</h2><p>检查 活动连通性、信息定义、OODA 时效和想定来源覆盖。</p></div><div class="activity-toolbar"><button class="quiet-button" type="button" data-action="open-structure-review">结构核对台</button><button data-action="run-validation">运行设计验证</button></div></div>
         ${renderProjectStorageState(state.validationStorage, { refreshAction: "refresh-project-validation" })}
-        <div class="idea-prompt"><p>验证会消费当前 OV-5、OODA 和自动想定数据，先执行确定性规则，再形成红方质询草案。规则问题会同步出现在结构核对台，便于与派生诊断一并处理。模型变更后结果会标为过期，需重新运行。</p></div>
+        <div class="idea-prompt"><p>验证会消费当前活动模型、研究循环 和自动想定数据，先执行确定性规则，再形成红方质询草案。规则问题会同步出现在结构核对台，便于与派生诊断一并处理。模型变更后结果会标为过期，需重新运行。</p></div>
         ${renderRedTeamService(state.redTeamHealth)}
       </section>
     `;

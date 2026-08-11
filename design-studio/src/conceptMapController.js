@@ -283,9 +283,9 @@ export function createConceptMapController({
         confirmBtn.dataset.conceptMapConfirmed = "false";
         confirmBtn.title = itemCount === 0
           ? "请先生成或同步地图内容后再确认"
-          : "确认当前概念图作为 OV 参考，并进入 OV-1";
+          : "确认当前概念图作为研究参考，并进入高层作战概念图";
         const confirmLabel = confirmBtn.querySelector("[data-concept-map-confirm-label]");
-        if (confirmLabel) confirmLabel.textContent = "确认并进入 OV-1";
+        if (confirmLabel) confirmLabel.textContent = "确认并进入高层作战概念图";
       }
 
       const pullBtn = root.querySelector('[data-action="pull-concept-map-from-tool"]');
@@ -515,7 +515,7 @@ export function createConceptMapController({
       return;
     }
     if (isCurrentConceptMap(map, getState().conceptMapStorage)) {
-      notify("本步已确认，进入 OV-1");
+      notify("本步已确认，进入高层作战概念图");
       await onReferenceConfirmed?.(map);
       return;
     }

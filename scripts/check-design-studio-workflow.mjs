@@ -14,7 +14,7 @@ globalThis.localStorage = {
 
 const { project } = await import("../design-studio/src/data.js");
 const { addEdge, getAssignableParentActivities, loadOv5Model, updateActivity } = await import("../design-studio/src/ov5Store.js");
-const { addOv1Edge, addOv1Node, createOv1Model, deleteOv1Node, updateOv1Node } = await import("../design-studio/src/ov1Store.js");
+const { addOv1Edge, addOv1Node, createOv1Model, deleteOv1Node, hasPersistedOv1Model, loadOv1Model, saveOv1Model, setOv1ProjectScope, updateOv1Node } = await import("../design-studio/src/ov1Store.js");
 const { calculateOv1CanvasPosition } = await import("../design-studio/src/drawflowCanvasController.js");
 const { createAiOv1Draft, createLocalOv1Draft } = await import("../design-studio/src/ov1DraftStore.js");
 const { deriveOodaFromOv5, getOodaDuration } = await import("../design-studio/src/oodaStore.js");
@@ -45,10 +45,12 @@ assert(
 let ov1 = createOv1Model();
 ov1 = addOv1Node(ov1, { label: "备用协同节点", detail: "用于验证自定义节点与布局持久化。", x: 62, y: 58 });
 const customNode = ov1.nodes.at(-1);
-assert(customNode?.x === "62%" && customNode.y === "58%", "OV-1 custom node was not positioned");
+assert(customNode && (customNode.x !== "62%" || customNode.y !== "58%"), "OV-1 custom node overlap was not resolved");
+const initialCustomPosition = `${customNode.x},${customNode.y}`;
 ov1 = addOv1Edge(ov1, { sourceId: "sense", targetId: customNode.id, type: "信息流" });
 ov1 = updateOv1Node(ov1, customNode.id, { label: "已修订协同节点", detail: "已更新节点说明。", x: 66, y: 60 });
-assert(ov1.nodes.find((node) => node.id === customNode.id)?.x === "66%", "OV-1 node update was not persisted");
+const updatedCustomNode = ov1.nodes.find((node) => node.id === customNode.id);
+assert(updatedCustomNode?.label === "已修订协同节点" && `${updatedCustomNode.x},${updatedCustomNode.y}` !== initialCustomPosition, "OV-1 node update was not persisted");
 ov1 = deleteOv1Node(ov1, customNode.id);
 assert(!ov1.nodes.some((node) => node.id === customNode.id) && !ov1.edges.some((edge) => edge.sourceId === customNode.id || edge.targetId === customNode.id), "OV-1 node deletion did not remove relations");
 const aiOv1 = createAiOv1Draft({ brief: project.brief, direction: "体系压制", draft: {
@@ -62,11 +64,20 @@ const aiOv1 = createAiOv1Draft({ brief: project.brief, direction: "体系压制"
   ],
   edges: [{ id: "sense-decide", sourceId: "sense", targetId: "decide", type: "信息流" }]
 } });
-assert(aiOv1.nodes.length === 5 && aiOv1.edges.length >= 1 && aiOv1.provenance?.mode === "ai" && aiOv1.nodes.find((node) => node.id === "sense")?.x === "12%" && aiOv1.nodes.find((node) => node.id === "sense")?.label === "多域态势融合平台", "AI OV-1 draft layout is incomplete");
+const aiOv1ById = new Map(aiOv1.nodes.map((node) => [node.id, node]));
+assert(aiOv1.nodes.length === 5 && aiOv1.edges.length >= 1 && aiOv1.provenance?.mode === "ai" && aiOv1ById.get("opponent")?.x === "4%" && aiOv1ById.get("opponent")?.y === "48%" && aiOv1ById.get("sense")?.x === "22%" && aiOv1ById.get("sense")?.y === "48%" && aiOv1ById.get("decide")?.x === "42%" && aiOv1ById.get("decide")?.y === "48%" && aiOv1ById.get("control")?.x === "60%" && aiOv1ById.get("control")?.y === "48%" && aiOv1ById.get("assess")?.x === "84%" && aiOv1ById.get("assess")?.y === "48%" && aiOv1ById.get("sense")?.label === "多域态势融合平台", "AI OV-1 draft layout is incomplete");
 const draggedOv1Position = calculateOv1CanvasPosition({ node: ov1.nodes[0], startX: 100, startY: 100, clientX: 900, clientY: -300, boardRect: { width: 400, height: 400 } });
 assert(draggedOv1Position.x === "76%" && draggedOv1Position.y === "0%", "OV-1 canvas drag position was not bounded");
 const localOv1 = createLocalOv1Draft({ brief: project.brief, direction: "诱导牵制" });
-assert(localOv1.provenance?.mode === "local" && localOv1.nodes.find((node) => node.id === "assess")?.x === "69%", "Local OV-1 draft layout is incomplete");
+assert(localOv1.provenance?.mode === "local" && localOv1.nodes.find((node) => node.id === "assess")?.x === "84%" && localOv1.nodes.find((node) => node.id === "assess")?.y === "48%", "Local OV-1 draft layout is incomplete");
+setOv1ProjectScope("project-a");
+saveOv1Model({ ...createOv1Model(), concept: { mission: "A" } });
+setOv1ProjectScope("project-b");
+assert(!hasPersistedOv1Model() && loadOv1Model().concept.mission !== "A", "OV-1 browser-local state must not cross project boundaries");
+saveOv1Model({ ...createOv1Model(), concept: { mission: "B" } });
+setOv1ProjectScope("project-a");
+assert(loadOv1Model().concept.mission === "A", "Project-scoped OV-1 browser-local state was not retained");
+setOv1ProjectScope("default");
 
 const ov5 = loadOv5Model();
 assert(ov5.activities.length >= 4, "OV-5 seed model is incomplete");
@@ -185,7 +196,7 @@ changedOv5.activities[0].title = "Updated activity";
 const revisedBrief = { ...project.brief, approach: "Revised comparison approach" };
 const nextModelSnapshots = saveModelSnapshot({ project, direction: "Workflow acceptance", brief: revisedBrief, ov1: payload.ov1, ov5: changedOv5, ooda, scenario, validationResult: validation }, modelSnapshots);
 const comparison = compareModelSnapshots(nextModelSnapshots[1], nextModelSnapshots[0]);
-assert(loadModelSnapshots().length === 2 && comparison?.changes.some((item) => item.label === "OV-5 活动" && item.changed.length === 1) && comparison?.changes.some((item) => item.label === "概念简报" && item.changed.includes("核心思路")), "Model comparison was not persisted");
+assert(loadModelSnapshots().length === 2 && comparison?.changes.some((item) => (item.label === "作战活动" || item.label === "OV-5 活动") && item.changed.length === 1) && comparison?.changes.some((item) => item.label === "概念简报" && item.changed.includes("核心思路")), "Model comparison was not persisted");
 const synchronizedSnapshots = upsertModelSnapshot({ ...nextModelSnapshots[0], label: "M042", lineage: { validationRevision: 1 } }, nextModelSnapshots);
 assert(synchronizedSnapshots[0].label === "M042" && synchronizedSnapshots[0].lineage.validationRevision === 1, "Server model snapshot did not replace the local snapshot");
 const restored = restoreModelSnapshot(nextModelSnapshots[1], { briefSeed: project.brief });

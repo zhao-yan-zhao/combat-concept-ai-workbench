@@ -6,7 +6,7 @@
     <base href="/design-studio/">
     <title>作战概念设计工具</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="./styles.css?v=0.55">
+    <link rel="stylesheet" href="./styles.css?v=0.56">
   </head>
   <body>
     <div class="studio-shell" id="studioShell">
@@ -47,8 +47,8 @@
             <summary>研究</summary>
             <div class="menubar-panel">
               <button type="button" data-view="brief">概念简报</button>
-              <button type="button" data-view="ov1">OV-1 概念图</button>
-              <button type="button" data-view="ov5">OV-5 活动模型</button>
+              <button type="button" data-view="ov1">高层作战概念图</button>
+              <button type="button" data-view="ov5">作战活动模型</button>
               <button type="button" data-view="ooda">OODA 循环</button>
               <button type="button" data-view="structure-review">结构核对台</button>
             </div>
@@ -148,10 +148,10 @@
       </div>
     </dialog>
     <dialog id="customDirectionDialog" class="direction-dialog"><form id="customDirectionForm" method="dialog" class="custom-direction-form"><header><h2>新增方向</h2><button class="quiet-button" type="button" data-action="close-custom-direction">关闭</button></header><label><span>名称</span><input name="title" maxlength="80" required></label><label><span>概述</span><textarea name="text" rows="3" maxlength="500" required></textarea></label><label><span>研究依据</span><textarea name="basis" rows="3" maxlength="500" required></textarea></label><div class="editor-actions"><button class="quiet-button" type="button" data-action="close-custom-direction">取消</button><button type="submit">保存方向</button></div></form></dialog>
-    <dialog id="ov1Dialog" class="ov1-dialog" aria-label="OV-1 编辑窗口"></dialog>
+    <dialog id="ov1Dialog" class="ov1-dialog" aria-label="高层作战概念图编辑窗口"></dialog>
     <div class="toast" id="toast" role="status"></div>
     <input id="knowledgeVaultInput" type="file" accept=".md,.markdown,.txt" webkitdirectory directory multiple hidden>
     <script src="./vendor/drawflow-0.0.60.min.js"></script>
-    <script type="module" src="./src/main.js"></script>
+    <script type="module" src="./src/main.js?v=0.60-no-regen"></script>
   </body>
 </html>

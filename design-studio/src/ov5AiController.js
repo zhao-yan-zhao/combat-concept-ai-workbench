@@ -33,7 +33,7 @@ export function createOv5AiController({ getState, render, notify, invalidateDeri
       const planning = planningAnalysisForDownstream(state);
       const response = await generateWithAi({
         workflowId: "concept",
-        workflow: { id: "concept", title: "OV-5 作战活动模型生成", outputSchema: "ConceptPlan" },
+        workflow: { id: "concept", title: "作战活动模型生成", outputSchema: "ConceptPlan" },
         analysis: {
           "任务目标": state.brief?.objective || "当前概念目标",
           "核心思路": state.brief?.approach || "当前概念思路",

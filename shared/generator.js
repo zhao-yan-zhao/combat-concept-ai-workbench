@@ -86,6 +86,9 @@ function createResultBySchema(schema, workflow, analysis, evidenceRefs) {
   if (schema === "PhaseActionConcept") {
     return createPhaseActionConceptResult(analysis);
   }
+  if (schema === "RuleLibraryDraft") {
+    return createRuleLibraryDraftResult(analysis);
+  }
   if (schema === "ConceptGraphicPlan") {
     return createConceptGraphicPlanResult(analysis);
   }
@@ -242,6 +245,81 @@ function createPhaseActionConceptResult(analysis) {
     transitions: built.transitions,
     openQuestions: built.openQuestions,
     reviewChecklist: built.reviewChecklist
+  };
+}
+
+function createRuleLibraryDraftResult(analysis) {
+  const objective = valueOf(analysis, "任务目标") || "作战概念研究";
+  const approach = valueOf(analysis, "核心思路") || "体系协同";
+  const effects = valueOf(analysis, "预期效果") || "形成可复核态势优势";
+  const risk = valueOf(analysis, "主要风险") || "对手反制";
+  const request = String(analysis?.revisionRequest || analysis?.["修订要求"] || "").trim();
+  const existing = Array.isArray(analysis?.currentRules?.rules) ? analysis.currentRules.rules : [];
+  if (existing.length && /咨询|是否|为什么|如何理解|解释/.test(request) && !/增|删|改|起草|补充|合并|拆/.test(request)) {
+    return {
+      summary: `当前规则库共 ${existing.length} 条。建议优先核对：名称是否作战语义明确、描述是否可观察、范围是否过宽。本轮仅咨询，未改表单。`,
+      rules: []
+    };
+  }
+  if (existing.length && request) {
+    return {
+      summary: `已按“${request.slice(0, 40)}”在本地草案中保留并整理现有规则；请在表单中继续精修描述。`,
+      rules: existing.map((rule, index) => ({
+        id: rule.id || `rule-${index + 1}`,
+        name: rule.name || `规则 ${index + 1}`,
+        type: rule.type || "约束",
+        scope: rule.scope || "研究级",
+        description: rule.description || "待补充"
+      }))
+    };
+  }
+  const assumptions = valueOf(analysis, "关键假设") || "关键条件成立";
+  return {
+    summary: `已根据简报目标“${objective}”起草规则本体草案（本地兜底），请在表单复核后保存。`,
+    rules: [
+      {
+        id: "rule-link",
+        name: "关键链路可用",
+        type: "约束",
+        scope: "全局",
+        description: `围绕“${objective}”，主/备态势与指挥链路至少一路可用，作为阶段进入与转换的基础条件。`
+      },
+      {
+        id: "rule-window",
+        name: "行动时窗受控",
+        type: "转换条件",
+        scope: "主行动阶段",
+        description: `在总研究窗口内按时职能划分阶段时窗；转换须具备可观察门槛，避免无依据等长切分。`
+      },
+      {
+        id: "rule-auth",
+        name: "交战授权边界",
+        type: "前置条件",
+        scope: "交战相关阶段",
+        description: `关键行动须满足授权边界与风险阈值；未获授权不得进入火力释放类阶段。`
+      },
+      {
+        id: "rule-effect",
+        name: "效果可复核",
+        type: "业务规则",
+        scope: "全局",
+        description: `以${approach}推进时，阶段退出须对应可观察效果判据（如态势覆盖、通道控制），并回扣预期效果：${effects}。`
+      },
+      {
+        id: "rule-assumption",
+        name: "关键假设持续成立",
+        type: "约束",
+        scope: "全局",
+        description: `研究推进须持续核验关键假设（${assumptions}）；假设失效时暂停进入下一阶段并回改规则或阶段设计。`
+      },
+      {
+        id: "rule-risk",
+        name: "主要风险阈值",
+        type: "业务规则",
+        scope: "全局",
+        description: `关注主要风险（${risk}）：达到预设风险阈值时须降级目标、切换备选路径或请求上级授权，不得无记录硬推。`
+      }
+    ]
   };
 }
 
@@ -770,6 +848,16 @@ function renderResultMarkdown(result, schema) {
     return [
       "## 作战聚焦候选",
       ...(result.options || []).map((item) => `- **${item.title}**：${item.text}`)
+    ].join("\n");
+  }
+  if (schema === "RuleLibraryDraft") {
+    return [
+      "## 规则库草案",
+      result.summary || "",
+      "### 规则",
+      ...((result.rules || []).length
+        ? result.rules.map((rule) => `- **${rule.name}**（${rule.type || "约束"} · ${rule.scope || "研究级"}）：${rule.description || ""}`)
+        : ["- （本轮未改规则表单）"])
     ].join("\n");
   }
   if (schema === "PhaseActionConcept") {

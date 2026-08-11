@@ -17,9 +17,9 @@ assert(ov6b.states.length === 3 && ov6b.transitions.length === 2, "OV-6b did not
 const ov5aHtml = renderOv5a(ov5a);
 const ov6aHtml = renderOv6a(ov6a);
 const ov6bHtml = renderOv6b(ov6b);
-assert(ov5aHtml.includes("OV-5a") && ov6aHtml.includes("OV-6a") && ov6bHtml.includes("OV-6b"), "DoDAF operational views did not render");
+assert(ov5aHtml.includes("OV-5a") && ov6aHtml.includes('data-dodaf-product="OV-6a"') && ov6bHtml.includes("OV-6b"), "DoDAF operational views did not render");
 assert(ov5aHtml.includes('data-derived-provenance="ov5a"') && ov5aHtml.includes("parentId"), "OV-5a provenance strip missing source fields");
-assert(ov6aHtml.includes('data-derived-provenance="ov6a"') && ov6aHtml.includes("preconditions"), "OV-6a provenance strip missing source fields");
+assert(ov6aHtml.includes("rule-library-page") && ov6aHtml.includes("规则库") && ov6aHtml.includes("rule-form"), "OV-6a rule library form page missing");
 assert(ov6bHtml.includes('data-derived-provenance="ov6b"') && ov6bHtml.includes('data-view="ooda"'), "OV-6b provenance strip missing OODA jump");
 assert(getDerivedViewProvenance("ov2")?.sources?.length && listDerivedViewProvenance().length >= 8, "DoDAF product provenance catalog incomplete");
 assert(renderDerivedViewProvenance("ov3").includes('data-view="ov5"') && renderDerivedViewProvenance("ov3").includes("Needline") === false, "OV-3 provenance should point back to OV-5b");

@@ -15,7 +15,7 @@ export function createOv1Controller({ getState, render, notify, selectNode, inva
         state.ov1PanelMode = "context";
         state.ov1PanelOpen = true;
         state.ov1InspectorCollapsed = false;
-        notify("OV-1 任务摘要已保存");
+        notify("高层概念图任务摘要已保存");
         render();
       });
       root.querySelector("#ov1NodeForm")?.addEventListener("submit", (event) => {
@@ -30,14 +30,14 @@ export function createOv1Controller({ getState, render, notify, selectNode, inva
           y: data.get("y")
         });
         if (!next) {
-          notify("请填写有效的 OV-1 节点名称和说明");
+          notify("请填写有效的概念图节点名称和说明");
           return;
         }
         state.ov1 = next;
         invalidateValidation?.();
         void syncOv1?.(next, { source: "manual" });
         selectNode(data.get("nodeId"), { open: true });
-        notify("OV-1 节点已保存到本地");
+        notify("概念图节点已保存到本地");
         render();
       });
 
@@ -51,13 +51,13 @@ export function createOv1Controller({ getState, render, notify, selectNode, inva
           type: data.get("type")
         });
         if (!next) {
-          notify("该 OV-1 关系无效或已存在");
+          notify("该概念图关系无效或已存在");
           return;
         }
         state.ov1 = next;
         invalidateValidation?.();
         void syncOv1?.(next, { source: "manual" });
-        notify("OV-1 关系已保存到本地");
+        notify("概念图关系已保存到本地");
         render();
       });
 
@@ -71,7 +71,7 @@ export function createOv1Controller({ getState, render, notify, selectNode, inva
           if (state.ov1PanelEdgeId === removedId) state.ov1PanelEdgeId = null;
           invalidateValidation?.();
           void syncOv1?.(next, { source: "manual" });
-          notify("OV-1 关系已移除");
+          notify("概念图关系已移除");
           render();
         });
       });
@@ -84,11 +84,11 @@ export function createOv1Controller({ getState, render, notify, selectNode, inva
           const state = getState();
           const nodeId = state.selection?.id;
           const impacts = state.ov5.activities.filter((item) => (item.sourceOv1NodeIds || []).includes(nodeId));
-          const impactNote = impacts.length ? `\n将使 ${impacts.length} 项 OV-5 活动的来源引用失效：${impacts.map((item) => `“${item.title}”`).join("、")}。` : "";
-          if (!nodeId || !window.confirm(`确定删除当前 OV-1 节点及其关联关系？${impactNote}`)) return;
+          const impactNote = impacts.length ? `\n将使 ${impacts.length} 项活动的来源引用失效：${impacts.map((item) => `“${item.title}”`).join("、")}。` : "";
+          if (!nodeId || !window.confirm(`确定删除当前概念图节点及其关联关系？${impactNote}`)) return;
           const next = deleteOv1Node(state.ov1, nodeId);
           if (!next) {
-            notify("OV-1 至少需要保留一个节点");
+            notify("概念图至少需要保留一个节点");
             return;
           }
           state.ov1 = next;
@@ -98,7 +98,7 @@ export function createOv1Controller({ getState, render, notify, selectNode, inva
           state.ov1Dialog = null;
           state.ov1PanelNodeId = null;
           state.ov1PanelMode = "context";
-          notify("OV-1 节点及其关联已删除");
+          notify("概念图节点及其关联已删除");
           render();
         });
       });
@@ -123,7 +123,7 @@ export function createOv1Controller({ getState, render, notify, selectNode, inva
       void syncOv1?.(next, { source: "manual" });
       const node = next.nodes[next.nodes.length - 1];
       selectNode(node.id, { open: true });
-      notify("已新增 OV-1 节点，请在侧栏补充说明与位置");
+      notify("已新增概念图节点，请在侧栏补充说明与位置");
       render();
       return true;
     }

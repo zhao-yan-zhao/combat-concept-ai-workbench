@@ -1,5 +1,105 @@
 # project-context.md
 
+## Latest completed batch (2026-08-11, brief→rules AI pregenerate)
+
+- Goal: After confirming 研究建模 (brief), jump to 规则库 and AI-pregenerate combat rules from the brief, with no fixed rule count and a stage transition animation.
+- Trigger: `completeWorkflowStage` stage 0 → `ov6a` calls `ruleLibraryChatController.pregenerateFromBrief` only when `rules` is empty (does not overwrite existing library).
+- AI: `RuleLibraryDraft` schema max 240; prompt removes 4–12 cap; local generator fallback ~6 rules.
+- UX: `#workflowModeOverlay` title/detail “正在进入阶段行动 / 根据简报生成作战规则…”; empty board spinner + `is-pregenerating`.
+- Verification: `check-phase-chain`, `check-ov6-workbench`, `check-ov6-product-model`, syntax checks passed.
+
+## Latest completed batch (2026-08-11, rule library UI redesign)
+
+- Goal: Rebuild 规则库 as a research master-detail workbench with library vs bind modes.
+- `ruleLibraryView.js`: left filtered list + right editor; stats; add/delete/select; binding board grouped by phase/ov5.
+- Modes: before phase confirm = 建库态; after confirm = 绑定校验态. Chain guide retained.
+- Controller: `ov6a-select-rule`, `ov6a-set-filter`, `ov6a-delete-rule`; new rule auto-selected.
+- Verification: ov6-product-model, ov6-workbench, phase-chain, operational-views, workflow-test-mode related checks passed.
+
+## Latest completed batch (2026-08-11, pin phase-action chain)
+
+- Goal: Pin research path 规则库 → 阶段与行动 → 绑定/状态机/时序 → 反查回改.
+- Navigation: phase track `ov6a → phase-action → ov6b → ov6c`; primary path same; labels 规则库/状态机校验/时序校验.
+- Confirm phase-action opens rule binding (not force). Completing 阶段行动 stage seeds force-mission.
+- `phaseChainGuide.js` stepper on rule/phase/state/sequence/review pages; structure-review jump hints for reverse checks.
+- Verification: `check-phase-chain`, workflow-test-mode, ov6-workbench, structure-review, concept-planning passed.
+
+## Latest completed batch (2026-08-11, OV-6 workbench UI)
+
+- Goal: Ship rule-binding editor, multi state-machine editing, sequence canvas, and structure-review reverse checks.
+- `ov6Workbench.js`: activity candidates from phase/ov5; mutators for bindings/machines/sequences; `inspectPhaseAgainstOv6`.
+- UI: ov6a binding checklists + status; ov6b per-machine cards; ov6c lifeline/message canvas; styles in `styles.css`.
+- Controller actions wired via `dodafProductController` + main change handlers for checkbox/select.
+- Structure review ingests reverse-check findings (critical activity without rule, machine without exit, message without activity).
+- Verification: `check-ov6-workbench`, `check-ov6-product-model`, operational-views, structure-review, design-studio-workflow passed.
+
+## Latest completed batch (2026-08-11, OV-6 v2 normalizer)
+
+- Goal: Implement OV-6a/b/c v2 data model with legacy compatibility (batch A).
+- `shared/dodaf/products.js`: rules with activityBindings + 待校验; stateMachines[]; sequences/participants/messages/fragments; flat aliases retained for UI.
+- Helpers: `ov6aRuleReviewStatus` / `ov6aRuleReviewLabel`. UI shows pending validation, machine summary, sequence summary.
+- Field edits keep stateMachines/sequences in sync via `updateProductField`.
+- Verification: `check-ov6-product-model`, dm2-exchange, operational-views, consistency-snapshot, ov6c-event-trace, design-studio-workflow passed.
+- Next: rule binding editor, multi-machine authoring, sequence diagram canvas, reverse-check diagnostics.
+
+## Latest completed batch (2026-08-11, OV-6 product model freeze)
+
+- Goal: Freeze OV-6a/b/c research product semantics and the phase-validation loop.
+- Spec: `plans/OV6_PRODUCT_MODEL.md` + updates in `plans/RESEARCH_WORKFLOW_18.md`.
+
+## Latest completed batch (2026-08-11, freeze 18-step research path)
+
+- Goal: Freeze the user 18-step research flow and align navigation + hard gates with it.
+- Spec: `plans/RESEARCH_WORKFLOW_18.md` — roles (write/check/deliver), upstream, unlock, formal resources, hard vs soft gates.
+- Navigation order: 01 brief → 03 phase-action → 04a/b/c rule/state/event → 05 force → 06 responsibility → 07/08 resource flow → 09 concept-map → 10 overall graphic → 11 activity → 12 tree → 13 cycle → 14 review → 15–18 deliver.
+- Hard gates remain five stages: brief | phase-action only | force only | concept-map+ov1+ov5+ooda | scenario+validation. Check pages walkable but not blocking.
+- Gaps still open: 02 baseline page/resource; OV-2/3/4 seed from force+phase; 03↔04 rewrite loop.
+- Verification: workflow-test-mode, concept-planning, concept-map-integration, structure-review, design-studio-workflow, workflow-confirmation-invalidation passed.
+
+## Latest completed batch (2026-08-11, five-stage gates + no OV branding)
+
+- Goal: Align gates/step chain with the five research steps, and remove OV branding from UI while keeping ov* resource keys and standard data output.
+- Completed: `workflowPhases` = 研究建模 / 阶段行动 / 兵力任务 / 概念图 / 推演演示. Primary path is brief → phase-action → force-mission → concept-map → ov1 → ov5 → ooda → structure-review → scenario → validate → collaboration → report.
+- Completed: stage incomplete reasons split by step; progressive `currentWorkflow` clamp; `shared/workflowConfirmation.js` stage map updated; server `completedThrough` max clamp 4.
+- Completed: view/product labels, gate short labels, toasts, and derived-product titles drop OV wording; data keys remain `ov1`…`ov6c`.
+- Verification: workflow-test-mode, concept-planning, concept-map-integration, structure-review, design-studio-workflow, workflow-confirmation-invalidation, collaboration-audit passed.
+
+## Latest completed batch (2026-08-11, five-step navigation tracks)
+
+- Goal: Replace the three nav tracks (研究建模 / 结构核对 / 推演交付) with five research steps while keeping existing stage gating.
+- Completed: `workflowTracks` is now 研究建模(brief) → 阶段行动(phase-action + OV-6*) → 兵力任务(force-mission + OV-2/3/4) → 概念图(concept-map + OV-1 + OV-5* + OODA) → 推演演示(structure-review + scenario + validate + collaboration + report).
+- Completed: delivery track emphasizes scenario/validate; collaboration/report subtitles mark them secondary. Structure review empty copy points to the 概念图 step.
+- Not changed this batch: workflow phase lock order, resource lineage. OV-5 still lineage-tracks brief+conceptMap; OODA tracks OV-5; OV-6* still track OV-5/OODA/scenario rather than phase-action directly.
+- Verification: `check-workflow-test-mode`, `check-structure-review-workbench`, `check-design-studio-workflow` passed.
+
+## Latest completed batch (2026-08-11, OV-1 compact composition)
+
+- Goal: Replace the sparse ladder-like OV-1 composition and canvas-framing feedback loop with a compact operational graphic while keeping it adaptive for varied node counts.
+- Completed: `shared/ov1Layout.js` uses close support rows at `28/68` around the `48` main axis before it uses far-edge capacity. `shared/ov1EdgeRouting.js` now connects feedback directly to its upper or lower return rail rather than first detouring to the outer right/left boundary.
+- Completed: relation captions are visible again. `ov1View.js` renders each edge's actual type (`信息流`, `控制流`, `态势变化`, or `反馈`) instead of an empty, muted label.
+- Completed: straight horizontal and vertical relation captions now sit exactly at the route midpoint, rather than being offset beside the line.
+- Project data: `mjfkfd` was re-laid out at `r554`. Its support platforms and external actors are compact vertical triplets at `y=28/48/68`; the main backbone remains `P-8A -> command E-2D -> M1074A1 -> effect` at `y=48`.
+- Verification: zero card overlaps; five vertical straight branches, three horizontal main-chain links, one required horizontal detour, and one compact `feedback-rail`. OV-1, design-studio workflow, and concept-planning workflow checks pass.
+- Visual limitation: the browser-control page is unauthenticated and its preview surface is read-only; rely on the signed-in workbench refresh for the visual pass.
+
+## Latest completed batch (2026-08-11, OV-1 collision-safe lanes)
+
+- Goal: Remove OV-1 card overlaps without overfitting the active project, while keeping the high-level operational backbone and readable direct relations.
+- Completed: `shared/ov1Layout.js` now gives external objects, equipment, command nodes, actions, and effects separate safe vertical lanes at `x=4/22/42/60/84`. The highest-connected item occupies each lane's middle anchor; further items use separated upper/lower slots. A lane with more than five items expands vertically into the free canvas rather than compressing cards.
+- Completed: card footprints are enlarged to a bounded `14% x 12%` layout budget, and `ov1View.js` uses the same estimate for first-paint routing. Existing measured routing still replaces that estimate after paint.
+- Project data: `mjfkfd` was re-laid out from `r543` to `r544` using the canonical lanes. The later `r551` project revision contains newer workbench micro-adjustments, which were preserved; its 10 nodes still have no footprint overlap and remain in their intended semantic lanes.
+- Verification: OV-1, design-studio workflow, and concept-planning workflow acceptance scripts pass. The route check found vertical straight links for aligned branches, horizontal straight links for the main backbone, one obstacle detour, and one `feedback-rail`; no card overlaps. Static resources and `/api/health` return `200`.
+- Visual verification: the browser-control session opens an unauthenticated local tab and cannot access the user's existing signed-in tab, so a fresh authenticated screenshot remains unavailable.
+
+## Latest completed batch (2026-08-10, OV-1 adaptive layout and routing)
+
+- Goal: Make OV-1 stay readable across varying node counts and content, with a level main backbone, obstacle-aware relations, and no cross-project coordinate leakage.
+- Completed: `shared/ov1Layout.js` anchors the equipment-command-action-effect backbone at `y=48`, puts cross-band external actors into the same lane when appropriate, and fans action hubs with three or more local relations to the outer action band.
+- Completed: `shared/ov1EdgeRouting.js` uses direct horizontal or vertical lines only for aligned, clear pairs; it uses orthogonal detours for blocked aligned paths and outer cubic arcs for blocked long feedback. Endpoint lane offsets were removed so backbone lines remain exactly level.
+- Completed: standard local and AI five-role OV-1 drafts now call the shared layout engine; `ov1Store.js` local storage is project scoped and initialized before hydration, preventing a previous project draft from being uploaded after project switching.
+- Project data: `mjfkfd` OV-1 was safely auto-laid out from server revision 537 to revision 539. It has 13 nodes and 13 edges; P-8A, command, M1074A1 PLS, and effect are at `28/42/58/82%, 48%`. Route keys 9/10/12 are horizontal straight lines, key 11 is an orthogonal detour, and key 13 is a feedback arc.
+- Verification: `check-ov1-strengthening`, `check-design-studio-workflow`, and `check-concept-planning-workflow` passed; syntax checks passed for changed modules. Browser-session visual verification remains unavailable in the automation session because its fresh in-app tab was at the login screen.
+
 ## Latest completed batch (2026-07-28, concept-map position persistence)
 
 - Goal: 独立工具拖动兵力后，坐标写入 conceptMap 持久化（document + draft.placements + 服务端）。

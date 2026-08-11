@@ -97,23 +97,23 @@ function stepShortLabel(view) {
     "force-mission": "兵力任务",
     "phase-action": "阶段行动",
     "concept-map": "概念图",
-    ov1: "OV-1",
-    ov5: "OV-5b",
-    ooda: "OODA",
+    ov1: "总体图",
+    ov5: "活动",
+    ooda: "循环",
     "structure-review": "核对台",
-    ov5a: "OV-5a",
-    ov2: "OV-2",
-    ov3: "OV-3",
-    ov4: "OV-4",
-    ov6a: "OV-6a",
-    ov6b: "OV-6b",
-    ov6c: "OV-6c",
+    ov5a: "活动树",
+    ov2: "资源流",
+    ov3: "交换矩阵",
+    ov4: "责任",
+    ov6a: "规则库",
+    ov6b: "状态机",
+    ov6c: "时序",
     scenario: "想定",
     validate: "验证",
     collaboration: "协同",
     report: "报告"
   };
-  return map[view.id] || String(view.label || view.id).replace(/^OV-\S+\s*/, "OV-").slice(0, 8);
+  return map[view.id] || String(view.label || view.id).replace(/^OV-\S+\s*/, "").slice(0, 8);
 }
 
 export function renderView(viewId, state) {
@@ -340,7 +340,7 @@ function renderOv5(state) {
   const evidenceSelection = formatEvidenceSelection(model.provenance?.evidenceSelection);
   return `
     <section class="surface surface-pad">
-      <div class="section-heading"><div><h2>OV-5 作战活动模型</h2><p>活动、信息、资源与触发关系构成概念设计骨架。</p></div><div class="activity-toolbar"><span class="mini-tag ${state.ov5Generating ? "review" : ""}">${state.ov5Generating ? "生成中" : provenance}</span>${evidenceSelection ? `<span class="mini-tag">${escapeHtml(evidenceSelection)}</span>` : ""}<span class="mini-tag">${model.activities.length} 个活动 · ${model.edges.length} 条关联</span><button class="quiet-button" data-action="attach-ov1-sources" ${state.ov5Generating ? "disabled" : ""}>补挂 OV-1 来源</button><button class="quiet-button" data-action="apply-mapping-quality" ${state.ov5Generating ? "disabled" : ""} title="补全空 I/O 与浅层父活动，不覆盖已有正文">补全映射质量</button><button class="quiet-button" data-action="open-structure-review">结构核对</button><button class="quiet-button" data-action="add-activity" ${state.ov5Generating ? "disabled" : ""}>新增活动</button><button type="button" data-action="generate-ov5" ${state.ov5Generating ? "disabled" : ""}>${state.ov5Generating ? "正在生成" : "AI 重建 OV-5"}</button></div></div>
+      <div class="section-heading"><div><h2>作战活动模型</h2><p>活动、信息、资源与触发关系构成概念设计骨架。</p></div><div class="activity-toolbar"><span class="mini-tag ${state.ov5Generating ? "review" : ""}">${state.ov5Generating ? "生成中" : provenance}</span>${evidenceSelection ? `<span class="mini-tag">${escapeHtml(evidenceSelection)}</span>` : ""}<span class="mini-tag">${model.activities.length} 个活动 · ${model.edges.length} 条关联</span><button class="quiet-button" data-action="attach-ov1-sources" ${state.ov5Generating ? "disabled" : ""}>补挂总体图来源</button><button class="quiet-button" data-action="apply-mapping-quality" ${state.ov5Generating ? "disabled" : ""} title="补全空 I/O 与浅层父活动，不覆盖已有正文">补全映射质量</button><button class="quiet-button" data-action="open-structure-review">结构核对</button><button class="quiet-button" data-action="add-activity" ${state.ov5Generating ? "disabled" : ""}>新增活动</button><button type="button" data-action="generate-ov5" ${state.ov5Generating ? "disabled" : ""}>${state.ov5Generating ? "正在生成" : "AI 重建 OV-5"}</button></div></div>
       ${renderProjectStorageState(state.ov5Storage, { refreshAction: "refresh-project-ov5" })}
       ${renderOv5ActivityGraph(model, state.selection?.id)}
     </section>

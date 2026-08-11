@@ -105,7 +105,7 @@ export function buildCollaborationReviewDraft(payload = {}) {
     `高优 ${Number(summary.alert) || 0} · 复核 ${Number(summary.review) || 0} · 未完成 ${Number(summary.pending) || 0}`,
     summary.validationStale ? "注意：设计验证结果已过期" : "",
     summary.scenarioStale || issues.some((item) => item.code === "scenario-stale") ? "注意：想定相对上游已过期" : "",
-    summary.oodaStale || issues.some((item) => item.code === "ooda-stale") ? "注意：OODA 相对 OV-5 已过期" : "",
+    summary.oodaStale || issues.some((item) => item.code === "ooda-stale") ? "注意：研究循环相对活动模型已过期" : "",
     `过滤：优先级=${filterLabel(payload.filter?.severity)}；分组=${groupFilterLabel(payload.filter?.group)}`,
     "",
     "主要问题："

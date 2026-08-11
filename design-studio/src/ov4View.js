@@ -11,7 +11,7 @@ export function renderOv4(state) {
   const unresolved = model.unresolved || { unmappedActivityIds: [], unassignedRoleIds: [] };
   return `
     <section class="surface surface-pad dodaf-drafting-surface" data-dodaf-product="OV-4">
-      <div class="section-heading"><div><h2>OV-4 抽象责任关系</h2><p>DoDAF 2.02 / DM2 Organization / responsibleFor 可编辑产品。</p></div><span class="mini-tag">${source === "persisted" ? "已持久化" : "种子/草稿"} · DM2 制图</span></div>
+      <div class="section-heading"><div><h2>责任关系</h2><p>DoDAF 2.02 / DM2 Organization / responsibleFor 可编辑产品。</p></div><span class="mini-tag">${source === "persisted" ? "已持久化" : "种子/草稿"} · DM2 制图</span></div>
       ${renderDerivedViewProvenance("ov4")}
       ${renderProjectStorageState(storage, { refreshAction: "refresh-project-ov4" })}
       ${renderDodafLegend("OV-4")}

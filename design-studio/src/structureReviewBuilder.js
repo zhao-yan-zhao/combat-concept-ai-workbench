@@ -12,6 +12,7 @@ import { isValidationStale } from "./validationStore.js";
 import { resolveDodafProduct } from "./dodafProductStore.js";
 import { inspectArchitectureConsistency } from "../../shared/dodaf/consistency.js";
 import { detectLegacyConceptMapOnly, planningCoverageStatus } from "./planningContext.js";
+import { inspectPhaseAgainstOv6 } from "./ov6Workbench.js";
 
 const MAX_ISSUES = 64;
 const FILTER_GROUPS = ["mapping", "validation", "concept", "contract", "sequence"];
@@ -64,6 +65,7 @@ export function buildStructureReview(state = {}) {
   pushDiagnosticIssues(issues, ov6a.diagnostics, "ov6a", "ov5", "rules");
   pushDiagnosticIssues(issues, ov6b.diagnostics, "ov6b", "ooda", "states");
   pushOv6cIssues(issues, ov6c);
+  pushPhaseOv6ReverseIssues(issues, state);
   const validationStale = Boolean(validationResult && isValidationStale(validationResult, ov5, ooda, scenario, ov1));
   pushValidationIssues(issues, validationResult, ov5, ooda, scenario, validationStale);
   const oodaFreshness = getOodaFreshness(ooda, ov5);
@@ -74,8 +76,8 @@ export function buildStructureReview(state = {}) {
       group: "sequence",
       severity: "review",
       sourceView: "ooda",
-      title: "OODA 相对 OV-5 已过期",
-      detail: oodaFreshness.reason || "OV-5 活动或关系已变更，当前研究辅助循环可能不再匹配，建议从 OV-5 重新派生。",
+      title: "研究循环相对活动模型已过期",
+      detail: oodaFreshness.reason || "OV-5 活动或关系已变更，当前研究辅助循环可能不再匹配，建议从活动模型重新派生。",
       targetView: "ooda",
       action: "derive-ooda",
       stale: true
@@ -90,7 +92,7 @@ export function buildStructureReview(state = {}) {
       group: "sequence",
       severity: "review",
       sourceView: "scenario",
-      title: "想定相对 OV-5/OODA 已过期",
+      title: "想定相对活动模型/研究循环已过期",
       detail: scenarioFreshness.reason || "上游活动或行为循环已变更，当前想定实体与时间线仅供参考，建议重新生成。",
       targetView: "scenario",
       action: "generate-scenario",
@@ -473,6 +475,23 @@ function pushConsistencyIssues(issues, consistency) {
       targetView: item.targetView || "structure-review",
       targetKind: item.entityId ? "entity" : "",
       targetId: item.entityId || ""
+    }));
+  });
+}
+
+function pushPhaseOv6ReverseIssues(issues, state) {
+  const findings = inspectPhaseAgainstOv6(state);
+  findings.forEach((item) => {
+    issues.push(issue({
+      id: item.id,
+      code: item.code,
+      group: item.group || "sequence",
+      severity: item.severity || "review",
+      sourceView: item.sourceView || "phase-action",
+      title: item.title,
+      detail: item.detail,
+      targetView: item.targetView || "phase-action",
+      action: item.action || ""
     }));
   });
 }

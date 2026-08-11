@@ -29,7 +29,7 @@ export function createOv1AiController({ getState, render, notify, invalidateVali
           direction: state.direction,
           forceMission: state.forceMission
         }));
-        notify("已按研究主体概念兵力装备展开 OV-1 候选（一兵力一节点）");
+        notify("已按研究主体概念兵力装备展开高层概念图候选（一兵力一节点）");
       } catch {
         state.ov1Candidate = normalizeOv1Model(createLocalOv1Draft({
           brief: state.brief,
@@ -54,7 +54,7 @@ export function createOv1AiController({ getState, render, notify, invalidateVali
       const planning = planningAnalysisForDownstream(state);
       const response = await generateWithAi({
         workflowId: "concept",
-        workflow: { id: "concept", title: "OV-1 高层作战概念图生成", outputSchema: "OperationalConceptGraphic" },
+        workflow: { id: "concept", title: "高层作战概念图生成", outputSchema: "OperationalConceptGraphic" },
         analysis: {
           "任务目标": state.brief?.objective || "当前概念简报目标",
           "核心思路": state.brief?.approach || "当前概念简报思路",
@@ -63,7 +63,7 @@ export function createOv1AiController({ getState, render, notify, invalidateVali
           ...planning,
           "概念方向": state.direction,
           "生成要求": [
-            "当前缺少已确认研究主体概念兵力，仅可按简报生成研究级 OV-1 草案。",
+            "当前缺少已确认研究主体概念兵力，仅可按简报生成研究级高层概念图草案。",
             "必须恰好给出 sense、decide、control、opponent、assess 五类节点及其高层关系。",
             "节点名只能是实体、能力或关键动作；不得把阶段名、研究步骤写成节点。",
             "内容保持研究级、可审阅；不提供具体行动步骤、目标选择、武器用法、坐标或性能参数。"
@@ -71,7 +71,7 @@ export function createOv1AiController({ getState, render, notify, invalidateVali
         },
         evidence
       });
-      if (!isAiOutput(response)) throw new Error("AI OV-1 响应不完整");
+      if (!isAiOutput(response)) throw new Error("AI 高层概念图响应不完整");
       state.ov1Candidate = normalizeOv1Model(createAiOv1Draft({
         brief: state.brief,
         direction: state.direction,

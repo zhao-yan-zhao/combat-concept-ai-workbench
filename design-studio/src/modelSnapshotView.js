@@ -6,7 +6,7 @@ export function renderModelSnapshotPanel({ snapshots = [], comparison = null, se
   return `
     <section class="report-detail-section model-snapshot-section">
       <div class="report-detail-heading"><h3>模型快照与方案对比</h3><span class="report-state ${snapshots.length ? "ready" : "pending"}">${snapshots.length ? `${snapshots.length} 份快照` : "未保存"}</span></div>
-      <p class="model-snapshot-intro">保存概念简报、OV-1、OV-5、OODA、想定与验证的不可变本地快照；对比不会改写当前模型。</p>
+      <p class="model-snapshot-intro">保存概念简报、高层概念图、活动模型、研究循环、想定与验证的不可变本地快照；对比不会改写当前模型。</p>
       <div class="model-snapshot-actions"><button class="quiet-button" data-action="save-model-snapshot">保存当前模型</button></div>
       ${snapshots.length ? renderSnapshotList(snapshots) : `<p class="report-empty">尚未保存模型快照。报告归档与模型快照相互独立。</p>`}
       ${snapshots.length > 1 ? renderComparisonForm(snapshots, defaultBaseline, defaultCandidate, settings) : ""}
@@ -84,7 +84,7 @@ function renderChange(label, values, type) {
 function snapshotSummary(snapshot) {
   const model = snapshot.model || {};
   const oodaCount = (model.ooda?.lanes || []).flatMap((lane) => lane.nodes || []).length;
-  return `OV-1 ${model.ov1?.nodes?.length || 0} 节点 · OV-5 ${model.ov5?.activities?.length || 0} 活动 · OODA ${oodaCount} 节点`;
+  return `总体图 ${model.ov1?.nodes?.length || 0} 节点 · 活动 ${model.ov5?.activities?.length || 0} 活动 · OODA ${oodaCount} 节点`;
 }
 
 function formatTime(value) {

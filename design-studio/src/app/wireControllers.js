@@ -30,6 +30,7 @@ import { createConceptMapController } from "../conceptMapController.js";
 import { createConceptPlanningController } from "../conceptPlanningController.js";
 import { createPhaseActionChatController } from "../phaseActionChatController.js";
 import { createForceMissionChatController } from "../forceMissionChatController.js";
+import { createRuleLibraryChatController } from "../ruleLibraryChatController.js";
 import { createCollaborationController } from "../collaborationController.js";
 import { createDodafProductController } from "../dodafProductController.js";
 import { createAiOv1Draft } from "../ov1DraftStore.js";
@@ -147,7 +148,7 @@ export function wireControllers({
     projectId: activeProjectId,
     resource: "ov1",
     storageKey: "ov1Storage",
-    resourceLabel: "OV-1",
+    resourceLabel: "高层作战概念图",
     load: loadProjectOv1,
     save: saveProjectOv1,
     getState: () => state,
@@ -541,7 +542,7 @@ export function wireControllers({
       state.activeView = "ov1";
       state.selection = null;
       render();
-      showToast("概念图已确认，请继续 OV-1");
+      showToast("概念图已确认，请继续高层作战概念图");
     }
   });
 
@@ -579,10 +580,10 @@ export function wireControllers({
       state.forceMissionChatOpen = true;
     },
     onPhaseActionConfirmed: async () => {
-      state.activeView = "force-mission";
+      // Phase chain: after phase confirm → rule binding / state / sequence, not force yet.
+      state.activeView = "ov6a";
       render();
-      // Auto-generate concept forces first; combat forces are a separate step.
-      await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
+      // Force generation deferred until the 阶段行动 stage is completed (gate), not here.
     },
     onForceMissionConfirmed: async () => {
       state.activeView = "concept-map";
@@ -608,7 +609,7 @@ export function wireControllers({
       } catch {
         /* local seed remains available */
       }
-      showToast("已根据总体作战概念图种子化 OV-1，请继续复核");
+      showToast("已根据总体作战概念图种子化高层作战概念图，请继续复核");
       render();
     }
   });
@@ -658,6 +659,24 @@ export function wireControllers({
     projectTitle: () => project.title || activeProjectId
   });
 
+  const ruleLibraryChatController = createRuleLibraryChatController({
+    projectId: activeProjectId,
+    getState: () => state,
+    render,
+    notify: showToast,
+    syncOv6a: (model, options = {}) => dodafProductController.syncResource("ov6a", model, {
+      source: options.source || "rule-library:chat",
+      writeArchitecture: true
+    }),
+    onBusyChange: () => {
+      // Keep stage-transition overlay in sync while pregenerate runs outside full render paths.
+      if (typeof document !== "undefined") {
+        const shell = document.querySelector("#studioShell");
+        if (shell) shell.classList.toggle("is-mode-switching", Boolean(state.ruleLibraryPregenerating));
+      }
+    }
+  });
+
   return {
     oodaController,
     ov1Controller,
@@ -697,6 +716,7 @@ export function wireControllers({
     conceptPlanningController,
     phaseActionChatController,
     forceMissionChatController,
+    ruleLibraryChatController,
     collaborationController
   };
 }

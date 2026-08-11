@@ -1022,7 +1022,7 @@ function normalizeProjectMeta(value, timestamp) {
 }
 
 function normalizeWorkflow(value) {
-  return { mode: value?.mode === "free" ? "free" : "gated", completedThrough: Math.max(-1, Math.min(5, Number.isInteger(Number(value?.completedThrough)) ? Number(value.completedThrough) : -1)), updatedAt: clean(value?.updatedAt, 80) };
+  return { mode: value?.mode === "free" ? "free" : "gated", completedThrough: Math.max(-1, Math.min(4, Number.isInteger(Number(value?.completedThrough)) ? Number(value.completedThrough) : -1)), updatedAt: clean(value?.updatedAt, 80) };
 }
 
 function invalidateProjectWorkflow(state, projectId, changedStage) {

@@ -10,6 +10,7 @@ import {
   renderResearchChatFloatButton,
   renderResearchChatPanel
 } from "./researchChat/researchChatView.js";
+import { renderPhaseChainGuide } from "./phaseChainGuide.js";
 
 /**
  * 阶段与行动：主研读台（左链 + 中 CONOPS）+ 右上悬浮核验对话（OV-1 同位置入口）。
@@ -52,6 +53,7 @@ export function renderPhaseAction(state) {
   const statusLabel = `${status}${focusGenerating ? " · 聚焦生成中" : chatGenerating ? " · 对话修订中" : generating ? " · 阶段生成中" : ""}`;
 
   return `<section class="planning-page phase-action-page phase-action-page--bench ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}">
+    ${renderPhaseChainGuide(state, "phase-action")}
     ${renderPlanningMigrationBanner(state)}
 
     ${renderCombatFocusBlock({
@@ -322,7 +324,7 @@ function renderPhaseDetail({
 function renderPhaseActionChatPanel({ chat, chatGenerating, busy, confirmed, phases, plan, selectedLabels }) {
   const disabled = busy || confirmed || !phases.length;
   const footerHtml = `<div class="phase-review-chat-footer">
-        <button type="button" data-action="confirm-phase-action" ${busy || chatGenerating || !phases.length || confirmed ? "disabled" : ""}>${confirmed ? "阶段与行动已确认" : "确认阶段与行动"}</button>
+        <button type="button" data-action="confirm-phase-action" ${busy || chatGenerating || !phases.length || confirmed ? "disabled" : ""}>${confirmed ? "已确认 · 去规则绑定" : "确认阶段与行动"}</button>
         <p class="planning-meta">生成来源：${escapeHtml(plan.generation?.source || "—")} · ${escapeHtml(plan.generation?.generatedAt || "未生成")}${selectedLabels ? ` · 聚焦：${escapeHtml(selectedLabels)}` : ""}</p>
       </div>`;
   return renderResearchChatPanel({

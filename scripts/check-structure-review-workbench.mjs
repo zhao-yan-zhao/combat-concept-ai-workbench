@@ -178,9 +178,9 @@ assert(inspectorHtml.includes('name="sourceOv1NodeIds"') && inspectorHtml.includ
 assert(inspectorHtml.includes('data-ov1-source-suggest') && inspectorHtml.includes('data-ov1-source-clear'), "Activity inspector should offer suggest/clear source actions");
 
 assert(views.some((view) => view.id === "structure-review"), "structure-review view missing from navigation data");
-assert(workflowTracks.find((track) => track.id === "review")?.viewIds[0] === "structure-review", "Structure review should lead the review track");
+assert(workflowTracks.find((track) => track.id === "deliver")?.viewIds[0] === "structure-review", "Structure review should lead the delivery/demo track");
 const tree = renderTree("structure-review", { completedThrough: 4, mode: "free" });
-assert((tree.includes("结构核对台") || tree.includes("核对台") || tree.includes("step-label")) && tree.includes('data-track="review"') && tree.includes("step-circle"), "Step rail should list structure review under review track");
+assert((tree.includes("结构核对台") || tree.includes("核对台") || tree.includes("step-label")) && tree.includes('data-track="deliver"') && tree.includes("step-circle"), "Step rail should list structure review under delivery/demo track");
 
 const ooda = deriveOodaFromOv5(linkedDraft);
 assert(ooda.sourceOv5Signature === createOv5SourceSignature(linkedDraft), "Derived OODA should stamp OV-5 source signature");
@@ -191,7 +191,7 @@ const changedOv5 = {
 };
 assert(isOodaStale(ooda, changedOv5), "OODA should become stale after OV-5 activity edits");
 const oodaPage = renderOoda({ ooda, ov5: changedOv5, oodaDuration: 12, oodaGenerating: false, oodaStorage: {}, selection: null });
-assert(oodaPage.includes("OODA 相对 OV-5 已过期") && oodaPage.includes("立即重新派生"), "OODA view should show stale banner after OV-5 change");
+assert((oodaPage.includes("研究循环相对活动模型已过期") || oodaPage.includes("相对活动模型已过期")) && oodaPage.includes("立即重新派生"), "OODA view should show stale banner after activity model change");
 const oodaStaleReview = buildStructureReview({
   ov1,
   ov5: changedOv5,
@@ -247,7 +247,7 @@ const scenarioPage = renderScenario({
   deployment: { settings: { targetUrl: "http://127.0.0.1:8765/tool" }, status: "idle", open: false },
   simulationAdapter: { settings: {}, status: "idle" }
 });
-assert(scenarioPage.includes("想定相对 OV-5 / OODA 已过期") && scenarioPage.includes("立即重新生成"), "Scenario view should show stale banner");
+assert((scenarioPage.includes("想定相对") && scenarioPage.includes("已过期")) && scenarioPage.includes("立即重新生成"), "Scenario view should show stale banner");
 assert(scenarioPage.includes("部署推送已暂停") && scenarioPage.includes('data-action="open-deployment" disabled') && scenarioPage.includes('data-action="push-deployment" disabled'), "Stale scenario should disable deployment open/push");
 const deploymentHtml = renderDeploymentIntegration({
   scenario: scenarioStaleByUpstream,

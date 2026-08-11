@@ -1,10 +1,11 @@
 import { ov1Nodes } from "./data.js";
 import { normalizeDodafOv1 } from "../../shared/dodaf/products.js";
 import { normalizeWorldPosition, repairLegacyCompressedOv1Nodes } from "./ov1Canvas.js";
-import { layoutOv1Nodes } from "../../shared/ov1Layout.js";
+import { layoutOv1Nodes, resolveOv1NodePosition } from "../../shared/ov1Layout.js";
 
 const STORAGE_KEY = "concept-studio-ov1-v1";
 const RELATION_TYPES = ["信息流", "控制流", "态势变化", "反馈"];
+let projectScope = "default";
 
 const DEFAULT_EDGES = [
   { id: "ov1-edge-sense-decide", sourceId: "sense", targetId: "decide", type: "信息流" },
@@ -20,9 +21,13 @@ export function createOv1Model() {
   return normalizeOv1Model({ edges: DEFAULT_EDGES });
 }
 
+export function setOv1ProjectScope(projectId) {
+  projectScope = normalizeProjectScope(projectId);
+}
+
 export function loadOv1Model() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    const saved = JSON.parse(localStorage.getItem(storageKey()));
     if (saved) return normalizeOv1Model(saved);
   } catch {
     // Invalid browser-local state falls back to the stable baseline.
@@ -32,7 +37,7 @@ export function loadOv1Model() {
 
 export function hasPersistedOv1Model() {
   try {
-    return Boolean(localStorage.getItem(STORAGE_KEY));
+    return Boolean(localStorage.getItem(storageKey()));
   } catch {
     return false;
   }
@@ -41,7 +46,7 @@ export function hasPersistedOv1Model() {
 export function saveOv1Model(model) {
   const normalized = normalizeOv1Model(model);
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    localStorage.setItem(storageKey(), JSON.stringify(normalized));
   } catch {
     // A blocked local store should not stop the active editing session.
   }
@@ -65,7 +70,7 @@ export function addOv1Edge(model, { sourceId, targetId, type }) {
 export function addOv1Node(model, values = {}) {
   const current = normalizeOv1Model(model);
   const position = nextNodePosition(current.nodes);
-  const node = normalizeNode({
+  let node = normalizeNode({
     id: createId(),
     label: values.label || "新概念节点",
     detail: values.detail || "补充该总体概念节点的任务、约束或预期效果。",
@@ -74,6 +79,8 @@ export function addOv1Node(model, values = {}) {
     y: values.y ?? position.y
   });
   if (!node) return null;
+  const resolvedPosition = resolveOv1NodePosition(current.nodes, node.id, node);
+  node = { ...node, ...resolvedPosition };
   return saveOv1Model({ ...current, nodes: [...current.nodes, node] });
 }
 
@@ -109,9 +116,7 @@ export function updateOv1Node(model, id, values) {
   const detail = clean(values?.detail ?? existing.detail).slice(0, 800);
   // Canvas drag may send position-only updates; keep previous label/detail.
   if (!positionOnly && (!label || !detail)) return null;
-  return saveOv1Model({
-    ...current,
-    nodes: current.nodes.map((node) => node.id === nodeId ? {
+  let nodes = current.nodes.map((node) => node.id === nodeId ? {
       ...node,
       label: label || node.label,
       detail: detail || node.detail || "待补充说明",
@@ -125,8 +130,13 @@ export function updateOv1Node(model, id, values) {
       evidenceRefs: values?.evidenceRefs === undefined ? node.evidenceRefs : normalizeRefs(values?.evidenceRefs),
       x: normalizePosition(values?.x, node.x),
       y: normalizePosition(values?.y, node.y)
-    } : node)
-  });
+    } : node);
+  if (values?.x !== undefined || values?.y !== undefined) {
+    const moved = nodes.find((node) => node.id === nodeId);
+    const position = resolveOv1NodePosition(nodes, nodeId, moved);
+    nodes = nodes.map((node) => node.id === nodeId ? { ...node, ...position } : node);
+  }
+  return saveOv1Model({ ...current, nodes });
 }
 
 export function updateOv1Concept(model, values = {}) {
@@ -265,3 +275,5 @@ function clean(value) {
 }
 
 function normalizeRefs(value) { return [...new Set(String(value || "").split(/[，,]/).map(clean).filter(Boolean))].slice(0, 12); }
+function storageKey() { return `${STORAGE_KEY}:${projectScope}`; }
+function normalizeProjectScope(value) { return String(value || "default").trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || "default"; }

@@ -1,7 +1,7 @@
 ﻿import { directions, project, views, workflowPhases } from "./data.js";
 import { createInitialWorkbenchState } from "./app/createInitialState.js";
 import { $, downloadArtifact as downloadArtifactHelper, downloadBlob, escapeHtml, showToast, writePrintableReport as writePrintableReportHelper } from "./app/domUtils.js";
-import { currentProjectTitle as currentProjectTitleFor, currentWorkflow as currentWorkflowFor, getWorkflowStageIncompleteReasons, nextWorkflowStage, renderWorkflowGate as renderWorkflowGateFor } from "./app/workflowGate.js";
+import { completedWorkflowStage, currentProjectTitle as currentProjectTitleFor, currentWorkflow as currentWorkflowFor, getWorkflowStageIncompleteReasons, nextWorkflowStage, renderWorkflowGate as renderWorkflowGateFor, resolveWorkflowGateContext } from "./app/workflowGate.js";
 import { wireControllers } from "./app/wireControllers.js";
 import { deriveOodaFromOv5, getOodaDuration, persistOodaModel } from "./oodaStore.js";
 import { buildStructureReviewExport } from "./structureReviewExport.js";
@@ -26,6 +26,7 @@ import { saveOv1Model } from "./ov1Store.js";
 import { renderOv1ToolboxFloatButton } from "./ov1View.js";
 import { renderPhaseActionChatFloatButton } from "./phaseActionView.js";
 import { renderForceMissionChatFloatButton } from "./forceMissionView.js";
+import { renderRuleLibraryChatFloatButton } from "./ruleLibraryView.js";
 
 import { deleteModelSnapshot, persistModelSnapshots, saveModelSnapshot, snapshotContextFromState, upsertModelSnapshot } from "./modelSnapshotStore.js";
 import { restoreModelSnapshot } from "./modelSnapshotRestore.js";
@@ -82,6 +83,7 @@ const {
   conceptPlanningController,
   phaseActionChatController,
   forceMissionChatController,
+  ruleLibraryChatController,
   collaborationController
 } = wireControllers({
   state,
@@ -358,9 +360,22 @@ function renderOv1ToolboxFloatHost() {
   const hasForceDraft = (Array.isArray(state.forceMission?.forces) && state.forceMission.forces.length > 0)
     || (Array.isArray(state.forceMission?.combatForces) && state.forceMission.combatForces.length > 0);
   const forceFloating = onForceMission && hasForceDraft && !state.forceMissionChatOpen;
+  // Rule library (nav 02): always offer research-chat FAB while chat is collapsed.
+  const onRuleLibrary = state.activeView === "ov6a";
+  const ruleFloating = onRuleLibrary && state.ruleLibraryChatOpen !== true;
   if (ov1Floating) {
     host.hidden = false;
     host.innerHTML = renderOv1ToolboxFloatButton();
+    return;
+  }
+  if (ruleFloating) {
+    host.hidden = false;
+    host.removeAttribute("hidden");
+    host.innerHTML = renderRuleLibraryChatFloatButton({
+      chatOpen: false,
+      chatGenerating: Boolean(state.ruleLibraryChatGenerating || state.ruleLibraryPregenerating),
+      disabled: Boolean(state.ruleLibraryChatGenerating || state.ruleLibraryPregenerating)
+    });
     return;
   }
   if (phaseFloating) {
@@ -528,14 +543,11 @@ function bindDynamicEvents() {
   document.querySelectorAll(".brief-sidebar-editor textarea").forEach((textarea) => textarea.addEventListener("input", () => fitBriefTextarea(textarea)));
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.activeView = button.dataset.view;
-      state.selection = null;
-      state.ov1Dialog = null;
-      state.ov1PanelMode = "context";
-      state.ov1PanelNodeId = null;
-      state.ov1PanelEdgeId = null;
+      const viewId = button.dataset.view;
+      if (!viewId) return;
       closeMenubarMenus();
-      render();
+      // Left floating step rail and menus: same entry path as workflow gate.
+      void navigateToResearchView(viewId);
     });
   });
 
@@ -675,7 +687,16 @@ function bindDynamicEvents() {
   document.querySelector("#projectCreateForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    try { const result = await createProject({ id: values.get("id"), title: values.get("title"), description: values.get("description") }); switchProject(result.project.id); } catch { showToast("项目创建失败，请检查项目标识和名称"); }
+    try {
+      const result = await createProject({
+        id: values.get("id"),
+        title: values.get("title"),
+        description: values.get("description")
+      });
+      switchProject(result.project.id);
+    } catch (error) {
+      showToast(describeProjectCreateError(error));
+    }
   });
   traceabilityController.bind(document);
   collaborationController.bind(document);
@@ -688,7 +709,14 @@ function bindDynamicEvents() {
     if (control.tagName === "TEXTAREA") control.addEventListener("blur", commit);
   });
   document.querySelectorAll("[data-action]").forEach((button) => {
-    button.addEventListener("click", () => handleAction(button.dataset.action, button));
+    // Workflow gate uses root-level delegation (survives soft refresh / open toggle).
+    if (button.closest("#workflowGateRoot")) return;
+    const fire = () => handleAction(button.dataset.action, button);
+    if (button.matches("input, select, textarea")) {
+      button.addEventListener("change", fire);
+      return;
+    }
+    button.addEventListener("click", fire);
   });
   document.querySelectorAll("[data-export]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -727,6 +755,7 @@ function bindDynamicEvents() {
   inspirationAdviceController.bind(document);
   phaseActionChatController.bind(document);
   forceMissionChatController.bind(document);
+  ruleLibraryChatController.bind(document);
   aiDirectionController.bind(document);
   ov1Controller.bind(document);
   ov1CanvasController.bind(document);
@@ -788,7 +817,7 @@ function bindOv1SourcePicker(form) {
     if (!activity) return;
     const suggested = new Set(suggestOv1SourcesForActivity(activity, state.ov1));
     if (!suggested.size) {
-      showToast("未能根据活动类型给出 OV-1 建议，请手工多选");
+      showToast("未能根据活动类型给出总体图建议，请手工多选");
       return;
     }
     form.querySelectorAll('input[name="sourceOv1NodeIds"]').forEach((input) => {
@@ -895,6 +924,25 @@ function handleAction(action, source = null) {
     render();
     return;
   }
+  if (action === "toggle-rule-library-chat") {
+    state.ruleLibraryChatOpen = !state.ruleLibraryChatOpen;
+    if (state.ruleLibraryChatOpen) {
+      ruleLibraryChatController.ensureWelcome(state.ov6a || {});
+    }
+    render();
+    return;
+  }
+  if (action === "close-rule-library-chat") {
+    state.ruleLibraryChatOpen = false;
+    render();
+    return;
+  }
+  if (action === "open-rule-library-chat") {
+    state.ruleLibraryChatOpen = true;
+    ruleLibraryChatController.ensureWelcome(state.ov6a || {});
+    render();
+    return;
+  }
   if (action === "open-custom-direction") {
     resetCustomDirectionDialog();
     document.querySelector("#customDirectionDialog")?.showModal();
@@ -946,8 +994,17 @@ function handleAction(action, source = null) {
     return;
   }
   if (action === "toggle-workflow-gate") {
-    state.workflowGateOpen = !state.workflowGateOpen;
+    // Capsule only expands/collapses the panel; primary advance stays on the panel button.
+    setWorkflowGateOpen(!state.workflowGateOpen);
+    return;
+  }
+  if (action === "toggle-phase-chain-guide") {
+    state.phaseChainGuideOpen = !state.phaseChainGuideOpen;
     render();
+    return;
+  }
+  if (action === "advance-workflow-step") {
+    void advanceWorkflowStep();
     return;
   }
   if (action === "complete-workflow-stage") {
@@ -988,7 +1045,7 @@ function handleAction(action, source = null) {
   if (knowledgeController.handleAction(action, $("#knowledgeVaultInput"))) return;
   if (aiConfigController.handleAction(action)) return;
   if (projectBriefSyncController.handleAction(action)) return;
-  if (dodafProductController.handleAction(action)) return;
+  if (dodafProductController.handleAction(action, source)) return;
   if (projectForceMissionSyncController.handleAction(action)) return;
   if (projectPhaseActionSyncController.handleAction(action)) return;
   if (projectConceptMapSyncController.handleAction(action)) return;
@@ -1010,14 +1067,14 @@ function handleAction(action, source = null) {
   }
   if (action === "discard-ov1-candidate") {
     state.ov1Candidate = null;
-    showToast("已舍弃 OV-1 候选，当前人工模型保持不变");
+    showToast("已舍弃高层作战概念图候选，当前人工模型保持不变");
     render();
     return;
   }
   if (action === "continue-to-ov5") {
     state.activeView = "ov5";
     state.selection = null;
-    showToast("已进入 OV-5。可手工维护活动，或使用 AI 生成候选。");
+    showToast("已进入作战活动模型。可手工维护活动，或使用 AI 生成候选。");
     render();
     return;
   }
@@ -1099,6 +1156,13 @@ function jumpFromStructureReview(viewId, targetKind, targetId) {
   if (!allowed.has(viewId)) return;
   state.activeView = viewId;
   state.selection = null;
+  // Phase-chain reverse checks default to sequence filter when jumping from review.
+  if (["ov6a", "ov6b", "ov6c", "phase-action"].includes(viewId)) {
+    state.structureReviewFilter = {
+      ...(state.structureReviewFilter || { severity: "all", group: "all" }),
+      group: "sequence"
+    };
+  }
   if (targetKind && targetId) {
     try {
       // Validation issues live under design-validation selection type "issue".
@@ -1109,17 +1173,29 @@ function jumpFromStructureReview(viewId, targetKind, targetId) {
     }
   }
   const meta = getViewMeta(viewId);
-  showToast(state.selection ? `已打开 ${meta?.label || viewId}，并定位到相关对象` : `已打开 ${meta?.label || viewId}`);
+  const chainHint = {
+    ov6a: "请绑定规则到受约束活动，或修订规则库",
+    ov6b: "请补状态出口或按任务/对象分机",
+    ov6c: "请为消息回链阶段活动",
+    "phase-action": "请修订阶段、行动或进入退出条件"
+  }[viewId];
+  showToast(
+    state.selection
+      ? `已打开 ${meta?.label || viewId}，并定位到相关对象`
+      : chainHint
+        ? `已打开 ${meta?.label || viewId}：${chainHint}`
+        : `已打开 ${meta?.label || viewId}`
+  );
   render();
 }
 
 function attachOv1SourcesToOv5() {
   if (!state.ov1?.nodes?.length) {
-    showToast("请先在 OV-1 定义概念节点，再补挂活动来源");
+    showToast("请先在高层作战概念图定义概念节点，再补挂活动来源");
     return;
   }
   if (!state.ov5?.activities?.length) {
-    showToast("请先建立 OV-5 活动");
+    showToast("请先建立作战活动");
     return;
   }
   const before = countUnmappedOv5Activities(state.ov5, state.ov1);
@@ -1130,8 +1206,8 @@ function attachOv1SourcesToOv5() {
   void projectOv5SyncController.sync(state.ov5, { source: "ov1-source-link" });
   const linked = Math.max(0, before - after);
   showToast(linked || before === 0
-    ? (before === 0 ? "全部活动已具备有效 OV-1 来源" : `已为 ${linked} 个活动补挂 OV-1 来源，请在结构核对台复核`)
-    : "未能自动补挂更多来源，请手工为活动选择 OV-1 节点");
+    ? (before === 0 ? "全部活动已具备有效总体图来源" : `已为 ${linked} 个活动补挂总体图来源，请在结构核对台复核`)
+    : "未能自动补挂更多来源，请手工为活动选择总体图节点");
   if (state.activeView !== "structure-review" && state.activeView !== "ov5") state.activeView = "structure-review";
   render();
 }
@@ -1139,7 +1215,7 @@ function attachOv1SourcesToOv5() {
 /** Fill blank OV-5 I/O and shallow parent hierarchy; never overwrites authored text. */
 function applyMappingQualityToOv5() {
   if (!state.ov5?.activities?.length) {
-    showToast("请先建立 OV-5 活动");
+    showToast("请先建立作战活动");
     return;
   }
   // Sources improve I/O suggestions; keep existing valid links, only fill gaps.
@@ -1156,10 +1232,10 @@ function applyMappingQualityToOv5() {
     showToast("没有可自动补全的空字段；已有正文不会被覆盖");
   } else {
     const parts = [];
-    if (ioFromOv1) parts.push(`OV-1 回填 ${ioFromOv1} 处`);
+    if (ioFromOv1) parts.push(`总体图回填 ${ioFromOv1} 处`);
     if (ioFromEdges) parts.push(`沿边对齐 ${ioFromEdges} 处`);
     if (parentsSet) parts.push(`父活动 ${parentsSet} 项`);
-    showToast(`已补全映射质量：${parts.join(" · ")}。请在 OV-5 / 结构核对台复核`);
+    showToast(`已补全映射质量：${parts.join(" · ")}。请在活动模型 / 结构核对台复核`);
   }
   if (state.selection?.kind === "activity") {
     state.selection = selectionFor("activity", state.selection.id, getModels());
@@ -1264,7 +1340,7 @@ async function attachStructureReviewToCollaboration() {
 
 async function applyOv1CandidateWithRecoveryPoint() {
   if (!state.ov1Candidate) return;
-  if (!window.confirm("应用候选将替换当前 OV-1。系统会先保存一个可恢复的模型快照，是否继续？")) return;
+  if (!window.confirm("应用候选将替换当前高层作战概念图。系统会先保存一个可恢复的模型快照，是否继续？")) return;
 
   state.modelSnapshots = saveModelSnapshot(snapshotContextFromState(state, project), state.modelSnapshots);
   const recoveryPoint = state.modelSnapshots[0];
@@ -1284,7 +1360,7 @@ async function applyOv1CandidateWithRecoveryPoint() {
   }
   invalidateDerivedArtifacts();
   await projectOv1SyncController.sync(state.ov1, { source: "ai-candidate-approved" });
-  showToast("已应用 OV-1 候选；恢复点已保存。可用「基于当前概念生成 OV-5 候选」继续。");
+  showToast("已应用高层作战概念图候选；恢复点已保存。可用「基于当前概念生成活动模型候选」继续。");
   render();
 }
 
@@ -1641,9 +1717,28 @@ function restoreLocalConceptGraphicConflictDraft(model) {
   state.conceptGraphic = persistConceptGraphic(normalizeConceptGraphicPlan(model), activeProjectId);
 }
 
+function describeProjectCreateError(error) {
+  const status = Number(error?.status || 0);
+  const message = String(error?.message || "").trim();
+  if (status === 403 || /login is required|Collaboration login/i.test(message)) {
+    return "创建项目前请先登录协同账号";
+  }
+  if (status === 409 || /already in use/i.test(message)) {
+    return "项目标识已被占用：请直接打开已有项目，或换一个新标识";
+  }
+  if (/identifier is invalid/i.test(message)) {
+    return "项目标识格式无效：使用 2–64 位小写字母、数字、下划线或连字符，且以字母/数字开头";
+  }
+  if (/title is required/i.test(message)) {
+    return "请填写项目名称";
+  }
+  if (message) return `项目创建失败：${message}`;
+  return "项目创建失败，请检查项目标识和名称";
+}
+
 function applyRemoteOv5(remote, { force = false } = {}) {
   if (!remote?.model) return false;
-  if (force && !window.confirm(`服务端 OV-5 修订 r${remote.revision} 将覆盖当前活动模型并重新派生 OODA。是否继续？`)) return false;
+  if (force && !window.confirm(`服务端活动模型修订 r${remote.revision} 将覆盖当前活动模型并重新派生 OODA。是否继续？`)) return false;
   if (!force && state.ov5Storage.localSaved) return false;
   state.ov5 = remote.model;
   persistOv5Model(state.ov5);
@@ -1655,7 +1750,7 @@ function applyRemoteOv5(remote, { force = false } = {}) {
 
 function applyRemoteOv1(remote, { force = false } = {}) {
   if (!remote?.model || remote.stale) return false;
-  if (force && !window.confirm(`服务端 OV-1 修订 r${remote.revision} 将覆盖当前总体概念图，并使本地验证结果失效。是否继续？`)) return false;
+  if (force && !window.confirm(`服务端高层作战概念图修订 r${remote.revision} 将覆盖当前总体概念图，并使本地验证结果失效。是否继续？`)) return false;
   if (!force && state.ov1Storage.localSaved) return false;
   state.ov1 = saveOv1Model(remote.model);
   state.selection = null;
@@ -1821,37 +1916,129 @@ function renderWorkflowGate() {
   return renderWorkflowGateFor(state);
 }
 
-async function completeWorkflowStage() {
-  if (state.workflowCompleting) return;
-  const workflow = currentWorkflow();
-  const next = nextWorkflowStage(workflow);
-  const incompleteReasons = getWorkflowStageIncompleteReasons(state, next);
-  if (incompleteReasons.length) {
-    state.workflowGateOpen = true;
-    showToast(`\u5c1a\u4e0d\u80fd\u8fdb\u5165${workflowPhases[next + 1] || "\u4ea4\u4ed8\u5b8c\u6210"}\uff1a\u8bf7\u5148\u5b8c\u6210${incompleteReasons.join("\u3001")}`);
+/** Ignore synthetic pointerleave caused by rebuilding the capsule DOM. */
+let workflowGateLeaveSuppressedUntil = 0;
+
+function suppressWorkflowGateLeave(ms = 400) {
+  workflowGateLeaveSuppressedUntil = performance.now() + ms;
+}
+
+function refreshWorkflowGateUi() {
+  const root = document.getElementById("workflowGateRoot");
+  if (!root) {
     render();
     return;
   }
-  state.workflowCompleting = true;
-  render();
-  try {
-    await updateProject(state.activeProjectId, { workflow: { ...workflow, completedThrough: next, updatedAt: new Date().toISOString() } });
-    state.workflowGateOpen = false;
-    const followingPhase = workflowPhases[next + 1];
-    const nextView = followingPhase ? views.find((view) => view.phase === followingPhase)?.id : "";
-    if (nextView) {
-      state.activeView = nextView;
-      state.selection = null;
-      state.ov1Dialog = null;
-      state.ov1PanelMode = "context";
-      state.ov1PanelNodeId = null;
-      state.ov1PanelEdgeId = null;
+  // Replacing the open shell fires pointerout on the removed node; suppress auto-collapse.
+  suppressWorkflowGateLeave();
+  root.innerHTML = renderWorkflowGate();
+}
+
+/** Open/close without replacing DOM — keeps click handlers and avoids leave-collapse races. */
+function setWorkflowGateOpen(open) {
+  state.workflowGateOpen = Boolean(open);
+  const shell = document.querySelector("#workflowGateRoot [data-workflow-gate-shell]");
+  if (!shell || shell.classList.contains("is-complete")) {
+    if (!shell) refreshWorkflowGateUi();
+    return;
+  }
+  shell.classList.toggle("is-open", state.workflowGateOpen);
+  const panel = shell.querySelector(".workflow-gate-panel");
+  const capsule = shell.querySelector(".workflow-gate-capsule[data-action='toggle-workflow-gate']");
+  if (panel) {
+    if (state.workflowGateOpen) {
+      panel.removeAttribute("inert");
+      panel.removeAttribute("aria-hidden");
+    } else {
+      panel.setAttribute("inert", "");
+      panel.setAttribute("aria-hidden", "true");
     }
-    await hydrateProjectDirectory();
+  }
+  if (capsule) capsule.setAttribute("aria-expanded", state.workflowGateOpen ? "true" : "false");
+}
+
+function goToWorkflowView(viewId) {
+  if (!viewId) return;
+  state.activeView = viewId;
+  state.selection = null;
+  state.ov1Dialog = null;
+  state.ov1PanelMode = "context";
+  state.ov1PanelNodeId = null;
+  state.ov1PanelEdgeId = null;
+  state.workflowGateOpen = false;
+}
+
+/**
+ * Single navigation entry for research views.
+ * Landing on 规则库 always attempts brief→rules AI pregenerate when the library is empty.
+ * Used by: top gate capsule, gate panel buttons, left floating step rail, menus.
+ */
+async function navigateToResearchView(viewId, { toast = "", force = false } = {}) {
+  if (!viewId) return;
+  if (!force && state.activeView === viewId && viewId !== "ov6a") return;
+  goToWorkflowView(viewId);
+  render();
+  if (toast) showToast(toast);
+  if (viewId === "ov6a") {
+    await ruleLibraryChatController.pregenerateFromBrief({ silent: false });
+  }
+}
+
+/** Intermediate steps: capsule advances one research page (not a whole phase). */
+async function advanceWorkflowStep() {
+  const ctx = resolveWorkflowGateContext(state);
+  if (ctx.mode !== "next-step" || !ctx.nextStep?.id) {
+    showToast("当前没有可进入的下一步");
+    return;
+  }
+  await navigateToResearchView(ctx.nextStep.id, {
+    toast: `已进入${ctx.nextStep.label}`,
+    force: true
+  });
+}
+
+/** Last step of a phase: confirm and unlock the next phase. */
+async function completeWorkflowStage() {
+  if (state.workflowCompleting) return;
+  const workflow = currentWorkflow();
+  const ctx = resolveWorkflowGateContext(state);
+  // Prefer the phase of the active last-step page; fall back to classic next-stage index.
+  const stage = Number.isInteger(ctx.phaseIndex) && ctx.phaseIndex >= 0
+    ? ctx.phaseIndex
+    : nextWorkflowStage(workflow);
+  const incompleteReasons = getWorkflowStageIncompleteReasons(state, stage);
+  if (incompleteReasons.length) {
+    setWorkflowGateOpen(true);
+    showToast(`\u5c1a\u4e0d\u80fd\u8fdb\u5165${workflowPhases[stage + 1] || "\u4ea4\u4ed8\u5b8c\u6210"}\uff1a\u8bf7\u5148\u5b8c\u6210${incompleteReasons.join("\u3001")}`);
+    return;
+  }
+  if (completedWorkflowStage(workflow) >= stage) {
+    // Already confirmed — just walk forward if possible (same pregenerate path as “下一步”).
+    if (ctx.nextStep?.id) {
+      await navigateToResearchView(ctx.nextStep.id, { force: true });
+      return;
+    }
+    showToast("本阶段已确认");
+    return;
+  }
+  state.workflowCompleting = true;
+  refreshWorkflowGateUi();
+  try {
+    await updateProject(state.activeProjectId, { workflow: { ...workflow, completedThrough: stage, updatedAt: new Date().toISOString() } });
+    state.workflowGateOpen = false;
+    const followingPhase = workflowPhases[stage + 1];
+    const nextView = followingPhase ? views.find((view) => view.phase === followingPhase)?.id : "";
+    if (nextView) goToWorkflowView(nextView);
+    await hydrateProjectDirectory({ skipRender: true });
     showToast(nextView ? "\u5f53\u524d\u9636\u6bb5\u5df2\u786e\u8ba4\uff0c\u5df2\u8fdb\u5165\u4e0b\u4e00\u9636\u6bb5" : "\u5de5\u4f5c\u6d41\u5df2\u786e\u8ba4\u5b8c\u6210");
-    // Confirming the brief stage auto-starts combat-focus candidates; user selects then generates phases.
-    if (next === 0 && nextView === "phase-action") {
-      void conceptPlanningController.generateCombatFocus({ silent: false });
+    // Brief → 阶段行动 first page is 规则库: empty library gets AI pregenerate from brief.
+    if (stage === 0 && nextView === "ov6a") {
+      render();
+      await ruleLibraryChatController.pregenerateFromBrief({ silent: false });
+    }
+    // Completing 阶段行动 (after phase confirm + soft validation walk) opens 兵力任务 and seeds concept forces.
+    if (stage === 1 && nextView === "force-mission") {
+      void conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
     }
   } catch {
     showToast("\u9636\u6bb5\u72b6\u6001\u4fdd\u5b58\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5");
@@ -1884,6 +2071,12 @@ async function setWorkflowMode(mode) {
 }
 
 function getBusyOverlayState() {
+  if (state.ruleLibraryPregenerating) {
+    return {
+      title: "正在进入阶段行动",
+      detail: "根据简报生成作战规则…"
+    };
+  }
   if (state.workflowModeSwitching) {
     const testModeActive = currentWorkflow().mode === "free";
     return {
@@ -2015,7 +2208,7 @@ function saveActivity(event) {
   void dodafProductController.syncFromOv5b({ source: "manual" });
   state.selection = selectionFor("activity", activity.id, getModels());
   const sourceCount = activity.sourceOv1NodeIds?.length || 0;
-  showToast(sourceCount ? `活动已保存（${sourceCount} 个 OV-1 来源），OV-5a 已同步` : "活动已保存；尚未挂接 OV-1 来源；OV-5a 已同步");
+  showToast(sourceCount ? `活动已保存（${sourceCount} 个总体图来源），活动分解树已同步` : "活动已保存；尚未挂接总体图来源；活动分解树已同步");
   render();
 }
 
@@ -2037,15 +2230,15 @@ function getModels() {
 }
 
 function invalidateConceptMapDependents() {
-  state.ov1Storage = markStorageStale(state.ov1Storage, "Concept map changed; review or regenerate OV-1 before relying on it.");
-  state.ov5Storage = markStorageStale(state.ov5Storage, "Concept map changed; review or regenerate OV-5 before relying on it.");
+  state.ov1Storage = markStorageStale(state.ov1Storage, "Concept map changed; review or regenerate concept graphic before relying on it.");
+  state.ov5Storage = markStorageStale(state.ov5Storage, "Concept map changed; review or regenerate activity model before relying on it.");
   invalidateDerivedArtifacts();
 }
 
 function invalidateDerivedArtifacts() {
   // Keep scenario as a stale reference (same pattern as validation/OODA) so researchers can compare before regenerating.
   if (state.scenario) {
-    state.scenario = markScenarioStale(state.scenario, "上游 OV-5/OODA 已变更，上次想定仅供参考，请重新生成。");
+    state.scenario = markScenarioStale(state.scenario, "上游活动模型/研究循环已变更，上次想定仅供参考，请重新生成。");
   }
   state.lastDeploymentData = null;
   markCurrentValidationStale("上游模型已变更，上次设计验证仅供参考，请重新运行。");
@@ -2307,4 +2500,61 @@ function bindMenubarChrome() {
   });
 }
 
+/** Capsule: click to expand; auto-collapse when pointer leaves the capsule region. */
+function bindWorkflowGateChrome() {
+  const root = document.getElementById("workflowGateRoot");
+  // Delegate clicks on the permanent root so rebuilds keep working.
+  if (root && root.dataset.actionsBound !== "true") {
+    root.dataset.actionsBound = "true";
+    root.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const button = target.closest("[data-action]");
+      if (!button || !root.contains(button)) return;
+      handleAction(button.dataset.action, button);
+    });
+  }
+
+  let leaveTimer = null;
+  const clearLeaveTimer = () => {
+    if (!leaveTimer) return;
+    clearTimeout(leaveTimer);
+    leaveTimer = null;
+  };
+
+  const collapseGate = () => {
+    clearLeaveTimer();
+    if (!state.workflowGateOpen) return;
+    // Soft close — do not rebuild DOM (avoids click/leave races).
+    setWorkflowGateOpen(false);
+  };
+
+  document.addEventListener("pointerover", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (!target.closest("#workflowGateRoot [data-workflow-gate-shell]")) return;
+    clearLeaveTimer();
+  }, true);
+
+  document.addEventListener("pointerout", (event) => {
+    if (!state.workflowGateOpen) return;
+    if (performance.now() < workflowGateLeaveSuppressedUntil) return;
+    const from = event.target;
+    if (!(from instanceof Element) || !from.closest("#workflowGateRoot [data-workflow-gate-shell]")) return;
+    const to = event.relatedTarget;
+    if (to instanceof Element && to.closest("#workflowGateRoot [data-workflow-gate-shell]")) return;
+    // If the node was detached by a re-render, relatedTarget is often null — ignore those.
+    if (!(to instanceof Element) && !document.contains(from)) return;
+    clearLeaveTimer();
+    leaveTimer = window.setTimeout(collapseGate, 160);
+  }, true);
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !state.workflowGateOpen) return;
+    event.preventDefault();
+    collapseGate();
+  });
+}
+
 bindMenubarChrome();
+bindWorkflowGateChrome();

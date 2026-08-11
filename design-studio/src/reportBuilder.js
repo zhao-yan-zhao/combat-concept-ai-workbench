@@ -228,7 +228,7 @@ export function buildMarkdownReport(payload) {
     "",
     `活动关联：${payload.ov5.edges.map((edge) => `${edge.sourceId} -> ${edge.targetId}（${edge.type}）`).join("；") || "未定义"}`,
     "",
-    "## OODA 行为循环",
+    "## 研究辅助循环",
     `- 生成来源：${generationLabel(payload.ooda.provenance)}`,
     ...evidenceSelectionLines(payload.ooda.provenance?.evidenceSelection),
     `- 周期估算：${payload.ooda.durationMinutes || "待估算"} 分钟`,
@@ -1248,7 +1248,7 @@ function buildValidationMaturity({ ov5, ooda, scenario, validationResult, knowle
   const review = validationResult?.redTeamReview;
   const traceSummary = traceability?.summary || {};
   const missingInputs = [
-    !ov5.activities.length && "OV-5 活动",
+    !ov5.activities.length && "作战活动",
     !oodaNodeCount && "OODA 节点",
     !scenario && "自动想定"
   ].filter(Boolean);

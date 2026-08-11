@@ -11,7 +11,7 @@ export function renderOv2(state) {
     <section class="surface surface-pad dodaf-drafting-surface" data-dodaf-product="OV-2">
       <div class="section-heading">
         <div>
-          <h2>OV-2 作战节点交换</h2>
+          <h2>作战资源流描述</h2>
           <p>DoDAF 2.02 / DM2 可编辑产品（Needline / ResourceFlow）。可从 OV-1×OV-5 种子生成，保存后独立持久化。</p>
         </div>
         <span class="mini-tag">${source === "persisted" ? "已持久化" : "种子/草稿"} · DM2 制图</span>

@@ -55,7 +55,7 @@ export function createModelSnapshotController({ getState, render, notify, projec
           const state = getState();
           const snapshot = state.modelSnapshots.find((item) => item.id === button.dataset.modelSnapshotRestore);
           if (!snapshot) return;
-          const confirmed = window.confirm(`恢复 ${snapshot.label} 将覆盖当前概念简报、OV-1～OV-6c、architecture、OODA、想定与验证结果。部署图桥接将关闭并需要重新推送。是否继续？`);
+          const confirmed = window.confirm(`恢复 ${snapshot.label} 将覆盖当前概念简报、全部研究产品、architecture、OODA、想定与验证结果。部署图桥接将关闭并需要重新推送。是否继续？`);
           if (!confirmed) return;
           try {
             restoreSnapshot(snapshot);

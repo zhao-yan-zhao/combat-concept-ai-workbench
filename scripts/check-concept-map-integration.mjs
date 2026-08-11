@@ -48,7 +48,7 @@ try {
     "Preview UI should offer planning seed without AI wording"
   );
   assert(viewSource.includes("拉取最新") || viewSource.includes("同步工具内容"), "Preview UI should offer manual tool pull as recovery");
-  assert(viewSource.includes("确认并进入 OV-1") || viewSource.includes("进入 OV-1"), "Preview UI should offer confirm/next step");
+  assert(viewSource.includes("确认并进入高层作战概念图") || viewSource.includes("进入高层作战概念图"), "Preview UI should offer confirm/next step");
 
   const mapProjectId = boundMapProjectIdFor("proj-demo-1");
   assert(mapProjectId.startsWith("workbench-"), "Bound map project id must use workbench- prefix");
@@ -137,7 +137,7 @@ try {
       && view.includes(mapProjectId)
       && view.includes("按规划重建")
       && view.includes("拉取最新")
-      && view.includes("确认并进入 OV-1"),
+      && (view.includes("确认并进入高层作战概念图") || view.includes("确认并进入")),
     "Preview must show frame mount, bind id, and action toolbar"
   );
   assert(!view.includes("generateWithAi") && !view.includes("ConceptMapInitial") && !view.includes("根据规划生成模糊"), "Preview must not surface AI generation UI");
@@ -193,12 +193,18 @@ try {
   };
   const workflowState = {
     activeProjectId: "concept-map-test",
-    projectDirectory: { projects: [{ id: "concept-map-test", workflow: { completedThrough: 1, mode: "gated" } }] },
+    projectDirectory: { projects: [{ id: "concept-map-test", workflow: { completedThrough: 3, mode: "gated" } }] },
+    brief: completeBrief("Initial research objective"),
     conceptMap: persisted.model,
     conceptMapStorage: { stale: false },
+    ov1: { nodes: [{ id: "sense" }] },
+    ov5: { activities: [{ id: "a1" }], edges: [{ id: "e1" }] },
+    ooda: { lanes: [{ nodes: [{ id: "n1" }] }] },
     ...planningComplete
   };
-  assert(getWorkflowStageIncompleteReasons(workflowState, 1).length === 0 && currentWorkflow(workflowState).completedThrough === 1, "Confirmed concept map satisfies workflow gate");
+  assert(getWorkflowStageIncompleteReasons(workflowState, 1).length === 0, "Confirmed phase-action satisfies stage 1");
+  assert(getWorkflowStageIncompleteReasons(workflowState, 2).length === 0, "Confirmed force-mission satisfies stage 2");
+  assert(getWorkflowStageIncompleteReasons(workflowState, 3).length === 0 && currentWorkflow(workflowState).completedThrough === 3, "Confirmed concept products satisfy stage 3");
   reopened.close();
 
   console.log("Concept-map integration acceptance passed: no-AI seed, project binding, phase deployment, preview UI, persistence.");

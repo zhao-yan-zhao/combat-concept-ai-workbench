@@ -377,7 +377,9 @@ export function createRequestHandler(runtime) {
       }
       await serveStatic(url.pathname, response, request.method === "HEAD");
     } catch (error) {
-      send(response, 500, error.message, "text/plain;charset=utf-8");
+      const status = Number(error?.statusCode) || 500;
+      const message = String(error?.message || "Internal Server Error").slice(0, 1200);
+      send(response, status, message, "text/plain;charset=utf-8");
     }
   };
 }

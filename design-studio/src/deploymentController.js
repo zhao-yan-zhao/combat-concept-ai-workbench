@@ -32,7 +32,7 @@ export function createDeploymentController({ getState, render, notify, invalidat
       if (action === "open-deployment") {
         if (!state.scenario || !resolveTargetOrigin(state.deployment.settings.targetUrl)) return false;
         if (isScenarioStale(state.scenario, state.ov5, state.ooda)) {
-          notify("想定相对 OV-5/OODA 已过期，请先重新生成后再打开部署图");
+          notify("想定相对活动模型/研究循环 已过期，请先重新生成后再打开部署图");
           return true;
         }
         state.deployment.open = true;

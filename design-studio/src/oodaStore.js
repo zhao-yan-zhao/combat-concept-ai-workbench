@@ -107,7 +107,7 @@ export function getOodaFreshness(oodaModel, ov5Model) {
   return {
     stale: true,
     ran: true,
-    reason: oodaModel.staleReason || "OV-5 活动或关系已变更，当前 OODA 仅供参考，建议从 OV-5 重新派生。",
+    reason: oodaModel.staleReason || "OV-5 活动或关系已变更，当前 OODA 仅供参考，建议从活动模型重新派生。",
     derivedAt: oodaModel.derivedAt || oodaModel.provenance?.generatedAt || ""
   };
 }

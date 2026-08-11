@@ -73,7 +73,19 @@ export function normalizeDodafProduct(resourceKey, value) {
 /** Prefer persisted product; otherwise return a non-persisted seed for display. */
 export function resolveDodafProduct(state, resourceKey) {
   const current = state?.[resourceKey];
-  if (current && typeof current === "object" && (current.entities || current.nodes || current.activities || current.roles || current.rules || current.states || current.events || current.tree || current.exchanges)) {
+  if (current && typeof current === "object" && (
+    current.entities
+    || current.nodes
+    || current.activities
+    || current.roles
+    || current.rules
+    || current.states
+    || current.stateMachines
+    || current.events
+    || current.sequences
+    || current.tree
+    || current.exchanges
+  )) {
     return { model: current, source: current.schema ? "persisted" : "legacy", seeded: Boolean(current.derivedFrom) };
   }
   return { model: seedDodafProduct(resourceKey, state), source: "seed", seeded: true };
@@ -135,13 +147,37 @@ export function updateProductField(model, resourceKey, path, value) {
     if (role && segments[2]) role[segments[2]] = value;
   } else if (segments[0] === "rule" && resourceKey === "ov6a") {
     const rule = (clone.rules || []).find((item) => item.id === segments[1]);
-    if (rule && segments[2]) rule[segments[2]] = value;
+    if (rule && segments[2]) {
+      rule[segments[2]] = value;
+      // Keep legacy aliases in sync until the next normalize pass.
+      if (segments[2] === "name") rule.subject = value;
+      if (segments[2] === "description") rule.text = value;
+      if (segments[2] === "text") rule.description = value;
+      if (segments[2] === "subject") rule.name = value;
+    }
   } else if (segments[0] === "transition" && resourceKey === "ov6b") {
     const transition = (clone.transitions || []).find((item) => item.id === segments[1]);
-    if (transition && segments[2]) transition[segments[2]] = value;
+    if (transition && segments[2]) {
+      transition[segments[2]] = value;
+      for (const machine of clone.stateMachines || []) {
+        const machineTransition = (machine.transitions || []).find((item) => item.id === segments[1]);
+        if (machineTransition) machineTransition[segments[2]] = value;
+      }
+    }
   } else if (segments[0] === "event" && resourceKey === "ov6c") {
     const event = (clone.events || []).find((item) => item.id === segments[1]);
-    if (event && segments[2]) event[segments[2]] = value;
+    if (event && segments[2]) {
+      event[segments[2]] = value;
+      if (segments[2] === "title") event.name = value;
+      if (segments[2] === "name") event.title = value;
+      for (const sequence of clone.sequences || []) {
+        const message = (sequence.messages || []).find((item) => item.id === segments[1]);
+        if (!message) continue;
+        message[segments[2]] = value;
+        if (segments[2] === "title") message.name = value;
+        if (segments[2] === "name") message.title = value;
+      }
+    }
   } else if (segments[0] === "view" && segments[1] === "notes") {
     clone.view = { ...(clone.view || {}), notes: value };
   }

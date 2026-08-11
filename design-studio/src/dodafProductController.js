@@ -29,6 +29,20 @@ import {
   saveProjectOv6b,
   saveProjectOv6c
 } from "./projectBriefClient.js";
+import {
+  addOv6aRule,
+  addOv6bStateMachine,
+  addOv6bTransition,
+  addOv6cMessage,
+  addOv6cParticipant,
+  addOv6cSequence,
+  removeOv6aRule,
+  removeOv6bStateMachine,
+  removeOv6cSequence,
+  setOv6aBindingStatus,
+  toggleOv6aActivityBinding,
+  updateOv6bStateMachine
+} from "./ov6Workbench.js";
 
 const LOADERS = {
   ov2: loadProjectOv2, ov3: loadProjectOv3, ov4: loadProjectOv4, ov5a: loadProjectOv5a,
@@ -39,8 +53,8 @@ const SAVERS = {
   ov6a: saveProjectOv6a, ov6b: saveProjectOv6b, ov6c: saveProjectOv6c
 };
 const LABELS = {
-  ov2: "OV-2", ov3: "OV-3", ov4: "OV-4", ov5a: "OV-5a",
-  ov6a: "OV-6a", ov6b: "OV-6b", ov6c: "OV-6c"
+  ov2: "作战资源流描述", ov3: "作战资源流矩阵", ov4: "责任关系", ov5a: "作战活动分解树",
+  ov6a: "规则库", ov6b: "状态机校验", ov6c: "时序校验"
 };
 
 export function createDodafProductController({
@@ -84,6 +98,115 @@ export function createDodafProductController({
   }));
 
   let fileInput = null;
+
+  function persistOv6(resource, model, toast = "") {
+    const state = getState();
+    state[resource] = saveLocalDodafProduct(resource, model, projectId);
+    void syncControllers[resource].sync(state[resource], { source: "manual-edit" }).then(() => writebackArchitecture("manual-edit"));
+    if (toast) notify(toast);
+    render();
+  }
+
+  function handleOv6WorkbenchAction(action, el) {
+    const state = getState();
+    const ds = el?.dataset || {};
+
+    if (action === "ov6a-add-rule") {
+      const model = resolveDodafProduct(state, "ov6a").model;
+      const next = addOv6aRule(model);
+      if (next._createdRuleId) state.ov6aSelectedRuleId = next._createdRuleId;
+      persistOv6("ov6a", next, "已新增规则（可先不绑活动）");
+      return true;
+    }
+    if (action === "ov6a-select-rule") {
+      if (!ds.ruleId) return true;
+      state.ov6aSelectedRuleId = ds.ruleId;
+      render();
+      return true;
+    }
+    if (action === "ov6a-set-filter") {
+      state.ov6aRuleFilter = ds.filter || "all";
+      render();
+      return true;
+    }
+    if (action === "ov6a-delete-rule") {
+      if (!ds.ruleId || !window.confirm("删除该规则及其活动绑定？")) return true;
+      const model = resolveDodafProduct(state, "ov6a").model;
+      const next = removeOv6aRule(model, ds.ruleId);
+      if (state.ov6aSelectedRuleId === ds.ruleId) state.ov6aSelectedRuleId = next.rules?.[0]?.id || "";
+      persistOv6("ov6a", next, "已删除规则");
+      return true;
+    }
+    if (action === "ov6a-toggle-binding") {
+      const model = resolveDodafProduct(state, "ov6a").model;
+      const checked = Boolean(el?.checked);
+      if (ds.ruleId) state.ov6aSelectedRuleId = ds.ruleId;
+      persistOv6("ov6a", toggleOv6aActivityBinding(model, ds.ruleId, ds.activityRef, {
+        checked,
+        status: "pending"
+      }));
+      return true;
+    }
+    if (action === "ov6a-set-binding-status") {
+      const model = resolveDodafProduct(state, "ov6a").model;
+      if (ds.ruleId) state.ov6aSelectedRuleId = ds.ruleId;
+      persistOv6("ov6a", setOv6aBindingStatus(model, ds.ruleId, ds.activityRef, el?.value || "pending"));
+      return true;
+    }
+
+    if (action === "ov6b-add-machine") {
+      const model = resolveDodafProduct(state, "ov6b").model;
+      const picker = document.getElementById("ov6bSubjectPicker");
+      const subjectRef = picker?.value || "";
+      const subjectType = ds.subjectType || picker?.selectedOptions?.[0]?.dataset?.subjectType || "task";
+      const name = picker?.selectedOptions?.[0]?.textContent?.split("（")[0]?.trim() || "";
+      persistOv6("ov6b", addOv6bStateMachine(model, { subjectType, subjectRef, name }), "已新建状态机");
+      return true;
+    }
+    if (action === "ov6b-remove-machine") {
+      if (!ds.machineId || !window.confirm("删除该状态机及其转换？")) return true;
+      const model = resolveDodafProduct(state, "ov6b").model;
+      persistOv6("ov6b", removeOv6bStateMachine(model, ds.machineId), "已删除状态机");
+      return true;
+    }
+    if (action === "ov6b-add-transition") {
+      const model = resolveDodafProduct(state, "ov6b").model;
+      persistOv6("ov6b", addOv6bTransition(model, ds.machineId), "已添加转换");
+      return true;
+    }
+    if (action === "ov6b-machine-field") {
+      const model = resolveDodafProduct(state, "ov6b").model;
+      const field = ds.field;
+      if (!field || !ds.machineId) return true;
+      persistOv6("ov6b", updateOv6bStateMachine(model, ds.machineId, { [field]: el?.value || "" }));
+      return true;
+    }
+
+    if (action === "ov6c-add-sequence") {
+      const model = resolveDodafProduct(state, "ov6c").model;
+      persistOv6("ov6c", addOv6cSequence(model), "已新增时序图");
+      return true;
+    }
+    if (action === "ov6c-remove-sequence") {
+      if (!ds.sequenceId || !window.confirm("删除该时序图？")) return true;
+      const model = resolveDodafProduct(state, "ov6c").model;
+      persistOv6("ov6c", removeOv6cSequence(model, ds.sequenceId), "已删除时序图");
+      return true;
+    }
+    if (action === "ov6c-add-participant") {
+      const model = resolveDodafProduct(state, "ov6c").model;
+      persistOv6("ov6c", addOv6cParticipant(model, ds.sequenceId), "已添加参与方");
+      return true;
+    }
+    if (action === "ov6c-add-message") {
+      const model = resolveDodafProduct(state, "ov6c").model;
+      persistOv6("ov6c", addOv6cMessage(model, ds.sequenceId), "已添加消息");
+      return true;
+    }
+
+    return false;
+  }
+
   const api = {
     async hydrateAll() {
       for (const resource of DODAF_PRODUCT_KEYS) {
@@ -158,7 +281,7 @@ export function createDodafProductController({
       return fileInput;
     },
 
-    handleAction(action) {
+    handleAction(action, el = null) {
       for (const resource of DODAF_PRODUCT_KEYS) {
         if (syncControllers[resource].handleAction(action)) return true;
       }
@@ -177,9 +300,11 @@ export function createDodafProductController({
         return true;
       }
 
+      if (handleOv6WorkbenchAction(action, el)) return true;
+
       if (action === "sync-ov5a-from-ov5b") {
         void api.syncFromOv5b({ source: "manual-sync" }).then(() => {
-          notify("已将 OV-5b 活动层级同步到 OV-5a");
+          notify("已将活动模型层级同步到活动分解树");
           render();
         });
         return true;
@@ -187,7 +312,7 @@ export function createDodafProductController({
 
       if (action === "sync-ov5b-from-ov5a") {
         void syncOv5aIntoOv5b("manual-sync").then(() => {
-          notify("已将 OV-5a 分解树写回 OV-5b parentId/标题");
+          notify("已将活动分解树写回活动模型 parentId/标题");
           render();
         });
         return true;
@@ -254,7 +379,7 @@ export function createDodafProductController({
     const state = getState();
     if (resource === "ov5a") {
       await syncOv5aIntoOv5b("manual");
-      notify("已保存 OV-5a，并同步写回 OV-5b");
+      notify("已保存活动分解树，并同步写回活动模型");
       render();
       return;
     }

@@ -15,7 +15,7 @@ const html = renderCollaboration({
   }
 });
 
-assert(html.includes("项目变更审计") && html.includes("更新 OV-5") && html.includes("Research lead") && !html.includes("spoofed") && html.includes('data-action="export-project-audit"') && html.includes("项目写入认证"), "Project audit view did not provide verified attribution, export, and deployment authentication guidance");
+assert(html.includes("项目变更审计") && (html.includes("更新作战活动模型") || html.includes("更新 OV-5")) && html.includes("Research lead") && !html.includes("spoofed") && html.includes('data-action="export-project-audit"') && html.includes("项目写入认证"), "Project audit view did not provide verified attribution, export, and deployment authentication guidance");
 const payload = buildReportPayload({ project: { title: "Audit report", brief: { objective: "Review", approach: "Audit", assumptions: "Local", risk: "Disclosure" }, citations: [] }, direction: "Audit", ov1: { nodes: [], edges: [] }, ov5: { activities: [], edges: [] }, ooda: { lanes: [] }, scenario: null, validationResult: null, knowledge: null, deployment: {}, collaboration: { status: "ready", policy: {}, reviews: [], auditEntries: [{ id: "audit-1", revision: 4, action: "ov5.updated", actor: { id: "lead-1", label: "Research lead" }, occurredAt: "2026-07-14T00:00:00.000Z", summary: "Updated model" }] } });
 const markdown = buildExportArtifactFromPayload("markdown", payload).content;
 const xml = buildExportArtifactFromPayload("xml", payload).content;

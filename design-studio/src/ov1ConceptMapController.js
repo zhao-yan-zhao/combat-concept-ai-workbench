@@ -5,6 +5,8 @@ import {
   computeOv1WorldBounds,
   logicalToWorldCss
 } from "./ov1Canvas.js";
+import { routeOv1Edges } from "../../shared/ov1EdgeRouting.js";
+import { resolveOv1NodePosition } from "../../shared/ov1Layout.js";
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4;
@@ -264,10 +266,10 @@ export function createOv1ConceptMapController({ getState, render, notify, select
       const stageH = Math.max(stage.clientHeight, 1);
       const nextX = originX + ((pointer.clientX - start.x) / (stageW * canvasZoom)) * 100;
       const nextY = originY + ((pointer.clientY - start.y) / (stageH * canvasZoom)) * 100;
-      position = {
+      position = resolveOv1NodePosition(getState().ov1.nodes || [], node.id, {
         x: `${clampNumber(nextX, OV1_COORD_MIN, OV1_COORD_MAX)}%`,
         y: `${clampNumber(nextY, OV1_COORD_MIN, OV1_COORD_MAX)}%`
-      };
+      });
       if (Math.abs(pointer.clientX - start.x) < 3 && Math.abs(pointer.clientY - start.y) < 3) return;
       moved = true;
 
@@ -305,7 +307,7 @@ export function createOv1ConceptMapController({ getState, render, notify, select
       state.ov1 = next;
       invalidateValidation?.();
       void syncOv1?.(state.ov1, { source: "concept-map-drag" });
-      notify("OV-1 主体位置已更新");
+      notify("高层概念图主体位置已更新");
       render();
     };
 
@@ -375,13 +377,22 @@ function refreshConceptEdges(stage) {
   if (!world) return;
   const ww = Math.max(world.offsetWidth, 1);
   const wh = Math.max(world.offsetHeight, 1);
+  const boxes = new Map();
+  stage.querySelectorAll("[data-ov1-node]").forEach((element) => {
+    const box = nodeCssBox(element, ww, wh);
+    if (box) boxes.set(element.dataset.ov1Node, { ...box, id: element.dataset.ov1Node });
+  });
+  const edges = [...stage.querySelectorAll(".ov1-concept-edge[data-ov1-edge]")].map((path) => ({
+    id: path.dataset.ov1Edge,
+    sourceId: path.dataset.sourceId,
+    targetId: path.dataset.targetId,
+    type: path.dataset.edgeType
+  }));
+  const geometryById = routeOv1Edges(edges, boxes);
   const updatedLabels = new Set();
 
   stage.querySelectorAll("[data-ov1-edge]:not([data-ov1-link-draft])").forEach((path) => {
-    const source = resolveNodeElement(stage, path.dataset.sourceId);
-    const target = resolveNodeElement(stage, path.dataset.targetId);
-    if (!source || !target) return;
-    const geometry = edgeGeometryFromLayout(source, target, ww, wh, path.dataset.edgeType);
+    const geometry = geometryById.get(path.dataset.ov1Edge);
     if (!geometry) return;
     path.setAttribute("d", geometry.path);
     const edgeId = path.dataset.ov1Edge;
@@ -399,31 +410,6 @@ function resolveNodeElement(stage, id) {
   if (!id) return null;
   return stage.querySelector(`[data-ov1-node="${CSS.escape(id)}"]`)
     || stage.querySelector(`[data-ov1="${CSS.escape(id)}"]`);
-}
-
-function edgeGeometryFromLayout(sourceEl, targetEl, worldW, worldH, type) {
-  const source = nodeCssBox(sourceEl, worldW, worldH);
-  const target = nodeCssBox(targetEl, worldW, worldH);
-  if (!source || !target) return null;
-  const start = boxAnchor(source, target.center);
-  const end = boxAnchor(target, source.center);
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const distance = Math.hypot(dx, dy) || 1;
-  const normal = { x: -dy / distance, y: dx / distance };
-  const bend = type === "反馈" ? 4 : 2;
-  const control = {
-    x: (start.x + end.x) / 2 + normal.x * bend,
-    y: (start.y + end.y) / 2 + normal.y * bend
-  };
-  const label = {
-    x: (start.x + 2 * control.x + end.x) / 4,
-    y: (start.y + 2 * control.y + end.y) / 4
-  };
-  return {
-    path: `M${start.x} ${start.y} Q${control.x} ${control.y} ${end.x} ${end.y}`,
-    label
-  };
 }
 
 function nodeCssBox(el, worldW, worldH) {
@@ -451,17 +437,6 @@ function nodeCssCenter(el) {
     x: left + (el.offsetWidth / ww) * 50,
     y: top + (el.offsetHeight / wh) * 50
   };
-}
-
-function boxAnchor(box, toward) {
-  const dx = toward.x - box.center.x;
-  const dy = toward.y - box.center.y;
-  const scale = 1 / Math.max(
-    Math.abs(dx) / Math.max(box.halfW, 0.5),
-    Math.abs(dy) / Math.max(box.halfH, 0.5),
-    1
-  );
-  return { x: box.center.x + dx * scale, y: box.center.y + dy * scale };
 }
 
 function clientToWorldCssPercent(clientX, clientY, stage, world) {
