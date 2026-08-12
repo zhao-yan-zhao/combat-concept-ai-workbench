@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OV 验证闭环 Demo</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <header class="brand">
+          <span class="brand-mark">OV</span>
+          <div>
+            <h1>研究规划验证台</h1>
+            <p>规划闭环 Demo</p>
+          </div>
+        </header>
+
+        <section class="project-card">
+          <span class="section-label">当前研究</span>
+          <strong>概念规划样例</strong>
+          <div class="version-line"><span class="dot"></span>规划版本 V1.2</div>
+        </section>
+
+        <nav class="nav" aria-label="流程导航">
+          <span class="section-label">主流程</span>
+          <button class="nav-item" data-panel="plan"><i data-lucide="layout-list"></i><span>规划对象</span><small>已确认</small></button>
+          <button class="nav-item active" data-panel="validation"><i data-lucide="shield-check"></i><span>OV 验证</span><small class="warn">3 项</small></button>
+          <button class="nav-item" data-panel="revision"><i data-lucide="history"></i><span>修订记录</span><small>V1.2</small></button>
+          <button class="nav-item" data-panel="archive"><i data-lucide="archive"></i><span>验证归档</span><small>1</small></button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div><span>验证范围</span><strong>规划 V1.2</strong></div>
+          <button class="icon-button" id="helpBtn" title="查看流程说明" aria-label="查看流程说明"><i data-lucide="circle-help"></i></button>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Validation loop</p>
+            <h2 id="pageTitle">OV 验证与回改</h2>
+          </div>
+          <div class="top-actions">
+            <span class="status-pill"><i data-lucide="circle-check"></i>等待复核</span>
+            <button class="button secondary" id="archiveBtn"><i data-lucide="archive"></i>归档本轮验证</button>
+          </div>
+        </header>
+
+        <section class="flow-strip" aria-label="验证流程">
+          <div class="flow-step complete"><span>01</span><b>规划已确认</b><small>阶段、兵力、概念图</small></div>
+          <i data-lucide="arrow-right"></i>
+          <div class="flow-step active"><span>02</span><b>OV 验证</b><small>识别缺口与矛盾</small></div>
+          <i data-lucide="arrow-right"></i>
+          <div class="flow-step"><span>03</span><b>回到来源修订</b><small>只改受影响对象</small></div>
+          <i data-lucide="arrow-right"></i>
+          <div class="flow-step"><span>04</span><b>局部复验</b><small>保留本轮证据</small></div>
+        </section>
+
+        <section class="dashboard" id="validationPanel">
+          <div class="workspace-head">
+            <div>
+              <p class="eyebrow">当前验证范围</p>
+              <h3>规划一致性检查</h3>
+            </div>
+            <div class="filter-group" role="group" aria-label="验证视图筛选">
+              <button class="filter active" data-filter="all">全部 <span>7</span></button>
+              <button class="filter" data-filter="issue">待处理 <span>3</span></button>
+              <button class="filter" data-filter="pass">已通过 <span>4</span></button>
+            </div>
+          </div>
+
+          <div class="metric-grid">
+            <article class="metric"><span>覆盖视角</span><strong>7</strong><small>OV-1、OV-2、OV-4、OV-5、OV-6</small></article>
+            <article class="metric warning"><span>待处理问题</span><strong id="issueMetric">3</strong><small>均可定位回规划来源</small></article>
+            <article class="metric"><span>可直接通过</span><strong id="passMetric">4</strong><small>无须额外修订</small></article>
+            <article class="metric revision"><span>本轮修订</span><strong id="revisionMetric">0</strong><small>尚未保存来源修订</small></article>
+          </div>
+
+          <div class="content-grid">
+            <section class="validation-list panel">
+              <div class="panel-head"><div><span class="section-label">验证项</span><h3>按模型视角检查</h3></div><button class="icon-button" id="refreshBtn" title="重新计算验证结果" aria-label="重新计算验证结果"><i data-lucide="refresh-cw"></i></button></div>
+              <div id="checks"></div>
+            </section>
+
+            <aside class="detail-panel panel" id="detailPanel">
+              <div class="empty-detail">
+                <i data-lucide="mouse-pointer-click"></i>
+                <h3>选择一个验证项</h3>
+                <p>查看问题、来源和受影响的复验范围。</p>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="hidden-panel" id="planPanel">
+          <div class="workspace-head"><div><p class="eyebrow">source of truth</p><h3>规划对象</h3></div></div>
+          <div class="source-grid" id="sources"></div>
+        </section>
+
+        <section class="hidden-panel" id="revisionPanel">
+          <div class="workspace-head"><div><p class="eyebrow">audit trail</p><h3>修订记录</h3></div></div>
+          <div class="timeline" id="timeline"></div>
+        </section>
+
+        <section class="hidden-panel" id="archivePanel">
+          <div class="archive-state"><i data-lucide="archive"></i><h3>验证归档</h3><p id="archiveText">尚未归档本轮验证。归档将保存当前结果、问题与规划版本。</p><button class="button" id="archiveBtnInline">归档当前验证</button></div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="revisionDialog">
+      <form method="dialog" id="revisionForm">
+        <header><div><p class="eyebrow">source revision</p><h3 id="dialogTitle">修订来源对象</h3></div><button class="icon-button" value="cancel" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></header>
+        <p id="dialogHint"></p>
+        <label>修订说明<textarea id="revisionNote" rows="4" placeholder="填写本次修订的说明"></textarea></label>
+        <div class="impact-box"><span>保存后将重新验证</span><strong id="impactList"></strong></div>
+        <footer><button class="button secondary" value="cancel">取消</button><button class="button" value="confirm">保存修订并局部复验</button></footer>
+      </form>
+    </dialog>
+  </body>
+</html>
