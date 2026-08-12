@@ -3,7 +3,7 @@
  * 本页不提供活动绑定（绑定在阶段确认后的校验步处理）。
  */
 import { resolveDodafProduct } from "./dodafProductStore.js";
-import { renderProjectStorageState } from "./projectStorageView.js";
+import { renderProjectStorageActions } from "./projectStorageView.js";
 import { renderPhaseChainGuide } from "./phaseChainGuide.js";
 import {
   renderResearchChatFloatButton,
@@ -19,8 +19,10 @@ export function renderRuleLibrary(state = {}) {
   const rules = Array.isArray(model.rules) ? model.rules : [];
   const chatGenerating = Boolean(state.ruleLibraryChatGenerating);
   const pregenerating = Boolean(state.ruleLibraryPregenerating);
+  const changeGenerating = Boolean(state.ruleLibraryChangeGenerating);
+  const changeSet = model.ruleChangeSet;
   const chatOpen = Boolean(state.ruleLibraryChatOpen);
-  const busy = chatGenerating || pregenerating;
+  const busy = chatGenerating || pregenerating || changeGenerating;
   const hasRules = rules.length > 0;
 
   return `<section class="rule-library-page is-form-mode ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}${pregenerating ? " is-pregenerating" : ""}" data-view-page="rule-library" data-dodaf-product="OV-6a">
@@ -37,11 +39,12 @@ export function renderRuleLibrary(state = {}) {
           <small class="rule-library-hint">表单维护规则本体 · 不绑定活动 · 对话从右上角入口打开</small>
         </div>
         <div class="rule-library-toolbar">
+          ${storage ? renderProjectStorageActions(storage, { refreshAction: "refresh-project-ov6a" }) : ""}
           <button type="button" class="primary-btn" data-action="save-dodaf-ov6a" ${busy ? "disabled" : ""}>保存</button>
           <button type="button" class="quiet-button" data-view="phase-action" ${busy ? "disabled" : ""}>下一步</button>
         </div>
       </div>
-      ${storage ? `<div class="rule-library-storage">${renderProjectStorageState(storage, { refreshAction: "refresh-project-ov6a" })}</div>` : ""}
+      ${renderRuleChangeSet(changeSet, { busy })}
     </header>
 
     <div class="rule-library-workbench ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}" aria-label="规则库研究台">
@@ -62,6 +65,25 @@ export function renderRuleLibrary(state = {}) {
         }) : ""}
       </aside>
     </div>
+  </section>`;
+}
+
+function renderRuleChangeSet(changeSet, { busy = false } = {}) {
+  const changes = Array.isArray(changeSet?.changes) ? changeSet.changes : [];
+  const pending = changes.filter((change) => change.status === "pending");
+  if (!pending.length) return "";
+  const sourceLabel = changeSet.source === "force-mission" ? "兵力与任务" : "阶段与行动";
+  return `<section class="rule-change-set" aria-label="待审核规则变更">
+    <header class="rule-change-set-head">
+      <div><strong>待审核变更</strong><small>${escapeHtml(sourceLabel)}分析 · ${pending.length} 项</small></div>
+      <button type="button" class="quiet-button" data-action="ov6a-apply-all-changes" ${busy ? "disabled" : ""}>全部采纳</button>
+    </header>
+    ${changeSet.summary ? `<p class="planning-meta">${escapeHtml(changeSet.summary)}</p>` : ""}
+    <div class="rule-change-list">${pending.map((change) => `<article class="rule-change-row">
+      <div><span class="mini-tag review">${escapeHtml(change.action === "add" ? "新增" : change.action === "revise" ? "修订" : "废止")}</span> <strong>${escapeHtml(change.rule?.name || change.ruleId || "规则")}</strong>
+        <p>${escapeHtml(change.rationale || change.rule?.description || "请复核此建议")}</p></div>
+      <div class="rule-change-actions"><button type="button" class="quiet-button" data-action="ov6a-ignore-change" data-change-id="${escapeHtml(change.id)}" ${busy ? "disabled" : ""}>忽略</button><button type="button" class="primary-btn" data-action="ov6a-apply-change" data-change-id="${escapeHtml(change.id)}" ${busy ? "disabled" : ""}>采纳</button></div>
+    </article>`).join("")}</div>
   </section>`;
 }
 
@@ -107,38 +129,13 @@ function renderRuleForm(rule, ordinal, { busy = false } = {}) {
     const selected = current === type || (!RULE_TYPES.includes(current) && type === "其他");
     return `<option value="${escapeHtml(type)}" ${selected ? "selected" : ""}>${escapeHtml(type)}</option>`;
   }).join("");
-  const title = String(rule.name || rule.subject || "").trim() || `规则 ${ordinal}`;
-  const typeLabel = String(rule.type || "约束").trim() || "约束";
-
-  return `<article class="rule-form-card" data-rule-id="${escapeHtml(rule.id)}">
-    <header class="rule-form-card-head">
-      <div class="rule-form-card-title">
-        <span class="rule-form-ordinal" aria-hidden="true">${ordinal}</span>
-        <div>
-          <strong>${escapeHtml(title)}</strong>
-          <small class="muted"><span class="mini-tag">${escapeHtml(typeLabel)}</span> ${escapeHtml(rule.id)}</small>
-        </div>
-      </div>
-      <button type="button" class="quiet-button danger-quiet" data-action="ov6a-delete-rule" data-rule-id="${escapeHtml(rule.id)}" ${busy ? "disabled" : ""}>删除</button>
-    </header>
-    <div class="rule-form-grid">
-      <label class="rule-form-field">
-        <span>规则名称</span>
-        <input data-dodaf-field="ov6a.rule.${escapeHtml(rule.id)}.name" value="${escapeHtml(rule.name || rule.subject || "")}" placeholder="例如：关键链路可用" ${busy ? "disabled" : ""} />
-      </label>
-      <label class="rule-form-field">
-        <span>类型</span>
-        <select data-dodaf-field="ov6a.rule.${escapeHtml(rule.id)}.type" ${busy ? "disabled" : ""}>${typeOptions}</select>
-      </label>
-      <label class="rule-form-field">
-        <span>作用范围</span>
-        <input data-dodaf-field="ov6a.rule.${escapeHtml(rule.id)}.scope" value="${escapeHtml(rule.scope || "")}" placeholder="全局 / 某阶段 / 某域" ${busy ? "disabled" : ""} />
-      </label>
-      <label class="rule-form-field rule-form-field-full">
-        <span>规则描述</span>
-        <textarea data-dodaf-field="ov6a.rule.${escapeHtml(rule.id)}.description" rows="2" placeholder="写明约束含义、适用条件与例外" ${busy ? "disabled" : ""}>${escapeHtml(rule.description || rule.text || "")}</textarea>
-      </label>
-    </div>
+  return `<article class="rule-form-card rule-form-row" data-rule-id="${escapeHtml(rule.id)}">
+    <span class="rule-form-ordinal" aria-label="规则 ${ordinal}">${ordinal}</span>
+    <label class="rule-form-field rule-form-name"><span class="sr-only">规则名称</span><input aria-label="规则名称" data-dodaf-field="ov6a.rule.${escapeHtml(rule.id)}.name" value="${escapeHtml(rule.name || rule.subject || "")}" placeholder="规则名称" ${busy ? "disabled" : ""} /></label>
+    <label class="rule-form-field rule-form-type"><span class="sr-only">类型</span><select aria-label="规则类型" data-dodaf-field="ov6a.rule.${escapeHtml(rule.id)}.type" ${busy ? "disabled" : ""}>${typeOptions}</select></label>
+    <label class="rule-form-field rule-form-scope"><span class="sr-only">作用范围</span><input aria-label="作用范围" data-dodaf-field="ov6a.rule.${escapeHtml(rule.id)}.scope" value="${escapeHtml(rule.scope || "")}" placeholder="作用范围" ${busy ? "disabled" : ""} /></label>
+    <label class="rule-form-field rule-form-description"><span class="sr-only">规则描述</span><input aria-label="规则描述" data-dodaf-field="ov6a.rule.${escapeHtml(rule.id)}.description" value="${escapeHtml(rule.description || rule.text || "")}" placeholder="规则描述" ${busy ? "disabled" : ""} /></label>
+    <button type="button" class="quiet-button danger-quiet" data-action="ov6a-delete-rule" data-rule-id="${escapeHtml(rule.id)}" ${busy ? "disabled" : ""} aria-label="删除规则 ${ordinal}" title="删除规则">删除</button>
   </article>`;
 }
 

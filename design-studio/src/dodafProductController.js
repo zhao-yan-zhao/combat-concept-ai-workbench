@@ -31,18 +31,43 @@ import {
 } from "./projectBriefClient.js";
 import {
   addOv6aRule,
+  addOv6bState,
   addOv6bStateMachine,
   addOv6bTransition,
   addOv6cMessage,
   addOv6cParticipant,
   addOv6cSequence,
+  listForceAndPhaseSubjects,
+  listStateMachineSubjects,
   removeOv6aRule,
+  removeOv6bState,
   removeOv6bStateMachine,
+  removeOv6bTransition,
+  moveOv6cMessage,
+  removeOv6cMessage,
+  removeOv6cParticipant,
   removeOv6cSequence,
+  replaceOv6cSequenceContent,
+  reverseOv6cMessage,
+  seedOv6bFromSubjects,
+  seedOv6cFromPhase,
   setOv6aBindingStatus,
   toggleOv6aActivityBinding,
-  updateOv6bStateMachine
+  updateOv6bState,
+  updateOv6bStateMachine,
+  updateOv6bTransition,
+  updateOv6cMessage,
+  updateOv6cParticipant
 } from "./ov6Workbench.js";
+import {
+  mergeParsedSequence,
+  parseSequenceDsl,
+  resolveSequenceDiagramEngine
+} from "./sequenceDiagramDsl.js";
+import { applyRuleChangeSet, ignoreRuleChangeSet } from "./ruleLibraryChatController.js";
+import { generateWithAiStream, isAiOutput } from "../../shared/aiClient.js";
+import { generateMockOutput } from "../../shared/generator.js";
+import { normalizeDodafOv6b } from "../../shared/dodaf/products.js";
 
 const LOADERS = {
   ov2: loadProjectOv2, ov3: loadProjectOv3, ov4: loadProjectOv4, ov5a: loadProjectOv5a,
@@ -56,6 +81,123 @@ const LABELS = {
   ov2: "作战资源流描述", ov3: "作战资源流矩阵", ov4: "责任关系", ov5a: "作战活动分解树",
   ov6a: "规则库", ov6b: "状态机校验", ov6c: "时序校验"
 };
+
+export function buildStateMachineGenerationAnalysis(state = {}) {
+  const phases = Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : [];
+  const phaseNames = new Map(phases.map((phase, index) => [String(phase?.id || `phase-${index + 1}`), String(phase?.name || `阶段 ${index + 1}`)]));
+  const stateMachineSubjects = listStateMachineSubjects(state).map((subject) => ({
+    id: subject.id,
+    name: subject.name,
+    subjectType: subject.subjectType,
+    phaseId: subject.phaseId || "",
+    phaseName: subject.phaseName || "",
+    context: subject.context || "",
+    role: subject.role || "",
+    entryConditions: subject.entryConditions || [],
+    exitConditions: subject.exitConditions || [],
+    expectedEffects: subject.expectedEffects || []
+  }));
+  return {
+    stateMachineSubjects,
+    phaseAction: {
+      phases: phases.slice(0, 24).map((phase, index) => ({
+        id: String(phase?.id || `phase-${index + 1}`),
+        name: String(phase?.name || `阶段 ${index + 1}`),
+        objective: String(phase?.objective || ""),
+        primaryActions: (Array.isArray(phase?.primaryActions) ? phase.primaryActions : phase?.blueActions || []).filter(Boolean).slice(0, 8),
+        entryConditions: (phase?.entryConditions || []).filter(Boolean).slice(0, 6),
+        exitConditions: (phase?.exitConditions || []).filter(Boolean).slice(0, 6),
+        expectedEffects: (phase?.expectedEffects || []).filter(Boolean).slice(0, 6)
+      })),
+      transitions: (Array.isArray(state.phaseAction?.transitions) ? state.phaseAction.transitions : []).slice(0, 32).map((item) => ({
+        fromPhaseId: String(item?.fromPhaseId || ""),
+        toPhaseId: String(item?.toPhaseId || ""),
+        fromPhaseName: phaseNames.get(String(item?.fromPhaseId || "")) || "",
+        toPhaseName: phaseNames.get(String(item?.toPhaseId || "")) || "",
+        condition: String(item?.condition || ""),
+        note: String(item?.note || "")
+      }))
+    },
+    rules: (Array.isArray(state.ov6a?.rules) ? state.ov6a.rules : []).slice(0, 80).map((rule) => ({
+      id: String(rule?.id || ""),
+      name: String(rule?.name || ""),
+      type: String(rule?.type || ""),
+      description: String(rule?.description || "")
+    })),
+    generationRequest: "为识别出的关键任务和持续运行对象生成可编辑状态机草案；阶段仅作为上下文",
+    modelingInstructions: "输出 StateMachineDraft JSON：stateMachines[] 每项对应一个 stateMachineSubjects[].id，subjectRef 和 subjectType 必须原样匹配候选。不要为阶段容器自动建机。每台至少有 initial、normal、final；确需分支时使用 decision，并给出 decisionExpression，判定出边给出不重复的 branchResult。condition 必须可观察；ruleRefs 仅可引用 analysis.rules 中的 id。只给研究级、可复核内容。"
+  };
+}
+
+export function applyStateMachineDraft(draft = {}, analysis = {}) {
+  const candidates = Array.isArray(analysis?.stateMachineSubjects) && analysis.stateMachineSubjects.length
+    ? analysis.stateMachineSubjects
+    : (Array.isArray(analysis?.phaseAction?.phases) ? analysis.phaseAction.phases.map((phase) => ({ ...phase, subjectType: "task" })) : []);
+  const rules = Array.isArray(analysis?.rules) ? analysis.rules : [];
+  const validRuleIds = new Set(rules.map((rule) => rule.id).filter(Boolean));
+  const rawMachines = Array.isArray(draft?.stateMachines) ? draft.stateMachines : [];
+  const machines = candidates.map((candidate, index) => {
+    const subjectRef = String(candidate?.id || `subject-${index + 1}`);
+    const raw = rawMachines.find((item) => String(item?.subjectRef || "") === subjectRef) || rawMachines[index] || {};
+    const machineId = `subject-${safeId(subjectRef)}-machine`;
+    const rawStates = Array.isArray(raw?.states) ? raw.states.slice(0, 12) : [];
+    const fallbackStates = [
+      { name: candidate?.entryConditions?.[0] || "进入条件满足", kind: "initial" },
+      { name: candidate?.name || candidate?.context || "任务执行中", kind: "normal" },
+      { name: candidate?.exitConditions?.[0] || candidate?.expectedEffects?.[0] || "终止条件满足", kind: "final" }
+    ];
+    const sourceStates = rawStates.length >= 3 ? rawStates : fallbackStates;
+    const states = sourceStates.map((item, stateIndex) => ({
+      id: `${machineId}-state-${stateIndex + 1}`,
+      name: String(item?.name || fallbackStates[stateIndex]?.name || `状态 ${stateIndex + 1}`).slice(0, 120),
+      kind: ["initial", "normal", "decision", "final"].includes(item?.kind) ? item.kind : "normal",
+      decisionExpression: item?.kind === "decision" ? String(item?.decisionExpression || "").slice(0, 1000) : "",
+      x: item?.x,
+      y: item?.y
+    }));
+    if (!states.some((item) => item.kind === "initial")) states[0].kind = "initial";
+    if (!states.some((item) => item.kind === "final")) states[states.length - 1].kind = "final";
+    states.forEach((item, stateIndex) => {
+      if (stateIndex > 0 && stateIndex < states.length - 1 && (item.kind === "initial" || item.kind === "final")) item.kind = "normal";
+    });
+    const rawTransitions = Array.isArray(raw?.transitions) ? raw.transitions : [];
+    const transitions = rawTransitions.length
+      ? rawTransitions.map((item, transitionIndex) => ({
+        id: `${machineId}-transition-${transitionIndex + 1}`,
+        fromStateRef: states[Math.max(0, sourceStates.findIndex((state) => state?.id === item?.fromStateRef))]?.id || states[transitionIndex]?.id,
+        toStateRef: states[Math.max(0, sourceStates.findIndex((state) => state?.id === item?.toStateRef))]?.id || states[transitionIndex + 1]?.id || states.at(-1)?.id,
+        condition: String(item?.condition || "阶段转换条件").slice(0, 4000),
+        branchResult: String(item?.branchResult || "").slice(0, 400),
+        ruleRefs: (Array.isArray(item?.ruleRefs) ? item.ruleRefs : []).filter((id) => validRuleIds.has(id)).slice(0, 24),
+        eventRefs: []
+      })).filter((item) => item.fromStateRef && item.toStateRef && item.fromStateRef !== item.toStateRef)
+      : states.slice(0, -1).map((item, stateIndex) => ({
+        id: `${machineId}-transition-${stateIndex + 1}`,
+        fromStateRef: item.id,
+        toStateRef: states[stateIndex + 1].id,
+        condition: String(candidate?.exitConditions?.[stateIndex] || candidate?.context || "满足下一状态进入条件").slice(0, 4000),
+        branchResult: "",
+        ruleRefs: rules.slice(0, 2).map((rule) => rule.id).filter(Boolean),
+        eventRefs: []
+      }));
+    return {
+      id: machineId,
+      subjectRef,
+      subjectType: candidate?.subjectType || "task",
+      name: String(raw?.name || `${candidate?.name || `建模对象 ${index + 1}`}状态机`).slice(0, 240),
+      states,
+      transitions
+    };
+  });
+  return normalizeDodafOv6b({
+    stateMachines: machines,
+    derivedFrom: { mode: "ai", sources: ["phaseAction", "forceMission", "ov6a"], generatedAt: new Date().toISOString(), note: "关键任务与持续对象状态机分析" }
+  });
+}
+
+function safeId(value) {
+  return String(value || "state").replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "state";
+}
 
 export function createDodafProductController({
   projectId,
@@ -137,6 +279,17 @@ export function createDodafProductController({
       persistOv6("ov6a", next, "已删除规则");
       return true;
     }
+    if (action === "ov6a-apply-change" || action === "ov6a-apply-all-changes") {
+      const model = resolveDodafProduct(state, "ov6a").model;
+      const next = applyRuleChangeSet(model, model.ruleChangeSet, action === "ov6a-apply-change" ? ds.changeId : "");
+      persistOv6("ov6a", next, action === "ov6a-apply-change" ? "已采纳规则变更" : "已采纳全部待审核规则变更");
+      return true;
+    }
+    if (action === "ov6a-ignore-change") {
+      const model = resolveDodafProduct(state, "ov6a").model;
+      persistOv6("ov6a", ignoreRuleChangeSet(model, ds.changeId), "已忽略规则变更建议");
+      return true;
+    }
     if (action === "ov6a-toggle-binding") {
       const model = resolveDodafProduct(state, "ov6a").model;
       const checked = Boolean(el?.checked);
@@ -154,24 +307,81 @@ export function createDodafProductController({
       return true;
     }
 
+    if (action === "ov6b-select-machine") {
+      if (!ds.machineId) return true;
+      state.ov6bSelectedMachineId = ds.machineId;
+      state.ov6bSelectedStateId = "";
+      render();
+      return true;
+    }
+    if (action === "ov6b-select-state") {
+      if (ds.machineId) state.ov6bSelectedMachineId = ds.machineId;
+      state.ov6bSelectedStateId = ds.stateId || "";
+      render();
+      return true;
+    }
+    if (action === "ov6b-seed-subjects") {
+      const model = resolveDodafProduct(state, "ov6b").model;
+      const subjects = listStateMachineSubjects(state);
+      const next = seedOv6bFromSubjects(model, subjects);
+      const created = (next.stateMachines?.length || 0) - (model.stateMachines?.length || 0);
+      if (created > 0) state.ov6bSelectedMachineId = next.stateMachines.at(-1)?.id || "";
+      persistOv6("ov6b", next, created > 0 ? `已按主体新建 ${created} 台状态机` : "主体均已建机，未新增");
+      return true;
+    }
     if (action === "ov6b-add-machine") {
       const model = resolveDodafProduct(state, "ov6b").model;
       const picker = document.getElementById("ov6bSubjectPicker");
       const subjectRef = picker?.value || "";
       const subjectType = ds.subjectType || picker?.selectedOptions?.[0]?.dataset?.subjectType || "task";
       const name = picker?.selectedOptions?.[0]?.textContent?.split("（")[0]?.trim() || "";
-      persistOv6("ov6b", addOv6bStateMachine(model, { subjectType, subjectRef, name }), "已新建状态机");
+      const next = addOv6bStateMachine(model, { subjectType, subjectRef, name });
+      state.ov6bSelectedMachineId = next.stateMachines?.at(-1)?.id || "";
+      state.ov6bSelectedStateId = "";
+      persistOv6("ov6b", next, "已新建状态机");
       return true;
     }
     if (action === "ov6b-remove-machine") {
       if (!ds.machineId || !window.confirm("删除该状态机及其转换？")) return true;
       const model = resolveDodafProduct(state, "ov6b").model;
-      persistOv6("ov6b", removeOv6bStateMachine(model, ds.machineId), "已删除状态机");
+      const next = removeOv6bStateMachine(model, ds.machineId);
+      if (state.ov6bSelectedMachineId === ds.machineId) {
+        state.ov6bSelectedMachineId = next.stateMachines?.[0]?.id || "";
+        state.ov6bSelectedStateId = "";
+      }
+      persistOv6("ov6b", next, "已删除状态机");
       return true;
     }
     if (action === "ov6b-add-transition") {
       const model = resolveDodafProduct(state, "ov6b").model;
       persistOv6("ov6b", addOv6bTransition(model, ds.machineId), "已添加转换");
+      return true;
+    }
+    if (action === "ov6b-add-state") {
+      const model = resolveDodafProduct(state, "ov6b").model;
+      const priorMachine = (model.stateMachines || []).find((item) => item.id === ds.machineId);
+      const priorIds = new Set((priorMachine?.states || []).map((item) => item.id));
+      const next = addOv6bState(model, ds.machineId, {
+        kind: ds.kind || "normal",
+        insertTransitionId: ds.kind === "decision" ? state.ov6bSelectedTransitionId : ""
+      });
+      const machine = (next.stateMachines || []).find((item) => item.id === ds.machineId);
+      const created = machine?.states?.find((item) => !priorIds.has(item.id));
+      if (created) state.ov6bSelectedStateId = created.id;
+      persistOv6("ov6b", next, "已添加状态");
+      return true;
+    }
+    if (action === "ov6b-remove-state") {
+      if (!ds.machineId || !ds.stateId || !window.confirm("删除该状态及其相关转换？")) return true;
+      const model = resolveDodafProduct(state, "ov6b").model;
+      if (state.ov6bSelectedStateId === ds.stateId) state.ov6bSelectedStateId = "";
+      persistOv6("ov6b", removeOv6bState(model, ds.machineId, ds.stateId), "已删除状态");
+      return true;
+    }
+    if (action === "ov6b-remove-transition") {
+      if (!ds.machineId || !ds.transitionId) return true;
+      const model = resolveDodafProduct(state, "ov6b").model;
+      persistOv6("ov6b", removeOv6bTransition(model, ds.machineId, ds.transitionId), "已删除转换");
       return true;
     }
     if (action === "ov6b-machine-field") {
@@ -181,16 +391,185 @@ export function createDodafProductController({
       persistOv6("ov6b", updateOv6bStateMachine(model, ds.machineId, { [field]: el?.value || "" }));
       return true;
     }
+    if (action === "ov6b-state-field") {
+      const model = resolveDodafProduct(state, "ov6b").model;
+      const field = ds.field;
+      if (!field || !ds.machineId || !ds.stateId) return true;
+      persistOv6("ov6b", updateOv6bState(model, ds.machineId, ds.stateId, { [field]: el?.value || "" }));
+      return true;
+    }
+    if (action === "ov6b-transition-field") {
+      const model = resolveDodafProduct(state, "ov6b").model;
+      const field = ds.field;
+      if (!field || !ds.machineId || !ds.transitionId) return true;
+      persistOv6("ov6b", updateOv6bTransition(model, ds.machineId, ds.transitionId, { [field]: el?.value || "" }));
+      return true;
+    }
 
+    if (action === "ov6c-select-sequence") {
+      if (!ds.sequenceId) return true;
+      state.ov6cSelectedSequenceId = ds.sequenceId;
+      state.ov6cSelectedMessageId = "";
+      state.ov6cConnectFromId = "";
+      render();
+      return true;
+    }
+    if (action === "ov6c-select-message") {
+      if (ds.sequenceId) state.ov6cSelectedSequenceId = ds.sequenceId;
+      state.ov6cSelectedMessageId = ds.messageId || "";
+      state.ov6cConnectFromId = "";
+      render();
+      return true;
+    }
+    if (action === "ov6c-set-engine") {
+      const engine = String(ds.engine || "workbench");
+      state.ov6cDiagramEngine = ["mermaid", "js-sequence", "workbench"].includes(engine) ? engine : "workbench";
+      render();
+      return true;
+    }
+    if (action === "ov6c-cancel-connect") {
+      state.ov6cConnectFromId = "";
+      render();
+      return true;
+    }
+    if (action === "ov6c-connect-pick") {
+      const sequenceId = ds.sequenceId || state.ov6cSelectedSequenceId || "";
+      const participantId = ds.participantId || "";
+      if (!sequenceId || !participantId) return true;
+      const fromId = String(state.ov6cConnectFromId || "");
+      if (!fromId) {
+        state.ov6cConnectFromId = participantId;
+        state.ov6cSelectedSequenceId = sequenceId;
+        render();
+        return true;
+      }
+      if (fromId === participantId) {
+        state.ov6cConnectFromId = "";
+        render();
+        return true;
+      }
+      const model = resolveDodafProduct(state, "ov6c").model;
+      const next = addOv6cMessage(model, sequenceId, {
+        fromRef: fromId,
+        toRef: participantId,
+        name: "新消息"
+      });
+      const sequence = (next.sequences || []).find((item) => item.id === sequenceId);
+      state.ov6cConnectFromId = "";
+      state.ov6cSelectedMessageId = sequence?.messages?.at(-1)?.id || "";
+      persistOv6("ov6c", next, "已在画布添加消息（可直接改名称）");
+      return true;
+    }
+    if (action === "ov6c-participant-field") {
+      const model = resolveDodafProduct(state, "ov6c").model;
+      const field = ds.field;
+      if (!field || !ds.sequenceId || !ds.participantId) return true;
+      const patch = {};
+      if (field === "name" || field === "ref") patch[field] = el?.value || "";
+      else return true;
+      persistOv6("ov6c", updateOv6cParticipant(model, ds.sequenceId, ds.participantId, patch));
+      return true;
+    }
+    if (action === "ov6c-remove-participant") {
+      if (!ds.sequenceId || !ds.participantId) return true;
+      const model = resolveDodafProduct(state, "ov6c").model;
+      const sequence = (model.sequences || []).find((item) => item.id === ds.sequenceId);
+      if ((sequence?.participants || []).length <= 1) {
+        notify("至少保留一个参与方");
+        return true;
+      }
+      if (!window.confirm("删除该参与方？相关消息端点将改挂到其余参与方。")) return true;
+      persistOv6("ov6c", removeOv6cParticipant(model, ds.sequenceId, ds.participantId), "已删除参与方");
+      return true;
+    }
+    if (action === "ov6c-move-message") {
+      if (!ds.sequenceId || !ds.messageId) return true;
+      const delta = Number(ds.delta || 0);
+      const model = resolveDodafProduct(state, "ov6c").model;
+      persistOv6("ov6c", moveOv6cMessage(model, ds.sequenceId, ds.messageId, delta));
+      return true;
+    }
+    if (action === "ov6c-reverse-message") {
+      if (!ds.sequenceId || !ds.messageId) return true;
+      const model = resolveDodafProduct(state, "ov6c").model;
+      persistOv6("ov6c", reverseOv6cMessage(model, ds.sequenceId, ds.messageId), "已反转消息方向");
+      return true;
+    }
+    if (action === "ov6c-apply-dsl") {
+      const sequenceId = ds.sequenceId || state.ov6cSelectedSequenceId || "";
+      const engine = resolveSequenceDiagramEngine(ds.engine || state.ov6cDiagramEngine || "js-sequence");
+      if (!sequenceId) return true;
+      if (engine === "workbench") {
+        notify("画布编辑模式请直接在图上修改；可切换到 UML/Mermaid 使用文本");
+        return true;
+      }
+      const editor = document.querySelector(`[data-seq-dsl-editor][data-sequence-id="${CSS.escape(sequenceId)}"]`)
+        || document.querySelector("[data-seq-dsl-editor]");
+      const text = editor?.value ?? "";
+      if (!String(text).trim()) {
+        notify("DSL 为空，未应用");
+        return true;
+      }
+      try {
+        const model = resolveDodafProduct(state, "ov6c").model;
+        const current = (model.sequences || []).find((item) => item.id === sequenceId);
+        if (!current) {
+          notify("未找到当前时序图");
+          return true;
+        }
+        const parsed = parseSequenceDsl(text, engine);
+        if (!parsed.messages?.length && !parsed.participants?.length) {
+          notify("未能从 DSL 解析出参与方或消息，请检查语法");
+          return true;
+        }
+        const merged = mergeParsedSequence(current, parsed);
+        const next = replaceOv6cSequenceContent(model, sequenceId, merged);
+        state.ov6cSelectedSequenceId = sequenceId;
+        if (state.ov6cSelectedMessageId && !(merged.messages || []).some((item) => item.id === state.ov6cSelectedMessageId)) {
+          state.ov6cSelectedMessageId = merged.messages?.[0]?.id || "";
+        }
+        persistOv6(
+          "ov6c",
+          next,
+          `已应用${engine === "js-sequence" ? "UML" : "Mermaid"}文本（${merged.participants.length} 生命线 · ${merged.messages.length} 消息）`
+        );
+      } catch (error) {
+        notify(`DSL 解析失败：${error?.message || error}`);
+      }
+      return true;
+    }
+    if (action === "ov6c-preview-dsl") {
+      // Live preview only — sequenceCanvasController listens for input events.
+      return true;
+    }
+    if (action === "ov6c-seed-phase") {
+      const model = resolveDodafProduct(state, "ov6c").model;
+      if ((model.sequences || []).length) {
+        notify("已有时序图，未覆盖。可对话修订或手动编辑。");
+        return true;
+      }
+      const next = seedOv6cFromPhase(model, state);
+      if (next.sequences?.[0]?.id) state.ov6cSelectedSequenceId = next.sequences[0].id;
+      persistOv6("ov6c", next, next.sequences?.length ? "已按阶段/兵力生成时序草案" : "未能生成时序（缺少阶段/兵力）");
+      return true;
+    }
     if (action === "ov6c-add-sequence") {
       const model = resolveDodafProduct(state, "ov6c").model;
-      persistOv6("ov6c", addOv6cSequence(model), "已新增时序图");
+      const next = addOv6cSequence(model);
+      state.ov6cSelectedSequenceId = next.sequences?.at(-1)?.id || "";
+      state.ov6cSelectedMessageId = "";
+      persistOv6("ov6c", next, "已新增时序图");
       return true;
     }
     if (action === "ov6c-remove-sequence") {
       if (!ds.sequenceId || !window.confirm("删除该时序图？")) return true;
       const model = resolveDodafProduct(state, "ov6c").model;
-      persistOv6("ov6c", removeOv6cSequence(model, ds.sequenceId), "已删除时序图");
+      const next = removeOv6cSequence(model, ds.sequenceId);
+      if (state.ov6cSelectedSequenceId === ds.sequenceId) {
+        state.ov6cSelectedSequenceId = next.sequences?.[0]?.id || "";
+        state.ov6cSelectedMessageId = "";
+      }
+      persistOv6("ov6c", next, "已删除时序图");
       return true;
     }
     if (action === "ov6c-add-participant") {
@@ -200,7 +579,36 @@ export function createDodafProductController({
     }
     if (action === "ov6c-add-message") {
       const model = resolveDodafProduct(state, "ov6c").model;
-      persistOv6("ov6c", addOv6cMessage(model, ds.sequenceId), "已添加消息");
+      const next = addOv6cMessage(model, ds.sequenceId);
+      const sequence = (next.sequences || []).find((item) => item.id === ds.sequenceId);
+      state.ov6cSelectedMessageId = sequence?.messages?.at(-1)?.id || "";
+      persistOv6("ov6c", next, "已添加消息");
+      return true;
+    }
+    if (action === "ov6c-remove-message") {
+      if (!ds.sequenceId || !ds.messageId) return true;
+      const model = resolveDodafProduct(state, "ov6c").model;
+      const next = removeOv6cMessage(model, ds.sequenceId, ds.messageId);
+      if (state.ov6cSelectedMessageId === ds.messageId) state.ov6cSelectedMessageId = "";
+      persistOv6("ov6c", next, "已删除消息");
+      return true;
+    }
+    if (action === "ov6c-message-field") {
+      const model = resolveDodafProduct(state, "ov6c").model;
+      const field = ds.field;
+      if (!field || !ds.sequenceId || !ds.messageId) return true;
+      const patch = {};
+      if (field === "name" || field === "condition" || field === "type" || field === "fromRef" || field === "toRef") {
+        patch[field] = el?.value || "";
+      } else if (field === "activity") {
+        patch.relatedActivityRefs = el?.value ? [el.value] : [];
+      } else {
+        return true;
+      }
+      // Keep selection so canvas inline editor stays open after edit.
+      state.ov6cSelectedSequenceId = ds.sequenceId;
+      state.ov6cSelectedMessageId = ds.messageId;
+      persistOv6("ov6c", updateOv6cMessage(model, ds.sequenceId, ds.messageId, patch));
       return true;
     }
 
@@ -208,6 +616,82 @@ export function createDodafProductController({
   }
 
   const api = {
+    /**
+     * First entry from 阶段行动 → 状态机：derive editable task machines once.
+     * Existing models are human-owned and must never be regenerated implicitly.
+     */
+    async pregenerateOv6bFromPhaseAction({ silent = false } = {}) {
+      const state = getState();
+      if (state.stateMachinePregenerating) return { skipped: true, reason: "busy" };
+      // Do not use the display resolver here: its OODA legacy seed is only a
+      // compatibility preview and must not block first-time phase analysis.
+      const current = state.ov6b && typeof state.ov6b === "object"
+        ? normalizeDodafOv6b(state.ov6b)
+        : normalizeDodafOv6b({ stateMachines: [] });
+      if (Array.isArray(current.stateMachines) && current.stateMachines.length) {
+        return { skipped: true, reason: "has-machines", count: current.stateMachines.length };
+      }
+      const analysis = buildStateMachineGenerationAnalysis(state);
+      if (!analysis.stateMachineSubjects.length) return { skipped: true, reason: "no-subjects" };
+
+      state.stateMachinePregenerating = true;
+      render();
+      await new Promise((resolve) => {
+        if (typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        } else {
+          setTimeout(resolve, 32);
+        }
+      });
+      const startedAt = Date.now();
+      try {
+        let draft = null;
+        let source = "ai";
+        try {
+          const response = await generateWithAiStream({
+            workflowId: "state-machine",
+            workflow: { id: "state-machine", title: "阶段行动状态机分析", outputSchema: "StateMachineDraft" },
+            analysis,
+            evidence: []
+          });
+          if (!isAiOutput(response) || !Array.isArray(response.result?.stateMachines) || !response.result.stateMachines.length) {
+            throw new Error("state machine draft empty");
+          }
+          draft = response.result;
+        } catch {
+          draft = generateMockOutput({
+            workflow: { id: "state-machine", title: "阶段行动状态机分析", outputSchema: "StateMachineDraft" },
+            analysis,
+            evidence: []
+          }).result;
+          source = "local-fallback";
+        }
+
+        const next = applyStateMachineDraft(draft, analysis);
+        if (!next.stateMachines.length) throw new Error("state machine draft produced no machines");
+        state.ov6b = saveLocalDodafProduct("ov6b", next, projectId);
+        state.ov6bSelectedMachineId = next.stateMachines[0]?.id || "";
+        state.ov6bSelectedStateId = "";
+        await syncControllers.ov6b.sync(state.ov6b, { source: "state-machine:pregenerate-phase-action" });
+        await writebackArchitecture("state-machine:pregenerate-phase-action");
+
+        const elapsed = Date.now() - startedAt;
+        if (elapsed < 600) await new Promise((resolve) => setTimeout(resolve, 600 - elapsed));
+        if (!silent) {
+          notify(source === "ai"
+            ? `已根据阶段与行动生成 ${next.stateMachines.length} 台状态机，请复核状态与转换条件`
+            : `AI 暂不可用，已生成 ${next.stateMachines.length} 台本地状态机草案，请复核`);
+        }
+        return { applied: next.stateMachines.length, source, skipped: false };
+      } catch (error) {
+        if (!silent) notify("状态机预生成失败，请在状态机校验页手动新建");
+        return { skipped: true, reason: "error", error: error instanceof Error ? error.message : String(error || "") };
+      } finally {
+        state.stateMachinePregenerating = false;
+        render();
+      }
+    },
+
     async hydrateAll() {
       for (const resource of DODAF_PRODUCT_KEYS) {
         await syncControllers[resource].hydrate();

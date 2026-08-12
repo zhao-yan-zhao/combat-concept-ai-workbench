@@ -273,6 +273,13 @@ export function renderForceMissionChatFloatButton({ chatOpen = false, chatGenera
 
 function renderForceMissionChatPanel({ chat, chatGenerating, busy, confirmed, hasDraft, plan }) {
   const disabled = busy || confirmed || !hasDraft;
+  const disabledReason = confirmed
+    ? "本步已确认，如需修改请先重新生成草案"
+    : !hasDraft
+      ? "请先生成兵力与任务草案，再通过对话修订"
+      : busy && !chatGenerating
+        ? "兵力生成进行中，请稍候"
+        : "";
   const footerHtml = `<div class="phase-review-chat-footer">
         <button type="button" data-action="confirm-force-mission" ${busy || chatGenerating || !hasDraft || confirmed ? "disabled" : ""}>${confirmed ? "已确认" : "确认并进入作战概念图"}</button>
         <p class="planning-meta">生成来源：${escapeHtml(plan.generation?.source || "—")} · 概念 ${Array.isArray(plan.forces) ? plan.forces.length : 0} · 作战 ${Array.isArray(plan.combatForces) ? plan.combatForces.length : 0}</p>
@@ -288,6 +295,7 @@ function renderForceMissionChatPanel({ chat, chatGenerating, busy, confirmed, ha
     emptyTitle: "开始核验修订",
     emptyText: "例如：为阶段 2 增加预警概念单元；作战兵力挂接主攻概念编组。",
     disabled,
+    disabledReason,
     className: "phase-review-chat",
     interactiveTopic: "revision",
     headerActionsHtml: `<button type="button" class="phase-chat-close" data-action="close-force-mission-chat" title="收起对话" aria-label="收起对话"><span aria-hidden="true">×</span></button>`,

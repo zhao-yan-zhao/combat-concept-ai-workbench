@@ -786,7 +786,8 @@ export function createPhaseActionConceptFromForceMission(forceMission = {}, brie
   source = "ai",
   combatFocus = null,
   previousPhaseNames = null,
-  diversitySeed = ""
+  diversitySeed = "",
+  ruleLibrary = null
 } = {}) {
   const generatedAt = new Date().toISOString();
   const mission = normalizeForceMissionPlan(forceMission);
@@ -829,14 +830,18 @@ export function createPhaseActionConceptFromForceMission(forceMission = {}, brie
     : [];
   const transitions = buildJustifiedTransitions(phases, phaseIdList, sourceTransitions, horizon);
   const timeQuestion = `时窗总跨度：${horizon.label}；是否与任务窗口/聚焦匹配？`;
-  return normalizePhaseActionConcept({
+  const rulesCompact = compactRuleLibraryForAnalysis(ruleLibrary || draft.ruleLibrary || null);
+  const ruleNote = rulesCompact.count
+    ? `；已引用规则库 ${rulesCompact.count} 条（作战活动/门槛去重合并）`
+    : "";
+  const built = normalizePhaseActionConcept({
     status: "draft",
     generation: {
       source: usedFallback && source === "ai" ? "local-ai-fallback" : source,
       generatedAt,
       promptSummary: focusTitle && focusTitle !== "所选作战聚焦"
-        ? `按作战聚焦「${focusTitle}」生成 CONOPS 式阶段与行动草案（时窗：${horizon.label}）`
-        : `根据概念简报生成 CONOPS 式阶段与行动草案（时窗：${horizon.label}）`,
+        ? `按作战聚焦「${focusTitle}」生成 CONOPS 式阶段与行动草案（时窗：${horizon.label}${ruleNote}）`
+        : `根据概念简报生成 CONOPS 式阶段与行动草案（时窗：${horizon.label}${ruleNote}）`,
       reviewNotes: clean(draft.reviewNotes, 2000)
     },
     phases,
@@ -849,8 +854,170 @@ export function createPhaseActionConceptFromForceMission(forceMission = {}, brie
       "阶段是否写成作战 CONOPS（时窗+蓝红行动+阶段目标）",
       "时窗是否有理有据（职能加权、相邻衔接、转换 note 含依据）",
       "阶段是否服从已选作战聚焦与研究课题",
-      "是否避免写成研究流程步骤或助手元叙述"
+      "是否避免写成研究流程步骤或助手元叙述",
+      ...(rulesCompact.count ? ["蓝/红行动与进入退出是否落实规则库约束（已有类似表述不重复堆叠）"] : [])
     ]
+  });
+  return enrichPhaseActionWithRules(built, rulesCompact);
+}
+
+/** Compact ov6a rules for phase-action AI analysis (no activity bindings). */
+export function compactRuleLibraryForAnalysis(ov6aOrCompact = null, limit = 40) {
+  if (!ov6aOrCompact || typeof ov6aOrCompact !== "object") {
+    return { count: 0, rules: [] };
+  }
+  const raw = Array.isArray(ov6aOrCompact.rules) ? ov6aOrCompact.rules : [];
+  const rules = raw.slice(0, limit).map((rule, index) => ({
+    id: clean(rule?.id, 80) || `rule-${index + 1}`,
+    name: clean(rule?.name || rule?.subject, 80) || `规则 ${index + 1}`,
+    type: clean(rule?.type, 40) || "约束",
+    scope: clean(rule?.scope, 80) || "研究级",
+    description: clean(rule?.description || rule?.text, 240) || ""
+  })).filter((rule) => rule.name && rule.description);
+  return { count: rules.length, rules };
+}
+
+/**
+ * Fold rule-library constraints into phase entry/exit (or one blue action) when missing.
+ * Skip if the phase corpus already expresses a similar constraint (name/keywords).
+ */
+export function enrichPhaseActionWithRules(plan = {}, ruleLibrary = null) {
+  const rules = compactRuleLibraryForAnalysis(ruleLibrary).rules;
+  if (!rules.length) return normalizePhaseActionConcept(plan);
+  const normalized = normalizePhaseActionConcept(plan);
+  const phases = (normalized.phases || []).map((phase) => ({
+    ...phase,
+    blueActions: [...(phase.blueActions || [])],
+    redActions: [...(phase.redActions || [])],
+    entryConditions: [...(phase.entryConditions || [])],
+    exitConditions: [...(phase.exitConditions || [])],
+    expectedEffects: [...(phase.expectedEffects || [])],
+    primaryActions: [...(phase.primaryActions || phase.blueActions || [])],
+    secondaryActions: [...(phase.secondaryActions || phase.redActions || [])]
+  }));
+  if (!phases.length) return normalized;
+
+  let applied = 0;
+  for (const rule of rules.slice(0, 16)) {
+    const fullCorpus = phases.map((phase) => phaseActivityCorpus(phase)).join("\n");
+    if (ruleAlreadyCovered(rule, fullCorpus)) continue;
+    const target = pickPhaseForRule(phases, rule);
+    if (!target) continue;
+    const clause = ruleToPhaseClause(rule);
+    if (!clause) continue;
+    if (rule.type === "转换条件" || /退出|转换|时窗/.test(`${rule.name}${rule.description}`)) {
+      if (!listHasSimilar(target.exitConditions, clause)) {
+        target.exitConditions = [...target.exitConditions, clause].slice(0, 6);
+        applied += 1;
+      }
+    } else if (rule.type === "前置条件" || /进入|授权|门槛/.test(`${rule.name}${rule.description}`)) {
+      if (!listHasSimilar(target.entryConditions, clause)) {
+        target.entryConditions = [...target.entryConditions, clause].slice(0, 6);
+        applied += 1;
+      }
+    } else {
+      // Constraint / business rule → prefer entry condition; fall back to one blue action.
+      if (!listHasSimilar(target.entryConditions, clause) && target.entryConditions.length < 5) {
+        target.entryConditions = [...target.entryConditions, clause].slice(0, 6);
+        applied += 1;
+      } else if (!listHasSimilar(target.blueActions, clause) && target.blueActions.length < 4) {
+        const action = `按规则「${rule.name}」组织可观察作战活动：${clause}`;
+        if (!listHasSimilar(target.blueActions, action)) {
+          target.blueActions = [...target.blueActions, action].slice(0, 4);
+          target.primaryActions = [...target.blueActions];
+          applied += 1;
+        }
+      }
+    }
+  }
+
+  const checklist = Array.isArray(normalized.reviewChecklist) ? [...normalized.reviewChecklist] : [];
+  if (applied > 0 && !checklist.some((item) => String(item).includes("规则库"))) {
+    checklist.push(`已从规则库补入 ${applied} 条作战门槛/活动约束（跳过已有类似表述）`);
+  }
+  const summary = clean(normalized.generation?.promptSummary, 400);
+  return normalizePhaseActionConcept({
+    ...normalized,
+    phases,
+    reviewChecklist: checklist.slice(0, 10),
+    generation: {
+      ...normalized.generation,
+      promptSummary: applied > 0 && summary && !summary.includes("规则库")
+        ? `${summary}；规则补入 ${applied} 条`
+        : summary
+    }
+  });
+}
+
+function phaseActivityCorpus(phase = {}) {
+  return [
+    phase.name,
+    phase.objective,
+    ...(phase.blueActions || []),
+    ...(phase.redActions || []),
+    ...(phase.entryConditions || []),
+    ...(phase.exitConditions || []),
+    ...(phase.expectedEffects || []),
+    ...(phase.primaryActions || []),
+    ...(phase.secondaryActions || [])
+  ].map((item) => String(item || "")).join(" ");
+}
+
+function ruleAlreadyCovered(rule = {}, corpus = "") {
+  const text = String(corpus || "");
+  if (!text) return false;
+  const name = clean(rule.name, 40);
+  if (name && text.includes(name)) return true;
+  const keys = [
+    name,
+    ...String(name).match(/[\u4e00-\u9fff]{2,8}/g) || [],
+    ...String(rule.description || "").match(/[\u4e00-\u9fff]{2,8}/g) || []
+  ].filter((item) => item && item.length >= 2);
+  const hits = new Set();
+  for (const key of keys) {
+    if (text.includes(key)) hits.add(key);
+    if (hits.size >= 2) return true;
+  }
+  // Single strong keyword match on distinctive rule head
+  const head = clean(rule.description, 10);
+  return Boolean(head && head.length >= 4 && text.includes(head));
+}
+
+function pickPhaseForRule(phases = [], rule = {}) {
+  if (!phases.length) return null;
+  const scope = clean(rule.scope, 40);
+  if (scope && scope !== "全局" && scope !== "研究级") {
+    const byScope = phases.find((phase) => String(phase.name || "").includes(scope)
+      || String(phase.objective || "").includes(scope));
+    if (byScope) return byScope;
+  }
+  if (rule.type === "转换条件") return phases[Math.min(phases.length - 1, Math.floor(phases.length * 0.6))] || phases[0];
+  if (rule.type === "前置条件") return phases[0];
+  return phases[Math.floor((phases.length - 1) / 2)] || phases[0];
+}
+
+function ruleToPhaseClause(rule = {}) {
+  const name = clean(rule.name, 24);
+  const detail = clean(rule.description, 100);
+  if (!name && !detail) return "";
+  if (name && detail) return `【${name}】${detail}`;
+  return name || detail;
+}
+
+function listHasSimilar(list = [], clause = "") {
+  const target = clean(clause, 160);
+  if (!target) return true;
+  const keys = String(target).match(/[\u4e00-\u9fff]{2,8}/g) || [target.slice(0, 8)];
+  return (Array.isArray(list) ? list : []).some((item) => {
+    const text = String(item || "");
+    if (!text) return false;
+    if (text.includes(target.slice(0, 12))) return true;
+    let hits = 0;
+    for (const key of keys) {
+      if (key.length >= 2 && text.includes(key)) hits += 1;
+      if (hits >= 2) return true;
+    }
+    return false;
   });
 }
 

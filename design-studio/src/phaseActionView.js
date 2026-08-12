@@ -70,8 +70,11 @@ export function renderPhaseAction(state) {
     })}
 
     ${focusConfirmed ? "" : hasFocus
-      ? `<p class="planning-banner">已选择聚焦，请点击「确认作战聚焦并生成阶段」；确认后才会自动起草作战阶段。</p>`
-      : `<p class="planning-banner">请先多选作战聚焦（或新增），再确认并生成阶段。</p>`}
+      ? `<p class="planning-banner">已选择聚焦，请点击「确认作战聚焦并生成阶段」；确认后会结合简报、聚焦与规则库起草作战阶段（含作战活动，已有类似表述不重复）。</p>`
+      : `<p class="planning-banner">请先多选作战聚焦（或新增），再确认并生成阶段。生成时会引用上游规则库约束。</p>`}
+    ${focusConfirmed && Array.isArray(state.ov6a?.rules) && state.ov6a.rules.length
+      ? `<p class="planning-meta">上游规则库 ${state.ov6a.rules.length} 条已作为阶段生成输入；阶段蓝/红行动与进入退出体现作战活动，语义重复则跳过。</p>`
+      : ""}
 
     ${showResearchBench ? `
     <div class="phase-workbench ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}" aria-label="阶段与行动研究台">
@@ -151,7 +154,9 @@ function renderCombatFocusBlock({
             <p>${escapeHtml(option.text)}</p>
           </button>`;
         }).join("")}
-      </div>` : `<p class="empty-inspector combat-focus-empty">尚未生成作战聚焦。请先点击上方按钮，由 AI 根据简报起草 3 个候选。</p>`}
+      </div>` : focusGenerating
+        ? `<p class="empty-inspector combat-focus-empty is-generating" role="status">正在根据简报生成 3 个作战聚焦方向…</p>`
+        : `<p class="empty-inspector combat-focus-empty">尚未生成作战聚焦。进入本步时会自动起草 3 个候选，也可点击上方按钮手动生成。</p>`}
 
       ${selectedFocuses.length ? `<div class="combat-focus-selected">
         <p>已选 ${selectedFocuses.length} 项${focusConfirmed ? "（已确认）" : "（待确认）"}：</p>
@@ -323,6 +328,13 @@ function renderPhaseDetail({
 
 function renderPhaseActionChatPanel({ chat, chatGenerating, busy, confirmed, phases, plan, selectedLabels }) {
   const disabled = busy || confirmed || !phases.length;
+  const disabledReason = confirmed
+    ? "本步已确认，如需修改请先重新生成草案"
+    : !phases.length
+      ? "请先生成阶段草案，再通过对话修订"
+      : busy && !chatGenerating
+        ? "阶段或聚焦生成进行中，请稍候"
+        : "";
   const footerHtml = `<div class="phase-review-chat-footer">
         <button type="button" data-action="confirm-phase-action" ${busy || chatGenerating || !phases.length || confirmed ? "disabled" : ""}>${confirmed ? "已确认 · 去规则绑定" : "确认阶段与行动"}</button>
         <p class="planning-meta">生成来源：${escapeHtml(plan.generation?.source || "—")} · ${escapeHtml(plan.generation?.generatedAt || "未生成")}${selectedLabels ? ` · 聚焦：${escapeHtml(selectedLabels)}` : ""}</p>
@@ -338,6 +350,7 @@ function renderPhaseActionChatPanel({ chat, chatGenerating, busy, confirmed, pha
     emptyTitle: "开始核验修订",
     emptyText: "例如：合并第 2、3 阶段；补充进入条件；缩短撤离时窗。",
     disabled,
+    disabledReason,
     className: "phase-review-chat",
     interactiveTopic: "revision",
     headerActionsHtml: `<button type="button" class="phase-chat-close" data-action="close-phase-action-chat" title="收起对话" aria-label="收起对话"><span aria-hidden="true">×</span></button>`,

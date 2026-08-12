@@ -15,6 +15,7 @@ export function renderResearchChatPanel({
   emptyTitle = "开始研究交流",
   emptyText = "记录任务设想、假设或约束，助手将给出可复核的概念级判断。",
   disabled = false,
+  disabledReason = "",
   className = "",
   headerActionsHtml = "",
   footerHtml = "",
@@ -33,6 +34,9 @@ export function renderResearchChatPanel({
   const classes = ["surface", "inspiration-panel", "research-chat-panel", busy ? "is-generating" : "", className]
     .filter(Boolean)
     .join(" ");
+  const reason = !busy && disabled && disabledReason
+    ? `<p class="research-chat-disabled-reason" role="status">${escapeHtml(disabledReason)}</p>`
+    : "";
 
   return `
     <section class="${classes}" data-research-chat-scope="${escapeHtml(scope)}">
@@ -55,13 +59,25 @@ export function renderResearchChatPanel({
             </div>`}
       </div>
       <form class="research-chat-composer" id="${escapeHtml(resolvedFormId)}" data-research-chat-form="${escapeHtml(scope)}">
-        <label class="research-chat-composer-field" for="${escapeHtml(resolvedInputId)}">
-          <span class="visually-hidden">研究问题</span>
-          <textarea id="${escapeHtml(resolvedInputId)}" name="question" rows="2" maxlength="800" placeholder="${escapeHtml(placeholder)}" data-research-chat-input="${escapeHtml(scope)}" ${inputDisabled ? "disabled" : ""}></textarea>
-        </label>
-        <button class="research-chat-send" type="submit" aria-label="发送" title="发送" ${inputDisabled ? "disabled" : ""}>
-          <span aria-hidden="true">${busy ? "…" : "↑"}</span>
-        </button>
+        <div class="research-chat-edit-banner" data-research-chat-edit-banner="${escapeHtml(scope)}" hidden>
+          <span>正在编辑一条消息</span>
+          <button type="button" class="message-action" data-research-chat-cancel-edit="${escapeHtml(scope)}">取消编辑</button>
+        </div>
+        ${reason}
+        <div class="research-chat-composer-row">
+          <label class="research-chat-composer-field" for="${escapeHtml(resolvedInputId)}">
+            <span class="visually-hidden">研究问题</span>
+            <textarea id="${escapeHtml(resolvedInputId)}" name="question" rows="2" maxlength="800" placeholder="${escapeHtml(placeholder)}" data-research-chat-input="${escapeHtml(scope)}" ${inputDisabled ? "disabled" : ""}></textarea>
+          </label>
+          ${busy
+            ? `<button class="research-chat-stop" type="button" data-research-chat-stop="${escapeHtml(scope)}" aria-label="停止生成" title="停止生成">
+                <span aria-hidden="true">■</span>
+              </button>`
+            : `<button class="research-chat-send" type="submit" aria-label="发送" title="发送（Enter）" ${inputDisabled ? "disabled" : ""}>
+                <span aria-hidden="true">↑</span>
+              </button>`}
+        </div>
+        <p class="research-chat-composer-hint">Enter 发送 · Shift+Enter 换行</p>
       </form>
       ${footerHtml}
     </section>
@@ -115,22 +131,22 @@ export function renderResearchChatMessage(message, { scope = "brief", interactiv
 
   const isUser = message.role === "user";
   const isInteractive = message.topic === interactiveTopic;
-  const isAi = message.source === "ai";
-  const source = isAi ? "AI" : "本地建议";
-  const sourceClass = isAi ? "is-ai" : "is-local";
+  const sourceMeta = resolveSourceMeta(message.source);
+  const truncated = Boolean(message.truncated);
   const action = isInteractive
     ? (isUser
       ? `<button type="button" class="message-action" data-research-chat-edit="${escapeHtml(message.id)}" data-research-chat-scope="${escapeHtml(scope)}">编辑</button>`
       : `<button type="button" class="message-action" data-research-chat-retry="${escapeHtml(message.id)}" data-research-chat-scope="${escapeHtml(scope)}">重新生成</button>`)
     : "";
 
-  return `<article class="inspiration-message ${isUser ? "user" : "assistant"}">
+  return `<article class="inspiration-message ${isUser ? "user" : "assistant"}${sourceMeta.articleClass}">
     <div class="inspiration-message-avatar" aria-hidden="true">${isUser ? "研" : "助"}</div>
     <div class="inspiration-message-body">
       <div class="inspiration-message-meta">
         <strong>${isUser ? "研究人员" : "研究助手"}</strong>
         <div class="inspiration-message-meta-tools">
-          ${!isUser ? `<span class="inspiration-message-source ${sourceClass}">${source}</span>` : ""}
+          ${!isUser ? `<span class="inspiration-message-source ${sourceMeta.sourceClass}">${sourceMeta.label}</span>` : ""}
+          ${truncated ? `<span class="research-chat-truncated" title="内容已按长度上限截断">已截断</span>` : ""}
           ${action}
         </div>
       </div>
@@ -140,9 +156,10 @@ export function renderResearchChatMessage(message, { scope = "brief", interactiv
 }
 
 export function scrollResearchChatToBottom(root, scope = "") {
+  const host = root || document;
   const thread = scope
-    ? root.querySelector(`[data-research-chat-thread="${scope}"]`)
-    : root.querySelector("[data-research-chat-thread], .research-chat-thread");
+    ? host.querySelector(`[data-research-chat-thread="${scope}"]`)
+    : host.querySelector("[data-research-chat-thread], .research-chat-thread");
   if (!thread) return;
   requestAnimationFrame(() => {
     thread.scrollTop = thread.scrollHeight;
@@ -150,9 +167,15 @@ export function scrollResearchChatToBottom(root, scope = "") {
 }
 
 /** In-place stream update without full app re-render (avoids input/scroll flicker). */
-export function patchResearchChatStream(scope, text) {
-  const root = document.querySelector(`[data-research-chat-scope="${scope}"]`) || document;
-  const pending = root.querySelector(`[data-research-chat-pending="true"] .inspiration-message-body`);
+export function patchResearchChatStream(scope, text, root = document) {
+  const host = (root && root.querySelector)
+    ? (root.querySelector(`[data-research-chat-scope="${scope}"]`) || root)
+    : document;
+  const panel = host.matches?.(`[data-research-chat-scope="${scope}"]`)
+    ? host
+    : (host.querySelector?.(`[data-research-chat-scope="${scope}"]`) || document);
+  const pending = panel.querySelector?.(`[data-research-chat-pending="true"] .inspiration-message-body`)
+    || document.querySelector(`[data-research-chat-scope="${scope}"] [data-research-chat-pending="true"] .inspiration-message-body`);
   if (!pending) return;
   const value = String(text || "").trim();
   let stream = pending.querySelector("[data-research-chat-stream]");
@@ -178,4 +201,17 @@ export function patchResearchChatStream(scope, text) {
   const source = pending.querySelector(".inspiration-message-source");
   if (source) source.textContent = "生成中";
   scrollResearchChatToBottom(document, scope);
+}
+
+function resolveSourceMeta(source) {
+  if (source === "ai") {
+    return { label: "AI", sourceClass: "is-ai", articleClass: "" };
+  }
+  if (source === "error") {
+    return { label: "生成失败", sourceClass: "is-error", articleClass: " is-error" };
+  }
+  if (source === "cancelled") {
+    return { label: "已停止", sourceClass: "is-cancelled", articleClass: " is-cancelled" };
+  }
+  return { label: "本地建议", sourceClass: "is-local", articleClass: "" };
 }

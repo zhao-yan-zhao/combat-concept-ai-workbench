@@ -163,6 +163,46 @@ export function createFileProjectRepository({ filePath, databasePath = "", now =
       return saveModelResource(projectId, input, "phaseActionConcept");
     },
 
+    getResearchChats(projectId) {
+      return readModelRecord(projectId, "researchChats");
+    },
+
+    /**
+     * Persist step research-chat sessions (phase / force / rule).
+     * Does not bump project revision or invalidate workflow confirmation,
+     * so chat traffic does not fight brief/model expectedRevision writes.
+     */
+    saveResearchChats(projectId, input = {}) {
+      return enqueue(async () => {
+        const state = await loadState();
+        const current = normalizeProjectRecord(state.projects[projectId]) || {
+          revision: 0,
+          briefRevision: 0,
+          updatedAt: now(),
+          audit: []
+        };
+        const model = normalizeResearchChatsModel(input.model);
+        const existing = current.researchChats;
+        if (existing?.model && sameJson(existing.model, model)) {
+          return toModelResponse(projectId, current, "researchChats");
+        }
+        const updatedAt = now();
+        const resource = {
+          resourceRevision: Number(existing?.resourceRevision || 0) + 1,
+          updatedAt,
+          model
+        };
+        const next = {
+          ...current,
+          updatedAt,
+          researchChats: resource
+        };
+        state.projects[projectId] = next;
+        await persistState(state);
+        return toModelResponse(projectId, next, "researchChats");
+      });
+    },
+
     getConceptMap(projectId) {
       return readModelRecord(projectId, "conceptMap");
     },
@@ -864,7 +904,27 @@ function createProjectPersistence({ filePath, databasePath }) {
   const insertReview = database.prepare("INSERT INTO project_collaboration_reviews (project_id, review_id, position, review_json) VALUES (?, ?, ?, ?)");
   const insertDecision = database.prepare("INSERT INTO project_collaboration_decisions (project_id, review_id, position, decision_json) VALUES (?, ?, ?, ?)");
   const insertAudit = database.prepare("INSERT INTO project_audit_events (project_id, event_id, position, revision, action, occurred_at, event_json) VALUES (?, ?, ?, ?, ?, ?, ?)");
-  const resourceKeys = ["ov1", "ov2", "ov3", "ov4", "ov5a", "ov5", "ov6a", "ov6b", "ov6c", "architecture", "ooda", "scenario", "validation", "knowledge"];
+  const resourceKeys = [
+    "forceMissionPlan",
+    "phaseActionConcept",
+    "conceptMap",
+    "conceptGraphicPlan",
+    "researchChats",
+    "ov1",
+    "ov2",
+    "ov3",
+    "ov4",
+    "ov5a",
+    "ov5",
+    "ov6a",
+    "ov6b",
+    "ov6c",
+    "architecture",
+    "ooda",
+    "scenario",
+    "validation",
+    "knowledge"
+  ];
   const historyKeys = ["reportArchives", "modelSnapshots"];
   // One-time bootstrap after schema exists: empty SQLite inherits projects.json, then all writes stay in DB.
   bootstrapSqliteFromFileIfEmpty({
@@ -1116,14 +1176,63 @@ function normalizeInspirationSnapshot(value) {
 }
 
 function normalizeInspirationMessage(value) {
+  // Drop in-flight typing bubbles — only durable turns belong in the project store.
+  if (value?.pending) return null;
   const role = value?.role === "user" ? "user" : value?.role === "assistant" ? "assistant" : "";
   const text = clean(value?.text, 800);
   if (!role || !text) return null;
+  const sourceRaw = clean(value?.source, 16);
+  const source = ["ai", "local", "error", "cancelled"].includes(sourceRaw) ? sourceRaw : "";
+  const id = clean(value?.id, 80);
   return {
+    ...(id ? { id } : {}),
     role,
     topic: clean(value?.topic, 64),
-    source: ["ai", "local"].includes(clean(value?.source, 16)) ? clean(value.source, 16) : "",
+    source,
     text,
+    truncated: Boolean(value?.truncated),
+    createdAt: clean(value?.createdAt, 80)
+  };
+}
+
+/** Step research chats (phase / force / rule) persisted as one project resource. */
+function normalizeResearchChatsModel(value) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    version: 1,
+    phaseAction: normalizeResearchChatSessionSnapshot(source.phaseAction),
+    forceMission: normalizeResearchChatSessionSnapshot(source.forceMission),
+    ruleLibrary: normalizeResearchChatSessionSnapshot(source.ruleLibrary)
+  };
+}
+
+function normalizeResearchChatSessionSnapshot(value, { maxMessages = 48 } = {}) {
+  if (!value || typeof value !== "object") return null;
+  const messages = Array.isArray(value.messages)
+    ? value.messages.map(normalizeResearchChatMessageSnapshot).filter(Boolean).slice(-maxMessages)
+    : [];
+  if (!messages.length) return null;
+  return {
+    version: 1,
+    messages
+  };
+}
+
+function normalizeResearchChatMessageSnapshot(value) {
+  if (value?.pending) return null;
+  const role = value?.role === "user" ? "user" : value?.role === "assistant" ? "assistant" : "";
+  const text = clean(value?.text, 800);
+  if (!role || !text) return null;
+  const sourceRaw = clean(value?.source, 16);
+  const source = ["ai", "local", "error", "cancelled"].includes(sourceRaw) ? sourceRaw : "";
+  const id = clean(value?.id, 80);
+  return {
+    ...(id ? { id } : {}),
+    role,
+    topic: clean(value?.topic, 64),
+    source,
+    text,
+    truncated: Boolean(value?.truncated),
     createdAt: clean(value?.createdAt, 80)
   };
 }
@@ -1368,6 +1477,15 @@ function getCollaborationResourceRevision(record, resource) {
 
 function getResourceDefinition(resourceKey) {
   const definitions = {
+    researchChats: {
+      normalize: normalizeResearchChatsModel,
+      getLineage: () => ({}),
+      isStale: () => false,
+      summarize: (model) => {
+        const count = (session) => (Array.isArray(session?.messages) ? session.messages.length : 0);
+        return `phase ${count(model?.phaseAction)} / force ${count(model?.forceMission)} / rules ${count(model?.ruleLibrary)}`;
+      }
+    },
     phaseActionConcept: {
       normalize: normalizeProjectPhaseActionConcept,
       getLineage: (record) => ({ briefRevision: Number(record?.briefRevision || 0) }),

@@ -89,6 +89,15 @@ function createResultBySchema(schema, workflow, analysis, evidenceRefs) {
   if (schema === "RuleLibraryDraft") {
     return createRuleLibraryDraftResult(analysis);
   }
+  if (schema === "RuleLibraryChangeSet") {
+    return createRuleLibraryChangeSetResult(analysis);
+  }
+  if (schema === "StateMachineDraft") {
+    return createStateMachineDraftResult(analysis);
+  }
+  if (schema === "SequenceDraft") {
+    return createSequenceDraftResult(analysis);
+  }
   if (schema === "ConceptGraphicPlan") {
     return createConceptGraphicPlanResult(analysis);
   }
@@ -235,10 +244,12 @@ function createPhaseActionConceptResult(analysis) {
     risk: valueOf(analysis, "主要风险")
   };
   const combatFocus = analysis?.combatFocus && typeof analysis.combatFocus === "object" ? analysis.combatFocus : null;
+  const ruleLibrary = analysis?.ruleLibrary && typeof analysis.ruleLibrary === "object" ? analysis.ruleLibrary : null;
   const built = createPhaseActionConceptFromBrief(brief, null, {
     source: "local",
     forceMission: analysis?.forceMission || null,
-    combatFocus
+    combatFocus,
+    ruleLibrary
   });
   return {
     phases: built.phases,
@@ -249,19 +260,66 @@ function createPhaseActionConceptResult(analysis) {
 }
 
 function createRuleLibraryDraftResult(analysis) {
-  const objective = valueOf(analysis, "任务目标") || "作战概念研究";
-  const approach = valueOf(analysis, "核心思路") || "体系协同";
-  const effects = valueOf(analysis, "预期效果") || "形成可复核态势优势";
-  const risk = valueOf(analysis, "主要风险") || "对手反制";
-  const request = String(analysis?.revisionRequest || analysis?.["修订要求"] || "").trim();
+  const objective = shortResearchText(valueOf(analysis, "任务目标") || valueOf(analysis, "研究意图") || "作战概念研究", 48);
+  const approach = shortResearchText(valueOf(analysis, "核心思路") || "体系协同", 40);
+  const effects = shortResearchText(valueOf(analysis, "预期效果") || "形成可复核态势优势", 40);
+  const risk = shortResearchText(valueOf(analysis, "主要风险") || "对手反制", 40);
+  const assumptions = shortResearchText(valueOf(analysis, "关键假设") || "关键条件成立", 40);
+  const request = String(analysis?.revisionRequest || "").trim();
+  const revisionNotes = String(analysis?.["修订要求"] || "").trim();
   const existing = Array.isArray(analysis?.currentRules?.rules) ? analysis.currentRules.rules : [];
-  if (existing.length && /咨询|是否|为什么|如何理解|解释/.test(request) && !/增|删|改|起草|补充|合并|拆/.test(request)) {
+  // First-entry pregenerate must never go through the chat “add N rules” path.
+  const isPregenerate = analysis?.pregenerateFromBrief === true
+    || /首次按简报|完整规则库|预生成|简报确认后进入规则库/.test(`${request} ${revisionNotes}`);
+  const isConsult = !isPregenerate
+    && /咨询|是否|为什么|如何理解|解释/.test(request)
+    && !/新增|添加|补充|删除|修改|起草|合并|拆分|写入/.test(request);
+  // Chat-style add only: explicit 新增/添加/N条, not bare “起草完整库”.
+  const isAdd = !isPregenerate
+    && /新增|添加|补充|新建|写入/.test(request)
+    && !/完整规则库|首次按简报/.test(request);
+
+  if (existing.length && isConsult) {
     return {
       summary: `当前规则库共 ${existing.length} 条。建议优先核对：名称是否作战语义明确、描述是否可观察、范围是否过宽。本轮仅咨询，未改表单。`,
       rules: []
     };
   }
-  if (existing.length && request) {
+
+  // Add/supplement: return only new short rules so the client can merge-append.
+  if (isAdd) {
+    const countMatch = request.match(/(\d+)\s*条/) || request.match(/([一二两三四五六七八九十])\s*条/);
+    const cnMap = { 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+    let count = 3;
+    if (countMatch) {
+      count = cnMap[countMatch[1]] || Math.max(1, Math.min(12, Number(countMatch[1]) || 3));
+    }
+    const theme = extractLocalRuleTheme(request) || "作战任务";
+    const templates = [
+      { name: `${theme}目标对齐`, type: "业务规则", scope: theme, description: `${theme}行动须回扣目标“${objective}”，并具备可观察完成判据。` },
+      { name: `${theme}进入门槛`, type: "前置条件", scope: theme, description: `进入${theme}前须满足授权、态势与资源就绪等门槛；未满足不得转入执行。` },
+      { name: `${theme}时窗受控`, type: "转换条件", scope: theme, description: `${theme}阶段转换须依据可观察条件与时窗，禁止无依据跳过复核。` },
+      { name: `${theme}风险阈值`, type: "约束", scope: theme, description: `${theme}触及风险“${risk}”阈值时须降级、切换路径或请求授权。` },
+      { name: `${theme}效果复核`, type: "业务规则", scope: theme, description: `${theme}退出前复核效果是否朝向“${effects}”，并记录研究判断。` }
+    ];
+    const rules = [];
+    for (let i = 0; i < count; i += 1) {
+      const t = templates[i % templates.length];
+      rules.push({
+        id: `rule-local-add-${i + 1}`,
+        name: t.name.slice(0, 24),
+        type: t.type,
+        scope: t.scope.slice(0, 24),
+        description: t.description
+      });
+    }
+    return {
+      summary: `已按“${request.slice(0, 40)}”起草 ${rules.length} 条新增规则草案（本地），请在表单复核。`,
+      rules
+    };
+  }
+
+  if (existing.length && request && !isPregenerate) {
     return {
       summary: `已按“${request.slice(0, 40)}”在本地草案中保留并整理现有规则；请在表单中继续精修描述。`,
       rules: existing.map((rule, index) => ({
@@ -273,7 +331,8 @@ function createRuleLibraryDraftResult(analysis) {
       }))
     };
   }
-  const assumptions = valueOf(analysis, "关键假设") || "关键条件成立";
+
+  // Default / pregenerate: short, operational rule names — never use process phrases as titles.
   return {
     summary: `已根据简报目标“${objective}”起草规则本体草案（本地兜底），请在表单复核后保存。`,
     rules: [
@@ -288,39 +347,160 @@ function createRuleLibraryDraftResult(analysis) {
         id: "rule-window",
         name: "行动时窗受控",
         type: "转换条件",
-        scope: "主行动阶段",
-        description: `在总研究窗口内按时职能划分阶段时窗；转换须具备可观察门槛，避免无依据等长切分。`
+        scope: "全局",
+        description: "阶段时窗须可观察、可复核；转换不得无依据等长切分或跳过门槛。"
       },
       {
         id: "rule-auth",
         name: "交战授权边界",
         type: "前置条件",
-        scope: "交战相关阶段",
-        description: `关键行动须满足授权边界与风险阈值；未获授权不得进入火力释放类阶段。`
+        scope: "全局",
+        description: "关键行动须满足授权边界与风险阈值；未获授权不得进入火力释放类阶段。"
       },
       {
         id: "rule-effect",
         name: "效果可复核",
         type: "业务规则",
         scope: "全局",
-        description: `以${approach}推进时，阶段退出须对应可观察效果判据（如态势覆盖、通道控制），并回扣预期效果：${effects}。`
+        description: `以“${approach}”推进时，阶段退出须对应可观察效果（如覆盖、通道控制），并回扣“${effects}”。`
       },
       {
         id: "rule-assumption",
         name: "关键假设持续成立",
         type: "约束",
         scope: "全局",
-        description: `研究推进须持续核验关键假设（${assumptions}）；假设失效时暂停进入下一阶段并回改规则或阶段设计。`
+        description: `持续核验关键假设“${assumptions}”；假设失效时暂停进入下一阶段并回改规则或阶段设计。`
       },
       {
         id: "rule-risk",
         name: "主要风险阈值",
         type: "业务规则",
         scope: "全局",
-        description: `关注主要风险（${risk}）：达到预设风险阈值时须降级目标、切换备选路径或请求上级授权，不得无记录硬推。`
+        description: `关注主要风险“${risk}”：达阈值时须降级目标、切换备选路径或请求授权，不得无记录硬推。`
       }
     ]
   };
+}
+
+function createRuleLibraryChangeSetResult(analysis = {}) {
+  const source = analysis.source === "force-mission" ? "force-mission" : "phase-action";
+  const existing = Array.isArray(analysis?.currentRules?.rules) ? analysis.currentRules.rules : [];
+  const changes = [];
+  if (source === "phase-action") {
+    (analysis.phaseAction || []).forEach((phase, index) => {
+      const name = String(phase?.name || `阶段 ${index + 1}`);
+      const scope = `阶段：${name}`;
+      if (phase?.entryConditions?.length) changes.push({ id: `phase-entry-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-phase-entry-${index + 1}`, name: `${name}进入门槛`, type: "前置条件", scope, description: `进入该阶段前，应依据已确认的进入条件完成可观察、可复核的就绪判断。` }, rationale: "依据该阶段的进入条件。" });
+      if (phase?.exitConditions?.length || phase?.expectedEffects?.length) changes.push({ id: `phase-exit-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-phase-exit-${index + 1}`, name: `${name}转换判据`, type: "转换条件", scope, description: `阶段转换应以已确认的退出条件或预期效果为判据，并保留复核依据。` }, rationale: "依据该阶段的退出条件和预期效果。" });
+    });
+  } else {
+    (analysis.forces || []).forEach((force, index) => {
+      const name = String(force?.name || `概念兵力 ${index + 1}`);
+      if (!force?.task) return;
+      changes.push({ id: `force-duty-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-force-duty-${index + 1}`, name: `${name}职责边界`, type: "业务规则", scope: `兵力：${name}`, description: `该兵力承担的任务应与职责边界一致；任务调整或交接时应明确责任主体与可复核依据。` }, rationale: "依据该兵力的任务与角色。" });
+    });
+    (analysis.relations || []).forEach((relation, index) => {
+      if (!relation?.fromForceId || !relation?.toForceId) return;
+      changes.push({ id: `force-link-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-force-link-${index + 1}`, name: "协同交接可追溯", type: "业务规则", scope: "兵力协同", description: "存在协同、支援、指挥或信息关系时，应明确交接条件、责任边界和确认记录。" }, rationale: "依据已确认的兵力关系。" });
+    });
+  }
+  const names = new Set(existing.map((rule) => `${rule.name}|${rule.scope}`));
+  const unique = changes.filter((change) => !names.has(`${change.rule.name}|${change.rule.scope}`)).slice(0, 24);
+  return { summary: source === "phase-action" ? "已依据已确认阶段与行动提出待审核规则建议。" : "已依据已确认兵力、任务与协同关系提出待审核规则建议。", changes: unique };
+}
+
+function createStateMachineDraftResult(analysis) {
+  const subjects = Array.isArray(analysis?.stateMachineSubjects) && analysis.stateMachineSubjects.length
+    ? analysis.stateMachineSubjects
+    : (Array.isArray(analysis?.phaseAction?.phases) ? analysis.phaseAction.phases.map((phase) => ({ ...phase, subjectType: "task" })) : []);
+  const rules = Array.isArray(analysis?.rules) ? analysis.rules.filter((rule) => rule?.id) : [];
+  return {
+    summary: "已为关键任务和持续运行对象生成分机草案；阶段仅作为上下文。",
+    stateMachines: subjects.map((subject, index) => {
+      const subjectRef = String(subject?.id || `subject-${index + 1}`);
+      const prefix = `state-machine-${subjectRef}`;
+      const states = [
+        { id: `${prefix}-start`, name: subject?.entryConditions?.[0] || "进入条件满足", kind: "initial", decisionExpression: "", x: "12%", y: "42%" },
+        { id: `${prefix}-execute`, name: subject?.name || subject?.context || "任务执行中", kind: "normal", decisionExpression: "", x: "42%", y: "42%" },
+        { id: `${prefix}-end`, name: subject?.exitConditions?.[0] || subject?.expectedEffects?.[0] || "终止条件满足", kind: "final", decisionExpression: "", x: "72%", y: "42%" }
+      ];
+      return {
+        id: `${prefix}-machine`,
+        subjectRef,
+        subjectType: subject?.subjectType || "task",
+        name: `${subject?.name || `建模对象 ${index + 1}`}状态机`,
+        states,
+        transitions: [
+          { id: `${prefix}-t1`, fromStateRef: states[0].id, toStateRef: states[1].id, condition: subject?.entryConditions?.[0] || "进入条件满足", branchResult: "", ruleRefs: rules.slice(0, 1).map((rule) => rule.id) },
+          { id: `${prefix}-t2`, fromStateRef: states[1].id, toStateRef: states[2].id, condition: subject?.exitConditions?.[0] || subject?.expectedEffects?.[0] || "终止条件满足", branchResult: "", ruleRefs: rules.slice(0, 2).map((rule) => rule.id) }
+        ]
+      };
+    })
+  };
+}
+
+function createSequenceDraftResult(analysis) {
+  const phases = Array.isArray(analysis?.phases) ? analysis.phases : Array.isArray(analysis?.phaseAction?.phases) ? analysis.phaseAction.phases : [];
+  const forces = Array.isArray(analysis?.forces) ? analysis.forces : [];
+  const participants = (forces.length
+    ? forces.slice(0, 6).map((force, index) => ({
+      id: String(force?.id || `force-${index + 1}`),
+      name: String(force?.name || force?.id || `参与方 ${index + 1}`),
+      ref: String(force?.id || "")
+    }))
+    : phases.slice(0, 4).map((phase, index) => ({
+      id: String(phase?.id || `phase-${index + 1}`),
+      name: String(phase?.name || `阶段 ${index + 1}`),
+      ref: String(phase?.id || "")
+    })));
+  if (participants.length < 2) {
+    participants.push(
+      { id: "participant-blue", name: "蓝方指挥", ref: "" },
+      { id: "participant-force", name: "行动单元", ref: "" }
+    );
+  }
+  const messages = (phases.length ? phases : [{ name: "协同", blueActions: ["态势上报"], id: "phase-1" }]).slice(0, 8).map((phase, index) => {
+    const from = participants[index % participants.length];
+    const to = participants[(index + 1) % participants.length];
+    const action = (phase.blueActions || phase.primaryActions || [])[0] || phase.objective || phase.name || `消息 ${index + 1}`;
+    return {
+      id: `event-local-${index + 1}`,
+      sequence: index + 1,
+      fromRef: from.id,
+      toRef: to.id,
+      name: String(action).slice(0, 80),
+      type: "message",
+      condition: String((phase.entryConditions || phase.exitConditions || [])[0] || "").slice(0, 120),
+      relatedActivityRefs: phase.id ? [String(phase.id)] : []
+    };
+  });
+  return {
+    summary: "已按阶段/兵力生成协同时序草案；请在画布复核消息方向与活动回链。",
+    sequences: [{
+      id: "sequence-local-1",
+      name: phases[0]?.name ? `${phases[0].name}协同时序` : "阶段协同时序",
+      participants,
+      messages,
+      fragments: []
+    }]
+  };
+}
+
+function shortResearchText(value, max = 48) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+/** Theme for local add-rules: drop process words, never keep “首次按简报…” fragments. */
+function extractLocalRuleTheme(request = "") {
+  const cleaned = String(request || "")
+    .replace(/首次|按简报|完整|规则库|预生成|本轮|要求|修订|对话|表单|研究|请|把|将|并|与|和|的|了|等/g, " ")
+    .replace(/新增|添加|补充|起草|生成|写入|规则|主要|针对|关于|条|候选|草案/g, " ")
+    .replace(/[一二两三四五六七八九十\d]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned || cleaned.length < 2) return "";
+  if (/简报|完整|库规则|预生成/.test(cleaned)) return "";
+  return cleaned.slice(0, 12);
 }
 
 function createConceptGraphicPlanResult(analysis) {
@@ -859,6 +1039,27 @@ function renderResultMarkdown(result, schema) {
         ? result.rules.map((rule) => `- **${rule.name}**（${rule.type || "约束"} · ${rule.scope || "研究级"}）：${rule.description || ""}`)
         : ["- （本轮未改规则表单）"])
     ].join("\n");
+  }
+  if (schema === "RuleLibraryChangeSet") {
+    return [
+      "## 规则变更建议",
+      result.summary || "",
+      "### 待审核变更",
+      ...((result.changes || []).length
+        ? result.changes.map((change) => `- **${change.action}** ${change.rule?.name || change.ruleId || "规则"}：${change.rationale || change.rule?.description || ""}`)
+        : ["- （当前无充分依据提出变更）"])
+    ].join("\n");
+  }
+  if (schema === "StateMachineDraft") {
+    return [
+      "## 状态机草案",
+      result.summary || "",
+      ...(result.stateMachines || []).map((machine) => [
+        `### ${machine.name || machine.subjectRef || "状态机"}`,
+        `- 状态：${(machine.states || []).map((state) => state.name).filter(Boolean).join(" → ")}`,
+        `- 转换：${(machine.transitions || []).map((transition) => transition.condition).filter(Boolean).join("；")}`
+      ].join("\n"))
+    ].join("\n\n");
   }
   if (schema === "PhaseActionConcept") {
     return [

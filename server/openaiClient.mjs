@@ -36,7 +36,10 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
       "ConceptMapInitialPlan",
       "OperationalConceptGraphic",
       "CombatFocusOptions",
-      "RuleLibraryDraft"
+      "RuleLibraryDraft",
+      "RuleLibraryChangeSet",
+      "StateMachineDraft",
+      "SequenceDraft"
     ]);
     if (longSchemas.has(schema)) return 180000;
     return 90000;
@@ -64,6 +67,9 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
     const isCombatFocusOptions = input.workflow?.outputSchema === "CombatFocusOptions";
     const isConceptGraphicPlan = input.workflow?.outputSchema === "ConceptGraphicPlan";
     const isRuleLibraryDraft = input.workflow?.outputSchema === "RuleLibraryDraft";
+    const isRuleLibraryChangeSet = input.workflow?.outputSchema === "RuleLibraryChangeSet";
+    const isSequenceDraft = input.workflow?.outputSchema === "SequenceDraft";
+    const isStateMachineDraft = input.workflow?.outputSchema === "StateMachineDraft";
     const prompt = [
       "你是作战概念研究工作台的专业研究助理。",
       "请基于结构化想定、知识依据和当前工作流，生成可审阅的中文内容。",
@@ -85,9 +91,22 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         '{ "phases": [{ "id": "phase-1", "name": "编队展开", "sequence": 1, "timeWindow": "T+00:00至T+00:40", "objective": "阶段目标一句话", "blueActions": ["蓝方概念级行动叙述"], "redActions": ["红方概念级行动叙述"], "primaryActions": ["与 blueActions 相同"], "secondaryActions": ["与 redActions 相同"], "entryConditions": ["进入门槛"], "exitConditions": ["退出/转换门槛"], "expectedEffects": ["阶段效果"], "forceIds": [] }],',
         '  "transitions": [{ "fromPhaseId": "phase-1", "toPhaseId": "phase-2", "condition": "可观察的转换条件", "note": "T+时点" }],',
         '  "openQuestions": ["待确认的作战判断"], "reviewChecklist": ["复核提示"] }'
+      ] : isRuleLibraryChangeSet ? [
+        '{ "summary": "变更摘要", "changes": [{ "id": "change-1", "action": "add|revise|retire", "ruleId": "既有规则 id；新增为空", "rule": { "id": "新增建议 id", "name": "规则名称", "type": "约束|前置条件|转换条件|业务规则|其他", "scope": "作用范围", "description": "可复核规则描述" }, "rationale": "来自结构化上游输入的理由" }] }'
       ] : isRuleLibraryDraft ? [
         '{ "summary": "1-3 句中文答复（说明改了什么或回答咨询）",',
         '  "rules": [{ "id": "rule-1", "name": "规则名称（不超过20字）", "type": "约束|前置条件|转换条件|业务规则|其他", "scope": "全局|某阶段|某域", "description": "可复核的规则描述（40-160字）" }] }'
+      ] : isSequenceDraft ? [
+        '{ "summary": "1-3 句中文答复（说明改了什么或回答咨询）",',
+        '  "sequences": [{ "id": "sequence-1", "name": "时序图名称",',
+        '    "participants": [{ "id": "p1", "name": "参与方名", "ref": "兵力或阶段 id" }],',
+        '    "messages": [{ "id": "event-1", "sequence": 1, "fromRef": "p1", "toRef": "p2", "name": "消息名", "type": "message|response|status|exception|timeout", "condition": "触发条件", "relatedActivityRefs": ["阶段或活动 id"] }],',
+        '    "fragments": [] }] }'
+      ] : isStateMachineDraft ? [
+        '{ "summary": "1-3 句中文说明",',
+        '  "stateMachines": [{ "id": "machine-subject-1", "subjectRef": "候选对象 id", "subjectType": "task|force|object", "name": "状态机名称",',
+        '    "states": [{ "id": "state-1", "name": "可复核状态名", "kind": "initial|normal|decision|final", "decisionExpression": "仅判定节点填写", "x": "12%", "y": "42%" }],',
+        '    "transitions": [{ "id": "transition-1", "fromStateRef": "state-1", "toStateRef": "state-2", "condition": "可观察转换条件", "branchResult": "判定出边结果，否则为空", "ruleRefs": ["rule-id"] }] }] }'
       ] : isConceptGraphicPlan ? [
         '{ "narrative": "总体构想叙述", "nodes": [{ "id": "sense|decide|control|opponent|assess", "label": "节点名", "role": "sense|command|action|external|effect|equipment|environment", "fromForceIds": ["兵力标识"], "fromPhaseIds": ["阶段标识"], "note": "说明" }],',
         '  "edges": [{ "from": "节点标识", "to": "节点标识", "type": "信息流|控制流|态势变化|反馈|协同|保障", "note": "说明" }],',
@@ -119,11 +138,40 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
       ] : []),
       ...(isRuleLibraryDraft ? [
         "规则库要求：只维护规则本体（name/type/scope/description），不要输出活动绑定或 OV 品牌字段。",
-        "若研究人员要求起草/增删改：返回完整 rules 列表（保留仍有效的规则并落实本轮改动）；条数按课题需要覆盖，不设固定上下限，禁止为凑数重复或空泛同义改写；description 须可观察、可复核。",
+        "若研究人员要求起草/增删改：必须返回非空 rules；禁止只给文字建议而 rules=[]。",
+        "若 analysis.addOnlyRequest=true 或要求含「新增/添加/补充/起草 N 条」：优先只返回本轮新增规则（N 条左右），客户端会合并进现有库；也可返回完整列表但须保留仍有效旧规则。",
+        "若要求修改/删除：返回落实改动后的完整 rules 列表。",
         "若 analysis 标明首次按简报预生成（pregenerateFromBrief / 修订要求含「首次起草」）：必须输出非空 rules，覆盖约束、前置条件、转换条件、业务规则等维度，回扣任务目标/假设/效果/风险。",
-        "若 analysis.mergeExistingRules=true 或修订要求含「对比」「补充」：在 currentRules 基础上给出完整建议列表；优先写出现有库未覆盖的新规则；名称/语义勿与 currentRules 简单同义重复；客户端会去重后只追加新增项。",
-        "若仅咨询：rules 返回空数组 []，summary 直接回答问题。",
+        "首次按简报预生成只允许输出全局基线规则：每一条 scope 必须严格为“全局”，不得引用阶段、行动、兵力、任务交接或协同关系；这些内容只能由后续变更集提出。",
+        "规则 name 必须是短作战语义名称（如「关键链路可用」「交战授权边界」），禁止把流程话术写进名称/范围（禁止「首次按简报」「完整库」「规则1」这类标题）。description 40-120 字，提炼简报要点，禁止整段粘贴简报原文。",
+        "条数按课题需要，不设固定上下限；禁止为凑数重复或空泛同义改写；description 须可观察、可复核。",
+        "若仅咨询（analysis.mutationRequest=false 且无改库动词）：rules 返回空数组 []，summary 直接回答问题。",
         "type 只能是：约束、前置条件、转换条件、业务规则、其他。语气克制，禁止空泛套话。"
+      ] : []),
+      ...(isRuleLibraryChangeSet ? [
+        "规则变更集要求：只输出可供人工审核的 changes，不得直接改写既有规则，也不得输出活动绑定或任何 OV 品牌字段。",
+        "仅依据 analysis.currentRules 和已提供的结构化上游输入提出新增、修订或废止；没有充分依据时返回 changes=[]。不得把同义改写当成新建议，不得臆造上游未提供的事实。",
+        "analysis.source=phase-action 时，仅围绕阶段名称/ID、进入退出条件、行动边界、衔接顺序和可观察效果提出建议；scope 必须能回指具体阶段或阶段间关系。",
+        "阶段规则必须按阶段分别生成，禁止把多个阶段合并成一条笼统规则。对每个包含输入内容的阶段，至少给出：1 条前置条件（依据 entryConditions）和 1 条转换条件（依据 primaryActions、exitConditions、expectedEffects）；行动存在独立边界或约束时再给出业务规则。",
+        "阶段间衔接规则只能依据 analysis.phaseTransitions 中明确提供的 fromPhaseId、toPhaseId、condition 和 note 生成；禁止仅凭阶段编号臆造衔接条件。规则名称须包含阶段名称，scope 使用“阶段：名称（ID）”或明确的两个阶段名称，description 必须引用输入中的具体条件或效果，不得只写‘应确认、应校验、可观察’等空泛套话。",
+        "analysis.source=force-mission 时，仅围绕概念兵力的职责、可用性、任务交接、协同、保障及指挥授权关系提出建议；scope 必须能回指兵力或协同域。",
+        "action=add 时 ruleId 为空；action=revise 或 retire 时 ruleId 必须匹配 analysis.currentRules 内已有 id。retire 只在输入明确显示规则不再适用或发生矛盾时使用。",
+        "rationale 必须说明采用了哪些上游结构化字段。只生成领域通用、研究级、可观察可复核的规则；禁止真实坐标、武器运用细节、性能参数或输入之外的具体战术假设。"
+      ] : []),
+      ...(isSequenceDraft ? [
+        "时序校验要求：用 sequences[] 表达生命线（participants）与时间向下消息（messages）。",
+        "若研究人员要求起草/增删改时序：必须返回非空 sequences，禁止只给文字建议。",
+        "参与方优先用 analysis.forces / phases 的 id 作 ref；消息 fromRef/toRef 必须指向 participants.id。",
+        "关键消息尽量 relatedActivityRefs 回链阶段或活动 id（见 activityCandidates）。",
+        "消息 type 用 message|response|status|exception|timeout；name 为短作战语义名，禁止空泛套话。",
+        "若仅咨询（analysis.mutationRequest=false）：sequences 可返回空数组，summary 直接回答。",
+        "不要输出 OV 品牌字段；语气克制、可复核。"
+      ] : []),
+      ...(isStateMachineDraft ? [
+        "状态机校验要求：仅为 analysis.stateMachineSubjects 中的候选建立状态机；subjectRef 与 subjectType 必须原样匹配候选。阶段是上下文，不得为 phaseAction.phases 机械建机。",
+        "每台至少输出 initial、normal、final；确需分支时使用 decision，并填写 decisionExpression。判定节点至少有两个出边，每条填写明确且不重复的 branchResult（如满足/不满足）。",
+        "转换只连接本机状态；condition 必须是可观察门槛；ruleRefs 只能使用 analysis.rules 已存在的 id。",
+        "只输出研究级可复核状态，不写真实坐标、武器运用步骤或未经输入支持的战术细节。"
       ] : []),
       ...(isConceptBrief ? [
         "概念简报要求：summary 写核心思路；sections 必须分别包含“研究目标”“关键假设”“预期效果”三个标题；bullets 仅列出需要进一步验证的条件；risks 列出主要风险。",
@@ -199,12 +247,17 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         "4. blueActions/redActions 各 2-3 条完整句；primaryActions=blueActions，secondaryActions=redActions。",
         "5. objective 一句，含可观察门槛；expectedEffects 写对敌/对己效果与研究级指标（可写“不低于某比例”等可讨论门槛，勿伪装实测数据）。",
         "6. 服从 combatFocus/combatFocuses；多聚焦时主聚焦定骨架，次聚焦写入关键段蓝方行动。",
-        "7. transitions 共 phases.length-1 条；condition 必须可观察（分批完成、漏防可控、评估闭合、敌增援被阻等）；note 含时点与时窗依据。",
-        "8. forceIds 可空；禁止真实经纬度、CEP/射表、操作步骤；实装型号/地名仅当简报已给出方可沿用。",
-        "9. reviewNotes 非空时优先落实批注（可增删合并阶段）。",
-        "10. 禁止空泛套话（体系压制/保持优势/组织协同）与助手元叙述（API/模型/免责声明）。",
-        "11. 防空反导/吕宋岛基/IAMD 类课题：阶段须围绕探测—识别—交战—评估闭环，不得套用“编队展开→电子诱发→火力释放→撤离”进攻模板。",
-        "12. previousPhaseNames 非空时为重生成：阶段名集合与划分不得雷同；diversitySeed 仅作差异化提示，禁止写入输出。"
+        "7. 若 analysis.ruleLibrary 非空（上游规则库）：",
+        "   - 蓝/红行动须写成可观察的作战活动，并落实规则中的约束/前置/转换/业务语义（授权、时窗、链路、效果复核等）。",
+        "   - 进入/退出门槛与 transitions.condition 优先映射规则类型：前置条件→entry，转换条件→exit/transition，约束/业务规则→行动边界或复核门槛。",
+        "   - 去重：若某规则语义已在 objective/行动/门槛中出现，禁止再写同义句堆叠；只补缺口。",
+        "   - 规则库为空时，仍须写出作战活动，不得退化成研究流程步骤。",
+        "8. transitions 共 phases.length-1 条；condition 必须可观察（分批完成、漏防可控、评估闭合、敌增援被阻等）；note 含时点与时窗依据。",
+        "9. forceIds 可空；禁止真实经纬度、CEP/射表、操作步骤；实装型号/地名仅当简报已给出方可沿用。",
+        "10. reviewNotes 非空时优先落实批注（可增删合并阶段）。",
+        "11. 禁止空泛套话（体系压制/保持优势/组织协同）与助手元叙述（API/模型/免责声明）。",
+        "12. 防空反导/吕宋岛基/IAMD 类课题：阶段须围绕探测—识别—交战—评估闭环，不得套用“编队展开→电子诱发→火力释放→撤离”进攻模板。",
+        "13. previousPhaseNames 非空时为重生成：阶段名集合与划分不得雷同；diversitySeed 仅作差异化提示，禁止写入输出。"
       ] : []),
       ...(isConceptGraphicPlan ? [
         "总体作战概念图要求：汇总 forceMission、phaseAction 与 conceptMapReference，形成可直接支撑 OV-1 的总体节点与关系。优先给出 sense/decide/control/opponent/assess 五类节点语义（可用 role 映射）。consistencyReport 必须说明与上游一致性。不得生成真实坐标、武器用法或仿真级细节。"
@@ -247,8 +300,12 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
                 ? forceMissionPlanSchema()
                 : isPhaseActionConcept
                   ? phaseActionConceptSchema()
+                  : isRuleLibraryChangeSet
+                  ? ruleLibraryChangeSetSchema()
                   : isRuleLibraryDraft
-                    ? ruleLibraryDraftSchema()
+                  ? ruleLibraryDraftSchema()
+                    : isStateMachineDraft
+                      ? stateMachineDraftSchema()
                     : isConceptGraphicPlan
                       ? conceptGraphicPlanSchema()
                       : isConceptMapInitialPlan
@@ -505,7 +562,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
       };
     }
 
-    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft") && draft && typeof draft === "object") {
+    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft") && draft && typeof draft === "object") {
       base.result = draft;
     }
   
@@ -705,6 +762,81 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
               type: { type: "string", enum: ["约束", "前置条件", "转换条件", "业务规则", "其他"] },
               scope: { type: "string", maxLength: 120 },
               description: { type: "string", maxLength: 800 }
+            }
+          }
+        }
+      }
+    };
+  }
+
+  function ruleLibraryChangeSetSchema() {
+    const rule = {
+      type: "object", additionalProperties: false,
+      required: ["id", "name", "type", "scope", "description"],
+      properties: {
+        id: { type: "string", maxLength: 80 }, name: { type: "string", maxLength: 120 },
+        type: { type: "string", enum: ["约束", "前置条件", "转换条件", "业务规则", "其他"] },
+        scope: { type: "string", maxLength: 120 }, description: { type: "string", maxLength: 800 }
+      }
+    };
+    return {
+      type: "object", additionalProperties: false, required: ["summary", "changes"],
+      properties: {
+        summary: { type: "string", maxLength: 800 },
+        changes: { type: "array", maxItems: 48, items: { type: "object", additionalProperties: false, required: ["id", "action", "ruleId", "rule", "rationale"], properties: {
+          id: { type: "string", maxLength: 120 }, action: { type: "string", enum: ["add", "revise", "retire"] }, ruleId: { type: "string", maxLength: 180 }, rule, rationale: { type: "string", maxLength: 800 }
+        } } }
+      }
+    };
+  }
+
+  function stateMachineDraftSchema() {
+    return {
+      type: "object",
+      additionalProperties: false,
+      required: ["summary", "stateMachines"],
+      properties: {
+        summary: { type: "string", maxLength: 800 },
+        stateMachines: {
+          type: "array", minItems: 1, maxItems: 24,
+          items: {
+            type: "object", additionalProperties: false,
+            required: ["id", "subjectRef", "subjectType", "name", "states", "transitions"],
+            properties: {
+              id: { type: "string", maxLength: 180 },
+              subjectRef: { type: "string", maxLength: 160 },
+              subjectType: { type: "string", enum: ["task", "force", "object"] },
+              name: { type: "string", maxLength: 240 },
+              states: {
+                type: "array", minItems: 3, maxItems: 12,
+                items: {
+                  type: "object", additionalProperties: false,
+                  required: ["id", "name", "kind", "decisionExpression", "x", "y"],
+                  properties: {
+                    id: { type: "string", maxLength: 180 },
+                    name: { type: "string", maxLength: 120 },
+                    kind: { type: "string", enum: ["initial", "normal", "decision", "final"] },
+                    decisionExpression: { type: "string", maxLength: 1000 },
+                    x: { type: "string", maxLength: 20 },
+                    y: { type: "string", maxLength: 20 }
+                  }
+                }
+              },
+              transitions: {
+                type: "array", minItems: 2, maxItems: 24,
+                items: {
+                  type: "object", additionalProperties: false,
+                  required: ["id", "fromStateRef", "toStateRef", "condition", "branchResult", "ruleRefs"],
+                  properties: {
+                    id: { type: "string", maxLength: 180 },
+                    fromStateRef: { type: "string", maxLength: 180 },
+                    toStateRef: { type: "string", maxLength: 180 },
+                    condition: { type: "string", maxLength: 800 },
+                    branchResult: { type: "string", maxLength: 400 },
+                    ruleRefs: { type: "array", maxItems: 12, items: { type: "string", maxLength: 160 } }
+                  }
+                }
+              }
             }
           }
         }

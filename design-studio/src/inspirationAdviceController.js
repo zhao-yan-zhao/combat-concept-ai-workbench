@@ -1,12 +1,13 @@
 import { generateWithAiStream, isAiOutput } from "../../shared/aiClient.js";
 import {
   beginInspirationAdviceTurn,
+  cancelInspirationAdviceTurn,
   completeInspirationAdviceTurn,
   saveInspirationSession,
   summarizeInspirationSession,
   updateInspirationPendingText
 } from "./inspirationStore.js";
-import { createResearchChatController } from "./researchChat/researchChatController.js";
+import { createResearchChatController } from "./researchChat/index.js";
 
 export function createInspirationAdviceController({
   getState,
@@ -37,6 +38,12 @@ export function createInspirationAdviceController({
         state.inspiration = saveInspirationSession(
           completeInspirationAdviceTurn(state.inspiration, action.advice, action.source || "ai")
         );
+        return;
+      }
+      if (action.type === "cancel") {
+        state.inspiration = saveInspirationSession(
+          cancelInspirationAdviceTurn(state.inspiration, action.reason || "")
+        );
       }
     },
     isGenerating: (state) => Boolean(state.inspirationAdviceGenerating),
@@ -44,38 +51,44 @@ export function createInspirationAdviceController({
       state.inspirationAdviceGenerating = Boolean(value);
     },
     canSend: () => true,
-    async runTurn({ question, state, onDelta }) {
-      const response = await generateWithAiStream({
-        workflowId: "concept",
-        workflow: { id: "concept", title: "研究对话直接答复", outputSchema: "ConceptPlan" },
-        analysis: {
-          "已记录灵感": summarizeInspirationSession(state.inspiration) || "尚未形成结构化灵感。",
-          "研究人员问题": question,
-          "对话回答要求": "先直接回答研究人员当前问题，使用 1 至 3 句连贯中文，控制在 120 至 220 字。不得复述整个研究简报，不得罗列任务阶段、待核实、待交接、最小信息集等报告式标签；仅在确有必要时补充不超过两项需要进一步澄清的信息。回答仅限概念研究级判断、假设、约束和验证关注点；不得给出具体行动步骤、目标选择、路线、武器用法或规避建议。"
-        },
-        evidence: []
-      }, {
-        onDelta: (payload) => {
-          onDelta?.(payload);
+    async runTurn({ question, state, onDelta, signal }) {
+      try {
+        const response = await generateWithAiStream({
+          workflowId: "concept",
+          workflow: { id: "concept", title: "研究对话直接答复", outputSchema: "ConceptPlan" },
+          analysis: {
+            "已记录灵感": summarizeInspirationSession(state.inspiration) || "尚未形成结构化灵感。",
+            "研究人员问题": question,
+            "对话回答要求": "先直接回答研究人员当前问题，使用 1 至 3 句连贯中文，控制在 120 至 220 字。不得复述整个研究简报，不得罗列任务阶段、待核实、待交接、最小信息集等报告式标签；仅在确有必要时补充不超过两项需要进一步澄清的信息。回答仅限概念研究级判断、假设、约束和验证关注点；不得给出具体行动步骤、目标选择、路线、武器用法或规避建议。"
+          },
+          evidence: []
+        }, {
+          signal,
+          onDelta: (payload) => {
+            onDelta?.(payload);
+          }
+        });
+        if (!isAiOutput(response)) {
+          const error = new Error("AI advice response is incomplete");
+          error.fallbackAdvice = createFallbackAdvice(question);
+          error.notifyMessage = "AI 服务暂不可用，已记录本地研究级复核建议";
+          throw error;
         }
-      });
-      if (!isAiOutput(response)) {
-        const error = new Error("AI advice response is incomplete");
-        error.fallbackAdvice = createFallbackAdvice(question);
-        error.notifyMessage = "AI 服务暂不可用，已记录本地研究级复核建议";
+        const advice = formatAdvice(response);
+        const updatedFields = applyBriefUpdate(response, question);
+        return {
+          advice,
+          source: "ai",
+          notifyMessage: updatedFields.length
+            ? `已更新研究简报：${updatedFields.join("、")}`
+            : "已记录研究问答建议；请结合证据与人工判断复核",
+          response,
+          updatedFields
+        };
+      } catch (error) {
+        if (error?.name === "AbortError" || signal?.aborted) throw error;
         throw error;
       }
-      const advice = formatAdvice(response);
-      const updatedFields = applyBriefUpdate(response, question);
-      return {
-        advice,
-        source: "ai",
-        notifyMessage: updatedFields.length
-          ? `已更新研究简报：${updatedFields.join("、")}`
-          : "已记录研究问答建议；请结合证据与人工判断复核",
-        response,
-        updatedFields
-      };
     },
     onAfterTurn: () => {
       syncConversation();

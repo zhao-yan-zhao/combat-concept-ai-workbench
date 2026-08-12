@@ -1,9 +1,17 @@
-export function renderProjectStorageState(storage = {}, { refreshAction = "refresh-project-brief" } = {}) {
+export function renderProjectStorageState(storage = {}, { refreshAction = "refresh-project-brief", showSummary = true } = {}) {
   const ready = storage.status === "ready";
   const saving = storage.status === "saving" || storage.status === "checking";
   const stateClass = ready ? "ready" : saving ? "review" : "pending";
   const detail = storage.detail || "浏览器本地草稿可离线继续使用";
   const audit = storage.auditCount ? ` · ${storage.auditCount} 条审计` : "";
+  const summary = showSummary
+    ? `<div><span class="report-state ${stateClass}">${escapeHtml(storage.label || "本地草稿")}</span><small>${escapeHtml(detail)}${escapeHtml(audit)}</small></div>`
+    : "";
+  return `<div class="project-storage-state${showSummary ? "" : " is-actions-only"}">${summary}${renderProjectStorageActions(storage, { refreshAction })}</div>`;
+}
+
+export function renderProjectStorageActions(storage = {}, { refreshAction = "refresh-project-brief" } = {}) {
+  const saving = storage.status === "saving" || storage.status === "checking";
   const loadAction = refreshAction.replace(/^refresh-project-/, "load-project-");
   const restoreAction = refreshAction.replace(/^refresh-project-/, "restore-project-") + "-conflict-draft";
   const loadButton = !saving && (storage.remoteAvailable || storage.conflict)
@@ -12,7 +20,7 @@ export function renderProjectStorageState(storage = {}, { refreshAction = "refre
   const restoreButton = !saving && storage.conflictDraftAvailable
     ? `<button type="button" class="quiet-button" data-action="${escapeHtml(restoreAction)}">恢复本地冲突草稿</button>`
     : "";
-  return `<div class="project-storage-state"><div><span class="report-state ${stateClass}">${escapeHtml(storage.label || "本地草稿")}</span><small>${escapeHtml(detail)}${escapeHtml(audit)}</small></div><div class="project-storage-actions"><button type="button" class="quiet-button" data-action="${escapeHtml(refreshAction)}" ${saving ? "disabled" : ""}>刷新</button>${loadButton}${restoreButton}</div></div>`;
+  return `<div class="project-storage-actions"><button type="button" class="quiet-button" data-action="${escapeHtml(refreshAction)}" ${saving ? "disabled" : ""}>刷新</button>${loadButton}${restoreButton}</div>`;
 }
 
 export function renderProjectStorageFooter(storage = {}) {

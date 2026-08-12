@@ -7,23 +7,31 @@ import {
   persistForceMission
 } from "./forceMissionStore.js";
 import {
-  beginForceMissionChatTurn,
-  completeForceMissionChatTurn,
   ensureForceMissionChatWelcome,
+  forceMissionChatStepStore,
   persistForceMissionChat,
   seedForceMissionChatFromPlan,
-  summarizeForceMissionChat,
-  updateForceMissionChatPendingText
+  summarizeForceMissionChat
 } from "./forceMissionChatStore.js";
-import { createResearchChatController } from "./researchChat/researchChatController.js";
+import {
+  createResearchChatController,
+  createResearchChatSessionApplier
+} from "./researchChat/index.js";
 
 export function createForceMissionChatController({
   projectId,
   getState,
   render,
   notify,
-  syncForceMission
+  syncForceMission,
+  onChatPersisted = () => {}
 }) {
+  const applySession = createResearchChatSessionApplier({
+    key: "forceMissionChat",
+    projectId,
+    store: forceMissionChatStepStore
+  });
+
   const chat = createResearchChatController({
     scope: "force-mission",
     topic: "revision",
@@ -31,36 +39,27 @@ export function createForceMissionChatController({
     render,
     notify,
     getSession: (state) => state.forceMissionChat,
-    setSession: (state, action) => {
-      if (action.type === "begin") {
-        state.forceMissionChat = persistForceMissionChat(
-          beginForceMissionChatTurn(state.forceMissionChat, action.question, action.replaceMessageId || ""),
-          projectId
-        );
-        return;
-      }
-      if (action.type === "delta") {
-        state.forceMissionChat = updateForceMissionChatPendingText(state.forceMissionChat, action.text || "");
-        return;
-      }
-      if (action.type === "complete") {
-        state.forceMissionChat = persistForceMissionChat(
-          completeForceMissionChatTurn(state.forceMissionChat, action.advice, action.source || "ai"),
-          projectId
-        );
-      }
+    setSession: applySession,
+    onAfterTurn: () => {
+      onChatPersisted("force-mission-chat");
     },
     isGenerating: (state) => Boolean(state.forceMissionChatGenerating),
     setGenerating: (state, value) => {
       state.forceMissionChatGenerating = Boolean(value);
     },
     canSend: (state) => {
-      if (state.forceMissionGenerating) return false;
-      if (!state.forceMission?.forces?.length && !state.forceMission?.combatForces?.length) return false;
-      if (isForceMissionPlanConfirmed(state.forceMission, state.forceMissionStorage)) return false;
+      if (state.forceMissionGenerating) {
+        return { ok: false, reason: "兵力生成进行中，请稍候" };
+      }
+      if (!state.forceMission?.forces?.length && !state.forceMission?.combatForces?.length) {
+        return { ok: false, reason: "请先生成兵力与任务草案，再通过对话修订" };
+      }
+      if (isForceMissionPlanConfirmed(state.forceMission, state.forceMissionStorage)) {
+        return { ok: false, reason: "本步已确认，如需修改请先重新生成草案" };
+      }
       return true;
     },
-    async runTurn({ question, state, onDelta }) {
+    async runTurn({ question, state, onDelta, signal }) {
       if (state.forceMissionGenerating) {
         const error = new Error("busy");
         error.notifyMessage = "兵力生成进行中，请稍候";
@@ -96,6 +95,7 @@ export function createForceMissionChatController({
           },
           evidence: []
         }, {
+          signal,
           onDelta: (payload) => {
             const preview = String(payload?.preview || "").trim()
               || (payload?.assembled
@@ -123,6 +123,7 @@ export function createForceMissionChatController({
           notifyMessage: `已按对话修订兵力草案（概念 ${state.forceMission.forces?.length || 0} / 作战 ${state.forceMission.combatForces?.length || 0}），请复核`
         };
       } catch (error) {
+        if (error?.name === "AbortError" || signal?.aborted) throw error;
         const err = error instanceof Error ? error : new Error(String(error || "ai-unavailable"));
         err.fallbackAdvice = createFallbackAdvice(question);
         err.notifyMessage = "AI 暂不可用，已记录本地修订建议；兵力草案未改动";
@@ -134,9 +135,11 @@ export function createForceMissionChatController({
   return {
     bind: (root) => chat.bind(root),
     ask: (...args) => chat.ask(...args),
+    stop: chat.stop,
     seedFromPlan(plan) {
       const state = getState();
       state.forceMissionChat = persistForceMissionChat(seedForceMissionChatFromPlan(plan), projectId);
+      onChatPersisted("force-mission-chat:seed");
     },
     ensureWelcome(plan) {
       const state = getState();

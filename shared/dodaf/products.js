@@ -521,7 +521,7 @@ export function normalizeDodafOv5a(value) {
 
 const OV6A_BINDING_STATUSES = ["pending", "verified", "rejected", "stale"];
 const OV6B_SUBJECT_TYPES = ["task", "object", "force", "phase", "other"];
-const OV6B_STATE_KINDS = ["initial", "normal", "final"];
+const OV6B_STATE_KINDS = ["initial", "normal", "decision", "final"];
 const OV6C_MESSAGE_TYPES = ["message", "response", "status", "exception", "timeout"];
 const OV6C_FRAGMENT_KINDS = ["alt", "loop", "par", "break", "opt"];
 
@@ -650,9 +650,35 @@ export function normalizeDodafOv6a(value) {
       kind: "persisted-ov6a-operational-rules",
       generatedAt: nowIso(value?.generatedAt),
       rules,
+      ruleChangeSet: normalizeRuleChangeSet(value?.ruleChangeSet),
       diagnostics: buildOv6aDiagnostics(rules, value?.diagnostics)
     }
   });
+}
+
+function normalizeRuleChangeSet(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const sources = ["phase-action", "force-mission"];
+  const source = sources.includes(value.source) ? value.source : "phase-action";
+  const changes = (Array.isArray(value.changes) ? value.changes : []).slice(0, 48).map((change, index) => {
+    const action = ["add", "revise", "retire"].includes(change?.action) ? change.action : "add";
+    const rule = normalizeOv6aRule(change?.rule || {}, index);
+    return {
+      id: clean(change?.id, 120) || `rule-change-${index + 1}`,
+      action,
+      ruleId: clean(change?.ruleId || (action === "add" ? "" : rule.id), 180),
+      rule: { id: rule.id, name: rule.name, type: rule.type, scope: rule.scope, description: rule.description },
+      rationale: clean(change?.rationale, 800),
+      status: ["pending", "applied", "ignored"].includes(change?.status) ? change.status : "pending"
+    };
+  }).filter((change) => change.rule.name || change.ruleId);
+  return changes.length ? {
+    source,
+    generatedAt: nowIso(value.generatedAt),
+    upstreamFingerprint: clean(value.upstreamFingerprint, 240),
+    summary: clean(value.summary, 800),
+    changes
+  } : null;
 }
 
 function normalizeOv6bState(state, index) {
@@ -663,12 +689,22 @@ function normalizeOv6bState(state, index) {
       ? "initial"
       : "normal";
   const name = clean(state?.name || state?.label || state?.title, 240) || `状态 ${index + 1}`;
+  // Optional free-canvas coords (same logical % system as OV-1).
+  const xRaw = state?.x;
+  const yRaw = state?.y;
+  const xNum = Number.parseFloat(xRaw);
+  const yNum = Number.parseFloat(yRaw);
+  const x = Number.isFinite(xNum) ? `${Math.round(xNum * 100) / 100}%` : "";
+  const y = Number.isFinite(yNum) ? `${Math.round(yNum * 100) / 100}%` : "";
   return {
     id: clean(state?.id, 160) || `state-${index + 1}`,
     name,
     kind,
+    decisionExpression: kind === "decision" ? clean(state?.decisionExpression || state?.expression, 1000) : "",
     phase: clean(state?.phase, 160),
     rule: clean(state?.rule, 4000),
+    ...(x ? { x } : {}),
+    ...(y ? { y } : {}),
     // Legacy alias
     label: name
   };
@@ -684,6 +720,7 @@ function normalizeOv6bTransition(item, index, stateById) {
     fromStateRef,
     toStateRef,
     condition,
+    branchResult: clean(item?.branchResult || item?.result, 400),
     ruleRefs: normalizeStringList(item?.ruleRefs, 12, 160),
     eventRefs: normalizeStringList(item?.eventRefs, 12, 160),
     // Legacy aliases for current UI
@@ -705,12 +742,53 @@ function diagnoseStateMachine(machine) {
   if (!hasFinal) issues.push("缺少结束状态");
   if (!hasNormal) issues.push("缺少中间状态");
   if (!transitions.length) issues.push("尚无转换");
+  const initialIds = states.filter((state) => state.kind === "initial").map((state) => state.id);
+  const finalIds = new Set(states.filter((state) => state.kind === "final").map((state) => state.id));
+  const outgoing = new Map(states.map((state) => [state.id, transitions.filter((edge) => edge.fromStateRef === state.id)]));
+  const incoming = new Map(states.map((state) => [state.id, transitions.filter((edge) => edge.toStateRef === state.id)]));
+  states.forEach((state) => {
+    const out = outgoing.get(state.id) || [];
+    const input = incoming.get(state.id) || [];
+    if (state.kind !== "initial" && !input.length) issues.push(`「${state.name}」无入口`);
+    if (state.kind !== "final" && !out.length) issues.push(`「${state.name}」无出口`);
+    if (state.kind === "final" && out.length) issues.push(`「${state.name}」结束后仍有转换`);
+    if (state.kind === "decision") {
+      if (!state.decisionExpression) issues.push(`「${state.name}」缺少判定表达式`);
+      if (out.length < 2) issues.push(`「${state.name}」至少需要两个分支`);
+      const results = out.map((edge) => edge.branchResult).filter(Boolean);
+      if (results.length !== out.length) issues.push(`「${state.name}」存在未标注分支`);
+      if (results.length !== new Set(results).size) issues.push(`「${state.name}」存在重复分支结果`);
+    }
+  });
+  transitions.forEach((edge) => {
+    if (!edge.condition || /^TBD$/i.test(edge.condition)) issues.push(`转换「${edge.id}」缺少可观察条件`);
+  });
+  const walk = (starts, neighborMap, field) => {
+    const visited = new Set(starts);
+    const queue = [...visited];
+    while (queue.length) {
+      const current = queue.shift();
+      (neighborMap.get(current) || []).forEach((edge) => {
+        const next = edge[field];
+        if (visited.has(next)) return;
+        visited.add(next);
+        queue.push(next);
+      });
+    }
+    return visited;
+  };
+  const reachable = walk(initialIds, outgoing, "toStateRef");
+  states.filter((state) => !reachable.has(state.id)).forEach((state) => issues.push(`「${state.name}」从开始不可达`));
+  const canReachFinal = walk([...finalIds], incoming, "fromStateRef");
+  states.filter((state) => reachable.has(state.id) && !finalIds.has(state.id) && !canReachFinal.has(state.id))
+    .forEach((state) => issues.push(`「${state.name}」无法到达结束`));
+  const uniqueIssues = [...new Set(issues)];
   return {
     id: `machine-${machine.id}`,
     label: machine.name || machine.id,
-    state: issues.length ? "review" : "ready",
-    statusLabel: issues.length ? "需复核" : "已满足",
-    detail: issues.length ? issues.join("；") : `状态 ${states.length} · 转换 ${transitions.length}`
+    state: uniqueIssues.length ? "review" : "ready",
+    statusLabel: uniqueIssues.length ? "需复核" : "已满足",
+    detail: uniqueIssues.length ? uniqueIssues.join("；") : `状态 ${states.length} · 转换 ${transitions.length}`
   };
 }
 
@@ -756,7 +834,9 @@ function legacyFlatToStateMachines(value) {
 }
 
 export function normalizeDodafOv6b(value) {
-  const rawMachines = Array.isArray(value?.stateMachines) && value.stateMachines.length
+  // An explicit empty array is a user-cleared v2 model. Only migrate the
+  // flat legacy shape when stateMachines is genuinely absent.
+  const rawMachines = Array.isArray(value?.stateMachines)
     ? value.stateMachines
     : legacyFlatToStateMachines(value);
   const stateMachines = rawMachines.slice(0, 48).map((machine, index) => normalizeOv6bStateMachine(machine, index));

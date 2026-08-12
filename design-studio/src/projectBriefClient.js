@@ -80,6 +80,18 @@ export async function saveProjectPhaseActionConcept(projectId, { model, source, 
   return saveProjectModel(projectId, "phase-action-concept", { model, source, expectedRevision });
 }
 
+export async function loadProjectResearchChats(projectId) {
+  return loadProjectModel(projectId, "research-chats");
+}
+
+export async function saveProjectResearchChats(projectId, { model, source } = {}) {
+  return request(`/api/projects/${encodeURIComponent(projectId)}/research-chats`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, source })
+  });
+}
+
 export async function loadProjectConceptMap(projectId) {
   return loadProjectModel(projectId, "concept-map");
 }

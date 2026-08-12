@@ -130,6 +130,11 @@ export function createRequestHandler(runtime) {
         await projects.handleProjectPhaseActionConcept(request, response, decodeProjectId(projectPhaseActionMatch[1]));
         return;
       }
+      const projectResearchChatsMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/research-chats$/);
+      if (projectResearchChatsMatch && (request.method === "GET" || request.method === "PUT")) {
+        await projects.handleProjectResearchChats(request, response, decodeProjectId(projectResearchChatsMatch[1]));
+        return;
+      }
       const projectConceptMapMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/concept-map$/);
       if (projectConceptMapMatch && (request.method === "GET" || request.method === "PUT")) {
         await projects.handleProjectConceptMap(request, response, decodeProjectId(projectConceptMapMatch[1]));
@@ -243,11 +248,11 @@ export function createRequestHandler(runtime) {
           projectRepository: {
             mode: projectRepository.getStatus().storage,
             durable: projectRepository.getStatus().storage === "sqlite",
-            conceptBrief: true, forceMissionPlan: true, phaseActionConcept: true, conceptMap: true, conceptGraphicPlan: true,
+            conceptBrief: true, forceMissionPlan: true, phaseActionConcept: true, researchChats: true, conceptMap: true, conceptGraphicPlan: true,
             ov1: true, ov2: true, ov3: true, ov4: true, ov5a: true, ov5: true, ov6a: true, ov6b: true, ov6c: true,
             architecture: true,
             ooda: true, scenario: true, validation: true, knowledge: true, reportArchives: true, modelSnapshots: true, collaboration: true,
-            resources: ["brief", "forceMissionPlan", "phaseActionConcept", "conceptMap", "conceptGraphicPlan", "ov1", "ov2", "ov3", "ov4", "ov5a", "ov5", "ov6a", "ov6b", "ov6c", "architecture", "ooda", "scenario", "validation", "knowledge", "reportArchives", "modelSnapshots", "collaboration", "audit"]
+            resources: ["brief", "forceMissionPlan", "phaseActionConcept", "researchChats", "conceptMap", "conceptGraphicPlan", "ov1", "ov2", "ov3", "ov4", "ov5a", "ov5", "ov6a", "ov6b", "ov6c", "architecture", "ooda", "scenario", "validation", "knowledge", "reportArchives", "modelSnapshots", "collaboration", "audit"]
           },
           knowledgeRetrieval: { defaultMode: knowledgeRetrievalMode, modes: listKnowledgeRetrievalModes(), externalVector: externalVectorAdapter.getStatus() },
           collaborationIdentity: localIdentity.getStatus(),

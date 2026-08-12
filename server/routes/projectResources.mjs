@@ -121,6 +121,18 @@ export function createProjectResourceHandlers(runtime) {
   const handleProjectPhaseActionConcept = createOvResourceHandler("phaseActionConcept", "phase action concept");
   const handleProjectConceptMap = createOvResourceHandler("conceptMap", "concept map");
   const handleProjectConceptGraphicPlan = createOvResourceHandler("conceptGraphicPlan", "concept graphic plan");
+
+  async function handleProjectResearchChats(request, response, projectId) {
+    try {
+      if (request.method === "GET") {
+        sendJson(response, 200, await projectRepository.getResearchChats(projectId));
+        return;
+      }
+      sendJson(response, 200, await projectRepository.saveResearchChats(projectId, await readAuthorizedProjectInput(request)));
+    } catch (error) {
+      sendJson(response, error.statusCode || 400, { error: error.message || "Research chat request is invalid" });
+    }
+  }
   const handleProjectOv2 = createOvResourceHandler("ov2", "OV-2");
   const handleProjectOv3 = createOvResourceHandler("ov3", "OV-3");
   const handleProjectOv4 = createOvResourceHandler("ov4", "OV-4");
@@ -294,6 +306,7 @@ export function createProjectResourceHandlers(runtime) {
     handleProjectCollaborationDecision,
     handleProjectForceMissionPlan,
     handleProjectPhaseActionConcept,
+    handleProjectResearchChats,
     handleProjectConceptMap,
     handleProjectConceptGraphicPlan,
     handleProjectOv1,

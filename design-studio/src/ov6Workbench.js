@@ -90,6 +90,56 @@ export function listForceAndPhaseSubjects(state = {}) {
   return subjects.slice(0, 48);
 }
 
+/** State-machine subjects are lifecycle-bearing tasks/objects, not phase containers. */
+export function listStateMachineSubjects(state = {}) {
+  const subjects = [];
+  const seen = new Set();
+  const push = (subject) => {
+    const id = String(subject?.id || "").trim();
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    subjects.push({
+      ...subject,
+      id,
+      name: String(subject?.name || id).trim() || id
+    });
+  };
+
+  const phases = Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : [];
+  phases.forEach((phase, phaseIndex) => {
+    const phaseId = String(phase?.id || `phase-${phaseIndex + 1}`);
+    const phaseName = String(phase?.name || `阶段 ${phaseIndex + 1}`).trim();
+    const primary = Array.isArray(phase?.primaryActions) ? phase.primaryActions.filter(Boolean) : [];
+    const actions = primary.length ? primary : (Array.isArray(phase?.blueActions) ? phase.blueActions.filter(Boolean) : []);
+    actions.forEach((action, actionIndex) => push({
+      id: `${phaseId}::action-${actionIndex + 1}`,
+      name: String(action),
+      subjectType: "task",
+      phaseId,
+      phaseName,
+      context: String(phase?.objective || ""),
+      entryConditions: (phase?.entryConditions || []).filter(Boolean).slice(0, 6),
+      exitConditions: (phase?.exitConditions || []).filter(Boolean).slice(0, 6),
+      expectedEffects: (phase?.expectedEffects || []).filter(Boolean).slice(0, 6)
+    }));
+  });
+
+  const forces = Array.isArray(state.forceMission?.forces) ? state.forceMission.forces : [];
+  forces.forEach((force, index) => {
+    const task = String(force?.task || "").trim();
+    const role = String(force?.role || "").trim();
+    if (!task && !role) return;
+    push({
+      id: String(force?.id || `force-${index + 1}`),
+      name: String(force?.name || force?.id || `持续对象 ${index + 1}`),
+      subjectType: "force",
+      context: task,
+      role
+    });
+  });
+  return subjects.slice(0, 48);
+}
+
 function cloneModel(model) {
   return structuredClone(model && typeof model === "object" ? model : {});
 }
@@ -199,9 +249,9 @@ export function addOv6bStateMachine(model, { subjectType = "task", subjectRef = 
       subjectType: ["task", "object", "force", "phase", "other"].includes(subjectType) ? subjectType : "task",
       name: name || `状态机 ${index}`,
       states: [
-        { id: `${prefix}start`, name: "开始", kind: "initial" },
-        { id: `${prefix}mid`, name: "进行中", kind: "normal" },
-        { id: `${prefix}end`, name: "结束", kind: "final" }
+        { id: `${prefix}start`, name: "开始", kind: "initial", x: "12%", y: "42%" },
+        { id: `${prefix}mid`, name: "进行中", kind: "normal", x: "42%", y: "42%" },
+        { id: `${prefix}end`, name: "结束", kind: "final", x: "72%", y: "42%" }
       ],
       transitions: [
         {
@@ -259,11 +309,230 @@ export function addOv6bTransition(model, machineId, partial = {}) {
       fromStateRef: from,
       toStateRef: to,
       condition: partial.condition || "新转换条件",
+      branchResult: partial.branchResult || "",
       ruleRefs: partial.ruleRefs || [],
       eventRefs: partial.eventRefs || []
     }
   ];
   return normalizeDodafOv6b(next);
+}
+
+export function resolveOv6bSelectedMachineId(state = {}, machines = []) {
+  const list = Array.isArray(machines) ? machines : [];
+  if (!list.length) return "";
+  const preferred = String(state.ov6bSelectedMachineId || "");
+  if (preferred && list.some((item) => item.id === preferred)) return preferred;
+  return list[0].id;
+}
+
+export function addOv6bState(model, machineId, partial = {}) {
+  const next = cloneModel(ensureOv6bModel(model));
+  const machine = (next.stateMachines || []).find((item) => item.id === machineId);
+  if (!machine) return normalizeDodafOv6b(next);
+  const kind = ["initial", "normal", "decision", "final"].includes(partial.kind) ? partial.kind : "normal";
+  const index = (machine.states || []).length + 1;
+  const id = partial.id || `${machine.id}-state-${Date.now().toString(36)}-${index}`;
+  const laidOut = layoutOv6bStatesForCanvas(machine.states || []);
+  const finalState = laidOut.find((item) => item.kind === "final");
+  const rightMostNonFinal = laidOut
+    .filter((item) => item.kind !== "final")
+    .sort((a, b) => Number.parseFloat(b.x) - Number.parseFloat(a.x))[0];
+  const insertX = kind === "decision" && finalState
+    ? (Number.parseFloat(finalState.x) + Number.parseFloat(rightMostNonFinal?.x || finalState.x)) / 2
+    : null;
+  if (insertX !== null && finalState && insertX > Number.parseFloat(finalState.x) - 9) {
+    finalState.x = `${Math.min(88, Number.parseFloat(finalState.x) + 18)}%`;
+    const storedFinal = (machine.states || []).find((item) => item.id === finalState.id);
+    if (storedFinal) storedFinal.x = finalState.x;
+  }
+  const state = {
+    id,
+    name: partial.name || (kind === "initial" ? "开始" : kind === "final" ? "结束" : kind === "decision" ? "条件判定" : `状态 ${index}`),
+    kind,
+    decisionExpression: kind === "decision" ? (partial.decisionExpression || "条件是否满足") : "",
+    x: partial.x || (insertX === null ? `${18 + ((index - 1) % 4) * 18}%` : `${Math.round(insertX * 100) / 100}%`),
+    y: partial.y || (kind === "decision" && finalState ? finalState.y : `${28 + Math.floor((index - 1) / 4) * 18}%`)
+  };
+  const states = [...(machine.states || [])];
+  if (kind === "initial") states.unshift(state);
+  else if (kind === "final") states.push(state);
+  else {
+    const finalIndex = states.findIndex((item) => item.kind === "final");
+    if (finalIndex >= 0) states.splice(finalIndex, 0, state);
+    else states.push(state);
+  }
+  machine.states = states;
+  if (kind === "decision") {
+    const preferred = (machine.transitions || []).find((item) => item.id === partial.insertTransitionId)
+      || (machine.transitions || []).find((item) => item.toStateRef === finalState?.id)
+      || (machine.transitions || []).at(-1);
+    if (preferred) {
+      const originalTarget = preferred.toStateRef;
+      preferred.toStateRef = id;
+      machine.transitions = [
+        ...(machine.transitions || []),
+        {
+          id: `transition-${Date.now().toString(36)}-decision`,
+          fromStateRef: id,
+          toStateRef: originalTarget,
+          condition: "满足条件",
+          branchResult: "满足",
+          ruleRefs: [],
+          eventRefs: []
+        }
+      ];
+    }
+  }
+  return normalizeDodafOv6b(next);
+}
+
+export function updateOv6bState(model, machineId, stateId, patch = {}) {
+  const next = cloneModel(ensureOv6bModel(model));
+  const machine = (next.stateMachines || []).find((item) => item.id === machineId);
+  if (!machine) return normalizeDodafOv6b(next);
+  const state = (machine.states || []).find((item) => item.id === stateId);
+  if (!state) return normalizeDodafOv6b(next);
+  if (patch.name !== undefined) state.name = String(patch.name || "").slice(0, 120);
+  if (patch.kind !== undefined && ["initial", "normal", "decision", "final"].includes(patch.kind)) state.kind = patch.kind;
+  if (patch.decisionExpression !== undefined) state.decisionExpression = String(patch.decisionExpression || "").slice(0, 1000);
+  if (patch.x !== undefined) state.x = patch.x;
+  if (patch.y !== undefined) state.y = patch.y;
+  return normalizeDodafOv6b(next);
+}
+
+/** Default OV-1-style logical layout when states lack canvas coords. */
+export function layoutOv6bStatesForCanvas(states = []) {
+  const list = Array.isArray(states) ? states : [];
+  const weight = (kind) => (kind === "initial" ? 0 : kind === "final" ? 3 : kind === "decision" ? 2 : 1);
+  const ordered = [...list].sort((a, b) => weight(a.kind) - weight(b.kind));
+  const n = Math.max(ordered.length, 1);
+  return ordered.map((state, index) => {
+    const hasX = Number.isFinite(Number.parseFloat(state.x));
+    const hasY = Number.isFinite(Number.parseFloat(state.y));
+    if (hasX && hasY) {
+      return {
+        ...state,
+        x: `${Number.parseFloat(state.x)}%`,
+        y: `${Number.parseFloat(state.y)}%`
+      };
+    }
+    const t = n === 1 ? 0.5 : index / (n - 1);
+    const x = 12 + t * 60;
+    const y = 36 + (index % 2) * 12;
+    return {
+      ...state,
+      x: `${Math.round(x * 100) / 100}%`,
+      y: `${Math.round(y * 100) / 100}%`
+    };
+  });
+}
+
+export function removeOv6bState(model, machineId, stateId) {
+  const next = cloneModel(ensureOv6bModel(model));
+  const machine = (next.stateMachines || []).find((item) => item.id === machineId);
+  if (!machine || !stateId) return normalizeDodafOv6b(next);
+  machine.states = (machine.states || []).filter((item) => item.id !== stateId);
+  machine.transitions = (machine.transitions || []).filter(
+    (item) => item.fromStateRef !== stateId && item.toStateRef !== stateId
+  );
+  return normalizeDodafOv6b(next);
+}
+
+export function removeOv6bTransition(model, machineId, transitionId) {
+  const next = cloneModel(ensureOv6bModel(model));
+  const machine = (next.stateMachines || []).find((item) => item.id === machineId);
+  if (!machine || !transitionId) return normalizeDodafOv6b(next);
+  machine.transitions = (machine.transitions || []).filter((item) => item.id !== transitionId);
+  return normalizeDodafOv6b(next);
+}
+
+export function updateOv6bTransition(model, machineId, transitionId, patch = {}) {
+  const next = cloneModel(ensureOv6bModel(model));
+  const machine = (next.stateMachines || []).find((item) => item.id === machineId);
+  if (!machine || !transitionId) return normalizeDodafOv6b(next);
+  const transition = (machine.transitions || []).find((item) => item.id === transitionId);
+  if (!transition) return normalizeDodafOv6b(next);
+  if (patch.condition !== undefined) transition.condition = String(patch.condition || "").slice(0, 4000);
+  if (patch.branchResult !== undefined) transition.branchResult = String(patch.branchResult || "").slice(0, 400);
+  if (patch.fromStateRef !== undefined) transition.fromStateRef = String(patch.fromStateRef || "").slice(0, 180);
+  if (patch.toStateRef !== undefined) transition.toStateRef = String(patch.toStateRef || "").slice(0, 180);
+  return normalizeDodafOv6b(next);
+}
+
+/** Create one machine per uncovered lifecycle-bearing subject. */
+export function seedOv6bFromSubjects(model, subjects = []) {
+  let next = ensureOv6bModel(model);
+  const covered = new Set((next.stateMachines || []).map((item) => item.subjectRef).filter(Boolean));
+  const list = Array.isArray(subjects) ? subjects : [];
+  list.forEach((subject) => {
+    const ref = String(subject?.id || "").trim();
+    if (!ref || covered.has(ref)) return;
+    covered.add(ref);
+    next = addOv6bStateMachine(next, {
+      subjectType: subject.subjectType || "task",
+      subjectRef: ref,
+      name: subject.name ? `${subject.name}状态机` : ""
+    });
+  });
+  return ensureOv6bModel(next);
+}
+
+export function diagnoseOv6bMachineLocal(machine = {}) {
+  const states = Array.isArray(machine.states) ? machine.states : [];
+  const transitions = Array.isArray(machine.transitions) ? machine.transitions : [];
+  const issues = [];
+  if (!states.some((item) => item.kind === "initial")) issues.push("缺少开始状态");
+  if (!states.some((item) => item.kind === "final")) issues.push("缺少结束状态");
+  if (!states.some((item) => item.kind === "normal")) issues.push("缺少中间状态");
+  if (!transitions.length) issues.push("尚无转换");
+  const initials = new Set(states.filter((item) => item.kind === "initial").map((item) => item.id));
+  const finals = new Set(states.filter((item) => item.kind === "final").map((item) => item.id));
+  const outgoing = new Map(states.map((item) => [item.id, transitions.filter((edge) => edge.fromStateRef === item.id)]));
+  const incoming = new Map(states.map((item) => [item.id, transitions.filter((edge) => edge.toStateRef === item.id)]));
+  states.forEach((state) => {
+    const out = outgoing.get(state.id) || [];
+    const input = incoming.get(state.id) || [];
+    if (!initials.has(state.id) && !input.length) issues.push(`「${state.name || state.id}」无入口`);
+    if (!finals.has(state.id) && !out.length) issues.push(`「${state.name || state.id}」无出口`);
+    if (finals.has(state.id) && out.length) issues.push(`「${state.name || state.id}」结束后仍有转换`);
+    if (state.kind === "decision") {
+      if (!String(state.decisionExpression || "").trim()) issues.push(`「${state.name || state.id}」缺少判定表达式`);
+      if (out.length < 2) issues.push(`「${state.name || state.id}」至少需要两个分支`);
+      const results = out.map((edge) => String(edge.branchResult || "").trim());
+      if (results.some((item) => !item)) issues.push(`「${state.name || state.id}」存在未标注分支`);
+      if (results.filter(Boolean).length !== new Set(results.filter(Boolean)).size) issues.push(`「${state.name || state.id}」存在重复分支结果`);
+    }
+  });
+  transitions.forEach((edge) => {
+    const condition = String(edge.condition || "").trim();
+    if (!condition || /^TBD$/i.test(condition)) issues.push(`转换「${edge.id}」缺少可观察条件`);
+  });
+  const reachable = walkGraph([...initials], (id) => (outgoing.get(id) || []).map((edge) => edge.toStateRef));
+  states.filter((item) => !reachable.has(item.id)).forEach((item) => issues.push(`「${item.name || item.id}」从开始不可达`));
+  const canReachFinal = walkGraph([...finals], (id) => (incoming.get(id) || []).map((edge) => edge.fromStateRef));
+  states.filter((item) => reachable.has(item.id) && !finals.has(item.id) && !canReachFinal.has(item.id))
+    .forEach((item) => issues.push(`「${item.name || item.id}」无法到达结束`));
+  const uniqueIssues = [...new Set(issues)];
+  return {
+    ok: uniqueIssues.length === 0,
+    issues: uniqueIssues,
+    statusLabel: uniqueIssues.length ? "需复核" : "结构完整",
+    detail: uniqueIssues.length ? uniqueIssues.join("；") : `状态 ${states.length} · 转换 ${transitions.length}`
+  };
+}
+
+function walkGraph(starts, neighbors) {
+  const visited = new Set(starts.filter(Boolean));
+  const queue = [...visited];
+  while (queue.length) {
+    const current = queue.shift();
+    neighbors(current).forEach((next) => {
+      if (!next || visited.has(next)) return;
+      visited.add(next);
+      queue.push(next);
+    });
+  }
+  return visited;
 }
 
 export function addOv6cSequence(model, partial = {}) {
@@ -336,6 +605,165 @@ export function removeOv6cSequence(model, sequenceId) {
   const next = cloneModel(ensureOv6cModel(model));
   next.sequences = (next.sequences || []).filter((item) => item.id !== sequenceId);
   return normalizeDodafOv6c(next);
+}
+
+export function resolveOv6cSelectedSequenceId(state = {}, sequences = []) {
+  const list = Array.isArray(sequences) ? sequences : [];
+  if (!list.length) return "";
+  const preferred = String(state.ov6cSelectedSequenceId || "");
+  if (preferred && list.some((item) => item.id === preferred)) return preferred;
+  return list[0].id;
+}
+
+export function updateOv6cSequence(model, sequenceId, patch = {}) {
+  const next = cloneModel(ensureOv6cModel(model));
+  const sequence = (next.sequences || []).find((item) => item.id === sequenceId);
+  if (!sequence) return normalizeDodafOv6c(next);
+  if (patch.name !== undefined) sequence.name = String(patch.name || "").slice(0, 240);
+  return normalizeDodafOv6c(next);
+}
+
+export function updateOv6cParticipant(model, sequenceId, participantId, patch = {}) {
+  const next = cloneModel(ensureOv6cModel(model));
+  const sequence = (next.sequences || []).find((item) => item.id === sequenceId);
+  if (!sequence) return normalizeDodafOv6c(next);
+  const participant = (sequence.participants || []).find((item) => item.id === participantId);
+  if (!participant) return normalizeDodafOv6c(next);
+  if (patch.name !== undefined) participant.name = String(patch.name || "").slice(0, 240);
+  if (patch.ref !== undefined) participant.ref = String(patch.ref || "").slice(0, 160);
+  return normalizeDodafOv6c(next);
+}
+
+export function updateOv6cMessage(model, sequenceId, messageId, patch = {}) {
+  const next = cloneModel(ensureOv6cModel(model));
+  const sequence = (next.sequences || []).find((item) => item.id === sequenceId);
+  if (!sequence) return normalizeDodafOv6c(next);
+  const message = (sequence.messages || []).find((item) => item.id === messageId);
+  if (!message) return normalizeDodafOv6c(next);
+  if (patch.name !== undefined) {
+    const name = String(patch.name || "").slice(0, 240);
+    message.name = name;
+    message.title = name;
+  }
+  if (patch.condition !== undefined) message.condition = String(patch.condition || "").slice(0, 800);
+  if (patch.type !== undefined) message.type = String(patch.type || "message").slice(0, 40);
+  if (patch.fromRef !== undefined) message.fromRef = String(patch.fromRef || "").slice(0, 160);
+  if (patch.toRef !== undefined) message.toRef = String(patch.toRef || "").slice(0, 160);
+  if (patch.relatedActivityRefs !== undefined) {
+    const refs = Array.isArray(patch.relatedActivityRefs)
+      ? patch.relatedActivityRefs
+      : String(patch.relatedActivityRefs || "").split(/[,，]/).map((item) => item.trim()).filter(Boolean);
+    message.relatedActivityRefs = refs.slice(0, 12).map((item) => String(item).slice(0, 160));
+    message.sourceActivityId = message.relatedActivityRefs[0] || "";
+  }
+  return normalizeDodafOv6c(next);
+}
+
+export function removeOv6cMessage(model, sequenceId, messageId) {
+  const next = cloneModel(ensureOv6cModel(model));
+  const sequence = (next.sequences || []).find((item) => item.id === sequenceId);
+  if (!sequence || !messageId) return normalizeDodafOv6c(next);
+  sequence.messages = (sequence.messages || []).filter((item) => item.id !== messageId);
+  return normalizeDodafOv6c(next);
+}
+
+export function removeOv6cParticipant(model, sequenceId, participantId) {
+  const next = cloneModel(ensureOv6cModel(model));
+  const sequence = (next.sequences || []).find((item) => item.id === sequenceId);
+  if (!sequence || !participantId) return normalizeDodafOv6c(next);
+  if ((sequence.participants || []).length <= 1) return normalizeDodafOv6c(next);
+  sequence.participants = (sequence.participants || []).filter((item) => item.id !== participantId);
+  const fallback = sequence.participants[0]?.id || "";
+  sequence.messages = (sequence.messages || []).map((message) => ({
+    ...message,
+    fromRef: message.fromRef === participantId ? fallback : message.fromRef,
+    toRef: message.toRef === participantId ? fallback : message.toRef
+  }));
+  return normalizeDodafOv6c(next);
+}
+
+/** Move a message by delta steps (-1 up / +1 down). */
+export function moveOv6cMessage(model, sequenceId, messageId, delta = 0) {
+  const next = cloneModel(ensureOv6cModel(model));
+  const sequence = (next.sequences || []).find((item) => item.id === sequenceId);
+  if (!sequence || !messageId || !delta) return normalizeDodafOv6c(next);
+  const list = [...(sequence.messages || [])].sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+  const index = list.findIndex((item) => item.id === messageId);
+  if (index < 0) return normalizeDodafOv6c(next);
+  const target = index + Number(delta);
+  if (target < 0 || target >= list.length) return normalizeDodafOv6c(next);
+  const [row] = list.splice(index, 1);
+  list.splice(target, 0, row);
+  sequence.messages = list.map((item, messageIndex) => ({ ...item, sequence: messageIndex + 1 }));
+  return normalizeDodafOv6c(next);
+}
+
+export function reverseOv6cMessage(model, sequenceId, messageId) {
+  const next = cloneModel(ensureOv6cModel(model));
+  const sequence = (next.sequences || []).find((item) => item.id === sequenceId);
+  if (!sequence || !messageId) return normalizeDodafOv6c(next);
+  const message = (sequence.messages || []).find((item) => item.id === messageId);
+  if (!message) return normalizeDodafOv6c(next);
+  const from = message.fromRef;
+  message.fromRef = message.toRef;
+  message.toRef = from;
+  return normalizeDodafOv6c(next);
+}
+
+/** Replace one sequence body from a parsed/merged DSL result. */
+export function replaceOv6cSequenceContent(model, sequenceId, nextSequence = {}) {
+  const next = cloneModel(ensureOv6cModel(model));
+  const index = (next.sequences || []).findIndex((item) => item.id === sequenceId);
+  if (index < 0) return normalizeDodafOv6c(next);
+  const current = next.sequences[index];
+  next.sequences[index] = {
+    id: current.id,
+    name: String(nextSequence.name || current.name || current.id).slice(0, 240),
+    participants: Array.isArray(nextSequence.participants) ? nextSequence.participants : current.participants,
+    messages: Array.isArray(nextSequence.messages) ? nextSequence.messages : current.messages,
+    fragments: Array.isArray(nextSequence.fragments) ? nextSequence.fragments : (current.fragments || [])
+  };
+  return normalizeDodafOv6c(next);
+}
+
+/** Seed one collaborative sequence from phase/force subjects when empty. */
+export function seedOv6cFromPhase(model, state = {}) {
+  let next = ensureOv6cModel(model);
+  if ((next.sequences || []).length) return next;
+  const subjects = listForceAndPhaseSubjects(state);
+  const phases = Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : [];
+  const participants = (subjects.length
+    ? subjects.slice(0, 6).map((item, index) => ({
+      id: item.id || `participant-${index + 1}`,
+      name: item.name || item.id || `参与方 ${index + 1}`,
+      ref: item.id || ""
+    }))
+    : [
+      { id: "participant-blue", name: "蓝方指挥", ref: "" },
+      { id: "participant-force", name: "行动单元", ref: "" }
+    ]);
+  const messages = [];
+  phases.slice(0, 8).forEach((phase, index) => {
+    const from = participants[index % participants.length];
+    const to = participants[(index + 1) % participants.length];
+    const action = (phase.blueActions || phase.primaryActions || [])[0] || phase.objective || phase.name || `阶段 ${index + 1}`;
+    messages.push({
+      id: `event-seed-${index + 1}`,
+      sequence: index + 1,
+      fromRef: from.id,
+      toRef: to.id,
+      name: String(action).slice(0, 120),
+      type: "message",
+      condition: String(phase.entryConditions?.[0] || phase.exitConditions?.[0] || "").slice(0, 200),
+      relatedActivityRefs: phase.id ? [String(phase.id)] : []
+    });
+  });
+  next = addOv6cSequence(next, {
+    name: phases[0]?.name ? `${phases[0].name}协同时序` : "阶段协同时序",
+    participants,
+    messages
+  });
+  return ensureOv6cModel(next);
 }
 
 /**

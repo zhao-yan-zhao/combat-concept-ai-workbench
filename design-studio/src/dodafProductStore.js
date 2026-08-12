@@ -178,6 +178,11 @@ export function updateProductField(model, resourceKey, path, value) {
         if (segments[2] === "name") message.title = value;
       }
     }
+  } else if (segments[0] === "sequence" && resourceKey === "ov6c") {
+    const sequence = (clone.sequences || []).find((item) => item.id === segments[1]);
+    if (sequence && segments[2] === "name") {
+      sequence.name = value;
+    }
   } else if (segments[0] === "view" && segments[1] === "notes") {
     clone.view = { ...(clone.view || {}), notes: value };
   }

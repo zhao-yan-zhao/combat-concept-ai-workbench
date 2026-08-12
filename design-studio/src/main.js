@@ -27,6 +27,7 @@ import { renderOv1ToolboxFloatButton } from "./ov1View.js";
 import { renderPhaseActionChatFloatButton } from "./phaseActionView.js";
 import { renderForceMissionChatFloatButton } from "./forceMissionView.js";
 import { renderRuleLibraryChatFloatButton } from "./ruleLibraryView.js";
+import { renderSequenceChatFloatButton } from "./ov6cView.js";
 
 import { deleteModelSnapshot, persistModelSnapshots, saveModelSnapshot, snapshotContextFromState, upsertModelSnapshot } from "./modelSnapshotStore.js";
 import { restoreModelSnapshot } from "./modelSnapshotRestore.js";
@@ -84,6 +85,10 @@ const {
   phaseActionChatController,
   forceMissionChatController,
   ruleLibraryChatController,
+  sequenceChatController,
+  sequenceCanvasController,
+  stateMachineCanvasController,
+  researchChatProjectSync,
   collaborationController
 } = wireControllers({
   state,
@@ -363,6 +368,9 @@ function renderOv1ToolboxFloatHost() {
   // Rule library (nav 02): always offer research-chat FAB while chat is collapsed.
   const onRuleLibrary = state.activeView === "ov6a";
   const ruleFloating = onRuleLibrary && state.ruleLibraryChatOpen !== true;
+  // Sequence validation (ov6c): AI chat FAB while chat is collapsed.
+  const onSequence = state.activeView === "ov6c";
+  const sequenceFloating = onSequence && state.sequenceChatOpen !== true;
   if (ov1Floating) {
     host.hidden = false;
     host.innerHTML = renderOv1ToolboxFloatButton();
@@ -375,6 +383,16 @@ function renderOv1ToolboxFloatHost() {
       chatOpen: false,
       chatGenerating: Boolean(state.ruleLibraryChatGenerating || state.ruleLibraryPregenerating),
       disabled: Boolean(state.ruleLibraryChatGenerating || state.ruleLibraryPregenerating)
+    });
+    return;
+  }
+  if (sequenceFloating) {
+    host.hidden = false;
+    host.removeAttribute("hidden");
+    host.innerHTML = renderSequenceChatFloatButton({
+      chatOpen: false,
+      chatGenerating: Boolean(state.sequenceChatGenerating),
+      disabled: Boolean(state.sequenceChatGenerating)
     });
     return;
   }
@@ -756,9 +774,12 @@ function bindDynamicEvents() {
   phaseActionChatController.bind(document);
   forceMissionChatController.bind(document);
   ruleLibraryChatController.bind(document);
+  sequenceChatController.bind(document);
   aiDirectionController.bind(document);
   ov1Controller.bind(document);
   ov1CanvasController.bind(document);
+  stateMachineCanvasController.bind(document);
+  sequenceCanvasController.bind(document);
   ov5CanvasController.bind(document);
   briefController.bind(document);
   oodaController.bind(document);
@@ -940,6 +961,25 @@ function handleAction(action, source = null) {
   if (action === "open-rule-library-chat") {
     state.ruleLibraryChatOpen = true;
     ruleLibraryChatController.ensureWelcome(state.ov6a || {});
+    render();
+    return;
+  }
+  if (action === "toggle-sequence-chat") {
+    state.sequenceChatOpen = !state.sequenceChatOpen;
+    if (state.sequenceChatOpen) {
+      sequenceChatController.ensureWelcome(state.ov6c || {});
+    }
+    render();
+    return;
+  }
+  if (action === "close-sequence-chat") {
+    state.sequenceChatOpen = false;
+    render();
+    return;
+  }
+  if (action === "open-sequence-chat") {
+    state.sequenceChatOpen = true;
+    sequenceChatController.ensureWelcome(state.ov6c || {});
     render();
     return;
   }
@@ -1878,6 +1918,7 @@ async function hydrateProjectModels() {
   await projectBriefSyncController.hydrate();
   await projectForceMissionSyncController.hydrate();
   await projectPhaseActionSyncController.hydrate();
+  await researchChatProjectSync.hydrate();
   await projectConceptMapSyncController.hydrate();
   await projectConceptGraphicSyncController.hydrate();
   await projectOv1SyncController.hydrate();
@@ -1959,6 +2000,7 @@ function setWorkflowGateOpen(open) {
 
 function goToWorkflowView(viewId) {
   if (!viewId) return;
+  if (viewId !== "ov6a") state.ruleLibraryEntrySource = "default";
   state.activeView = viewId;
   state.selection = null;
   state.ov1Dialog = null;
@@ -1970,18 +2012,39 @@ function goToWorkflowView(viewId) {
 
 /**
  * Single navigation entry for research views.
- * Landing on 规则库 always attempts brief→rules AI pregenerate when the library is empty.
+ * - 规则库: empty → AI pregenerate rules from brief
+ * - 阶段与行动: no combat-focus options yet → AI generate 3 directions + transition overlay
+ * - 状态机校验: empty → AI derives editable task machines from phase actions
  * Used by: top gate capsule, gate panel buttons, left floating step rail, menus.
  */
-async function navigateToResearchView(viewId, { toast = "", force = false } = {}) {
+async function navigateToResearchView(viewId, { toast = "", force = false, entrySource = "default" } = {}) {
   if (!viewId) return;
-  if (!force && state.activeView === viewId && viewId !== "ov6a") return;
+  if (!force && state.activeView === viewId && viewId !== "ov6a" && viewId !== "phase-action") return;
+  if (viewId === "ov6a") state.ruleLibraryEntrySource = entrySource;
   goToWorkflowView(viewId);
   render();
   if (toast) showToast(toast);
   if (viewId === "ov6a") {
     await ruleLibraryChatController.pregenerateFromBrief({ silent: false });
   }
+  if (viewId === "phase-action") {
+    await ensureCombatFocusOnEnterPhaseAction();
+  }
+  if (viewId === "ov6b") {
+    await dodafProductController.pregenerateOv6bFromPhaseAction({ silent: false });
+  }
+}
+
+/**
+ * Rule library → 阶段行动: if no focus options yet, generate 3 combat-focus directions with overlay.
+ * Existing options: enter directly (no regenerate).
+ */
+async function ensureCombatFocusOnEnterPhaseAction() {
+  const options = Array.isArray(state.combatFocus?.options) ? state.combatFocus.options : [];
+  if (options.length > 0) return null;
+  if (state.combatFocusGenerating) return null;
+  if (typeof conceptPlanningController?.generateCombatFocus !== "function") return null;
+  return conceptPlanningController.generateCombatFocus({ silent: false });
 }
 
 /** Intermediate steps: capsule advances one research page (not a whole phase). */
@@ -1989,6 +2052,33 @@ async function advanceWorkflowStep() {
   const ctx = resolveWorkflowGateContext(state);
   if (ctx.mode !== "next-step" || !ctx.nextStep?.id) {
     showToast("当前没有可进入的下一步");
+    return;
+  }
+  // Phase analysis must return to the rule library for explicit human review.
+  if (state.activeView === "phase-action" && state.phaseAction?.phases?.length) {
+    await ruleLibraryChatController.proposeChanges("phase-action", { silent: false });
+    await navigateToResearchView("ov6a", {
+      toast: "阶段规则建议已生成，请采纳或忽略后继续",
+      force: true,
+      entrySource: "phase-action"
+    });
+    return;
+  }
+
+  // A phase-derived change set marks this as the post-phase review visit.
+  // Do not derive a state machine from rules that the user has not resolved.
+  const phaseRuleChanges = state.ov6a?.ruleChangeSet;
+  if (state.activeView === "ov6a" && state.ruleLibraryEntrySource === "phase-action") {
+    const pendingCount = (phaseRuleChanges.changes || []).filter((change) => change.status === "pending").length;
+    if (pendingCount > 0) {
+      showToast(`还有 ${pendingCount} 项阶段规则建议待处理，请采纳或忽略后继续`);
+      document.querySelector(".rule-change-set")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    await navigateToResearchView("ov6b", {
+      toast: "规则审核已完成，正在生成状态机",
+      force: true
+    });
     return;
   }
   await navigateToResearchView(ctx.nextStep.id, {
@@ -2075,6 +2165,24 @@ function getBusyOverlayState() {
     return {
       title: "正在进入阶段行动",
       detail: "根据简报生成作战规则…"
+    };
+  }
+  if (state.ruleLibraryChangeGenerating) {
+    return {
+      title: "正在分析阶段规则",
+      detail: "根据阶段目标、行动、进入与退出条件生成待审核规则建议…"
+    };
+  }
+  if (state.combatFocusGenerating) {
+    return {
+      title: "正在进入阶段行动",
+      detail: "根据简报生成 3 个作战聚焦方向…"
+    };
+  }
+  if (state.stateMachinePregenerating) {
+    return {
+      title: "正在进入状态机校验",
+      detail: "根据阶段与行动分析任务状态和转换条件…"
     };
   }
   if (state.workflowModeSwitching) {

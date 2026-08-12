@@ -1,11 +1,12 @@
 import {
   beginResearchChatTurn,
+  cancelResearchChatTurn,
   completeResearchChatTurn,
   createMessage,
   normalizeResearchChatSession,
   stripPendingResearchChatTurns,
   updatePendingResearchChatText
-} from "./researchChat/researchChatStore.js";
+} from "./researchChat/index.js";
 
 const STORAGE_KEY = "concept-studio-inspiration-v1";
 const MAX_MESSAGES = 48;
@@ -175,6 +176,16 @@ export function completeInspirationAdviceTurn(session, advice, source = "ai") {
     advice,
     source,
     { topic: ADVICE_TOPIC }
+  );
+  return normalizeInspirationSession({ ...normalized, messages: next.messages });
+}
+
+/** Stop generation: complete pending bubble as cancelled. */
+export function cancelInspirationAdviceTurn(session, reason = "") {
+  const normalized = normalizeInspirationSession(session);
+  const next = cancelResearchChatTurn(
+    { messages: normalized.messages },
+    { topic: ADVICE_TOPIC, reason }
   );
   return normalizeInspirationSession({ ...normalized, messages: next.messages });
 }

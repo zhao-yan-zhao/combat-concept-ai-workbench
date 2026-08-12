@@ -4,29 +4,38 @@ import {
   compactCombatFocusForAnalysis,
   isCombatFocusConfirmed
 } from "./combatFocusStore.js";
+import { compactRuleLibraryForAnalysis } from "../../shared/conceptPlanning.js";
 import {
   createPhaseActionConceptFromBrief,
   isPhaseActionConceptConfirmed,
   persistPhaseAction
 } from "./phaseActionStore.js";
 import {
-  beginPhaseActionChatTurn,
-  completePhaseActionChatTurn,
   ensurePhaseActionChatWelcome,
   persistPhaseActionChat,
+  phaseActionChatStepStore,
   seedPhaseActionChatFromPlan,
-  summarizePhaseActionChat,
-  updatePhaseActionChatPendingText
+  summarizePhaseActionChat
 } from "./phaseActionChatStore.js";
-import { createResearchChatController } from "./researchChat/researchChatController.js";
+import {
+  createResearchChatController,
+  createResearchChatSessionApplier
+} from "./researchChat/index.js";
 
 export function createPhaseActionChatController({
   projectId,
   getState,
   render,
   notify,
-  syncPhaseAction
+  syncPhaseAction,
+  onChatPersisted = () => {}
 }) {
+  const applySession = createResearchChatSessionApplier({
+    key: "phaseActionChat",
+    projectId,
+    store: phaseActionChatStepStore
+  });
+
   const chat = createResearchChatController({
     scope: "phase-action",
     topic: "revision",
@@ -34,38 +43,30 @@ export function createPhaseActionChatController({
     render,
     notify,
     getSession: (state) => state.phaseActionChat,
-    setSession: (state, action) => {
-      if (action.type === "begin") {
-        state.phaseActionChat = persistPhaseActionChat(
-          beginPhaseActionChatTurn(state.phaseActionChat, action.question, action.replaceMessageId || ""),
-          projectId
-        );
-        return;
-      }
-      if (action.type === "delta") {
-        state.phaseActionChat = updatePhaseActionChatPendingText(state.phaseActionChat, action.text || "");
-        return;
-      }
-      if (action.type === "complete") {
-        state.phaseActionChat = persistPhaseActionChat(
-          completePhaseActionChatTurn(state.phaseActionChat, action.advice, action.source || "ai"),
-          projectId
-        );
-      }
+    setSession: applySession,
+    onAfterTurn: () => {
+      onChatPersisted("phase-action-chat");
     },
     isGenerating: (state) => Boolean(state.phaseActionChatGenerating),
     setGenerating: (state, value) => {
       state.phaseActionChatGenerating = Boolean(value);
     },
     canSend: (state) => {
-      if (state.phaseActionGenerating) return false;
-      if (!isCombatFocusConfirmed(state.combatFocus)) return false;
-      if (!state.phaseAction?.phases?.length) return false;
-      // Confirmed steps are read-only until re-generated / stale.
-      if (isPhaseActionConceptConfirmed(state.phaseAction, state.phaseActionStorage)) return false;
+      if (state.phaseActionGenerating) {
+        return { ok: false, reason: "阶段生成进行中，请稍候" };
+      }
+      if (!isCombatFocusConfirmed(state.combatFocus)) {
+        return { ok: false, reason: "请先确认作战聚焦并生成阶段草案" };
+      }
+      if (!state.phaseAction?.phases?.length) {
+        return { ok: false, reason: "请先生成阶段草案，再通过对话修订" };
+      }
+      if (isPhaseActionConceptConfirmed(state.phaseAction, state.phaseActionStorage)) {
+        return { ok: false, reason: "本步已确认，如需修改请先重新生成草案" };
+      }
       return true;
     },
-    async runTurn({ question, state, onDelta }) {
+    async runTurn({ question, state, onDelta, signal }) {
       if (state.phaseActionGenerating) {
         const error = new Error("busy");
         error.notifyMessage = "阶段修订进行中，请稍候";
@@ -92,6 +93,7 @@ export function createPhaseActionChatController({
       const revisionNotes = [recentChat, `本轮修订要求：${question}`].filter(Boolean).join("\n");
       const previousPhaseNames = (state.phaseAction?.phases || []).map((phase) => phase.name).filter(Boolean);
       const diversitySeed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      const ruleLibrary = compactRuleLibraryForAnalysis(state.ov6a || { rules: [] });
 
       try {
         const response = await generateWithAiStream({
@@ -101,6 +103,7 @@ export function createPhaseActionChatController({
             ...briefAnalysis(state.brief),
             combatFocus: compactFocus,
             combatFocuses: combatFocusesForAnalysis(state.combatFocus),
+            ruleLibrary,
             currentPhaseAction: compactPhaseActionForRevision(state.phaseAction),
             focusedPhaseId: previousFocusId,
             focusedPhaseName: previousFocusName,
@@ -108,12 +111,12 @@ export function createPhaseActionChatController({
             diversitySeed,
             reviewNotes: revisionNotes,
             revisionRequest: question,
-            "修订要求": "根据研究人员本轮修订要求，在保留合理部分的前提下更新阶段链。阶段数量仍可变（2～12）。优先落实本轮要求，不要无故整页重写无关阶段。输出须保持专业 CONOPS 语气（克制、可复核）：蓝/红行动写相对时点+主体+方式+对象/责任区+可观察门槛；红方须对蓝方行动作因果回应。时窗必须有理有据：相邻衔接、职能加权（主交战最长）、transitions.note 写时点与划分依据，禁止无依据等长切分。优先术语：航迹融合、交战授权、分层拦截、漏防补射、关键节点生存。禁止空泛套话与“编队展开→电子诱发→火力释放→撤离”固定模板（除非修订明确要求）。回答结果必须是完整 PhaseActionConcept。"
+            "修订要求": "根据研究人员本轮修订要求，在保留合理部分的前提下更新阶段链。阶段数量仍可变（2～12）。优先落实本轮要求，不要无故整页重写无关阶段。输出须保持专业 CONOPS 语气（克制、可复核）：蓝/红行动写相对时点+主体+方式+对象/责任区+可观察门槛；红方须对蓝方行动作因果回应。时窗必须有理有据：相邻衔接、职能加权（主交战最长）、transitions.note 写时点与划分依据，禁止无依据等长切分。优先术语：航迹融合、交战授权、分层拦截、漏防补射、关键节点生存。若 analysis.ruleLibrary 非空，蓝/红行动与进入退出须落实规则中的作战活动与约束；已有类似表述则不重复堆叠。禁止空泛套话与“编队展开→电子诱发→火力释放→撤离”固定模板（除非修订明确要求）。回答结果必须是完整 PhaseActionConcept。"
           },
           evidence: []
         }, {
+          signal,
           onDelta: (payload) => {
-            // Structured JSON stream: show raw progress preview when extractable, else assembled length hint.
             const preview = String(payload?.preview || "").trim()
               || (payload?.assembled ? `正在生成阶段草案… ${Math.min(100, Math.round(String(payload.assembled).length / 40))}%` : "");
             if (preview) onDelta?.({ preview, assembled: payload.assembled || "" });
@@ -126,7 +129,8 @@ export function createPhaseActionChatController({
           source: "ai",
           combatFocus: compactFocus,
           previousPhaseNames,
-          diversitySeed
+          diversitySeed,
+          ruleLibrary
         });
         next.reviewNotes = String(question || "").trim().slice(0, 2000);
         next.status = "draft";
@@ -141,7 +145,7 @@ export function createPhaseActionChatController({
           notifyMessage: `已按对话修订阶段草案（${state.phaseAction.phases.length} 段），请在中间栏复核`
         };
       } catch (error) {
-        // Local fallback: keep current plan, only record advisory reply.
+        if (error?.name === "AbortError" || signal?.aborted) throw error;
         const err = error instanceof Error ? error : new Error(String(error || "ai-unavailable"));
         err.fallbackAdvice = createFallbackAdvice(question);
         err.notifyMessage = "AI 暂不可用，已记录本地修订建议；阶段草案未改动";
@@ -152,9 +156,11 @@ export function createPhaseActionChatController({
 
   return {
     bind: chat.bind,
+    stop: chat.stop,
     seedFromPlan(plan) {
       const state = getState();
       state.phaseActionChat = persistPhaseActionChat(seedPhaseActionChatFromPlan(plan), projectId);
+      onChatPersisted("phase-action-chat:seed");
     },
     ensureWelcome(plan) {
       const state = getState();

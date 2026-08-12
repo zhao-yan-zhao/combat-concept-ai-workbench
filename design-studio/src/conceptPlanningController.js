@@ -53,6 +53,7 @@ import {
   createPhaseActionConceptFromBrief,
   persistPhaseAction
 } from "./phaseActionStore.js";
+import { compactRuleLibraryForAnalysis } from "../../shared/conceptPlanning.js";
 import { summarizePhaseActionChat } from "./phaseActionChatStore.js";
 
 export function createConceptPlanningController({
@@ -1082,6 +1083,11 @@ export function createConceptPlanningController({
     const customOptions = (state.combatFocus?.options || []).filter((item) => item.source === "custom");
     state.combatFocusGenerating = true;
     render();
+    // Let transition overlay paint before the AI request (enter-from-规则库 path).
+    if (typeof requestAnimationFrame === "function") {
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+    const startedAt = Date.now();
     try {
       const response = await generateWithAi({
         workflowId: "combat-focus",
@@ -1120,6 +1126,14 @@ export function createConceptPlanningController({
       if (!silent) notify("AI 暂不可用，已生成本地作战聚焦候选");
       return state.combatFocus;
     } finally {
+      // Keep transition overlay readable when entering from 规则库 capsule.
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < 560) {
+        await new Promise((resolve) => {
+          const delay = typeof globalThis.setTimeout === "function" ? globalThis.setTimeout.bind(globalThis) : setTimeout;
+          delay(resolve, 560 - elapsed);
+        });
+      }
       state.combatFocusGenerating = false;
       render();
     }
@@ -1389,6 +1403,7 @@ export function createConceptPlanningController({
       : state.phaseAction?.reviewNotes || "";
     const previousPhaseNames = (state.phaseAction?.phases || []).map((phase) => phase.name).filter(Boolean);
     const diversitySeed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const ruleLibrary = compactRuleLibraryForPhase(state);
     state.phaseActionGenerating = true;
     render();
     try {
@@ -1399,12 +1414,16 @@ export function createConceptPlanningController({
           ...briefAnalysis(state.brief),
           combatFocus: compactFocus,
           combatFocuses: combatFocusesForAnalysis(state.combatFocus),
+          ruleLibrary,
           reviewNotes: String(reviewNotes || "").trim(),
           previousPhaseNames,
           diversitySeed,
           "蓝红行动写作要求": "专业 CONOPS 语气。每条：相对时点+概念主体+方式+对象/责任区+可观察门槛。蓝方同阶段覆盖不同职能轴（探测跟踪/交战拦截/指挥授权/评估重组）；红方必须对蓝方行动作因果回应。优先术语：航迹融合、交战授权、分层拦截、漏防补射、开机管理、关键节点生存。",
           "专业性要求": "克制、准确、可复核；禁止口号化与小说化；阶段名可上作战概念图；转换条件可观察。",
           "时窗依据要求": "timeWindow 必须有理有据：先据简报总窗口（小时/日序）定总跨度；各段按时职能加权（准备短、识别中、主交战最长、评估短非零）；相邻衔接无空洞；禁止无依据等长切分；transitions.note 写清时点与划分依据；行动内时点不得越出本段时窗。",
+          "规则库落实要求": ruleLibrary.count
+            ? `analysis.ruleLibrary 共 ${ruleLibrary.count} 条规则。阶段蓝/红行动与进入/退出门槛须体现规则中的作战活动与约束；若某规则语义已在行动或门槛中出现，禁止同义重复堆叠。`
+            : "当前无规则库条目；仍须写出可观察的作战活动（非研究流程）。",
           "重生成约束": previousPhaseNames.length
             ? `这是重生成。禁止复用与 previousPhaseNames 相同的阶段划分/命名（上次：${previousPhaseNames.join("、")}）。须按当前研究意图与作战聚焦重新划分 2～12 段，名称、时窗与行动内容都应可区分。禁止套用“编队展开→电子诱发→火力释放→撤离”固定模板，除非课题本身就是该进攻节奏。`
             : "首次生成：阶段划分与时窗必须回扣研究意图与作战聚焦，体现专业作战阶段逻辑，不得套用无关固定模板。"
@@ -1416,7 +1435,8 @@ export function createConceptPlanningController({
         source: isAiOutput(response) ? "ai" : "local",
         combatFocus: compactFocus,
         previousPhaseNames,
-        diversitySeed
+        diversitySeed,
+        ruleLibrary
       });
       if (reviewNotes) next.reviewNotes = String(reviewNotes).trim();
       state.phaseAction = persistPhaseAction(next, projectId);
@@ -1425,10 +1445,11 @@ export function createConceptPlanningController({
       onPhaseActionGenerated?.(state.phaseAction);
       const labels = selectedFocuses.map((item) => item.title).join("、");
       const source = state.phaseAction.generation?.source || "";
+      const ruleHint = ruleLibrary.count ? `，规则库 ${ruleLibrary.count} 条` : "";
       if (!silent) {
-        if (source === "ai") notify(`已按聚焦「${labels}」生成阶段草案（AI），请复核`);
-        else if (source === "local-ai-fallback") notify(`AI 输出与课题不符或不可用，已按「${labels}」生成本地防空/课题向草案，请复核`);
-        else notify(`已生成本地阶段与行动草案（聚焦：${labels || "—"}），请复核`);
+        if (source === "ai") notify(`已按聚焦「${labels}」生成阶段草案（AI${ruleHint}），请复核`);
+        else if (source === "local-ai-fallback") notify(`AI 输出与课题不符或不可用，已按「${labels}」生成本地草案${ruleHint}，请复核`);
+        else notify(`已生成本地阶段与行动草案（聚焦：${labels || "—"}${ruleHint}），请复核`);
       }
       return state.phaseAction;
     } catch {
@@ -1436,7 +1457,8 @@ export function createConceptPlanningController({
         source: "local",
         combatFocus: compactFocus,
         previousPhaseNames,
-        diversitySeed
+        diversitySeed,
+        ruleLibrary
       });
       if (reviewNotes) fallback.reviewNotes = String(reviewNotes).trim();
       state.phaseAction = persistPhaseAction(fallback, projectId);
@@ -1697,6 +1719,10 @@ function collectForceMissionKeywords(state = {}) {
 
 function compactForceMission(plan = {}) {
   return compactForceMissionForAnalysis(plan);
+}
+
+function compactRuleLibraryForPhase(state = {}) {
+  return compactRuleLibraryForAnalysis(state.ov6a || { rules: [] });
 }
 
 function compactPhaseAction(plan = {}) {

@@ -1,5 +1,56 @@
 # project-context.md
 
+## Latest completed batch (2026-08-12, state-machine subject semantics and decision diagnostics)
+
+- Goal: Position state machines as lifecycle/trigger/exception/termination validation for key tasks and continuously operating objects, rather than duplicating every phase as a machine.
+- Completed: Added a state-machine-specific candidate builder from primary/blue actions and mission-bearing forces. Phase IDs/names remain context only; the existing phase/force subject helper remains unchanged for sequence diagrams.
+- Completed: State-machine UI, first-generation analysis, local fallback, AI prompt/schema, and draft application now use explicit modeling candidates and preserve candidate `subjectType`/`subjectRef`.
+- Completed: Decision nodes persist `decisionExpression`; transitions persist `branchResult`. The lower editor exposes both fields contextually, while the canvas keeps nodes compact and labels decision edges with branch results.
+- Completed: Local/shared diagnostics now cover missing entry/exit, unreachable states, final-state outgoing edges, empty/TBD conditions, missing decision expressions, fewer than two decision branches, missing/duplicate branch results, and paths that cannot reach a final state.
+- Decision: Adding a decision splits the existing transition but does not invent a second destination; the incomplete decision is diagnosed until the researcher explicitly adds and labels the alternate branch.
+- Verification: syntax checks passed for all changed JS/MJS files; `check-ov6-workbench`, `check-ov6-product-model`, `check-phase-chain`, `git diff --check`, and live `GET /api/health` (200) passed. Authenticated browser visual proof remains unavailable at the login gate.
+
+## Latest completed batch (2026-08-12, state-machine canvas and flow continuity)
+
+- Goal: Improve the 状态机校验 workbench canvas and make the upstream/downstream research path explicit.
+- Completed: `stateMachineView.js` keeps only the compact state-machine → 时序校验 downstream bridge, moves refresh/load-server controls beside 保存, and adds a subject-context canvas header, state trajectory strip, selected-transition synchronization, and reset-to-fit canvas control.
+- Completed: `stateMachineCanvasController.js` wires the fit control without changing the OV-6b model or persistence behavior; canvas styling now uses a low-glare blue-gray grid, rectangular state cards, restrained links, and standard start/final symbols.
+- Follow-up: first-paint edge boxes now match the rendered node geometry and transition labels are centered on their paths. OV-6b supports a persisted `decision` node kind, exposed as “加判定框” with a diamond canvas form and editable state-list type.
+- Open-source visual reference: LogicFlow (`@logicflow/core`, Apache-2.0) was selected over AntV X6 (heavier) and React Flow (would add React). The existing native OV-6b renderer now follows LogicFlow-style white nodes, restrained borders, blue selection/anchors, orthogonal edges, path-length-centered labels, and true diamond boundary anchors; no upstream source code or new runtime dependency was copied.
+- Decision insertion now places the diamond before the final node and shifts the final node when needed, instead of stacking a new diamond over an existing state.
+- Visual-structure follow-up: “加判定框” now splits the selected/final-bound transition into `source → decision → target`; the renderer collapses legacy direct bypass edges around an inserted decision and lays the visible main chain on a stable horizontal topology. The duplicate trajectory strip was removed, state cards use a fixed two-line footprint, edge labels sit above rather than on the stroke, and longer chains receive a wider world instead of compressed nodes.
+- Verification: `node --check design-studio/src/stateMachineView.js`, `node --check design-studio/src/stateMachineCanvasController.js`, `node scripts/check-ov6-workbench.mjs`, `node scripts/check-phase-chain.mjs`, `git diff --check`, and `GET /api/health` (200) passed.
+- Visual limitation: fresh Playwright session reaches the collaboration login gate, so a signed-in browser screenshot/click-through remains outstanding.
+
+## Latest completed batch (2026-08-11, sequence validation UI refactor)
+
+- Goal: Rebuild 时序校验 (ov6c): drop duplicate full events table, add AI research-chat FAB, embed open-source sequence diagram engines.
+- UI: `ov6cView.js` master-detail workbench (`seq-page`) — sequence list + engine tabs + message inspector + collapsible diagnostics; removed bottom events matrix / heavy DoDAF legend stack.
+- Engines (vendor offline under `design-studio/vendor/sequence/`): Mermaid 10.9.1, js-sequence-diagrams 2.0.1 (+ Raphael/Underscore), plus editable research canvas; PlantUML text export only. DSL helpers in `sequenceDiagramDsl.js`; mount via `sequenceCanvasController.js`.
+- AI: `sequenceChatStore` / `sequenceChatController` (scope `sequence`), FAB + side dock like rule library; project sync key `researchChats.sequence`; `SequenceDraft` schema in openai/generator.
+- Mutators: select sequence/message, set engine, seed from phase, update/remove message; field path `ov6c.sequence.*.name`.
+- Verification: `check-ov6-workbench`, `check-ov6-product-model`, `check-ov6c-event-trace`, `check-phase-chain`, `check-research-chat-project-persistence`, `check-design-studio-workflow` passed.
+
+## Latest completed batch (2026-08-11, research chat project persistence)
+
+- Goal: Persist research chats into the project repository (SQLite/file), not only browser localStorage.
+- Server: `researchChats` resource (`GET/PUT /api/projects/:id/research-chats`); chat-only saves do **not** bump project revision / invalidate workflow.
+- Model: `{ version, phaseAction, forceMission, ruleLibrary }` sessions; strip pending; keep `ai|local|error|cancelled`, ids, truncated.
+- Client: `researchChatProjectSync.js` hydrate + silent write-through; wired from phase/force/rule chat `onAfterTurn` / seed / pregenerate.
+- Brief inspiration remains on brief API; inspiration message normalize now keeps id/error/cancelled and drops pending.
+- SQLite `resourceKeys` also includes planning models (force/phase/concept map/graphic) + researchChats so they survive normalized reload.
+- Verification: `node scripts/check-research-chat-project-persistence.mjs` (+ shell/inspiration checks).
+
+## Latest completed batch (2026-08-11, researchChat shell upgrade)
+
+- Goal: Strengthen the shared AI research-chat shell (`design-studio/src/researchChat/`) end-to-end.
+- Store: `createResearchChatStepStore` + `createResearchChatSessionApplier`; session `version`; sources `ai|local|error|cancelled`; preserve newlines; truncation flag; cancel turn; lighter stream delta path.
+- Controller: AbortController + Stop; Enter send / Shift+Enter newline; composer draft restore; edit banner + cancel edit; `canSend` reason object; pass `signal` to `runTurn`.
+- View/CSS: stop button, disabled reason, truncated badge, error/cancelled source chrome, composer hint.
+- Migrated step stores/controllers: phase-action, force-mission, rule-library, inspiration advice.
+- Verification: `node scripts/check-research-chat-shell.mjs`, `check-inspiration-advice`, `check-research-chat-brief-update`, `check-concept-planning-workflow`, `check-design-studio-workflow`, `check-cmo-force-mission`, `check-ov6-workbench` passed.
+- Note: working-tree `check-phase-chain.mjs` still asserts WIP rule-add helpers (`isRuleAddRequest` / `applyChatDraftToLibrary`) not yet implemented in controller; unrelated to this shell batch.
+
 ## Latest completed batch (2026-08-11, brief→rules AI pregenerate)
 
 - Goal: After confirming 研究建模 (brief), jump to 规则库 and AI-pregenerate combat rules from the brief, with no fixed rule count and a stage transition animation.

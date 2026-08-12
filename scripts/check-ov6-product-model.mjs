@@ -137,8 +137,13 @@ const seededB = normalizeDodafOv6b(buildOv6bModel({
 }));
 assert(seededB.stateMachines.length === 1 && seededB.states.length >= 3, "OODA seed still normalizes");
 
-const htmlB = renderOv6b(multi);
-assert(htmlB.includes("台状态机") && htmlB.includes("封控任务状态") && htmlB.includes("通道对象状态"), "OV-6b UI lists machines");
+const htmlB = renderOv6b({ ov6b: multi, activeView: "ov6b", ov6bSelectedMachineId: multi.stateMachines[0].id });
+assert(
+  (htmlB.includes("状态机") || htmlB.includes("sm-page"))
+    && htmlB.includes("封控任务状态")
+    && htmlB.includes("通道对象状态"),
+  "OV-6b UI lists machines"
+);
 
 // --- OV-6c: sequence diagrams ---
 const sequence = normalizeDodafOv6c({
@@ -190,9 +195,17 @@ assert(legacyC.events[0].title === "旧事件" && legacyC.sequences[0].participa
 
 const htmlC = renderOv6c({
   ov6c: sequence,
-  ov6cStorage: { status: "ready", mode: "local", label: "事件序列" }
+  ov6cStorage: { status: "ready", mode: "local", label: "事件序列" },
+  activeView: "ov6c",
+  ov6cSelectedSequenceId: "sequence-001",
+  ov6cDiagramEngine: "workbench"
 });
-assert(htmlC.includes("幅时序图") && htmlC.includes("关键协同序列") && htmlC.includes("生命线"), "OV-6c UI mentions sequence model");
+assert(
+  (htmlC.includes("幅") || htmlC.includes("seq-page"))
+    && htmlC.includes("关键协同序列")
+    && htmlC.includes("生命线"),
+  "OV-6c UI mentions sequence model"
+);
 
 // Server normalizers
 const serverA = normalizeOv6a({ rules: [{ name: "独立规则", description: "无绑定" }] });

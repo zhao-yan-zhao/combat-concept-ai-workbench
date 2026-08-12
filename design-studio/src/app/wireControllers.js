@@ -31,8 +31,12 @@ import { createConceptPlanningController } from "../conceptPlanningController.js
 import { createPhaseActionChatController } from "../phaseActionChatController.js";
 import { createForceMissionChatController } from "../forceMissionChatController.js";
 import { createRuleLibraryChatController } from "../ruleLibraryChatController.js";
+import { createSequenceChatController } from "../sequenceChatController.js";
+import { createSequenceCanvasController } from "../sequenceCanvasController.js";
+import { createResearchChatProjectSync } from "../researchChatProjectSync.js";
 import { createCollaborationController } from "../collaborationController.js";
 import { createDodafProductController } from "../dodafProductController.js";
+import { createStateMachineCanvasController } from "../stateMachineCanvasController.js";
 import { createAiOv1Draft } from "../ov1DraftStore.js";
 import { saveOv1Model } from "../ov1Store.js";
 import { selectionFor } from "../ui.js";
@@ -546,12 +550,22 @@ export function wireControllers({
     }
   });
 
+  const researchChatProjectSync = createResearchChatProjectSync({
+    projectId: activeProjectId,
+    getState: () => state,
+    render
+  });
+  const persistResearchChats = (source = "research-chat") => {
+    void researchChatProjectSync.persistFromState(source);
+  };
+
   const phaseActionChatController = createPhaseActionChatController({
     projectId: activeProjectId,
     getState: () => state,
     render,
     notify: showToast,
-    syncPhaseAction: (...args) => projectPhaseActionSyncController.sync(...args)
+    syncPhaseAction: (...args) => projectPhaseActionSyncController.sync(...args),
+    onChatPersisted: persistResearchChats
   });
 
   const forceMissionChatController = createForceMissionChatController({
@@ -559,7 +573,8 @@ export function wireControllers({
     getState: () => state,
     render,
     notify: showToast,
-    syncForceMission: (...args) => projectForceMissionSyncController.sync(...args)
+    syncForceMission: (...args) => projectForceMissionSyncController.sync(...args),
+    onChatPersisted: persistResearchChats
   });
 
   const conceptPlanningController = createConceptPlanningController({
@@ -583,9 +598,11 @@ export function wireControllers({
       // Phase chain: after phase confirm → rule binding / state / sequence, not force yet.
       state.activeView = "ov6a";
       render();
+      await ruleLibraryChatController.proposeChanges("phase-action", { silent: false });
       // Force generation deferred until the 阶段行动 stage is completed (gate), not here.
     },
     onForceMissionConfirmed: async () => {
+      await ruleLibraryChatController.proposeChanges("force-mission", { silent: false });
       state.activeView = "concept-map";
       render();
       // Deterministic seed only (no AI on concept-map step).
@@ -659,6 +676,17 @@ export function wireControllers({
     projectTitle: () => project.title || activeProjectId
   });
 
+  const stateMachineCanvasController = createStateMachineCanvasController({
+    projectId: activeProjectId,
+    getState: () => state,
+    render,
+    notify: showToast,
+    syncOv6b: (model, options = {}) => dodafProductController.syncResource("ov6b", model, {
+      source: options.source || "state-machine-canvas",
+      writeArchitecture: true
+    })
+  });
+
   const ruleLibraryChatController = createRuleLibraryChatController({
     projectId: activeProjectId,
     getState: () => state,
@@ -668,14 +696,29 @@ export function wireControllers({
       source: options.source || "rule-library:chat",
       writeArchitecture: true
     }),
+    onChatPersisted: persistResearchChats,
     onBusyChange: () => {
       // Keep stage-transition overlay in sync while pregenerate runs outside full render paths.
       if (typeof document !== "undefined") {
         const shell = document.querySelector("#studioShell");
-        if (shell) shell.classList.toggle("is-mode-switching", Boolean(state.ruleLibraryPregenerating));
+        if (shell) shell.classList.toggle("is-mode-switching", Boolean(state.ruleLibraryPregenerating || state.ruleLibraryChangeGenerating));
       }
     }
   });
+
+  const sequenceChatController = createSequenceChatController({
+    projectId: activeProjectId,
+    getState: () => state,
+    render,
+    notify: showToast,
+    syncOv6c: (model, options = {}) => dodafProductController.syncResource("ov6c", model, {
+      source: options.source || "sequence:chat",
+      writeArchitecture: true
+    }),
+    onChatPersisted: persistResearchChats
+  });
+
+  const sequenceCanvasController = createSequenceCanvasController();
 
   return {
     oodaController,
@@ -717,6 +760,10 @@ export function wireControllers({
     phaseActionChatController,
     forceMissionChatController,
     ruleLibraryChatController,
+    sequenceChatController,
+    sequenceCanvasController,
+    stateMachineCanvasController,
+    researchChatProjectSync,
     collaborationController
   };
 }

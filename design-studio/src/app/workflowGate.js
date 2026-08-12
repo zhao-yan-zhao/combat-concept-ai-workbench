@@ -146,6 +146,64 @@ export function resolveWorkflowGateContext(state) {
   const completing = Boolean(state.workflowCompleting);
   const open = Boolean(state.workflowGateOpen);
 
+  // The phase loop revisits the rule library without duplicating it in the
+  // canonical navigation order. Present the actual human-review route here.
+  if (state.activeView === "phase-action" && Array.isArray(state.phaseAction?.phases) && state.phaseAction.phases.length > 0) {
+    const reviewStep = { id: "ov6a", label: "规则库审核", phase: current?.phase || "" };
+    return {
+      freeMode: false,
+      mode: "next-step",
+      current,
+      nextStep: reviewStep,
+      isLastInPhase: false,
+      phaseIndex,
+      completedThrough,
+      incompleteReasons: [],
+      ready: true,
+      followingPhase,
+      completing,
+      open,
+      action: "advance-workflow-step",
+      capsuleTitle: "下一步",
+      capsuleAction: "规则库审核",
+      actionLabel: "生成阶段规则并进入审核",
+      headLabel: "当前步骤",
+      headTitle: current.label,
+      hint: "AI 将根据阶段与行动生成规则建议，随后由你逐项审核。",
+      detailHtml: "<p class=\"workflow-gate-detail-note\">生成结果不会直接覆盖规则库；进入规则库后可逐项采纳或忽略。</p>"
+    };
+  }
+
+  const phaseRuleChanges = state.ov6a?.ruleChangeSet;
+  if (state.activeView === "ov6a" && state.ruleLibraryEntrySource === "phase-action") {
+    const pendingCount = (phaseRuleChanges.changes || []).filter((change) => change.status === "pending").length;
+    const stateMachineStep = { id: "ov6b", label: "状态机校验", phase: current?.phase || "" };
+    return {
+      freeMode: false,
+      mode: "next-step",
+      current,
+      nextStep: stateMachineStep,
+      isLastInPhase: false,
+      phaseIndex,
+      completedThrough,
+      incompleteReasons: pendingCount ? [`${pendingCount} 项阶段规则建议待处理`] : [],
+      ready: pendingCount === 0,
+      followingPhase,
+      completing,
+      open,
+      action: "advance-workflow-step",
+      capsuleTitle: "下一步",
+      capsuleAction: pendingCount ? `待审核 ${pendingCount}` : "状态机校验",
+      actionLabel: pendingCount ? "处理待审核建议" : "生成并进入状态机",
+      headLabel: "规则审核",
+      headTitle: pendingCount ? "尚未完成" : "已完成",
+      hint: pendingCount ? "请先采纳或忽略全部阶段规则建议。" : "AI 将根据阶段、行动与已审核规则生成状态机。",
+      detailHtml: pendingCount
+        ? `<p class="workflow-gate-detail-note">还有 ${pendingCount} 项建议未处理；规则版本明确后才能生成状态机。</p>`
+        : "<p class=\"workflow-gate-detail-note\">点击后显示生成动画，并在完成后进入状态机校验。</p>"
+    };
+  }
+
   if (freeMode) {
     return {
       freeMode: true,
