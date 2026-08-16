@@ -1,10 +1,11 @@
 import {
   beginResearchChatTurn,
+  attachResearchChatJob,
   cancelResearchChatTurn,
   completeResearchChatTurn,
   createMessage,
   normalizeResearchChatSession,
-  stripPendingResearchChatTurns,
+  recoverInterruptedResearchChatTurn,
   updatePendingResearchChatText
 } from "./researchChat/index.js";
 
@@ -24,8 +25,10 @@ const ADVICE_TOPIC = "consultation";
 
 export function loadInspirationSession() {
   try {
-    // Drop in-flight typing placeholders after reload; keep the user turn.
-    return stripPendingInspirationTurns(normalizeInspirationSession(JSON.parse(localStorage.getItem(storageKey()))));
+    return normalizeInspirationSession(recoverInterruptedResearchChatTurn(
+      normalizeInspirationSession(JSON.parse(localStorage.getItem(storageKey()))),
+      { topic: ADVICE_TOPIC, reason: "页面刷新导致生成中断，请重新生成" }
+    ));
   } catch {
     return createInspirationSession();
   }
@@ -231,6 +234,11 @@ export function updateInspirationPendingText(session, text) {
   return normalizeInspirationSession({ ...normalized, messages: next.messages });
 }
 
+export function attachInspirationAdviceJob(session, jobId) {
+  const normalized = normalizeInspirationSession(session);
+  return normalizeInspirationSession(attachResearchChatJob(normalized, jobId, { maxMessages: MAX_MESSAGES }));
+}
+
 /** Fill the pending assistant bubble once the model returns (or local fallback). */
 export function completeInspirationAdviceTurn(session, advice, source = "ai") {
   const normalized = normalizeInspirationSession(session);
@@ -306,11 +314,6 @@ export function normalizeInspirationSession(value) {
     stage,
     messages: messages.length ? messages : createInspirationSession().messages
   };
-}
-
-function stripPendingInspirationTurns(session) {
-  const stripped = stripPendingResearchChatTurns({ messages: session?.messages || [] });
-  return { ...session, messages: stripped.messages };
 }
 
 function clean(value) {

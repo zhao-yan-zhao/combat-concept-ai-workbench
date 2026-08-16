@@ -1,9 +1,97 @@
 import { generateMockOutput } from "../../shared/generator.js";
 import { readJson, send, sendJson } from "../httpUtils.mjs";
+import { randomUUID } from "node:crypto";
 
 export function createAiHandlers(runtime) {
   const { getAiApiKey, getAiServiceConfig, openAi } = runtime;
   const { callOpenAi, streamOpenAi, callOpenAiRedTeam, mergeAiDraft } = openAi;
+  const generationJobs = new Map();
+
+  async function handleCreateGenerateJob(request, response) {
+    if (!getAiApiKey()) {
+      send(response, 503, "未配置 OPENAI_API_KEY，已由前端回退到 Demo 生成。", "text/plain;charset=utf-8");
+      return;
+    }
+    const input = await readJson(request);
+    const job = {
+      id: randomUUID(),
+      input,
+      events: [],
+      listeners: new Set(),
+      done: false,
+      createdAt: Date.now()
+    };
+    generationJobs.set(job.id, job);
+    void runGenerationJob(job);
+    sendJson(response, 202, { jobId: job.id, status: "running" });
+  }
+
+  async function handleGenerateJobStream(request, response, jobId, after = 0) {
+    const job = generationJobs.get(jobId);
+    if (!job) {
+      sendJson(response, 404, { error: "Generation job not found or expired" });
+      return;
+    }
+    response.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no"
+    });
+    const write = (event) => response.write(`id: ${event.sequence}\ndata: ${JSON.stringify(event.payload)}\n\n`);
+    job.events.filter((event) => event.sequence > after).forEach(write);
+    if (job.done) {
+      response.end();
+      return;
+    }
+    const listener = { write, end: () => response.end() };
+    job.listeners.add(listener);
+    response.on("close", () => job.listeners.delete(listener));
+  }
+
+  async function runGenerationJob(job) {
+    const input = job.input;
+    const base = generateMockOutput({
+      workflow: input.workflow,
+      analysis: input.analysis || {},
+      evidence: input.evidence || []
+    });
+    publish(job, { type: "start", jobId: job.id, model: getAiServiceConfig().model });
+    try {
+      let lastAssembled = "";
+      for await (const chunk of streamOpenAi(input, base)) {
+        if (chunk.type === "delta") {
+          lastAssembled = chunk.assembled || (lastAssembled + (chunk.text || ""));
+          publish(job, {
+            type: "delta",
+            text: chunk.text || "",
+            assembled: lastAssembled,
+            preview: extractAdvicePreview(lastAssembled)
+          });
+        } else if (chunk.type === "done") {
+          publish(job, { type: "done", output: mergeAiDraft(base, chunk.draft) });
+        }
+      }
+    } catch (error) {
+      try {
+        const aiDraft = await callOpenAi(input, base);
+        publish(job, { type: "done", output: mergeAiDraft(base, aiDraft), fallback: "sync" });
+      } catch (fallbackError) {
+        publish(job, { type: "error", message: String(fallbackError?.message || error?.message || "AI 流式生成失败") });
+      }
+    } finally {
+      job.done = true;
+      for (const listener of job.listeners) listener.end();
+      job.listeners.clear();
+      setTimeout(() => generationJobs.delete(job.id), 10 * 60 * 1000).unref?.();
+    }
+  }
+
+  function publish(job, payload) {
+    const event = { sequence: job.events.length + 1, payload };
+    job.events.push(event);
+    for (const listener of job.listeners) listener.write(event);
+  }
 
   async function handleGenerate(request, response) {
     if (!getAiApiKey()) {
@@ -107,7 +195,7 @@ export function createAiHandlers(runtime) {
     });
   }
 
-  return { handleGenerate, handleGenerateStream, handleRedTeam };
+  return { handleGenerate, handleGenerateStream, handleCreateGenerateJob, handleGenerateJobStream, handleRedTeam };
 }
 
 /** Best-effort preview of summary/coreIdea while JSON is still streaming. */

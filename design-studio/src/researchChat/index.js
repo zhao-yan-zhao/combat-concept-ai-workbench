@@ -15,6 +15,7 @@ export {
   MAX_MESSAGES_DEFAULT,
   MAX_MESSAGE_CHARS_DEFAULT,
   addResearchChatTurn,
+  attachResearchChatJob,
   beginResearchChatTurn,
   cancelResearchChatTurn,
   completeResearchChatTurn,
@@ -27,6 +28,7 @@ export {
   normalizeResearchChatSession,
   persistResearchChat,
   replaceResearchChatTurn,
+  recoverInterruptedResearchChatTurn,
   stripPendingResearchChatTurns,
   summarizeResearchChat,
   updatePendingResearchChatText

@@ -9,6 +9,7 @@ import {
   replaceInspirationAdviceTurn
 } from "../design-studio/src/inspirationStore.js";
 import { renderInspirationSession } from "../design-studio/src/inspirationView.js";
+import { readFileSync } from "node:fs";
 
 let session = createInspirationSession();
 session = addInspirationReply(session, "Initial bounded concept.");
@@ -47,6 +48,10 @@ assert(compressed.length <= 1800, "Compressed conversation exceeded its context 
 assert(compressed.includes("【较早对话摘要】") && compressed.includes("【最近对话原文】"), "Long conversation was not split into summary and recent windows");
 assert(compressed.includes("Earlier assistant judgment 17"), "Compressed conversation did not preserve the newest assistant reply");
 assert(compressed.includes("已折叠"), "Compressed conversation did not disclose folded older messages");
+
+const adviceControllerSource = readFileSync(new URL("../design-studio/src/inspirationAdviceController.js", import.meta.url), "utf8");
+assert(adviceControllerSource.includes("hasConversationalAdvice(response)"), "Research advice still requires an unrelated full report response");
+assert(!adviceControllerSource.includes("isAiOutput(response)"), "Research advice still rejects usable partial conversational output");
 
 const html = renderInspirationSession({ session: advised });
 assert(html.includes("researchChatForm") && html.includes("研究对话") && html.includes("data-research-chat-retry"), "Research chat controls were not rendered in inspiration session");

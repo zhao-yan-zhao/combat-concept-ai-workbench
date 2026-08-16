@@ -22,6 +22,7 @@ export async function generateWithAi(input) {
  * @returns {Promise<object>} final output (same shape as generateWithAi)
  */
 export async function generateWithAiStream(input, options = {}) {
+  if (options.durable) return generateWithDurableAiStream(input, options);
   const { onDelta, onStart, signal } = options;
   const response = await fetch("/api/generate/stream", {
     method: "POST",
@@ -37,6 +38,36 @@ export async function generateWithAiStream(input, options = {}) {
     const message = await response.text();
     throw new Error(message || `AI 流式接口返回 ${response.status}`);
   }
+
+  return readAiStreamResponse(response, input, { onDelta, onStart, signal });
+}
+
+async function generateWithDurableAiStream(input, options = {}) {
+  const { onDelta, onStart, onJob, signal, resumeJobId = "" } = options;
+  let jobId = String(resumeJobId || "").trim();
+  if (!jobId) {
+    const created = await fetch("/api/generate/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(input),
+      signal
+    });
+    if (!created.ok) throw new Error(await created.text() || `AI 任务创建失败 (${created.status})`);
+    const payload = await created.json();
+    jobId = String(payload?.jobId || "").trim();
+    if (!jobId) throw new Error("AI 任务未返回可重连标识");
+    onJob?.({ jobId });
+  }
+  const response = await fetch(`/api/generate/jobs/${encodeURIComponent(jobId)}/stream`, {
+    method: "GET",
+    headers: { Accept: "text/event-stream" },
+    signal
+  });
+  if (!response.ok) throw new Error(await response.text() || `AI 任务重连失败 (${response.status})`);
+  return readAiStreamResponse(response, input, { onDelta, onStart, signal });
+}
+
+async function readAiStreamResponse(response, input, { onDelta, onStart, signal } = {}) {
 
   // Gateway returned plain JSON (non-SSE).
   const contentType = String(response.headers.get("content-type") || "");

@@ -4,6 +4,7 @@
  */
 import {
   addResearchChatTurn,
+  attachResearchChatJob,
   beginResearchChatTurn,
   cancelResearchChatTurn,
   completeResearchChatTurn,
@@ -11,6 +12,7 @@ import {
   createResearchChatSessionApplier,
   createResearchChatStepStore,
   normalizeResearchChatSession,
+  recoverInterruptedResearchChatTurn,
   replaceResearchChatTurn,
   stripPendingResearchChatTurns,
   summarizeResearchChat,
@@ -52,6 +54,15 @@ assert(session.messages.at(-1)?.text.includes("\n"), "complete should preserve n
 const withPending = beginResearchChatTurn(session, "将被替换", { topic: "revision" });
 const stripped = stripPendingResearchChatTurns(withPending);
 assert(!stripped.messages.some((m) => m.pending), "stripPending should drop pending bubbles");
+let interrupted = updatePendingResearchChatText(withPending, "刷新前已生成的片段");
+interrupted = recoverInterruptedResearchChatTurn(interrupted, { topic: "revision" });
+assert(!interrupted.messages.at(-1)?.pending && interrupted.messages.at(-1)?.source === "cancelled", "reload recovery should resolve the pending bubble");
+assert(interrupted.messages.at(-1)?.text.includes("刷新前已生成的片段") && interrupted.messages.at(-1)?.text.includes("页面刷新"), "reload recovery lost the streamed fragment or interruption reason");
+const interruptedBeforeDelta = recoverInterruptedResearchChatTurn(withPending, { topic: "revision" });
+assert(interruptedBeforeDelta.messages.at(-1)?.text.includes("页面刷新") && interruptedBeforeDelta.messages.at(-2)?.text === "将被替换", "reload recovery should retain the user turn before the first delta");
+const reconnectable = attachResearchChatJob(withPending, "123e4567-e89b-12d3-a456-426614174000");
+const recoveredReconnectable = recoverInterruptedResearchChatTurn(reconnectable, { topic: "revision" });
+assert(recoveredReconnectable.messages.at(-1)?.pending && recoveredReconnectable.messages.at(-1)?.jobId, "reload recovery should keep a reconnectable generation pending");
 const userId = session.messages.find((m) => m.role === "user")?.id;
 const replaced = replaceResearchChatTurn(session, userId, "改写后的问题", "改写后的答复", "ai", { topic: "revision" });
 assert(replaced.messages.some((m) => m.role === "user" && m.text === "改写后的问题"), "replace should update user text");

@@ -225,6 +225,15 @@ export function createRequestHandler(runtime) {
         await ai.handleGenerateStream(request, response);
         return;
       }
+      if (request.method === "POST" && url.pathname === "/api/generate/jobs") {
+        await ai.handleCreateGenerateJob(request, response);
+        return;
+      }
+      const generateJobStreamMatch = url.pathname.match(/^\/api\/generate\/jobs\/([a-f0-9-]+)\/stream$/i);
+      if (request.method === "GET" && generateJobStreamMatch) {
+        await ai.handleGenerateJobStream(request, response, generateJobStreamMatch[1], Number(url.searchParams.get("after") || 0));
+        return;
+      }
       if (request.method === "POST" && url.pathname === "/api/red-team") {
         await ai.handleRedTeam(request, response);
         return;

@@ -72,6 +72,14 @@ export function createResearchChatController({
         form?.requestSubmit();
       });
 
+      const session = getSession(getState());
+      const pendingIndex = (session?.messages || []).findIndex((message) => message?.pending && message?.jobId);
+      if (pendingIndex > 0 && !isGenerating(getState())) {
+        const pending = session.messages[pendingIndex];
+        const userMessage = session.messages.slice(0, pendingIndex).reverse().find((message) => message.role === "user" && message.topic === topic);
+        if (userMessage) queueMicrotask(() => void ask(userMessage.text, null, userMessage.id, { resumeJobId: pending.jobId }));
+      }
+
       root.querySelectorAll(`[data-research-chat-edit][data-research-chat-scope="${scope}"]`).forEach((button) => {
         button.addEventListener("click", () => {
           if (isGenerating(getState())) return;
@@ -136,7 +144,7 @@ export function createResearchChatController({
     abortController.abort();
   }
 
-  async function ask(question, form, replaceMessageId = "") {
+  async function ask(question, form, replaceMessageId = "", { resumeJobId = "" } = {}) {
     const state = getState();
     if (isGenerating(state)) return;
     const gate = resolveCanSend(state);
@@ -146,7 +154,7 @@ export function createResearchChatController({
     }
 
     // Optimistic UI: user bubble + typing indicator before network.
-    setSession(state, { type: "begin", question, replaceMessageId });
+    if (!resumeJobId) setSession(state, { type: "begin", question, replaceMessageId });
     setGenerating(state, true);
     draftText = "";
     replaceMessageIdDraft = "";
@@ -164,7 +172,9 @@ export function createResearchChatController({
         question,
         replaceMessageId,
         state: getState(),
+        resumeJobId,
         signal,
+        onJob: ({ jobId }) => setSession(getState(), { type: "job", jobId }),
         onDelta: (payload) => {
           if (signal.aborted) return;
           const preview = String(payload?.preview || payload?.assembled || "").trim();

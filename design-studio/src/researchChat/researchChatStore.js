@@ -48,6 +48,34 @@ export function stripPendingResearchChatTurns(session, options = {}) {
   return normalizeResearchChatSession({ ...session, messages }, options);
 }
 
+/** Recover a browser-interrupted stream as a durable, retryable assistant turn. */
+export function recoverInterruptedResearchChatTurn(session, {
+  reason = "页面刷新导致生成中断，请重新生成",
+  topic = "consultation",
+  maxMessages = MAX_MESSAGES_DEFAULT,
+  maxMessageChars = MAX_MESSAGE_CHARS_DEFAULT,
+  fallbackWelcome = ""
+} = {}) {
+  const normalized = normalizeResearchChatSession(session, {
+    maxMessages,
+    maxMessageChars,
+    fallbackWelcome
+  });
+  if (normalized.messages.some((message) => message?.pending && message?.jobId)) return normalized;
+  if (!normalized.messages.some((message) => message?.pending)) return normalized;
+  return cancelResearchChatTurn(normalized, { topic, reason, maxMessageChars });
+}
+
+export function attachResearchChatJob(session, jobId, options = {}) {
+  const normalized = normalizeResearchChatSession(session, options);
+  const pendingIndex = findLastIndex(normalized.messages, (message) => message.role === "assistant" && message.pending);
+  const id = clean(jobId).replace(/[^a-f0-9-]/gi, "");
+  if (pendingIndex < 0 || !id) return normalized;
+  const messages = [...normalized.messages];
+  messages[pendingIndex] = { ...messages[pendingIndex], jobId: id };
+  return { ...normalized, messages };
+}
+
 /** Optimistically append (or re-edit) a user turn with a pending assistant bubble. */
 export function beginResearchChatTurn(session, question, {
   replaceMessageId = "",
@@ -225,7 +253,7 @@ export function loadResearchChat(storageKey, {
 } = {}) {
   try {
     const raw = JSON.parse(localStorage.getItem(storageKey) || "null");
-    return stripPendingResearchChatTurns(
+    return recoverInterruptedResearchChatTurn(
       normalizeResearchChatSession(raw, { maxMessages, maxMessageChars, fallbackWelcome }),
       { maxMessages, maxMessageChars, fallbackWelcome }
     );
@@ -395,6 +423,13 @@ export function createResearchChatSessionApplier({ key, projectId = "default", s
       state[key] = store.updatePending(session, action.text || "");
       return;
     }
+    if (action?.type === "job") {
+      state[key] = store.persist(attachResearchChatJob(session, action.jobId, {
+        maxMessages: store.maxMessages,
+        maxMessageChars: store.maxMessageChars
+      }), pid);
+      return;
+    }
     if (action?.type === "complete") {
       state[key] = store.persist(
         store.complete(session, action.advice, action.source || "ai"),
@@ -445,6 +480,7 @@ function normalizeMessage(value, { maxMessageChars = MAX_MESSAGE_CHARS_DEFAULT }
     text,
     pending,
     streaming: Boolean(pending && text && value?.streaming !== false),
+    jobId: pending ? clean(value?.jobId).replace(/[^a-f0-9-]/gi, "") : "",
     truncated: Boolean(value?.truncated) || text.length > maxMessageChars,
     createdAt: clean(value.createdAt).replace(/\n/g, " ") || new Date().toISOString()
   }, maxMessageChars);

@@ -9,5 +9,7 @@ const assumptions = deriveResearchChatBriefUpdate({ brief, question: "需要明�
 assert(assumptions.patch.assumptions.includes("信息时效") && assumptions.fields[0] === "关键假设", "Constraint answer did not update the assumptions field");
 const risk = deriveResearchChatBriefUpdate({ brief, question: "目前主要风险有哪些？", result: { coreIdea: "", phases: [], risks: ["公开信息不足", "资源连续性待验证"] } });
 assert(risk.patch.risk.includes("资源连续性") && risk.fields[0] === "主要风险", "Risk answer did not update the risk field");
+const consultation = deriveResearchChatBriefUpdate({ brief, question: "为什么需要先核对公开证据？", result: { coreIdea: "公开证据有助于约束判断边界。", phases: [], risks: [] } });
+assert(Object.keys(consultation.patch).length === 0 && consultation.fields.length === 0, "General consultation incorrectly overwrote the core approach field");
 console.log("Research chat brief update acceptance passed.");
 function assert(condition, message) { if (!condition) throw new Error(message); }

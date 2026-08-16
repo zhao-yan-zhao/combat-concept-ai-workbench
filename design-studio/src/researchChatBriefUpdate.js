@@ -9,6 +9,7 @@ const FIELD_LABELS = {
 
 export function deriveResearchChatBriefUpdate({ brief = {}, question = "", result = {} }) {
   const field = selectField(question, brief);
+  if (!field) return { patch: {}, fields: [] };
   const coreIdea = clean(result.coreIdea || result.summary);
   const phases = list(result.phases);
   const risks = list(result.risks);
@@ -29,7 +30,9 @@ function selectField(question, brief) {
   if (/(假设|约束|前提|条件|边界)/.test(text)) return "assumptions";
   if (/(目标|目的|任务|研究什么)/.test(text)) return "objective";
   if (/(思路|设计|方案|机制|路径|如何)/.test(text)) return "approach";
-  return clean(brief.objective) === "待补充" ? "objective" : "approach";
+  // General consultation must not silently overwrite a brief field. The user can
+  // still explicitly ask about the objective, approach, assumptions, effects, or risk.
+  return "";
 }
 
 function list(value) {

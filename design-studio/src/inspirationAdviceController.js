@@ -1,6 +1,7 @@
-import { generateWithAiStream, isAiOutput } from "../../shared/aiClient.js";
+import { generateWithAiStream } from "../../shared/aiClient.js";
 import {
   buildInspirationConversationContext,
+  attachInspirationAdviceJob,
   beginInspirationAdviceTurn,
   cancelInspirationAdviceTurn,
   completeInspirationAdviceTurn,
@@ -35,6 +36,10 @@ export function createInspirationAdviceController({
         state.inspiration = updateInspirationPendingText(state.inspiration, action.text || "");
         return;
       }
+      if (action.type === "job") {
+        state.inspiration = saveInspirationSession(attachInspirationAdviceJob(state.inspiration, action.jobId));
+        return;
+      }
       if (action.type === "complete") {
         state.inspiration = saveInspirationSession(
           completeInspirationAdviceTurn(state.inspiration, action.advice, action.source || "ai")
@@ -52,7 +57,7 @@ export function createInspirationAdviceController({
       state.inspirationAdviceGenerating = Boolean(value);
     },
     canSend: () => true,
-    async runTurn({ question, state, onDelta, signal }) {
+    async runTurn({ question, state, onDelta, onJob, resumeJobId, signal }) {
       const conversationContext = buildInspirationConversationContext(state.inspiration, {
         currentQuestion: question
       });
@@ -68,12 +73,15 @@ export function createInspirationAdviceController({
           },
           evidence: []
         }, {
+          durable: true,
+          resumeJobId,
+          onJob,
           signal,
           onDelta: (payload) => {
             onDelta?.(payload);
           }
         });
-        if (!isAiOutput(response)) {
+        if (!hasConversationalAdvice(response)) {
           const error = new Error("AI advice response is incomplete");
           error.fallbackAdvice = createFallbackAdvice(question, conversationContext);
           error.notifyMessage = "AI 服务暂不可用，已记录本地研究级复核建议";
@@ -110,4 +118,8 @@ function createFallbackAdvice(question, conversationContext = "") {
   const subject = String(question).replace(/\s+/g, " ").trim().slice(0, 90) || "该研究问题";
   const continuity = conversationContext ? "结合前述对话已形成的研究对象与判断边界，" : "";
   return `${continuity}围绕“${subject}”，建议继续核对可验证的关键假设、公开证据和约束条件，并将结论保留为待专家复核的研究判断。`;
+}
+
+function hasConversationalAdvice(response) {
+  return Boolean(String(response?.result?.coreIdea || response?.result?.summary || "").trim());
 }
