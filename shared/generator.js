@@ -412,27 +412,29 @@ function createRuleLibraryChangeSetResult(analysis = {}) {
 function createStateMachineDraftResult(analysis) {
   const subjects = Array.isArray(analysis?.stateMachineSubjects) && analysis.stateMachineSubjects.length
     ? analysis.stateMachineSubjects
-    : (Array.isArray(analysis?.phaseAction?.phases) ? analysis.phaseAction.phases.map((phase) => ({ ...phase, subjectType: "task" })) : []);
+    : (Array.isArray(analysis?.phaseAction?.phases) ? analysis.phaseAction.phases.map((phase) => ({ ...phase, subjectType: "phase" })) : []);
   const rules = Array.isArray(analysis?.rules) ? analysis.rules.filter((rule) => rule?.id) : [];
   return {
-    summary: "已为关键任务和持续运行对象生成分机草案；阶段仅作为上下文。",
+    summary: "已为阶段行动生成阶段机，并为独立任务和持续运行对象生成分机草案。",
     stateMachines: subjects.map((subject, index) => {
       const subjectRef = String(subject?.id || `subject-${index + 1}`);
       const prefix = `state-machine-${subjectRef}`;
+      const window = String(subject?.timeWindow || "").trim();
+      const redPressure = (Array.isArray(subject?.redActions) ? subject.redActions : []).filter(Boolean)[0] || "";
       const states = [
-        { id: `${prefix}-start`, name: subject?.entryConditions?.[0] || "进入条件满足", kind: "initial", decisionExpression: "", x: "12%", y: "42%" },
-        { id: `${prefix}-execute`, name: subject?.name || subject?.context || "任务执行中", kind: "normal", decisionExpression: "", x: "42%", y: "42%" },
+        { id: `${prefix}-start`, name: subject?.entryConditions?.[0] || (window ? `进入${window}` : "进入条件满足"), kind: "initial", decisionExpression: "", x: "12%", y: "42%" },
+        { id: `${prefix}-execute`, name: subject?.taskName || subject?.name || subject?.context || "任务执行中", kind: "normal", decisionExpression: "", x: "42%", y: "42%" },
         { id: `${prefix}-end`, name: subject?.exitConditions?.[0] || subject?.expectedEffects?.[0] || "终止条件满足", kind: "final", decisionExpression: "", x: "72%", y: "42%" }
       ];
       return {
         id: `${prefix}-machine`,
         subjectRef,
-        subjectType: subject?.subjectType || "task",
+        subjectType: subject?.subjectType || (/::action-\d+$/.test(subjectRef) ? "phase" : "task"),
         name: `${subject?.name || `建模对象 ${index + 1}`}状态机`,
         states,
         transitions: [
-          { id: `${prefix}-t1`, fromStateRef: states[0].id, toStateRef: states[1].id, condition: subject?.entryConditions?.[0] || "进入条件满足", branchResult: "", ruleRefs: rules.slice(0, 1).map((rule) => rule.id) },
-          { id: `${prefix}-t2`, fromStateRef: states[1].id, toStateRef: states[2].id, condition: subject?.exitConditions?.[0] || subject?.expectedEffects?.[0] || "终止条件满足", branchResult: "", ruleRefs: rules.slice(0, 2).map((rule) => rule.id) }
+          { id: `${prefix}-t1`, fromStateRef: states[0].id, toStateRef: states[1].id, condition: subject?.entryConditions?.[0] || (window ? `进入时窗 ${window}` : "进入条件满足"), branchResult: "", ruleRefs: rules.slice(0, 1).map((rule) => rule.id) },
+          { id: `${prefix}-t2`, fromStateRef: states[1].id, toStateRef: states[2].id, condition: subject?.exitConditions?.[0] || subject?.expectedEffects?.[0] || (redPressure ? `红方压力未阻断：${redPressure}` : "终止条件满足"), branchResult: "", ruleRefs: rules.slice(0, 2).map((rule) => rule.id) }
         ]
       };
     })

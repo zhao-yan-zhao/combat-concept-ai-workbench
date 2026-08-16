@@ -32,6 +32,7 @@ import { createPhaseActionChatController } from "../phaseActionChatController.js
 import { createForceMissionChatController } from "../forceMissionChatController.js";
 import { createRuleLibraryChatController } from "../ruleLibraryChatController.js";
 import { createSequenceChatController } from "../sequenceChatController.js";
+import { createStateMachineChatController } from "../stateMachineChatController.js";
 import { createSequenceCanvasController } from "../sequenceCanvasController.js";
 import { createResearchChatProjectSync } from "../researchChatProjectSync.js";
 import { createCollaborationController } from "../collaborationController.js";
@@ -718,6 +719,18 @@ export function wireControllers({
     onChatPersisted: persistResearchChats
   });
 
+  const stateMachineChatController = createStateMachineChatController({
+    projectId: activeProjectId,
+    getState: () => state,
+    render,
+    notify: showToast,
+    syncOv6b: (model, options = {}) => dodafProductController.syncResource("ov6b", model, {
+      source: options.source || "state-machine:chat",
+      writeArchitecture: true
+    }),
+    onChatPersisted: persistResearchChats
+  });
+
   const sequenceCanvasController = createSequenceCanvasController();
 
   return {
@@ -762,6 +775,7 @@ export function wireControllers({
     ruleLibraryChatController,
     sequenceChatController,
     sequenceCanvasController,
+    stateMachineChatController,
     stateMachineCanvasController,
     researchChatProjectSync,
     collaborationController

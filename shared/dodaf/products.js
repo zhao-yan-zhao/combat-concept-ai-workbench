@@ -521,6 +521,15 @@ export function normalizeDodafOv5a(value) {
 
 const OV6A_BINDING_STATUSES = ["pending", "verified", "rejected", "stale"];
 const OV6B_SUBJECT_TYPES = ["task", "object", "force", "phase", "other"];
+const PHASE_ACTION_SUBJECT_REF = /::action-\d+$/;
+
+function resolveOv6bSubjectType(subjectType, subjectRef) {
+  const type = clean(subjectType, 40);
+  const ref = clean(subjectRef, 160);
+  if (PHASE_ACTION_SUBJECT_REF.test(ref) && (!type || type === "task" || type === "other")) return "phase";
+  if (OV6B_SUBJECT_TYPES.includes(type)) return type;
+  return "other";
+}
 const OV6B_STATE_KINDS = ["initial", "normal", "decision", "final"];
 const OV6C_MESSAGE_TYPES = ["message", "response", "status", "exception", "timeout"];
 const OV6C_FRAGMENT_KINDS = ["alt", "loop", "par", "break", "opt"];
@@ -553,6 +562,10 @@ function normalizeOv6aBinding(value, index = 0) {
   };
 }
 
+function normalizeOv6aPhaseBinding(value) {
+  return { phaseRef: clean(typeof value === "string" ? value : value?.phaseRef || value?.phaseId, 160) };
+}
+
 function normalizeOv6aRule(rule, index) {
   const name = clean(rule?.name || rule?.subject, 240) || `规则 ${index + 1}`;
   const description = clean(rule?.description || rule?.text, 4000) || "TBD";
@@ -562,6 +575,10 @@ function normalizeOv6aRule(rule, index) {
     .map((item, bindingIndex) => normalizeOv6aBinding(item, bindingIndex))
     .filter((item) => item.activityRef)
     .slice(0, 40);
+  const phaseBindings = (Array.isArray(rule?.phaseBindings) ? rule.phaseBindings : [])
+    .map(normalizeOv6aPhaseBinding)
+    .filter((item, itemIndex, list) => item.phaseRef && list.findIndex((candidate) => candidate.phaseRef === item.phaseRef) === itemIndex)
+    .slice(0, 24);
   // Legacy single activityId → one pending/verified binding (not a create-time requirement).
   const legacyActivityId = clean(rule?.activityId, 160);
   if (legacyActivityId && !activityBindings.some((item) => item.activityRef === legacyActivityId)) {
@@ -579,6 +596,7 @@ function normalizeOv6aRule(rule, index) {
     scope,
     type,
     activityBindings,
+    phaseBindings,
     reviewStatus,
     reviewLabel: ov6aRuleReviewLabel(reviewStatus),
     // Legacy UI aliases
@@ -625,17 +643,29 @@ export function normalizeDodafOv6a(value) {
       scope: rule.scope,
       reviewStatus: rule.reviewStatus,
       activityId: rule.activityId,
-      activityBindings: rule.activityBindings
+      activityBindings: rule.activityBindings,
+      phaseBindings: rule.phaseBindings
     }
   }, index, "Rule"));
-  const relations = rules.flatMap((rule) => rule.activityBindings.map((binding, index) => ({
+  const activityRelations = rules.flatMap((rule) => rule.activityBindings.map((binding, index) => ({
     id: `${rule.id}-bind-${index + 1}`,
     dm2Type: "constrains",
     sourceId: rule.id,
     targetId: binding.activityRef,
     name: binding.constraintNote || "constrains",
     properties: { bindingStatus: binding.bindingStatus }
-  }))).filter((item) => item.sourceId && item.targetId).slice(0, 480);
+  })));
+  const phaseRelations = rules.flatMap((rule) => rule.phaseBindings.map((binding, index) => ({
+    id: `${rule.id}-phase-${index + 1}`,
+    dm2Type: "appliesDuring",
+    sourceId: rule.id,
+    targetId: binding.phaseRef,
+    name: "applies during",
+    properties: { bindingType: "phase" }
+  })));
+  const relations = [...activityRelations, ...phaseRelations]
+    .filter((item) => item.sourceId && item.targetId)
+    .slice(0, 480);
 
   return createProductEnvelope({
     product: "OV-6a",
@@ -761,7 +791,7 @@ function diagnoseStateMachine(machine) {
     }
   });
   transitions.forEach((edge) => {
-    if (!edge.condition || /^TBD$/i.test(edge.condition)) issues.push(`转换「${edge.id}」缺少可观察条件`);
+    if (!edge.condition || /^(TBD|待补充|新转换条件)$/i.test(edge.condition)) issues.push(`转换「${edge.id}」缺少可观察条件`);
   });
   const walk = (starts, neighborMap, field) => {
     const visited = new Set(starts);
@@ -808,12 +838,14 @@ function normalizeOv6bStateMachine(machine, index) {
     .filter(Boolean)
     .filter((item) => stateById.has(item.fromStateRef) && stateById.has(item.toStateRef))
     .slice(0, 160);
-  const subjectType = clean(machine?.subjectType, 40);
+  const subjectRef = clean(machine?.subjectRef, 160);
+  const subjectType = resolveOv6bSubjectType(machine?.subjectType, subjectRef);
   return {
     id: clean(machine?.id, 180) || `state-machine-${index + 1}`,
-    subjectRef: clean(machine?.subjectRef, 160),
-    subjectType: OV6B_SUBJECT_TYPES.includes(subjectType) ? subjectType : "other",
+    subjectRef,
+    subjectType,
     name: clean(machine?.name, 240) || `状态机 ${index + 1}`,
+    canvasLayout: machine?.canvasLayout === "manual" ? "manual" : "auto",
     states,
     transitions
   };
@@ -961,6 +993,9 @@ function normalizeOv6cMessage(item, index) {
     offsetMinutes: item?.offsetMinutes === null || item?.offsetMinutes === undefined
       ? null
       : clampNumber(item.offsetMinutes, -100000, 100000, 0),
+    durationMinutes: item?.durationMinutes === null || item?.durationMinutes === undefined
+      ? null
+      : clampNumber(item.durationMinutes, 0, 100000, 0),
     sourceNodeId: clean(item?.sourceNodeId || item?.fromRef, 160),
     sourceActivityId: relatedActivityRefs[0] || "",
     phase: clean(item?.phase, 160),
@@ -1041,7 +1076,9 @@ function legacyEventsToSequences(value) {
 }
 
 export function normalizeDodafOv6c(value) {
-  const rawSequences = Array.isArray(value?.sequences) && value.sequences.length
+  // An explicit empty array is a user-cleared v2 model. Only migrate the
+  // flat legacy shape when sequences is genuinely absent.
+  const rawSequences = Array.isArray(value?.sequences)
     ? value.sequences
     : legacyEventsToSequences(value);
   const sequences = rawSequences.slice(0, 24).map((sequence, index) => normalizeOv6cSequence(sequence, index));

@@ -5,16 +5,14 @@
  */
 import {
   OV1_COORD_MAX,
-  OV1_COORD_MIN,
-  computeOv1WorldBounds,
-  logicalToWorldCss
+  OV1_COORD_MIN
 } from "./ov1Canvas.js";
 import { resolveDodafProduct, saveLocalDodafProduct } from "./dodafProductStore.js";
 import {
+  addOv6bState,
   addOv6bTransition,
-  layoutOv6bStatesForCanvas,
   resolveOv6bSelectedMachineId,
-  updateOv6bState
+  updateOv6bCanvasLayout
 } from "./ov6Workbench.js";
 import { routeSmFlowEdges } from "./stateMachineFlowRouting.js";
 
@@ -46,38 +44,44 @@ export function createStateMachineCanvasController({
     bind(root) {
       resizeObserver?.disconnect();
       const board = root.querySelector(".sm-ov1-canvas");
-      if (!board) return;
-      const stage = board.querySelector("[data-ov1-stage]") || board;
-      const world = board.querySelector("[data-ov1-world]");
-      const machineId = board.dataset.machineId || "";
-      if (machineId && machineId !== lastMachineId) {
-        lastMachineId = machineId;
-        shouldFitCamera = true;
-      }
-      if (shouldFitCamera) fitCameraToWorld(stage, world);
-      applyWorldTransform(world);
-      const refreshEdges = () => refreshConceptEdges(stage);
-      refreshEdges();
-      board.querySelector("[data-sm-canvas-fit]")?.addEventListener("click", () => {
-        fitCameraToWorld(stage, world);
+      const stage = board?.querySelector("[data-ov1-stage]") || board;
+      const world = board?.querySelector("[data-ov1-world]");
+      const refreshEdges = () => {
+        if (stage) refreshConceptEdges(stage);
+      };
+      if (board && stage) {
+        const machineId = board.dataset.machineId || "";
+        if (machineId && machineId !== lastMachineId) {
+          lastMachineId = machineId;
+          shouldFitCamera = true;
+        }
+        if (shouldFitCamera) fitCameraToWorld(stage, world);
         applyWorldTransform(world);
         refreshEdges();
-      });
-      resizeObserver = new ResizeObserver(refreshEdges);
-      resizeObserver.observe(stage);
-      if (world) resizeObserver.observe(world);
+        root.querySelector("[data-sm-canvas-fit]")?.addEventListener("click", () => {
+          fitCameraToWorld(stage, world);
+          applyWorldTransform(world);
+          refreshEdges();
+        });
+        resizeObserver = new ResizeObserver(refreshEdges);
+        resizeObserver.observe(stage);
+        if (world) resizeObserver.observe(world);
 
-      stage.querySelectorAll("[data-ov1-port]").forEach((port) => {
-        port.addEventListener("pointerdown", (event) => startLink(event, board, stage, world, port, refreshEdges));
+        stage.querySelectorAll("[data-ov1-port]").forEach((port) => {
+          port.addEventListener("pointerdown", (event) => startLink(event, board, stage, world, port, refreshEdges));
+        });
+        stage.querySelectorAll("[data-ov1-node]").forEach((element) => {
+          element.addEventListener("pointerdown", (event) => dragNode(event, stage, element, refreshEdges));
+        });
+        stage.querySelectorAll("[data-ov1-edge], [data-ov1-edge-label]").forEach((element) => {
+          element.addEventListener("pointerdown", (event) => selectTransition(event, element));
+        });
+        stage.addEventListener("pointerdown", (event) => panCanvas(event, board, stage, world, refreshEdges));
+        stage.addEventListener("wheel", (event) => zoomCanvas(event, stage, world, refreshEdges), { passive: false });
+      }
+      root.querySelectorAll("[data-sm-palette]").forEach((element) => {
+        element.addEventListener("pointerdown", (event) => startPaletteDrag(event, board, stage, world, element));
       });
-      stage.querySelectorAll("[data-ov1]").forEach((element) => {
-        element.addEventListener("pointerdown", (event) => dragNode(event, stage, element, refreshEdges));
-      });
-      stage.querySelectorAll("[data-ov1-edge], [data-ov1-edge-label]").forEach((element) => {
-        element.addEventListener("pointerdown", (event) => selectTransition(event, element));
-      });
-      stage.addEventListener("pointerdown", (event) => panCanvas(event, board, stage, world, refreshEdges));
-      stage.addEventListener("wheel", (event) => zoomCanvas(event, stage, world, refreshEdges), { passive: false });
     }
   };
 
@@ -106,6 +110,9 @@ export function createStateMachineCanvasController({
     const state = getState();
     state.ov6bSelectedTransitionId = edgeId;
     state.ov6bSelectedStateId = "";
+    state.ov6bToolsOpen = true;
+    state.ov6bEditorOpen = true;
+    state.stateMachineChatOpen = false;
     render();
   }
 
@@ -234,6 +241,11 @@ export function createStateMachineCanvasController({
         toStateRef: targetId,
         condition: "新转换条件"
       });
+      state.ov6bSelectedTransitionId = next._createdTransitionId || "";
+      state.ov6bSelectedStateId = "";
+      state.ov6bToolsOpen = true;
+      state.ov6bEditorOpen = true;
+      state.stateMachineChatOpen = false;
       persistModel(next, "已建立状态转换");
     };
 
@@ -263,70 +275,230 @@ export function createStateMachineCanvasController({
     if (event.button !== 0 || !event.isPrimary) return;
     if (event.target.closest("[data-ov1-port]")) return;
     const machine = currentMachine();
-    const nodeId = element.dataset.ov1;
+    const nodeId = element.dataset.ov1Node || element.dataset.ov1;
     if (!machine || !nodeId) return;
     event.preventDefault();
     event.stopPropagation();
 
-    const laidOut = layoutOv6bStatesForCanvas(machine.states || []);
-    const node = laidOut.find((item) => item.id === nodeId);
-    if (!node) return;
+    const world = stage.querySelector("[data-ov1-world]");
+    const originLeft = Number.parseFloat(element.style.left);
+    const originTop = Number.parseFloat(element.style.top);
+    if (!world || !Number.isFinite(originLeft) || !Number.isFinite(originTop)) return;
 
     const start = { x: event.clientX, y: event.clientY };
-    const originX = Number.parseFloat(node.x) || 0;
-    const originY = Number.parseFloat(node.y) || 0;
     let moved = false;
-    let position = { x: node.x, y: node.y };
-    const shell = element.closest("[data-ov1-node]") || element;
+    let settled = false;
+    let lastPointer = event;
+    let frame = 0;
+    element.classList.add("is-dragging");
+    element.querySelector(".sm-flow-node")?.classList.add("is-dragging");
     element.setPointerCapture?.(event.pointerId);
 
-    const move = (pointer) => {
-      const stageW = Math.max(stage.clientWidth, 1);
-      const stageH = Math.max(stage.clientHeight, 1);
-      const nextX = originX + ((pointer.clientX - start.x) / (stageW * canvasZoom)) * 100;
-      const nextY = originY + ((pointer.clientY - start.y) / (stageH * canvasZoom)) * 100;
-      position = {
-        x: `${clampNumber(nextX, OV1_COORD_MIN, OV1_COORD_MAX)}%`,
-        y: `${clampNumber(nextY, OV1_COORD_MIN, OV1_COORD_MAX)}%`
-      };
-      if (Math.abs(pointer.clientX - start.x) < 3 && Math.abs(pointer.clientY - start.y) < 3) return;
-      moved = true;
-      const draftNodes = laidOut.map((item) => (
-        item.id === nodeId ? { ...item, x: position.x, y: position.y } : item
-      ));
-      applyLiveWorldLayout(stage, draftNodes);
-      shell.dataset.logicalX = position.x;
-      shell.dataset.logicalY = position.y;
-      refreshEdges();
+    const applyPointer = (pointer) => {
+      if (!pointer || !Number.isFinite(pointer.clientX) || !Number.isFinite(pointer.clientY)) return;
+      const ww = Math.max(world.offsetWidth, 1);
+      const wh = Math.max(world.offsetHeight, 1);
+      const nextLeft = originLeft + ((pointer.clientX - start.x) / (ww * canvasZoom)) * 100;
+      const nextTop = originTop + ((pointer.clientY - start.y) / (wh * canvasZoom)) * 100;
+      element.style.left = `${nextLeft}%`;
+      element.style.top = `${nextTop}%`;
+      const logical = worldCssToLogical(nextLeft, nextTop, world);
+      element.dataset.logicalX = logical.x;
+      element.dataset.logicalY = logical.y;
     };
 
-    const finish = (pointer, cancelled = false) => {
+    const move = (pointer) => {
+      lastPointer = pointer;
+      if (!moved && Math.hypot(pointer.clientX - start.x, pointer.clientY - start.y) < 3) return;
+      moved = true;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        applyPointer(lastPointer);
+        refreshEdges();
+      });
+    };
+
+    const finish = (pointer) => {
+      if (settled) return;
+      settled = true;
+      if (frame) cancelAnimationFrame(frame);
       cleanup();
-      if (cancelled || !moved) {
-        const state = getState();
-        state.ov6bSelectedStateId = nodeId;
-        state.ov6bSelectedTransitionId = "";
+      const state = getState();
+      state.ov6bSelectedStateId = nodeId;
+      state.ov6bSelectedTransitionId = "";
+      state.ov6bToolsOpen = true;
+      state.ov6bEditorOpen = true;
+      state.stateMachineChatOpen = false;
+      if (!moved) {
         render();
         return;
       }
-      move(pointer);
-      const state = getState();
+      applyPointer((pointer?.type === "pointerup" ? pointer : lastPointer) || pointer);
       const model = resolveDodafProduct(state, "ov6b").model;
-      const next = updateOv6bState(model, machine.id, nodeId, { x: position.x, y: position.y });
-      state.ov6bSelectedStateId = nodeId;
+      const next = updateOv6bCanvasLayout(model, machine.id, {
+        canvasLayout: "manual",
+        positions: collectWorldNodePositions(stage)
+      });
       persistModel(next, "状态位置已更新");
     };
 
-    const cancel = (pointer) => finish(pointer, true);
     const cleanup = () => {
+      element.classList.remove("is-dragging");
+      element.querySelector(".sm-flow-node")?.classList.remove("is-dragging");
       element.removeEventListener("pointermove", move);
       element.removeEventListener("pointerup", finish);
-      element.removeEventListener("pointercancel", cancel);
+      element.removeEventListener("pointercancel", finish);
+      element.removeEventListener("lostpointercapture", finish);
       element.releasePointerCapture?.(event.pointerId);
     };
     element.addEventListener("pointermove", move);
     element.addEventListener("pointerup", finish);
-    element.addEventListener("pointercancel", cancel);
+    element.addEventListener("pointercancel", finish);
+    element.addEventListener("lostpointercapture", finish);
+  }
+
+  function startPaletteDrag(event, board, stage, world, element) {
+    if (event.button !== 0 || !event.isPrimary) return;
+    if (element.disabled) return;
+    const tool = element.dataset.smPalette;
+    if (tool === "delete") return;
+    const machine = currentMachine();
+    if (!machine) {
+      notify("请先选择状态机");
+      return;
+    }
+
+    const start = { x: event.clientX, y: event.clientY };
+    let moved = false;
+    let settled = false;
+    let ghost = null;
+    let lastPointer = event;
+    let sourceId = "";
+    element.setPointerCapture?.(event.pointerId);
+
+    const updateHover = (pointer) => {
+      lastPointer = pointer;
+      const overCanvas = isPointerOverCanvas(pointer, stage);
+      stage?.classList.toggle("is-palette-target", overCanvas);
+      board?.classList.toggle("is-palette-target", overCanvas);
+      if (tool === "transition") {
+        const hoverId = nodeIdAtPoint(pointer);
+        if (!sourceId && hoverId) sourceId = hoverId;
+        stage?.querySelectorAll(".is-link-hover, .is-link-source").forEach((el) => {
+          el.classList.remove("is-link-hover", "is-link-source");
+        });
+        if (sourceId) resolveNodeElement(stage, sourceId)?.classList.add("is-link-source");
+        if (hoverId && hoverId !== sourceId) resolveNodeElement(stage, hoverId)?.classList.add("is-link-hover");
+      }
+      if (ghost) {
+        ghost.style.left = `${pointer.clientX}px`;
+        ghost.style.top = `${pointer.clientY}px`;
+        ghost.classList.toggle("is-over-canvas", overCanvas);
+      }
+    };
+
+    const move = (pointer) => {
+      if (!moved && Math.hypot(pointer.clientX - start.x, pointer.clientY - start.y) < 5) return;
+      if (!moved) {
+        moved = true;
+        event.preventDefault();
+        element.classList.add("is-palette-dragging");
+        ghost = createPaletteGhost(tool);
+        document.body.appendChild(ghost);
+      }
+      updateHover(pointer);
+    };
+
+    const finish = (pointer) => {
+      if (settled) return;
+      settled = true;
+      const finalPointer = pointer?.type === "pointerup" ? pointer : lastPointer;
+      cleanup();
+      if (!moved) return;
+      suppressNextClick(element);
+      if (tool === "transition") {
+        const targetId = nodeIdAtPoint(finalPointer);
+        if (!sourceId || !targetId || sourceId === targetId) {
+          notify("请从起始状态拖到另一个状态");
+          return;
+        }
+        dropPaletteTransition(machine, sourceId, targetId);
+        return;
+      }
+      if (!isPointerOverCanvas(finalPointer, stage) || !world) return;
+      dropPaletteState(tool, finalPointer, world, machine);
+    };
+
+    const cleanup = () => {
+      element.classList.remove("is-palette-dragging");
+      board?.classList.remove("is-palette-target");
+      stage?.classList.remove("is-palette-target");
+      stage?.querySelectorAll(".is-link-hover, .is-link-source").forEach((el) => {
+        el.classList.remove("is-link-hover", "is-link-source");
+      });
+      ghost?.remove();
+      ghost = null;
+      element.removeEventListener("pointermove", move);
+      element.removeEventListener("pointerup", finish);
+      element.removeEventListener("pointercancel", finish);
+      element.releasePointerCapture?.(event.pointerId);
+    };
+
+    element.addEventListener("pointermove", move);
+    element.addEventListener("pointerup", finish);
+    element.addEventListener("pointercancel", finish);
+  }
+
+  function dropPaletteState(tool, pointer, world, machine) {
+    const kind = tool === "decision" ? "decision" : "normal";
+    const logical = pointerToLogical(pointer, world);
+    const state = getState();
+    const model = resolveDodafProduct(state, "ov6b").model;
+    const priorIds = new Set((machine.states || []).map((item) => item.id));
+    const next = addOv6bState(model, machine.id, {
+      kind,
+      x: logical.x,
+      y: logical.y,
+      insertTransitionId: kind === "decision" ? state.ov6bSelectedTransitionId : ""
+    });
+    const created = (next.stateMachines || []).find((item) => item.id === machine.id)
+      ?.states?.find((item) => !priorIds.has(item.id));
+    const placed = created
+      ? updateOv6bCanvasLayout(next, machine.id, {
+        canvasLayout: "manual",
+        positions: [{ id: created.id, x: logical.x, y: logical.y }]
+      })
+      : next;
+    if (created) state.ov6bSelectedStateId = created.id;
+    state.ov6bSelectedTransitionId = "";
+    state.ov6bToolsOpen = true;
+    state.ov6bEditorOpen = true;
+    state.stateMachineChatOpen = false;
+    persistModel(placed, kind === "decision" ? "已放置判定框" : "已放置中间态");
+  }
+
+  function dropPaletteTransition(machine, sourceId, targetId) {
+    const exists = (machine.transitions || []).some(
+      (item) => item.fromStateRef === sourceId && item.toStateRef === targetId
+    );
+    if (exists) {
+      notify("该转换已存在");
+      return;
+    }
+    const state = getState();
+    const model = resolveDodafProduct(state, "ov6b").model;
+    const next = addOv6bTransition(model, machine.id, {
+      fromStateRef: sourceId,
+      toStateRef: targetId,
+      condition: "新转换条件"
+    });
+    state.ov6bSelectedTransitionId = next._createdTransitionId || "";
+    state.ov6bSelectedStateId = "";
+    state.ov6bToolsOpen = true;
+    state.ov6bEditorOpen = true;
+    state.stateMachineChatOpen = false;
+    persistModel(next, "已建立状态转换");
   }
 }
 
@@ -358,27 +530,29 @@ function fitCameraToWorld(stage, world) {
   shouldFitCamera = false;
 }
 
-function applyLiveWorldLayout(stage, nodes) {
+function collectWorldNodePositions(stage) {
   const world = stage.querySelector("[data-ov1-world]");
-  if (!world) return;
-  const bounds = computeOv1WorldBounds(nodes);
-  world.style.width = `${bounds.widthPct}%`;
-  world.style.height = `${bounds.heightPct}%`;
-  world.dataset.worldMinX = String(bounds.minX);
-  world.dataset.worldMinY = String(bounds.minY);
-  world.dataset.worldWidth = String(bounds.width);
-  world.dataset.worldHeight = String(bounds.height);
-  const byId = new Map(nodes.map((node) => [node.id, node]));
-  stage.querySelectorAll("[data-ov1-node]").forEach((el) => {
-    const id = el.dataset.ov1Node;
-    const node = byId.get(id);
-    if (!node) return;
-    const css = logicalToWorldCss(node.x, node.y, bounds);
-    el.style.left = css.left;
-    el.style.top = css.top;
-    el.dataset.logicalX = String(node.x);
-    el.dataset.logicalY = String(node.y);
-  });
+  return [...stage.querySelectorAll("[data-ov1-node]")].map((el) => {
+    const left = Number.parseFloat(el.style.left);
+    const top = Number.parseFloat(el.style.top);
+    const logical = Number.isFinite(left) && Number.isFinite(top)
+      ? worldCssToLogical(left, top, world)
+      : { x: el.dataset.logicalX || "50%", y: el.dataset.logicalY || "50%" };
+    return { id: el.dataset.ov1Node, x: logical.x, y: logical.y };
+  }).filter((item) => item.id);
+}
+
+function worldCssToLogical(leftPct, topPct, world) {
+  const minX = Number.parseFloat(world?.dataset.worldMinX);
+  const minY = Number.parseFloat(world?.dataset.worldMinY);
+  const width = Number.parseFloat(world?.dataset.worldWidth);
+  const height = Number.parseFloat(world?.dataset.worldHeight);
+  const x = (Number.isFinite(minX) ? minX : 0) + (leftPct / 100) * (Number.isFinite(width) && width > 0 ? width : 100);
+  const y = (Number.isFinite(minY) ? minY : 0) + (topPct / 100) * (Number.isFinite(height) && height > 0 ? height : 100);
+  return {
+    x: `${clampNumber(x, OV1_COORD_MIN, OV1_COORD_MAX)}%`,
+    y: `${clampNumber(y, OV1_COORD_MIN, OV1_COORD_MAX)}%`
+  };
 }
 
 function refreshConceptEdges(stage) {
@@ -419,6 +593,47 @@ function resolveNodeElement(stage, id) {
   if (!id) return null;
   return stage.querySelector(`[data-ov1-node="${CSS.escape(id)}"]`)
     || stage.querySelector(`[data-ov1="${CSS.escape(id)}"]`);
+}
+
+function isPointerOverCanvas(pointer, stage) {
+  if (!pointer || !stage) return false;
+  const rect = stage.getBoundingClientRect();
+  return pointer.clientX >= rect.left
+    && pointer.clientX <= rect.right
+    && pointer.clientY >= rect.top
+    && pointer.clientY <= rect.bottom;
+}
+
+function nodeIdAtPoint(pointer) {
+  const under = document.elementFromPoint(pointer.clientX, pointer.clientY);
+  const node = under?.closest?.("[data-ov1-node], [data-ov1]");
+  return node?.dataset?.ov1Node || node?.dataset?.ov1 || "";
+}
+
+function pointerToLogical(pointer, world) {
+  if (!world) return { x: "50%", y: "50%" };
+  const rect = world.getBoundingClientRect();
+  const leftPct = ((pointer.clientX - rect.left) / Math.max(rect.width, 1)) * 100;
+  const topPct = ((pointer.clientY - rect.top) / Math.max(rect.height, 1)) * 100;
+  return worldCssToLogical(leftPct, topPct, world);
+}
+
+function createPaletteGhost(tool) {
+  const ghost = document.createElement("div");
+  ghost.className = `sm-palette-ghost kind-${tool === "decision" ? "decision" : tool === "transition" ? "transition" : "normal"}`;
+  ghost.textContent = tool === "decision" ? "判定" : tool === "transition" ? "转换" : "状态";
+  ghost.setAttribute("aria-hidden", "true");
+  return ghost;
+}
+
+function suppressNextClick(element) {
+  const block = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    element.removeEventListener("click", block, true);
+  };
+  element.addEventListener("click", block, true);
+  window.setTimeout(() => element.removeEventListener("click", block, true), 400);
 }
 
 /**

@@ -389,12 +389,13 @@ export function applyRuleChangeSet(current = {}, changeSet = {}, changeId = "") 
   if (!selected.length) return base;
   let rules = [...(base.rules || [])];
   selected.forEach((change) => {
+    const phaseBindings = (change.rule?.phaseRefs || []).map((phaseRef) => ({ phaseRef }));
     if (change.action === "add") {
       const id = uniqueRuleId(rules, change.rule.id);
-      rules.push({ ...change.rule, id, activityBindings: [] });
+      rules.push({ ...change.rule, id, phaseBindings, activityBindings: [] });
     } else if (change.action === "revise") {
       const index = rules.findIndex((rule) => rule.id === change.ruleId);
-      if (index >= 0) rules[index] = { ...rules[index], ...change.rule, id: rules[index].id, activityBindings: rules[index].activityBindings || [] };
+      if (index >= 0) rules[index] = { ...rules[index], ...change.rule, id: rules[index].id, phaseBindings, activityBindings: rules[index].activityBindings || [] };
     } else if (change.action === "retire") {
       rules = rules.filter((rule) => rule.id !== change.ruleId);
     }
@@ -430,7 +431,10 @@ function normalizeRuleChangeSet(draft = {}, source, fingerprint) {
       id: String(change?.id || `rule-change-${Date.now().toString(36)}-${index + 1}`),
       action: ["add", "revise", "retire"].includes(change?.action) ? change.action : "add",
       ruleId: String(change?.ruleId || ""),
-      rule: change?.rule || {},
+      rule: {
+        ...(change?.rule || {}),
+        phaseRefs: source === "phase-action" ? (change?.rule?.phaseRefs || []).map(String).filter(Boolean).slice(0, 24) : []
+      },
       rationale: String(change?.rationale || "").slice(0, 800),
       status: "pending"
     }))
@@ -465,7 +469,13 @@ function buildRuleChangeAnalysis(state, current, source) {
 
 export function ensurePhaseRuleCoverage(draft = {}, analysis = {}) {
   const phases = Array.isArray(analysis.phaseAction) ? analysis.phaseAction : [];
-  const incoming = Array.isArray(draft.changes) ? [...draft.changes] : [];
+  const phaseIds = new Set(phases.map((phase) => String(phase?.id || "")).filter(Boolean));
+  const incoming = (Array.isArray(draft.changes) ? draft.changes : []).map((change) => {
+    const explicit = (change?.rule?.phaseRefs || []).map(String).filter((ref) => phaseIds.has(ref));
+    const scope = String(change?.rule?.scope || "");
+    const inferred = phases.map((phase) => String(phase?.id || "")).filter((phaseId) => phaseId && (scope.includes(`（${phaseId}）`) || scope.includes(`(${phaseId})`)));
+    return { ...change, rule: { ...(change?.rule || {}), phaseRefs: [...new Set([...explicit, ...inferred])] } };
+  });
   const covered = (phaseId, kind) => incoming.some((change) => {
     const scope = String(change?.rule?.scope || "");
     if (!scope.includes(`（${phaseId}）`) && !scope.includes(`(${phaseId})`)) return false;
@@ -484,13 +494,13 @@ export function ensurePhaseRuleCoverage(draft = {}, analysis = {}) {
     if (entry && !covered(phaseId, "entry")) {
       incoming.push({ id: `phase-entry-${phaseId}`, action: "add", ruleId: "", rule: {
         id: `rule-phase-entry-${phaseId}`, name: `${phaseName}进入条件`, type: "前置条件", scope,
-        description: `仅当“${entry}”已被观察并确认时，方可进入${phaseName}；未满足时保持当前阶段并记录待决条件。`
+        description: `仅当“${entry}”已被观察并确认时，方可进入${phaseName}；未满足时保持当前阶段并记录待决条件。`, phaseRefs: [phaseId]
       }, rationale: `依据阶段 ${phaseId} 的 entryConditions。` });
     }
     if ((exit || effects) && !covered(phaseId, "exit")) {
       incoming.push({ id: `phase-exit-${phaseId}`, action: "add", ruleId: "", rule: {
         id: `rule-phase-exit-${phaseId}`, name: `${phaseName}退出判据`, type: "转换条件", scope,
-        description: `完成“${actions || phase?.objective || "本阶段主要行动"}”后，应确认“${exit || effects}”${exit && effects ? `并复核预期效果“${effects}”` : ""}，满足后方可退出或转入后续阶段。`
+        description: `完成“${actions || phase?.objective || "本阶段主要行动"}”后，应确认“${exit || effects}”${exit && effects ? `并复核预期效果“${effects}”` : ""}，满足后方可退出或转入后续阶段。`, phaseRefs: [phaseId]
       }, rationale: `依据阶段 ${phaseId} 的 primaryActions、exitConditions 和 expectedEffects。` });
     }
   });

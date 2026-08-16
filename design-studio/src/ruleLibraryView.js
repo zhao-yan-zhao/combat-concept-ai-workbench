@@ -4,7 +4,6 @@
  */
 import { resolveDodafProduct } from "./dodafProductStore.js";
 import { renderProjectStorageActions } from "./projectStorageView.js";
-import { renderPhaseChainGuide } from "./phaseChainGuide.js";
 import {
   renderResearchChatFloatButton,
   renderResearchChatPanel
@@ -21,13 +20,12 @@ export function renderRuleLibrary(state = {}) {
   const pregenerating = Boolean(state.ruleLibraryPregenerating);
   const changeGenerating = Boolean(state.ruleLibraryChangeGenerating);
   const changeSet = model.ruleChangeSet;
+  const phaseNames = new Map((state.phaseAction?.phases || []).map((phase) => [String(phase.id || ""), String(phase.name || phase.id || "阶段")]));
   const chatOpen = Boolean(state.ruleLibraryChatOpen);
   const busy = chatGenerating || pregenerating || changeGenerating;
   const hasRules = rules.length > 0;
 
   return `<section class="rule-library-page is-form-mode ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}${pregenerating ? " is-pregenerating" : ""}" data-view-page="rule-library" data-dodaf-product="OV-6a">
-    ${renderPhaseChainGuide(state, "ov6a")}
-
     <header class="rule-library-top">
       <div class="rule-library-bar">
         <div class="rule-library-identity">
@@ -44,13 +42,13 @@ export function renderRuleLibrary(state = {}) {
           <button type="button" class="quiet-button" data-view="phase-action" ${busy ? "disabled" : ""}>下一步</button>
         </div>
       </div>
-      ${renderRuleChangeSet(changeSet, { busy })}
+      ${renderRuleChangeSet(changeSet, { busy, phaseNames })}
     </header>
 
     <div class="rule-library-workbench ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}" aria-label="规则库研究台">
       <div class="rule-form-board" aria-label="规则表单列表">
         ${hasRules
-    ? `<div class="rule-form-list">${rules.map((rule, index) => renderRuleForm(rule, index + 1, { busy })).join("")}</div>
+    ? `<div class="rule-form-list">${rules.map((rule, index) => renderRuleForm(rule, index + 1, { busy, phaseNames })).join("")}</div>
         <div class="rule-form-footer">
           <button type="button" class="rule-library-add" data-action="ov6a-add-rule" ${busy ? "disabled" : ""}>＋ 新增规则</button>
         </div>`
@@ -68,7 +66,7 @@ export function renderRuleLibrary(state = {}) {
   </section>`;
 }
 
-function renderRuleChangeSet(changeSet, { busy = false } = {}) {
+function renderRuleChangeSet(changeSet, { busy = false, phaseNames = new Map() } = {}) {
   const changes = Array.isArray(changeSet?.changes) ? changeSet.changes : [];
   const pending = changes.filter((change) => change.status === "pending");
   if (!pending.length) return "";
@@ -81,6 +79,7 @@ function renderRuleChangeSet(changeSet, { busy = false } = {}) {
     ${changeSet.summary ? `<p class="planning-meta">${escapeHtml(changeSet.summary)}</p>` : ""}
     <div class="rule-change-list">${pending.map((change) => `<article class="rule-change-row">
       <div><span class="mini-tag review">${escapeHtml(change.action === "add" ? "新增" : change.action === "revise" ? "修订" : "废止")}</span> <strong>${escapeHtml(change.rule?.name || change.ruleId || "规则")}</strong>
+        ${renderPhaseBindingTags(change.rule?.phaseRefs, phaseNames, "拟绑定")}
         <p>${escapeHtml(change.rationale || change.rule?.description || "请复核此建议")}</p></div>
       <div class="rule-change-actions"><button type="button" class="quiet-button" data-action="ov6a-ignore-change" data-change-id="${escapeHtml(change.id)}" ${busy ? "disabled" : ""}>忽略</button><button type="button" class="primary-btn" data-action="ov6a-apply-change" data-change-id="${escapeHtml(change.id)}" ${busy ? "disabled" : ""}>采纳</button></div>
     </article>`).join("")}</div>
@@ -123,7 +122,7 @@ function renderRuleLibraryChatPanel({ chat, chatGenerating, rules, model }) {
   });
 }
 
-function renderRuleForm(rule, ordinal, { busy = false } = {}) {
+function renderRuleForm(rule, ordinal, { busy = false, phaseNames = new Map() } = {}) {
   const typeOptions = RULE_TYPES.map((type) => {
     const current = rule.type || "约束";
     const selected = current === type || (!RULE_TYPES.includes(current) && type === "其他");
@@ -131,12 +130,18 @@ function renderRuleForm(rule, ordinal, { busy = false } = {}) {
   }).join("");
   return `<article class="rule-form-card rule-form-row" data-rule-id="${escapeHtml(rule.id)}">
     <span class="rule-form-ordinal" aria-label="规则 ${ordinal}">${ordinal}</span>
-    <label class="rule-form-field rule-form-name"><span class="sr-only">规则名称</span><input aria-label="规则名称" data-dodaf-field="ov6a.rule.${escapeHtml(rule.id)}.name" value="${escapeHtml(rule.name || rule.subject || "")}" placeholder="规则名称" ${busy ? "disabled" : ""} /></label>
+    <label class="rule-form-field rule-form-name"><span class="sr-only">规则名称</span><input aria-label="规则名称" data-dodaf-field="ov6a.rule.${escapeHtml(rule.id)}.name" value="${escapeHtml(rule.name || rule.subject || "")}" placeholder="规则名称" ${busy ? "disabled" : ""} />${renderPhaseBindingTags((rule.phaseBindings || []).map((binding) => binding.phaseRef), phaseNames, "阶段")}</label>
     <label class="rule-form-field rule-form-type"><span class="sr-only">类型</span><select aria-label="规则类型" data-dodaf-field="ov6a.rule.${escapeHtml(rule.id)}.type" ${busy ? "disabled" : ""}>${typeOptions}</select></label>
     <label class="rule-form-field rule-form-scope"><span class="sr-only">作用范围</span><input aria-label="作用范围" data-dodaf-field="ov6a.rule.${escapeHtml(rule.id)}.scope" value="${escapeHtml(rule.scope || "")}" placeholder="作用范围" ${busy ? "disabled" : ""} /></label>
     <label class="rule-form-field rule-form-description"><span class="sr-only">规则描述</span><input aria-label="规则描述" data-dodaf-field="ov6a.rule.${escapeHtml(rule.id)}.description" value="${escapeHtml(rule.description || rule.text || "")}" placeholder="规则描述" ${busy ? "disabled" : ""} /></label>
     <button type="button" class="quiet-button danger-quiet" data-action="ov6a-delete-rule" data-rule-id="${escapeHtml(rule.id)}" ${busy ? "disabled" : ""} aria-label="删除规则 ${ordinal}" title="删除规则">删除</button>
   </article>`;
+}
+
+function renderPhaseBindingTags(refs = [], phaseNames = new Map(), prefix = "阶段") {
+  const unique = [...new Set((refs || []).map(String).filter(Boolean))];
+  if (!unique.length) return "";
+  return `<span class="rule-phase-bindings" aria-label="${escapeHtml(prefix)}阶段">${unique.map((ref) => `<span class="mini-tag">${escapeHtml(prefix)}：${escapeHtml(phaseNames.get(ref) || ref)}</span>`).join("")}</span>`;
 }
 
 function renderEmptyBoard({ busy = false, pregenerating = false } = {}) {

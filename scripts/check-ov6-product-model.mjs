@@ -27,6 +27,7 @@ const unbound = normalizeDodafOv6a({
 assert(unbound.version === 2, "OV-6a should normalize to version 2");
 assert(unbound.rules[0].name === "链路可用" && unbound.rules[0].description.includes("通信"), "OV-6a v2 rule fields missing");
 assert(unbound.rules[0].activityBindings.length === 0, "Unbound rule must allow empty activityBindings");
+assert(unbound.rules[0].phaseBindings.length === 0, "Global rule must allow empty phaseBindings");
 assert(unbound.rules[0].reviewStatus === "pending-validation", "Unbound rule status must be pending-validation");
 assert(unbound.rules[0].reviewLabel === "待校验", "Unbound rule label must be 待校验");
 assert(ov6aRuleReviewStatus(unbound.rules[0]) === "pending-validation", "Helper status mismatch");
@@ -40,6 +41,13 @@ const legacyRule = normalizeDodafOv6a({
 assert(legacyRule.rules[0].name === "感知", "Legacy subject maps to name");
 assert(legacyRule.rules[0].activityBindings[0]?.activityRef === "activity-007", "Legacy activityId becomes binding");
 assert(legacyRule.rules[0].activityBindings[0]?.bindingStatus === "pending", "Legacy binding starts pending");
+
+const phaseBoundRule = normalizeDodafOv6a({ rules: [{
+  id: "phase-rule", name: "阶段进入条件", description: "条件满足后进入", scope: "阶段：准备（phase-1）",
+  phaseBindings: [{ phaseRef: "phase-1" }]
+}] });
+assert(phaseBoundRule.rules[0].phaseBindings[0]?.phaseRef === "phase-1", "Rule must preserve structured phase binding");
+assert(phaseBoundRule.relations.some((relation) => relation.dm2Type === "appliesDuring" && relation.targetId === "phase-1"), "Phase binding must export as appliesDuring relation");
 
 const verified = normalizeDodafOv6a({
   rules: [{
@@ -108,6 +116,22 @@ const multi = normalizeDodafOv6b({
   ]
 });
 assert(multi.version === 2 && multi.stateMachines.length === 2, "OV-6b must keep multiple state machines");
+assert(multi.stateMachines[0].canvasLayout === "auto", "State machines default to automatic canvas layout");
+const remappedPhase = normalizeDodafOv6b({
+  stateMachines: [{
+    id: "sm-phase",
+    subjectRef: "p1::action-1",
+    subjectType: "task",
+    name: "汇聚态势状态机",
+    states: [
+      { id: "ps", name: "开始", kind: "initial" },
+      { id: "pm", name: "执行", kind: "normal" },
+      { id: "pe", name: "结束", kind: "final" }
+    ],
+    transitions: []
+  }]
+});
+assert(remappedPhase.stateMachines[0].subjectType === "phase", "Phase-action subjectRef must normalize to 阶段机");
 assert(multi.stateMachines[0].transitions[0].ruleRefs.includes("rule-001"), "Transitions keep ruleRefs");
 assert(multi.states.length === 6 && multi.transitions.length >= 2, "Flat states/transitions retained for UI");
 assert(multi.diagnostics.some((item) => item.id === "state-machines"), "Machine-level diagnostic present");
@@ -163,6 +187,8 @@ const sequence = normalizeDodafOv6c({
         name: "态势上报",
         type: "message",
         condition: "窗口打开",
+        offsetMinutes: 12,
+        durationMinutes: 18,
         relatedActivityRefs: ["activity-007"],
         ruleRefs: ["rule-001"],
         stateTransitionRefs: ["t1"]
@@ -182,6 +208,7 @@ const sequence = normalizeDodafOv6c({
 assert(sequence.version === 2 && sequence.sequences.length === 1, "OV-6c sequences present");
 assert(sequence.sequences[0].messages[0].sequence === 1 && sequence.sequences[0].messages[0].name === "任务授权", "Messages re-sorted by sequence");
 assert(sequence.sequences[0].messages[1].relatedActivityRefs.includes("activity-007"), "Message keeps activity links");
+assert(sequence.sequences[0].messages[1].offsetMinutes === 12 && sequence.sequences[0].messages[1].durationMinutes === 18, "Message keeps gantt start/duration");
 assert(sequence.events.length === 2 && sequence.events[0].title, "Flattened events for table UI");
 assert(sequence.sequences[0].fragments[0].kind === "alt", "Fragments preserved");
 
@@ -193,6 +220,14 @@ const legacyC = normalizeDodafOv6c({
 assert(legacyC.sequences[0].id === "sequence-legacy", "Legacy events become one sequence");
 assert(legacyC.events[0].title === "旧事件" && legacyC.sequences[0].participants.length >= 1, "Legacy participants inferred");
 
+const clearedSequences = normalizeDodafOv6c({
+  sequences: [],
+  // Flat aliases can remain in a cloned prior model; they must not revive a deleted sequence.
+  events: [{ id: "old-e1", sequence: 1, title: "旧事件", sourceNodeId: "node-a" }]
+});
+assert(clearedSequences.sequences.length === 0, "Explicitly cleared sequences must not revive as a legacy sequence");
+assert(clearedSequences.events.length === 0, "Cleared sequences must not keep flattened leftover events");
+
 const htmlC = renderOv6c({
   ov6c: sequence,
   ov6cStorage: { status: "ready", mode: "local", label: "事件序列" },
@@ -203,7 +238,8 @@ const htmlC = renderOv6c({
 assert(
   (htmlC.includes("幅") || htmlC.includes("seq-page"))
     && htmlC.includes("关键协同序列")
-    && htmlC.includes("生命线"),
+    && htmlC.includes("生命线")
+    && htmlC.includes("seq-gantt"),
   "OV-6c UI mentions sequence model"
 );
 

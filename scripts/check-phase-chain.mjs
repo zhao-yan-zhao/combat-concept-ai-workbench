@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { views, workflowPrimaryStepIds, workflowTracks } from "../design-studio/src/data.js";
-import { renderPhaseChainGuide } from "../design-studio/src/phaseChainGuide.js";
 import { renderPhaseAction } from "../design-studio/src/phaseActionView.js";
 import { renderOv6a } from "../design-studio/src/dodafOperationalViews.js";
 import { normalizeDodafOv6a } from "../shared/dodaf/products.js";
@@ -25,8 +24,6 @@ const emptyPhase = {
   phaseActionStorage: { stale: false },
   ov6a: normalizeDodafOv6a({ rules: [] })
 };
-const guideBefore = renderPhaseChainGuide(emptyPhase, "ov6a");
-assert(guideBefore.includes("phase-chain-fab") && guideBefore.includes("toggle-phase-chain-guide") && guideBefore.includes("规则库"), "Phase chain should render as floating ball with rule-library step");
 
 const confirmedPhase = {
   activeView: "ov6a",
@@ -42,18 +39,17 @@ const confirmedPhase = {
   phaseActionStorage: { stale: false },
   ov6a: normalizeDodafOv6a({ rules: [{ id: "r1", name: "规则", description: "d" }] })
 };
-const guideBind = renderPhaseChainGuide({ ...confirmedPhase, phaseChainGuideOpen: true }, "ov6a");
-assert(guideBind.includes("绑定校验") && guideBind.includes("is-open"), "Post-phase open panel should highlight binding step");
 
 const phasePage = renderPhaseAction({
   ...confirmedPhase,
   combatFocus: { status: "confirmed", options: [], selectedIds: [] },
   phaseActionFocusId: "p1"
 });
-assert(phasePage.includes("phase-chain-fab") && phasePage.includes("阶段行动链"), "Phase page must host floating chain ball");
+assert(!phasePage.includes("phase-chain-fab") && !phasePage.includes("阶段行动链"), "Phase page must not host the removed chain ball");
+assert(phasePage.includes("phase-action-page"), "Phase page must still render");
 
 const rulePage = renderOv6a({ ...confirmedPhase, activeView: "ov6a", ov6aStorage: {} });
-assert(rulePage.includes("phase-chain-fab") && rulePage.includes("规则库"), "Rule page must host floating chain ball");
+assert(!rulePage.includes("phase-chain-fab") && !rulePage.includes("toggle-phase-chain-guide"), "Rule page must not host the removed chain ball");
 assert(rulePage.includes("rule-form-board") && !rulePage.includes("ov6a-toggle-binding"), "Rule library stays form-only without binding options");
 
 // Brief → rule library pregenerate path (static wiring).
@@ -80,6 +76,9 @@ assert(ruleCtrl.includes("state.ov6a && Array.isArray(state.ov6a.rules)"), "Preg
 assert(ruleCtrl.includes("isRuleAddRequest") && ruleCtrl.includes("applyChatDraftToLibrary") && ruleCtrl.includes("createLocalMutationDraft"), "Chat add-rules must write form, not advice-only");
 assert(openaiClient.includes("maxItems: 240") && !openaiClient.includes("4～12 条为宜"), "AI schema must not cap rules at 4–12");
 assert(openaiClient.includes("addOnlyRequest") && openaiClient.includes("禁止只给文字建议"), "AI prompt must force non-empty rules on add requests");
+assert(openaiClient.includes("若研究人员要求生成/增删改状态机") && openaiClient.includes("analysis.currentMachines"), "State-machine chat prompt must force draft machines on mutation requests");
+assert(openaiClient.includes("subjectType 必须为 phase") || openaiClient.includes("subjectType=phase") || openaiClient.includes("phase|task|force|object"), "State-machine prompt must allow phase machines from phase-action generation");
+assert(openaiClient.includes("timeWindow") && openaiClient.includes("redActions") && openaiClient.includes("不得为红方行动另建状态机"), "State-machine prompt must use phase time windows and red actions as generation context");
 
 // Chat “新增三条…” must append without wiping existing library.
 const {
@@ -107,6 +106,9 @@ const coveredPhaseRules = ensurePhaseRuleCoverage({ summary: "AI only returned o
 assert(coveredPhaseRules.changes.length >= 4, "Phase rule coverage must not collapse multiple phases into one rule");
 assert(coveredPhaseRules.changes.some((item) => item.rule.scope.includes("准备阶段") && item.rule.type === "前置条件"), "Each phase needs an entry rule using its own content");
 assert(coveredPhaseRules.changes.some((item) => item.rule.scope.includes("实施阶段") && item.rule.type === "转换条件"), "Each phase needs an exit/effect rule using its own content");
+assert(coveredPhaseRules.changes.filter((item) => item.rule.scope.includes("准备阶段")).every((item) => item.rule.phaseRefs.includes("phase-1")), "Phase rules must carry structured phase refs");
+const ruleViewJs = readFileSync(join(root, "design-studio/src/ruleLibraryView.js"), "utf8");
+assert(ruleViewJs.includes("rule-phase-bindings") && ruleViewJs.includes('renderPhaseBindingTags(change.rule?.phaseRefs') && ruleViewJs.includes('renderPhaseBindingTags((rule.phaseBindings || [])'), "Rule review UI must expose proposed and accepted phase bindings");
 
 // Local pregenerate must not turn process text into rule titles like “首次按简报完整库规则1”.
 const { generateMockOutput } = await import("../shared/generator.js");
@@ -137,4 +139,4 @@ const pregenPage = renderOv6a({
 });
 assert(pregenPage.includes("is-pregenerating") && pregenPage.includes("正在根据简报起草规则"), "Rule library empty state must show pregenerate animation");
 
-console.log("Phase chain acceptance passed: order, guides, post-confirm binding path, brief→rules pregenerate.");
+console.log("Phase chain acceptance passed: order, no floating chain ball, brief→rules pregenerate.");

@@ -104,7 +104,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         '    "fragments": [] }] }'
       ] : isStateMachineDraft ? [
         '{ "summary": "1-3 句中文说明",',
-        '  "stateMachines": [{ "id": "machine-subject-1", "subjectRef": "候选对象 id", "subjectType": "task|force|object", "name": "状态机名称",',
+        '  "stateMachines": [{ "id": "machine-subject-1", "subjectRef": "候选对象 id", "subjectType": "phase|task|force|object", "name": "状态机名称",',
         '    "states": [{ "id": "state-1", "name": "可复核状态名", "kind": "initial|normal|decision|final", "decisionExpression": "仅判定节点填写", "x": "12%", "y": "42%" }],',
         '    "transitions": [{ "id": "transition-1", "fromStateRef": "state-1", "toStateRef": "state-2", "condition": "可观察转换条件", "branchResult": "判定出边结果，否则为空", "ruleRefs": ["rule-id"] }] }] }'
       ] : isConceptGraphicPlan ? [
@@ -149,12 +149,13 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         "type 只能是：约束、前置条件、转换条件、业务规则、其他。语气克制，禁止空泛套话。"
       ] : []),
       ...(isRuleLibraryChangeSet ? [
-        "规则变更集要求：只输出可供人工审核的 changes，不得直接改写既有规则，也不得输出活动绑定或任何 OV 品牌字段。",
+        "规则变更集要求：只输出可供人工审核的 changes，不得直接改写既有规则，也不得输出活动绑定或任何 OV 品牌字段。rule.phaseRefs 仅用于绑定已提供的阶段 ID。",
         "仅依据 analysis.currentRules 和已提供的结构化上游输入提出新增、修订或废止；没有充分依据时返回 changes=[]。不得把同义改写当成新建议，不得臆造上游未提供的事实。",
-        "analysis.source=phase-action 时，仅围绕阶段名称/ID、进入退出条件、行动边界、衔接顺序和可观察效果提出建议；scope 必须能回指具体阶段或阶段间关系。",
+        "analysis.source=phase-action 时，仅围绕阶段名称/ID、进入退出条件、行动边界、衔接顺序和可观察效果提出建议；scope 必须能回指具体阶段或阶段间关系；每条规则的 phaseRefs 必须列出其直接适用的 analysis.phaseAction[].id，不得使用阶段名称代替 ID。",
         "阶段规则必须按阶段分别生成，禁止把多个阶段合并成一条笼统规则。对每个包含输入内容的阶段，至少给出：1 条前置条件（依据 entryConditions）和 1 条转换条件（依据 primaryActions、exitConditions、expectedEffects）；行动存在独立边界或约束时再给出业务规则。",
         "阶段间衔接规则只能依据 analysis.phaseTransitions 中明确提供的 fromPhaseId、toPhaseId、condition 和 note 生成；禁止仅凭阶段编号臆造衔接条件。规则名称须包含阶段名称，scope 使用“阶段：名称（ID）”或明确的两个阶段名称，description 必须引用输入中的具体条件或效果，不得只写‘应确认、应校验、可观察’等空泛套话。",
         "analysis.source=force-mission 时，仅围绕概念兵力的职责、可用性、任务交接、协同、保障及指挥授权关系提出建议；scope 必须能回指兵力或协同域。",
+        "analysis.source=force-mission 时 rule.phaseRefs 必须为空数组；不得根据兵力的 phaseIds 擅自建立规则阶段绑定。",
         "action=add 时 ruleId 为空；action=revise 或 retire 时 ruleId 必须匹配 analysis.currentRules 内已有 id。retire 只在输入明确显示规则不再适用或发生矛盾时使用。",
         "rationale 必须说明采用了哪些上游结构化字段。只生成领域通用、研究级、可观察可复核的规则；禁止真实坐标、武器运用细节、性能参数或输入之外的具体战术假设。"
       ] : []),
@@ -168,9 +169,13 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         "不要输出 OV 品牌字段；语气克制、可复核。"
       ] : []),
       ...(isStateMachineDraft ? [
-        "状态机校验要求：仅为 analysis.stateMachineSubjects 中的候选建立状态机；subjectRef 与 subjectType 必须原样匹配候选。阶段是上下文，不得为 phaseAction.phases 机械建机。",
+        "状态机校验要求：仅为 analysis.stateMachineSubjects 中的候选建立状态机；subjectRef 与 subjectType 必须原样匹配候选。来自阶段行动的候选 subjectType 必须为 phase（阶段机）；兵力/持续对象用 force；独立任务用 task。不要另为阶段容器再复制一台机。",
+        "必须使用 analysis.phaseAction.phases 与候选上的 timeWindow、blueActions、redActions：时窗约束进入/持续/退出条件；红方行动只作为对抗压力、异常或判定分支的上下文，不得为红方行动另建状态机。",
         "每台至少输出 initial、normal、final；确需分支时使用 decision，并填写 decisionExpression。判定节点至少有两个出边，每条填写明确且不重复的 branchResult（如满足/不满足）。",
         "转换只连接本机状态；condition 必须是可观察门槛；ruleRefs 只能使用 analysis.rules 已存在的 id。",
+        "若研究人员要求生成/增删改状态机：必须返回非空 stateMachines，禁止只给文字建议。可只返回被改的那一台（用 subjectRef 或 id 对齐 analysis.currentMachines），也可返回完整列表。",
+        "若 analysis.mutationRequest=false 且本轮仅为咨询：stateMachines 可返回空数组，summary 直接回答。",
+        "若 analysis.currentMachines 已有内容：优先在其上修订，不要无故换掉 subjectRef 或打散已有机。",
         "只输出研究级可复核状态，不写真实坐标、武器运用步骤或未经输入支持的战术细节。"
       ] : []),
       ...(isConceptBrief ? [
@@ -772,11 +777,12 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
   function ruleLibraryChangeSetSchema() {
     const rule = {
       type: "object", additionalProperties: false,
-      required: ["id", "name", "type", "scope", "description"],
+      required: ["id", "name", "type", "scope", "description", "phaseRefs"],
       properties: {
         id: { type: "string", maxLength: 80 }, name: { type: "string", maxLength: 120 },
         type: { type: "string", enum: ["约束", "前置条件", "转换条件", "业务规则", "其他"] },
-        scope: { type: "string", maxLength: 120 }, description: { type: "string", maxLength: 800 }
+        scope: { type: "string", maxLength: 120 }, description: { type: "string", maxLength: 800 },
+        phaseRefs: { type: "array", maxItems: 24, items: { type: "string", maxLength: 160 } }
       }
     };
     return {
@@ -805,7 +811,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
             properties: {
               id: { type: "string", maxLength: 180 },
               subjectRef: { type: "string", maxLength: 160 },
-              subjectType: { type: "string", enum: ["task", "force", "object"] },
+              subjectType: { type: "string", enum: ["phase", "task", "force", "object"] },
               name: { type: "string", maxLength: 240 },
               states: {
                 type: "array", minItems: 3, maxItems: 12,

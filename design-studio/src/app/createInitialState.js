@@ -24,6 +24,7 @@ import { loadPhaseActionChat } from "../phaseActionChatStore.js";
 import { loadForceMissionChat } from "../forceMissionChatStore.js";
 import { loadRuleLibraryChat } from "../ruleLibraryChatStore.js";
 import { loadSequenceChat } from "../sequenceChatStore.js";
+import { loadStateMachineChat } from "../stateMachineChatStore.js";
 import { loadConceptGraphic } from "../conceptGraphicStore.js";
 import { createEmptyDodafProductState, DODAF_PRODUCT_KEYS } from "../dodafProductStore.js";
 import { ensureClientStoragePurged } from "../clientStoragePurge.js";
@@ -69,6 +70,7 @@ export function createInitialWorkbenchState(activeProjectId = resolveActiveProje
   const forceMissionChat = loadForceMissionChat(activeProjectId);
   const ruleLibraryChat = loadRuleLibraryChat(activeProjectId);
   const sequenceChat = loadSequenceChat(activeProjectId);
+  const stateMachineChat = loadStateMachineChat(activeProjectId);
   const conceptGraphic = loadConceptGraphic(activeProjectId);
   const customDirections = loadCustomDirections(activeProjectId);
   const aiDirections = loadAiDirections(activeProjectId);
@@ -158,13 +160,20 @@ export function createInitialWorkbenchState(activeProjectId = resolveActiveProje
     sequenceChat,
     sequenceChatGenerating: false,
     sequenceChatOpen: false,
+    stateMachineChat,
+    stateMachineChatGenerating: false,
+    stateMachineChatOpen: false,
+    stateMachinePregenerating: false,
     ov6bSelectedMachineId: "",
     ov6bSelectedStateId: "",
     ov6bSelectedTransitionId: "",
+    ov6bEditorOpen: false,
+    ov6bToolsOpen: false,
     ov6cSelectedSequenceId: "",
     ov6cSelectedMessageId: "",
     ov6cDiagramEngine: "workbench",
     ov6cConnectFromId: "",
+    ov6cEditorOpen: false,
     conceptGraphic,
     conceptGraphicStorage: { status: "checking", mode: "local", label: "正在检查总体作战概念图", localSaved: Boolean(conceptGraphic.nodes?.length) },
     conceptGraphicGenerating: false,

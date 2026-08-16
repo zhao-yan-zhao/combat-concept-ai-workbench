@@ -1195,14 +1195,16 @@ function normalizeInspirationMessage(value) {
   };
 }
 
-/** Step research chats (phase / force / rule) persisted as one project resource. */
+/** Step research chats (phase / force / rule / sequence / state-machine) persisted as one project resource. */
 function normalizeResearchChatsModel(value) {
   const source = value && typeof value === "object" ? value : {};
   return {
     version: 1,
     phaseAction: normalizeResearchChatSessionSnapshot(source.phaseAction),
     forceMission: normalizeResearchChatSessionSnapshot(source.forceMission),
-    ruleLibrary: normalizeResearchChatSessionSnapshot(source.ruleLibrary)
+    ruleLibrary: normalizeResearchChatSessionSnapshot(source.ruleLibrary),
+    sequence: normalizeResearchChatSessionSnapshot(source.sequence),
+    stateMachine: normalizeResearchChatSessionSnapshot(source.stateMachine)
   };
 }
 
@@ -1483,7 +1485,7 @@ function getResourceDefinition(resourceKey) {
       isStale: () => false,
       summarize: (model) => {
         const count = (session) => (Array.isArray(session?.messages) ? session.messages.length : 0);
-        return `phase ${count(model?.phaseAction)} / force ${count(model?.forceMission)} / rules ${count(model?.ruleLibrary)}`;
+        return `phase ${count(model?.phaseAction)} / force ${count(model?.forceMission)} / rules ${count(model?.ruleLibrary)} / seq ${count(model?.sequence)} / sm ${count(model?.stateMachine)}`;
       }
     },
     phaseActionConcept: {

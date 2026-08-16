@@ -32,6 +32,7 @@ import {
 import {
   addOv6aRule,
   addOv6bState,
+  addOv6bDecisionBranch,
   addOv6bStateMachine,
   addOv6bTransition,
   addOv6cMessage,
@@ -85,14 +86,19 @@ const LABELS = {
 export function buildStateMachineGenerationAnalysis(state = {}) {
   const phases = Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : [];
   const phaseNames = new Map(phases.map((phase, index) => [String(phase?.id || `phase-${index + 1}`), String(phase?.name || `阶段 ${index + 1}`)]));
+  const compactActions = (value, fallback = []) => (Array.isArray(value) ? value : fallback).filter(Boolean).slice(0, 8);
   const stateMachineSubjects = listStateMachineSubjects(state).map((subject) => ({
     id: subject.id,
     name: subject.name,
+    taskName: subject.taskName || "",
     subjectType: subject.subjectType,
     phaseId: subject.phaseId || "",
     phaseName: subject.phaseName || "",
     context: subject.context || "",
     role: subject.role || "",
+    timeWindow: subject.timeWindow || "",
+    blueActions: subject.blueActions || [],
+    redActions: subject.redActions || [],
     entryConditions: subject.entryConditions || [],
     exitConditions: subject.exitConditions || [],
     expectedEffects: subject.expectedEffects || []
@@ -104,7 +110,10 @@ export function buildStateMachineGenerationAnalysis(state = {}) {
         id: String(phase?.id || `phase-${index + 1}`),
         name: String(phase?.name || `阶段 ${index + 1}`),
         objective: String(phase?.objective || ""),
-        primaryActions: (Array.isArray(phase?.primaryActions) ? phase.primaryActions : phase?.blueActions || []).filter(Boolean).slice(0, 8),
+        timeWindow: String(phase?.timeWindow || phase?.timeRange || phase?.window || "").trim(),
+        primaryActions: compactActions(phase?.primaryActions, phase?.blueActions),
+        blueActions: compactActions(phase?.blueActions, phase?.primaryActions),
+        redActions: compactActions(phase?.redActions, phase?.secondaryActions),
         entryConditions: (phase?.entryConditions || []).filter(Boolean).slice(0, 6),
         exitConditions: (phase?.exitConditions || []).filter(Boolean).slice(0, 6),
         expectedEffects: (phase?.expectedEffects || []).filter(Boolean).slice(0, 6)
@@ -124,15 +133,15 @@ export function buildStateMachineGenerationAnalysis(state = {}) {
       type: String(rule?.type || ""),
       description: String(rule?.description || "")
     })),
-    generationRequest: "为识别出的关键任务和持续运行对象生成可编辑状态机草案；阶段仅作为上下文",
-    modelingInstructions: "输出 StateMachineDraft JSON：stateMachines[] 每项对应一个 stateMachineSubjects[].id，subjectRef 和 subjectType 必须原样匹配候选。不要为阶段容器自动建机。每台至少有 initial、normal、final；确需分支时使用 decision，并给出 decisionExpression，判定出边给出不重复的 branchResult。condition 必须可观察；ruleRefs 仅可引用 analysis.rules 中的 id。只给研究级、可复核内容。"
+    generationRequest: "为阶段行动中的关键行动、独立任务和持续运行对象生成可编辑状态机草案；来自阶段行动的候选标为阶段机。阶段时窗与红方行动只作转换/异常上下文，不另建机。",
+    modelingInstructions: "输出 StateMachineDraft JSON：stateMachines[] 每项对应一个 stateMachineSubjects[].id，subjectRef 和 subjectType 必须原样匹配候选。来自阶段行动的候选 subjectType=phase。不要再为阶段容器或红方行动额外建机。阶段 timeWindow、blueActions、redActions 用于进入/退出条件和对抗分支。每台至少有 initial、normal、final；确需分支时使用 decision，并给出 decisionExpression，判定出边给出不重复的 branchResult。condition 必须可观察；ruleRefs 仅可引用 analysis.rules 中的 id。只给研究级、可复核内容。"
   };
 }
 
 export function applyStateMachineDraft(draft = {}, analysis = {}) {
   const candidates = Array.isArray(analysis?.stateMachineSubjects) && analysis.stateMachineSubjects.length
     ? analysis.stateMachineSubjects
-    : (Array.isArray(analysis?.phaseAction?.phases) ? analysis.phaseAction.phases.map((phase) => ({ ...phase, subjectType: "task" })) : []);
+    : (Array.isArray(analysis?.phaseAction?.phases) ? analysis.phaseAction.phases.map((phase) => ({ ...phase, subjectType: "phase" })) : []);
   const rules = Array.isArray(analysis?.rules) ? analysis.rules : [];
   const validRuleIds = new Set(rules.map((rule) => rule.id).filter(Boolean));
   const rawMachines = Array.isArray(draft?.stateMachines) ? draft.stateMachines : [];
@@ -141,9 +150,11 @@ export function applyStateMachineDraft(draft = {}, analysis = {}) {
     const raw = rawMachines.find((item) => String(item?.subjectRef || "") === subjectRef) || rawMachines[index] || {};
     const machineId = `subject-${safeId(subjectRef)}-machine`;
     const rawStates = Array.isArray(raw?.states) ? raw.states.slice(0, 12) : [];
+    const window = String(candidate?.timeWindow || "").trim();
+    const redPressure = (Array.isArray(candidate?.redActions) ? candidate.redActions : []).filter(Boolean)[0] || "";
     const fallbackStates = [
-      { name: candidate?.entryConditions?.[0] || "进入条件满足", kind: "initial" },
-      { name: candidate?.name || candidate?.context || "任务执行中", kind: "normal" },
+      { name: candidate?.entryConditions?.[0] || (window ? `进入${window}` : "进入条件满足"), kind: "initial" },
+      { name: candidate?.taskName || candidate?.name || candidate?.context || "任务执行中", kind: "normal" },
       { name: candidate?.exitConditions?.[0] || candidate?.expectedEffects?.[0] || "终止条件满足", kind: "final" }
     ];
     const sourceStates = rawStates.length >= 3 ? rawStates : fallbackStates;
@@ -175,7 +186,7 @@ export function applyStateMachineDraft(draft = {}, analysis = {}) {
         id: `${machineId}-transition-${stateIndex + 1}`,
         fromStateRef: item.id,
         toStateRef: states[stateIndex + 1].id,
-        condition: String(candidate?.exitConditions?.[stateIndex] || candidate?.context || "满足下一状态进入条件").slice(0, 4000),
+        condition: String(candidate?.exitConditions?.[stateIndex] || (stateIndex === 0 && window ? `进入时窗 ${window}` : "") || (redPressure ? `红方压力未阻断：${redPressure}` : "") || candidate?.context || "满足下一状态进入条件").slice(0, 4000),
         branchResult: "",
         ruleRefs: rules.slice(0, 2).map((rule) => rule.id).filter(Boolean),
         eventRefs: []
@@ -183,7 +194,7 @@ export function applyStateMachineDraft(draft = {}, analysis = {}) {
     return {
       id: machineId,
       subjectRef,
-      subjectType: candidate?.subjectType || "task",
+      subjectType: candidate?.subjectType || "phase",
       name: String(raw?.name || `${candidate?.name || `建模对象 ${index + 1}`}状态机`).slice(0, 240),
       states,
       transitions
@@ -197,6 +208,12 @@ export function applyStateMachineDraft(draft = {}, analysis = {}) {
 
 function safeId(value) {
   return String(value || "state").replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "state";
+}
+
+function openStateMachineEditor(state) {
+  state.ov6bToolsOpen = true;
+  state.ov6bEditorOpen = true;
+  state.stateMachineChatOpen = false;
 }
 
 export function createDodafProductController({
@@ -307,17 +324,64 @@ export function createDodafProductController({
       return true;
     }
 
+    if (action === "toggle-ov6b-tools") {
+      state.ov6bToolsOpen = !state.ov6bToolsOpen;
+      if (!state.ov6bToolsOpen) {
+        state.ov6bEditorOpen = false;
+        state.stateMachineChatOpen = false;
+      }
+      render();
+      return true;
+    }
+    if (action === "ov6b-toggle-editor") {
+      state.ov6bToolsOpen = true;
+      state.ov6bEditorOpen = !state.ov6bEditorOpen;
+      if (state.ov6bEditorOpen) state.stateMachineChatOpen = false;
+      render();
+      return true;
+    }
+    if (action === "ov6b-close-editor") {
+      state.ov6bEditorOpen = false;
+      render();
+      return true;
+    }
     if (action === "ov6b-select-machine") {
       if (!ds.machineId) return true;
+      // Avoid full re-render churn when re-clicking the already selected machine.
+      if (state.ov6bSelectedMachineId === ds.machineId) return true;
       state.ov6bSelectedMachineId = ds.machineId;
       state.ov6bSelectedStateId = "";
+      state.ov6bSelectedTransitionId = "";
       render();
+      // Keep the clicked machine visible after list re-render (scroll preserve + nearest).
+      requestAnimationFrame(() => {
+        const selected = document.querySelector(`.sm-machine-item.is-selected[data-machine-id="${CSS.escape(ds.machineId)}"]`)
+          || document.querySelector(`.sm-machine-item[data-machine-id="${CSS.escape(ds.machineId)}"]`);
+        selected?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+      });
       return true;
     }
     if (action === "ov6b-select-state") {
       if (ds.machineId) state.ov6bSelectedMachineId = ds.machineId;
       state.ov6bSelectedStateId = ds.stateId || "";
+      openStateMachineEditor(state);
       render();
+      return true;
+    }
+    if (action === "ov6b-focus-finding") {
+      if (ds.machineId) state.ov6bSelectedMachineId = ds.machineId;
+      state.ov6bSelectedStateId = ds.stateId || "";
+      state.ov6bSelectedTransitionId = ds.transitionId || "";
+      openStateMachineEditor(state);
+      render();
+      requestAnimationFrame(() => {
+        const selector = ds.transitionId
+          ? `.sm-transition-row[data-transition-id="${CSS.escape(ds.transitionId)}"]`
+          : ds.stateId
+            ? `.sm-state-row[data-state-id="${CSS.escape(ds.stateId)}"]`
+            : ".sm-editor-actions";
+        document.querySelector(selector)?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+      });
       return true;
     }
     if (action === "ov6b-seed-subjects") {
@@ -342,10 +406,11 @@ export function createDodafProductController({
       return true;
     }
     if (action === "ov6b-remove-machine") {
-      if (!ds.machineId || !window.confirm("删除该状态机及其转换？")) return true;
+      const machineId = ds.machineId || state.ov6bSelectedMachineId;
+      if (!machineId || !window.confirm("删除该状态机及其转换？")) return true;
       const model = resolveDodafProduct(state, "ov6b").model;
-      const next = removeOv6bStateMachine(model, ds.machineId);
-      if (state.ov6bSelectedMachineId === ds.machineId) {
+      const next = removeOv6bStateMachine(model, machineId);
+      if (state.ov6bSelectedMachineId === machineId) {
         state.ov6bSelectedMachineId = next.stateMachines?.[0]?.id || "";
         state.ov6bSelectedStateId = "";
       }
@@ -354,20 +419,48 @@ export function createDodafProductController({
     }
     if (action === "ov6b-add-transition") {
       const model = resolveDodafProduct(state, "ov6b").model;
-      persistOv6("ov6b", addOv6bTransition(model, ds.machineId), "已添加转换");
+      const machineId = ds.machineId || state.ov6bSelectedMachineId;
+      const next = addOv6bTransition(model, machineId);
+      state.ov6bSelectedTransitionId = next._createdTransitionId || "";
+      state.ov6bSelectedStateId = "";
+      openStateMachineEditor(state);
+      persistOv6("ov6b", next, "已添加转换");
+      return true;
+    }
+    if (action === "ov6b-add-decision-branch") {
+      const row = el?.closest?.(".sm-decision-branch");
+      const target = row?.querySelector?.('[data-branch-field="target"]')?.value || "";
+      const result = row?.querySelector?.('[data-branch-field="result"]')?.value || "";
+      const condition = row?.querySelector?.('[data-branch-field="condition"]')?.value || "";
+      const model = resolveDodafProduct(state, "ov6b").model;
+      const next = addOv6bDecisionBranch(model, ds.machineId, ds.stateId, {
+        toStateRef: target,
+        branchResult: result,
+        condition
+      });
+      if (next._branchError) {
+        notify(next._branchError);
+        return true;
+      }
+      state.ov6bSelectedStateId = "";
+      state.ov6bSelectedTransitionId = next._createdTransitionId || "";
+      openStateMachineEditor(state);
+      persistOv6("ov6b", next, `已添加“${result}”分支`);
       return true;
     }
     if (action === "ov6b-add-state") {
       const model = resolveDodafProduct(state, "ov6b").model;
-      const priorMachine = (model.stateMachines || []).find((item) => item.id === ds.machineId);
+      const machineId = ds.machineId || state.ov6bSelectedMachineId;
+      const priorMachine = (model.stateMachines || []).find((item) => item.id === machineId);
       const priorIds = new Set((priorMachine?.states || []).map((item) => item.id));
-      const next = addOv6bState(model, ds.machineId, {
+      const next = addOv6bState(model, machineId, {
         kind: ds.kind || "normal",
         insertTransitionId: ds.kind === "decision" ? state.ov6bSelectedTransitionId : ""
       });
-      const machine = (next.stateMachines || []).find((item) => item.id === ds.machineId);
+      const machine = (next.stateMachines || []).find((item) => item.id === machineId);
       const created = machine?.states?.find((item) => !priorIds.has(item.id));
       if (created) state.ov6bSelectedStateId = created.id;
+      openStateMachineEditor(state);
       persistOv6("ov6b", next, "已添加状态");
       return true;
     }
@@ -402,7 +495,12 @@ export function createDodafProductController({
       const model = resolveDodafProduct(state, "ov6b").model;
       const field = ds.field;
       if (!field || !ds.machineId || !ds.transitionId) return true;
-      persistOv6("ov6b", updateOv6bTransition(model, ds.machineId, ds.transitionId, { [field]: el?.value || "" }));
+      const next = updateOv6bTransition(model, ds.machineId, ds.transitionId, { [field]: el?.value || "" });
+      if (next._transitionError) {
+        notify(next._transitionError);
+        return true;
+      }
+      persistOv6("ov6b", next);
       return true;
     }
 
@@ -418,6 +516,17 @@ export function createDodafProductController({
       if (ds.sequenceId) state.ov6cSelectedSequenceId = ds.sequenceId;
       state.ov6cSelectedMessageId = ds.messageId || "";
       state.ov6cConnectFromId = "";
+      state.ov6cEditorOpen = true;
+      render();
+      return true;
+    }
+    if (action === "ov6c-open-editor") {
+      state.ov6cEditorOpen = true;
+      render();
+      return true;
+    }
+    if (action === "ov6c-close-editor") {
+      state.ov6cEditorOpen = false;
       render();
       return true;
     }
@@ -457,6 +566,7 @@ export function createDodafProductController({
       const sequence = (next.sequences || []).find((item) => item.id === sequenceId);
       state.ov6cConnectFromId = "";
       state.ov6cSelectedMessageId = sequence?.messages?.at(-1)?.id || "";
+      state.ov6cEditorOpen = true;
       persistOv6("ov6c", next, "已在画布添加消息（可直接改名称）");
       return true;
     }
@@ -582,6 +692,7 @@ export function createDodafProductController({
       const next = addOv6cMessage(model, ds.sequenceId);
       const sequence = (next.sequences || []).find((item) => item.id === ds.sequenceId);
       state.ov6cSelectedMessageId = sequence?.messages?.at(-1)?.id || "";
+      state.ov6cEditorOpen = true;
       persistOv6("ov6c", next, "已添加消息");
       return true;
     }
@@ -600,11 +711,14 @@ export function createDodafProductController({
       const patch = {};
       if (field === "name" || field === "condition" || field === "type" || field === "fromRef" || field === "toRef") {
         patch[field] = el?.value || "";
+      } else if (field === "offsetMinutes" || field === "durationMinutes") {
+        patch[field] = el?.value === "" ? null : Number(el.value);
       } else if (field === "activity") {
         patch.relatedActivityRefs = el?.value ? [el.value] : [];
       } else {
         return true;
       }
+      state.ov6cEditorOpen = true;
       // Keep selection so canvas inline editor stays open after edit.
       state.ov6cSelectedSequenceId = ds.sequenceId;
       state.ov6cSelectedMessageId = ds.messageId;

@@ -10,7 +10,6 @@ import {
   renderResearchChatFloatButton,
   renderResearchChatPanel
 } from "./researchChat/researchChatView.js";
-import { renderPhaseChainGuide } from "./phaseChainGuide.js";
 
 /**
  * 阶段与行动：主研读台（左链 + 中 CONOPS）+ 右上悬浮核验对话（OV-1 同位置入口）。
@@ -53,7 +52,6 @@ export function renderPhaseAction(state) {
   const statusLabel = `${status}${focusGenerating ? " · 聚焦生成中" : chatGenerating ? " · 对话修订中" : generating ? " · 阶段生成中" : ""}`;
 
   return `<section class="planning-page phase-action-page phase-action-page--bench ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}">
-    ${renderPhaseChainGuide(state, "phase-action")}
     ${renderPlanningMigrationBanner(state)}
 
     ${renderCombatFocusBlock({

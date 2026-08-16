@@ -43,6 +43,12 @@ try {
         { id: "ru1", role: "user", topic: "revision", text: "新增约束", createdAt: "2026-08-11T00:02:00.000Z" },
         { id: "ra1", role: "assistant", topic: "revision", source: "cancelled", text: "已停止生成", createdAt: "2026-08-11T00:02:01.000Z" }
       ]
+    },
+    stateMachine: {
+      messages: [
+        { id: "su1", role: "user", topic: "revision", text: "按关键任务生成状态机", createdAt: "2026-08-11T00:04:00.000Z" },
+        { id: "sa1", role: "assistant", topic: "revision", source: "ai", text: "已生成状态机草案。", createdAt: "2026-08-11T00:04:01.000Z" }
+      ]
     }
   };
 
@@ -89,6 +95,7 @@ try {
   const restored = await reopened.getResearchChats("chat-demo");
   assert(restored.exists && restored.model.phaseAction.messages[1].text.includes("合并"), "research chats must survive reload");
   assert(restored.model.forceMission.messages.length === 2, "force chat must reload");
+  assert(restored.model.stateMachine.messages[0].text.includes("生成状态机"), "state-machine chat must reload");
 
   // Client capture / apply helpers
   const state = {

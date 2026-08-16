@@ -1,7 +1,6 @@
 import { applyStructureReviewFilter, buildStructureReview, defaultStructureReviewFilter } from "./structureReviewBuilder.js";
 import { renderDerivedViewProvenance } from "./derivedViewProvenance.js";
 import { renderProjectStorageState } from "./projectStorageView.js";
-import { renderPhaseChainGuide } from "./phaseChainGuide.js";
 
 const GROUP_HINT = {
   mapping: "优先补活动模型的总体图来源，再查交换与责任覆盖。",
@@ -60,7 +59,6 @@ export function renderStructureReview(state) {
       : `验证 ${summary.validationIssueCount} 项 · ${formatTime(summary.validationGeneratedAt)}`;
   return `
     <section class="surface surface-pad structure-review">
-      ${renderPhaseChainGuide(state, "structure-review")}
       <div class="section-heading">
         <div>
           <h2>结构核对台</h2>

@@ -63,7 +63,7 @@ export function createSequenceCanvasController() {
             if (cancel) cancel.click();
           }
         });
-        canvas.querySelectorAll(".seq-message-name-input, .seq-lifeline-name input").forEach((input) => {
+        canvas.querySelectorAll(".seq-message-name-input, .seq-lifeline-name input, .seq-lifeline-ref input").forEach((input) => {
           input.addEventListener("keydown", (event) => {
             if (event.key === "Enter") {
               event.preventDefault();

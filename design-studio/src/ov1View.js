@@ -10,6 +10,7 @@ import {
   renderEdgeBadge,
   renderEdgeMarkerDefs
 } from "./dodafDraftingView.js";
+import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
 
 const PANEL_META = {
   context: { eyebrow: "OV-1", title: "任务摘要" },
@@ -206,104 +207,102 @@ function localizeOv1StorageDetail(detail) {
 
 /** Topbar floating FAB (OV-1 tools collapsed). */
 export function renderOv1ToolboxFloatButton() {
-  return renderOv1ToolboxBrandButton({
-    toolsOpen: false,
+  return renderToolboxFloatButton({
+    scope: "ov1",
+    open: false,
+    action: "toggle-ov1-tools",
     className: "ov1-edit-rail-brand is-topbar-float"
   });
-}
-
-function renderOv1ToolboxBrandButton({ toolsOpen = false, className = "ov1-edit-rail-brand" } = {}) {
-  const toolboxTitle = toolsOpen ? "收起工具箱" : "展开工具箱";
-  return `
-    <button class="${className}" type="button" data-action="toggle-ov1-tools" title="${toolboxTitle}" aria-label="${toolboxTitle}" aria-expanded="${toolsOpen ? "true" : "false"}">
-      <span class="ov1-edit-rail-brand-ring" aria-hidden="true"></span>
-      <span class="ov1-edit-rail-brand-glow" aria-hidden="true"></span>
-      <span class="ov1-edit-ico" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M8.5 7.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v1.5"/>
-          <path d="M4.5 9.5h15v9a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-9z"/>
-          <path d="M9.5 13h5"/>
-        </svg>
-      </span>
-    </button>
-  `;
 }
 
 /** Scheme A: far-right icon rail when docked; floating toolbox FAB when collapsed. */
 function renderOv1EditRail(state, panelOpen = false, panelMode = "context", toolsOpen = false) {
   const busy = Boolean(state.ov1Generating);
-  const active = (mode) => panelOpen && panelMode === mode ? "is-active" : "";
+  const active = (mode) => panelOpen && panelMode === mode;
   const storage = state.ov1Storage || {};
   const { saving, showLoad, showRestore } = ov1StorageActionFlags(storage);
   const candidate = state.ov1Candidate;
-  // Floating mode uses the topbar FAB; docked rail keeps the brand toggle.
-  if (!toolsOpen) return "";
-  return `
-    <aside class="ov1-edit-rail is-docked" aria-label="OV-1 图面编辑栏">
-      ${renderOv1ToolboxBrandButton({ toolsOpen: true })}
-      <nav class="ov1-edit-rail-nav" aria-label="图面操作入口" aria-hidden="false">
-        <button class="ov1-edit-entry ${active("context")}" type="button" data-action="toggle-ov1-panel" title="任务摘要" aria-label="任务摘要" aria-expanded="${panelOpen && panelMode === "context" ? "true" : "false"}" aria-controls="ov1ContextPanel" ${toolsOpen ? "" : "tabindex=\"-1\""}>
-          <span class="ov1-edit-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>
-          </span>
-        </button>
-        <button class="ov1-edit-entry" type="button" data-action="refresh-project-ov1" title="${saving ? "同步中" : "刷新"}" aria-label="${saving ? "同步中" : "刷新"}" ${saving || !toolsOpen ? "disabled" : ""}>
-          <span class="ov1-edit-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg>
-          </span>
-        </button>
-        ${showLoad ? `
-        <button class="ov1-edit-entry is-attention" type="button" data-action="load-project-ov1" title="载入服务端" aria-label="载入服务端" ${toolsOpen ? "" : "disabled"}>
-          <span class="ov1-edit-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M5 19h14"/></svg>
-          </span>
-        </button>` : ""}
-        ${showRestore ? `
-        <button class="ov1-edit-entry is-attention" type="button" data-action="restore-project-ov1-conflict-draft" title="恢复本地冲突草稿" aria-label="恢复本地冲突草稿" ${toolsOpen ? "" : "disabled"}>
-          <span class="ov1-edit-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l-4-4 4-4"/><path d="M5 10h8a6 6 0 1 1 0 12h-3"/></svg>
-          </span>
-        </button>` : ""}
-        <button class="ov1-edit-entry ${active("concept")}" type="button" data-action="open-ov1-concept" title="编辑摘要" aria-label="编辑摘要" aria-expanded="${panelOpen && panelMode === "concept" ? "true" : "false"}" aria-controls="ov1ContextPanel" ${toolsOpen ? "" : "tabindex=\"-1\""}>
-          <span class="ov1-edit-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h10M4 19h14"/><path d="M16 10l3 3-3 3"/></svg>
-          </span>
-        </button>
-        <span class="ov1-edit-rail-sep" aria-hidden="true"></span>
-        <button class="ov1-edit-entry" type="button" data-action="add-ov1-node" title="新增节点" aria-label="新增节点" ${busy || !toolsOpen ? "disabled" : ""}>
-          <span class="ov1-edit-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          </span>
-        </button>
-        <button class="ov1-edit-entry" type="button" data-action="generate-ov1" title="${busy ? "正在生成" : "AI 生成候选"}" aria-label="${busy ? "正在生成" : "AI 生成候选"}" ${busy || !toolsOpen ? "disabled" : ""}>
-          <span class="ov1-edit-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.2 4.2L17.5 8.5l-4.3 1.3L12 14l-1.2-4.2L6.5 8.5l4.3-1.3L12 3z"/><path d="M18 14l.7 2.3L21 17l-2.3.7L18 20l-.7-2.3L15 17l2.3-.7L18 14z"/></svg>
-          </span>
-        </button>
-        ${candidate ? `
-        <button class="ov1-edit-entry is-attention" type="button" data-action="apply-ov1-candidate" title="应用 AI 候选" aria-label="应用 AI 候选" ${toolsOpen ? "" : "disabled"}>
-          <span class="ov1-edit-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
-          </span>
-        </button>
-        <button class="ov1-edit-entry" type="button" data-action="discard-ov1-candidate" title="舍弃候选" aria-label="舍弃候选" ${toolsOpen ? "" : "disabled"}>
-          <span class="ov1-edit-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
-          </span>
-        </button>` : ""}
-        <button class="ov1-edit-entry ${active("relations")}" type="button" data-action="open-ov1-relations" title="关系管理" aria-label="关系管理" aria-expanded="${panelOpen && panelMode === "relations" ? "true" : "false"}" aria-controls="ov1ContextPanel" ${toolsOpen ? "" : "tabindex=\"-1\""}>
-          <span class="ov1-edit-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="7" r="2.5"/><circle cx="17.5" cy="7" r="2.5"/><circle cx="12" cy="17" r="2.5"/><path d="M8.6 8.6l2.2 6M15.4 8.6l-2.2 6"/></svg>
-          </span>
-        </button>
-        <button class="ov1-edit-entry" type="button" data-action="auto-layout-ov1" title="重排布局" aria-label="重排布局" ${toolsOpen ? "" : "disabled"}>
-          <span class="ov1-edit-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h6V4H4v3zm10 0h6V4h-6v3zM4 20h6v-3H4v3zm10 0h6v-3h-6v3zM7 7v10M17 7v10"/></svg>
-          </span>
-        </button>
-      </nav>
-    </aside>
-  `;
+  return renderToolboxRail({
+    scope: "ov1",
+    open: toolsOpen,
+    label: "OV-1 图面编辑栏",
+    navLabel: "图面操作入口",
+    className: "ov1-edit-rail",
+    toggleAction: "toggle-ov1-tools",
+    items: [
+      {
+        action: "toggle-ov1-panel",
+        title: "任务摘要",
+        icon: "doc",
+        active: active("context"),
+        expanded: active("context"),
+        controls: "ov1ContextPanel"
+      },
+      {
+        action: "refresh-project-ov1",
+        title: saving ? "同步中" : "刷新",
+        icon: "refresh",
+        disabled: saving
+      },
+      showLoad && {
+        action: "load-project-ov1",
+        title: "载入服务端",
+        icon: "download",
+        attention: true
+      },
+      showRestore && {
+        action: "restore-project-ov1-conflict-draft",
+        title: "恢复本地冲突草稿",
+        icon: "restore",
+        attention: true
+      },
+      {
+        action: "open-ov1-concept",
+        title: "编辑摘要",
+        icon: "concept",
+        active: active("concept"),
+        expanded: active("concept"),
+        controls: "ov1ContextPanel"
+      },
+      "sep",
+      {
+        action: "add-ov1-node",
+        title: "新增节点",
+        icon: "plus",
+        disabled: busy
+      },
+      {
+        action: "generate-ov1",
+        title: busy ? "正在生成" : "AI 生成候选",
+        icon: "sparkle",
+        disabled: busy
+      },
+      candidate && {
+        action: "apply-ov1-candidate",
+        title: "应用 AI 候选",
+        icon: "check",
+        attention: true
+      },
+      candidate && {
+        action: "discard-ov1-candidate",
+        title: "舍弃候选",
+        icon: "close"
+      },
+      {
+        action: "open-ov1-relations",
+        title: "关系管理",
+        icon: "relations",
+        active: active("relations"),
+        expanded: active("relations"),
+        controls: "ov1ContextPanel"
+      },
+      {
+        action: "auto-layout-ov1",
+        title: "重排布局",
+        icon: "layout"
+      }
+    ]
+  });
 }
 
 function renderNextStep(model, state) {

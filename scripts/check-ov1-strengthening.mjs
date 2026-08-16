@@ -117,6 +117,7 @@ assert(addOv1Edge(model, { sourceId: "sense", targetId: "decide", type: "信息�
 const pageState = { ov1: model, ov1Generating: false, ov1Candidate: null, ov1Storage: {}, selection: null, ov5: { activities: [] }, ov1InspectorCollapsed: false, ov1PanelOpen: true, ov1PanelMode: "context", ov1ToolsOpen: true };
 const page = renderOv1(pageState);
 assert(page.includes("ov1-edit-rail") && page.includes("ov1-edit-entry") && page.includes("ov1-side-cluster") && page.includes("ov1-context-panel"), "OV-1 scheme A side rail/panel missing");
+assert(page.includes('data-toolbox-scope="ov1"'), "OV-1 rail must use the shared toolbox shell");
 assert(page.includes('data-action="open-ov1-relations"') && page.includes('data-action="generate-ov1"') && page.includes('data-action="add-ov1-node"') && page.includes('data-action="auto-layout-ov1"'), "OV-1 tools incomplete");
 assert(page.includes("refresh-project-ov1") && page.includes("ov1-task-panel") && page.includes("ov1-context-panel-body") && page.includes("任务摘要"), "OV-1 task summary side panel missing");
 assert(page.includes('data-action="open-ov1-concept"') && page.includes('title="编辑摘要"'), "OV-1 edit-summary action should live on the icon rail");

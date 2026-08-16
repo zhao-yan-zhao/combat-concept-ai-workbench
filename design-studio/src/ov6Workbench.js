@@ -113,18 +113,25 @@ export function listStateMachineSubjects(state = {}) {
     const actions = primary.length ? primary : (Array.isArray(phase?.blueActions) ? phase.blueActions.filter(Boolean) : []);
     actions.forEach((action, actionIndex) => push({
       id: `${phaseId}::action-${actionIndex + 1}`,
-      name: String(action),
-      subjectType: "task",
+      name: `${phaseName} · ${String(action)}`,
+      taskName: String(action),
+      subjectType: "phase",
       phaseId,
       phaseName,
       context: String(phase?.objective || ""),
+      timeWindow: String(phase?.timeWindow || phase?.timeRange || phase?.window || "").trim(),
+      blueActions: (Array.isArray(phase?.blueActions) ? phase.blueActions : phase?.primaryActions || []).filter(Boolean).slice(0, 8),
+      redActions: (Array.isArray(phase?.redActions) ? phase.redActions : phase?.secondaryActions || []).filter(Boolean).slice(0, 8),
       entryConditions: (phase?.entryConditions || []).filter(Boolean).slice(0, 6),
       exitConditions: (phase?.exitConditions || []).filter(Boolean).slice(0, 6),
       expectedEffects: (phase?.expectedEffects || []).filter(Boolean).slice(0, 6)
     }));
   });
 
-  const forces = Array.isArray(state.forceMission?.forces) ? state.forceMission.forces : [];
+  const forces = [
+    ...(Array.isArray(state.forceMission?.forces) ? state.forceMission.forces : []),
+    ...(Array.isArray(state.forceMission?.combatForces) ? state.forceMission.combatForces : [])
+  ];
   forces.forEach((force, index) => {
     const task = String(force?.task || "").trim();
     const role = String(force?.role || "").trim();
@@ -291,6 +298,9 @@ export function updateOv6bStateMachine(model, machineId, patch = {}) {
   if (patch.subjectType !== undefined && ["task", "object", "force", "phase", "other"].includes(patch.subjectType)) {
     machine.subjectType = patch.subjectType;
   }
+  if (patch.canvasLayout === "auto" || patch.canvasLayout === "manual") {
+    machine.canvasLayout = patch.canvasLayout;
+  }
   return normalizeDodafOv6b(next);
 }
 
@@ -302,10 +312,11 @@ export function addOv6bTransition(model, machineId, partial = {}) {
   const from = partial.fromStateRef || states.find((item) => item.kind === "initial")?.id || states[0]?.id;
   const to = partial.toStateRef || states.find((item) => item.kind === "final")?.id || states.at(-1)?.id;
   if (!from || !to || from === to) return normalizeDodafOv6b(next);
+  const transitionId = partial.id || `transition-${Date.now().toString(36)}`;
   machine.transitions = [
     ...(machine.transitions || []),
     {
-      id: partial.id || `transition-${Date.now().toString(36)}`,
+      id: transitionId,
       fromStateRef: from,
       toStateRef: to,
       condition: partial.condition || "新转换条件",
@@ -314,7 +325,46 @@ export function addOv6bTransition(model, machineId, partial = {}) {
       eventRefs: partial.eventRefs || []
     }
   ];
-  return normalizeDodafOv6b(next);
+  const normalized = normalizeDodafOv6b(next);
+  normalized._createdTransitionId = transitionId;
+  return normalized;
+}
+
+export function addOv6bDecisionBranch(model, machineId, decisionId, partial = {}) {
+  const next = cloneModel(ensureOv6bModel(model));
+  const machine = (next.stateMachines || []).find((item) => item.id === machineId);
+  const decision = (machine?.states || []).find((item) => item.id === decisionId && item.kind === "decision");
+  const targetId = String(partial.toStateRef || "").trim();
+  const result = String(partial.branchResult || "").trim();
+  const condition = String(partial.condition || "").trim();
+  const outgoing = (machine?.transitions || []).filter((item) => item.fromStateRef === decisionId);
+  let error = "";
+  if (!machine || !decision) error = "未找到判定节点";
+  else if (!targetId || targetId === decisionId || !(machine.states || []).some((item) => item.id === targetId)) error = "请选择有效分支目标";
+  else if (!result) error = "请填写分支结果";
+  else if (!condition || /^(TBD|待补充|新转换条件)$/i.test(condition)) error = "请填写可观察的分支条件";
+  else if (outgoing.some((item) => String(item.branchResult || "").trim().toLocaleLowerCase() === result.toLocaleLowerCase())) error = "分支结果不能重复";
+  if (error) {
+    const unchanged = normalizeDodafOv6b(next);
+    unchanged._branchError = error;
+    return unchanged;
+  }
+  const transitionId = partial.id || `transition-${Date.now().toString(36)}-branch-${outgoing.length + 1}`;
+  machine.transitions = [
+    ...(machine.transitions || []),
+    {
+      id: transitionId,
+      fromStateRef: decisionId,
+      toStateRef: targetId,
+      condition: condition.slice(0, 4000),
+      branchResult: result.slice(0, 400),
+      ruleRefs: partial.ruleRefs || [],
+      eventRefs: partial.eventRefs || []
+    }
+  ];
+  const normalized = normalizeDodafOv6b(next);
+  normalized._createdTransitionId = transitionId;
+  return normalized;
 }
 
 export function resolveOv6bSelectedMachineId(state = {}, machines = []) {
@@ -397,6 +447,23 @@ export function updateOv6bState(model, machineId, stateId, patch = {}) {
   if (patch.decisionExpression !== undefined) state.decisionExpression = String(patch.decisionExpression || "").slice(0, 1000);
   if (patch.x !== undefined) state.x = patch.x;
   if (patch.y !== undefined) state.y = patch.y;
+  if (patch.x !== undefined || patch.y !== undefined) machine.canvasLayout = "manual";
+  return normalizeDodafOv6b(next);
+}
+
+/** Persist free-canvas positions and stop auto topology from overwriting them. */
+export function updateOv6bCanvasLayout(model, machineId, { canvasLayout = "manual", positions = [] } = {}) {
+  const next = cloneModel(ensureOv6bModel(model));
+  const machine = (next.stateMachines || []).find((item) => item.id === machineId);
+  if (!machine) return normalizeDodafOv6b(next);
+  if (canvasLayout === "auto" || canvasLayout === "manual") machine.canvasLayout = canvasLayout;
+  const byId = new Map((Array.isArray(positions) ? positions : []).map((item) => [item?.id, item]));
+  (machine.states || []).forEach((state) => {
+    const pos = byId.get(state.id);
+    if (!pos) return;
+    if (pos.x !== undefined) state.x = pos.x;
+    if (pos.y !== undefined) state.y = pos.y;
+  });
   return normalizeDodafOv6b(next);
 }
 
@@ -454,8 +521,19 @@ export function updateOv6bTransition(model, machineId, transitionId, patch = {})
   if (!transition) return normalizeDodafOv6b(next);
   if (patch.condition !== undefined) transition.condition = String(patch.condition || "").slice(0, 4000);
   if (patch.branchResult !== undefined) transition.branchResult = String(patch.branchResult || "").slice(0, 400);
-  if (patch.fromStateRef !== undefined) transition.fromStateRef = String(patch.fromStateRef || "").slice(0, 180);
-  if (patch.toStateRef !== undefined) transition.toStateRef = String(patch.toStateRef || "").slice(0, 180);
+  const nextFrom = patch.fromStateRef !== undefined ? String(patch.fromStateRef || "").slice(0, 180) : transition.fromStateRef;
+  const nextTo = patch.toStateRef !== undefined ? String(patch.toStateRef || "").slice(0, 180) : transition.toStateRef;
+  const invalidTarget = !nextFrom || !nextTo || nextFrom === nextTo
+    || !(machine.states || []).some((item) => item.id === nextFrom)
+    || !(machine.states || []).some((item) => item.id === nextTo);
+  const duplicate = (machine.transitions || []).some((item) => item.id !== transitionId && item.fromStateRef === nextFrom && item.toStateRef === nextTo);
+  if (invalidTarget || duplicate) {
+    const unchanged = normalizeDodafOv6b(next);
+    unchanged._transitionError = invalidTarget ? "转换端点无效或不能连接自身" : "该转换已存在";
+    return unchanged;
+  }
+  transition.fromStateRef = nextFrom;
+  transition.toStateRef = nextTo;
   return normalizeDodafOv6b(next);
 }
 
@@ -469,7 +547,7 @@ export function seedOv6bFromSubjects(model, subjects = []) {
     if (!ref || covered.has(ref)) return;
     covered.add(ref);
     next = addOv6bStateMachine(next, {
-      subjectType: subject.subjectType || "task",
+      subjectType: subject.subjectType || (/::action-\d+$/.test(ref) ? "phase" : "task"),
       subjectRef: ref,
       name: subject.name ? `${subject.name}状态机` : ""
     });
@@ -480,11 +558,12 @@ export function seedOv6bFromSubjects(model, subjects = []) {
 export function diagnoseOv6bMachineLocal(machine = {}) {
   const states = Array.isArray(machine.states) ? machine.states : [];
   const transitions = Array.isArray(machine.transitions) ? machine.transitions : [];
-  const issues = [];
-  if (!states.some((item) => item.kind === "initial")) issues.push("缺少开始状态");
-  if (!states.some((item) => item.kind === "final")) issues.push("缺少结束状态");
-  if (!states.some((item) => item.kind === "normal")) issues.push("缺少中间状态");
-  if (!transitions.length) issues.push("尚无转换");
+  const findings = [];
+  const addFinding = (message, target = {}) => findings.push({ message, ...target });
+  if (!states.some((item) => item.kind === "initial")) addFinding("缺少开始状态");
+  if (!states.some((item) => item.kind === "final")) addFinding("缺少结束状态");
+  if (!states.some((item) => item.kind === "normal")) addFinding("缺少中间状态");
+  if (!transitions.length) addFinding("尚无转换");
   const initials = new Set(states.filter((item) => item.kind === "initial").map((item) => item.id));
   const finals = new Set(states.filter((item) => item.kind === "final").map((item) => item.id));
   const outgoing = new Map(states.map((item) => [item.id, transitions.filter((edge) => edge.fromStateRef === item.id)]));
@@ -492,30 +571,35 @@ export function diagnoseOv6bMachineLocal(machine = {}) {
   states.forEach((state) => {
     const out = outgoing.get(state.id) || [];
     const input = incoming.get(state.id) || [];
-    if (!initials.has(state.id) && !input.length) issues.push(`「${state.name || state.id}」无入口`);
-    if (!finals.has(state.id) && !out.length) issues.push(`「${state.name || state.id}」无出口`);
-    if (finals.has(state.id) && out.length) issues.push(`「${state.name || state.id}」结束后仍有转换`);
+    if (!initials.has(state.id) && !input.length) addFinding(`「${state.name || state.id}」无入口`, { stateId: state.id });
+    if (!finals.has(state.id) && !out.length) addFinding(`「${state.name || state.id}」无出口`, { stateId: state.id });
+    if (finals.has(state.id) && out.length) addFinding(`「${state.name || state.id}」结束后仍有转换`, { stateId: state.id });
     if (state.kind === "decision") {
-      if (!String(state.decisionExpression || "").trim()) issues.push(`「${state.name || state.id}」缺少判定表达式`);
-      if (out.length < 2) issues.push(`「${state.name || state.id}」至少需要两个分支`);
+      if (!String(state.decisionExpression || "").trim()) addFinding(`「${state.name || state.id}」缺少判定表达式`, { stateId: state.id });
+      if (out.length < 2) addFinding(`「${state.name || state.id}」至少需要两个分支`, { stateId: state.id });
       const results = out.map((edge) => String(edge.branchResult || "").trim());
-      if (results.some((item) => !item)) issues.push(`「${state.name || state.id}」存在未标注分支`);
-      if (results.filter(Boolean).length !== new Set(results.filter(Boolean)).size) issues.push(`「${state.name || state.id}」存在重复分支结果`);
+      out.filter((edge) => !String(edge.branchResult || "").trim())
+        .forEach((edge) => addFinding(`「${state.name || state.id}」存在未标注分支`, { transitionId: edge.id }));
+      if (results.filter(Boolean).length !== new Set(results.filter(Boolean)).size) addFinding(`「${state.name || state.id}」存在重复分支结果`, { stateId: state.id });
     }
   });
   transitions.forEach((edge) => {
     const condition = String(edge.condition || "").trim();
-    if (!condition || /^TBD$/i.test(condition)) issues.push(`转换「${edge.id}」缺少可观察条件`);
+    if (!condition || /^(TBD|待补充|新转换条件)$/i.test(condition)) addFinding(`转换「${edge.id}」缺少可观察条件`, { transitionId: edge.id });
   });
   const reachable = walkGraph([...initials], (id) => (outgoing.get(id) || []).map((edge) => edge.toStateRef));
-  states.filter((item) => !reachable.has(item.id)).forEach((item) => issues.push(`「${item.name || item.id}」从开始不可达`));
+  states.filter((item) => !reachable.has(item.id)).forEach((item) => addFinding(`「${item.name || item.id}」从开始不可达`, { stateId: item.id }));
   const canReachFinal = walkGraph([...finals], (id) => (incoming.get(id) || []).map((edge) => edge.fromStateRef));
   states.filter((item) => reachable.has(item.id) && !finals.has(item.id) && !canReachFinal.has(item.id))
-    .forEach((item) => issues.push(`「${item.name || item.id}」无法到达结束`));
-  const uniqueIssues = [...new Set(issues)];
+    .forEach((item) => addFinding(`「${item.name || item.id}」无法到达结束`, { stateId: item.id }));
+  const uniqueFindings = findings.filter((finding, index, list) => (
+    list.findIndex((item) => item.message === finding.message && item.stateId === finding.stateId && item.transitionId === finding.transitionId) === index
+  ));
+  const uniqueIssues = [...new Set(uniqueFindings.map((item) => item.message))];
   return {
     ok: uniqueIssues.length === 0,
     issues: uniqueIssues,
+    findings: uniqueFindings,
     statusLabel: uniqueIssues.length ? "需复核" : "结构完整",
     detail: uniqueIssues.length ? uniqueIssues.join("；") : `状态 ${states.length} · 转换 ${transitions.length}`
   };
@@ -595,7 +679,10 @@ export function addOv6cMessage(model, sequenceId, partial = {}) {
       condition: partial.condition || "",
       relatedActivityRefs: partial.relatedActivityRefs || [],
       ruleRefs: partial.ruleRefs || [],
-      stateTransitionRefs: partial.stateTransitionRefs || []
+      stateTransitionRefs: partial.stateTransitionRefs || [],
+      offsetMinutes: partial.offsetMinutes ?? ((index - 1) * 15),
+      durationMinutes: partial.durationMinutes ?? 15,
+      time: partial.time || `T+${(index - 1) * 15}`
     }
   ];
   return normalizeDodafOv6c(next);
@@ -656,7 +743,82 @@ export function updateOv6cMessage(model, sequenceId, messageId, patch = {}) {
     message.relatedActivityRefs = refs.slice(0, 12).map((item) => String(item).slice(0, 160));
     message.sourceActivityId = message.relatedActivityRefs[0] || "";
   }
+  if (patch.offsetMinutes !== undefined) {
+    message.offsetMinutes = patch.offsetMinutes === null || patch.offsetMinutes === ""
+      ? null
+      : Number(patch.offsetMinutes);
+    if (Number.isFinite(message.offsetMinutes)) message.time = `T+${Math.max(0, Math.round(message.offsetMinutes))}`;
+  }
+  if (patch.durationMinutes !== undefined) {
+    message.durationMinutes = patch.durationMinutes === null || patch.durationMinutes === ""
+      ? null
+      : Number(patch.durationMinutes);
+  }
+  if (patch.time !== undefined) message.time = String(patch.time || "").slice(0, 120);
   return normalizeDodafOv6c(next);
+}
+
+const GANTT_SLOT_MINUTES = 15;
+const GANTT_TYPE_COLORS = Object.freeze({
+  message: { key: "message", label: "协同消息", color: "#ef4444" },
+  response: { key: "response", label: "响应回执", color: "#8b5cf6" },
+  status: { key: "status", label: "状态通报", color: "#0ea5e9" },
+  exception: { key: "exception", label: "异常/对抗", color: "#f59e0b" },
+  timeout: { key: "timeout", label: "超时窗口", color: "#22c55e" }
+});
+
+/** Layout one sequence as a Gantt timeline (row = message, x = abstract minutes). */
+export function layoutSequenceGantt(sequence = {}, { slotMinutes = GANTT_SLOT_MINUTES } = {}) {
+  const messages = [...(sequence.messages || [])].sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+  let cursor = 0;
+  const rows = messages.map((message, index) => {
+    const explicitStart = message.offsetMinutes;
+    const start = explicitStart === null || explicitStart === undefined || !Number.isFinite(Number(explicitStart))
+      ? cursor
+      : Number(explicitStart);
+    const explicitDuration = message.durationMinutes;
+    const duration = explicitDuration === null || explicitDuration === undefined || !Number.isFinite(Number(explicitDuration))
+      ? (message.type === "status" ? 0 : slotMinutes)
+      : Math.max(0, Number(explicitDuration));
+    const span = Math.max(duration, 0);
+    const end = start + (span || 0);
+    cursor = Math.max(cursor, start + Math.max(span, 1));
+    return {
+      id: message.id,
+      message,
+      index,
+      start,
+      duration: span,
+      end,
+      instant: span === 0,
+      type: message.type || "message",
+      color: (GANTT_TYPE_COLORS[message.type] || GANTT_TYPE_COLORS.message).color
+    };
+  });
+  const starts = rows.map((row) => row.start);
+  const ends = rows.map((row) => (row.instant ? row.start + 1 : row.end));
+  const minStart = 0;
+  const rawEnd = ends.length ? Math.max(...ends, ...starts) : slotMinutes * 4;
+  const totalMinutes = Math.max(60, Math.ceil(Math.max(rawEnd, minStart + slotMinutes) / slotMinutes) * slotMinutes);
+  const tickStep = totalMinutes <= 90 ? 10 : totalMinutes <= 180 ? 20 : 30;
+  const ticks = [];
+  for (let minute = minStart; minute <= totalMinutes; minute += tickStep) ticks.push(minute);
+  if (ticks[ticks.length - 1] !== totalMinutes) ticks.push(totalMinutes);
+  return {
+    rows,
+    minStart,
+    totalMinutes,
+    ticks,
+    span: Math.max(totalMinutes - minStart, 1),
+    types: GANTT_TYPE_COLORS
+  };
+}
+
+export function formatSequenceClock(minutes) {
+  const value = Math.max(0, Math.round(Number(minutes) || 0));
+  const hours = Math.floor(value / 60);
+  const mins = value % 60;
+  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 }
 
 export function removeOv6cMessage(model, sequenceId, messageId) {
@@ -755,7 +917,10 @@ export function seedOv6cFromPhase(model, state = {}) {
       name: String(action).slice(0, 120),
       type: "message",
       condition: String(phase.entryConditions?.[0] || phase.exitConditions?.[0] || "").slice(0, 200),
-      relatedActivityRefs: phase.id ? [String(phase.id)] : []
+      relatedActivityRefs: phase.id ? [String(phase.id)] : [],
+      offsetMinutes: index * 20,
+      durationMinutes: 20,
+      time: `T+${index * 20}`
     });
   });
   next = addOv6cSequence(next, {

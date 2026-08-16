@@ -1,5 +1,85 @@
 # project-context.md
 
+## Latest completed batch (2026-08-14, shared toolbox shell)
+
+- Goal: Extract the OV-1 toolbox into a shared template like research-chat, then reuse it on every page that already has a toolbox.
+- Completed: `design-studio/src/toolbox/` now owns FAB + docked rail + named icons. OV-1 and state-machine render through that shell; other pages still only have the research-chat FAB.
+- Verification: `check-toolbox-shell`, `check-ov1-strengthening`, `check-ov6-workbench`. Authenticated browser click-through remains unavailable at the login gate.
+
+## Latest completed batch (2026-08-14, phase timeWindow + redActions in SM generation)
+
+- Goal: Feed phase time windows and red actions into state-machine AI generation.
+- Completed: `listStateMachineSubjects` and `buildStateMachineGenerationAnalysis` now carry `timeWindow`, `blueActions`, and `redActions`. Prompt requires using them for entry/exit and adversarial branches, without creating extra machines for red actions. Local fallback mentions window/red pressure in conditions.
+- Verification: syntax plus `check-ov6-workbench`, `check-phase-chain`. Authenticated browser click-through remains unavailable at the login gate.
+
+## Latest completed batch (2026-08-13, OV-6c gantt timeline)
+
+- Goal: Render 时序校验 as a Gantt timeline and give the canvas the same room as the state-machine workbench.
+- Completed: Compact top bar + left list + reserved light canvas + optional right property dock. Messages are time bars (`offsetMinutes` / `durationMinutes`); instant status events stay as ticks. UML/Mermaid remain secondary text views.
+- Verification: `check-ov6-product-model`, `check-ov6-workbench`, `check-phase-chain`. Authenticated browser click-through remains unavailable at the login gate.
+
+## Latest completed batch (2026-08-14, 阶段机 category)
+
+- Goal: Classify state machines generated from 阶段行动 as 阶段机, and expose that category in the workbench.
+- Completed: Phase-action candidates keep `subjectType: "phase"`. AI schema/prompt now allow `phase`. Local fallback, seed, and chat ingest default those refs to 阶段机. Persisted machines whose `subjectRef` is `phase-id::action-n` remap from 任务机 to 阶段机. UI list, picker, empty state, and property dock show 阶段机.
+- Verification: syntax plus `check-ov6-workbench`, `check-ov6-product-model`, `check-phase-chain`. Authenticated browser click-through remains unavailable at the login gate.
+
+## Latest completed batch (2026-08-14, state-machine edge routing)
+
+- Goal: Keep transition lines on node ports and stop them from cutting through other states.
+- Completed: Orthogonal routing now leaves/enters border ports, scores detours around intervening boxes, and sends return edges onto an outer lane. First-paint node boxes use the served CSS sizes.
+- Verification: `check-ov6-workbench` now asserts a skip-over-middle path and a return lane. Authenticated browser click-through remains unavailable at the login gate.
+
+## Latest completed batch (2026-08-14, toolbox palette drag)
+
+- Goal: Move 加中间态 / 加判定框 / 加转换 / 删除机 into the right toolbox and let the first three drop onto the canvas.
+- Completed: Those header buttons now live in the docked rail. Click still adds at the default spot; drag a state or decision onto the canvas to place it; drag transition from one node onto another to create the edge. Delete remains a click-to-confirm action.
+- Verification: syntax plus `check-ov6-workbench`. Authenticated browser click-through remains unavailable at the login gate.
+
+## Latest completed batch (2026-08-13, state-machine toolbox + AI chat)
+
+- Goal: Put 状态 / 转换 and AI chat behind a top-right toolbox, and add a generation prompt for state machines.
+- Completed: OV-1-style toolbox FAB on ov6b. Docked rail has 状态/转换 and AI chat. Only one right dock is open at a time. Research-chat controller writes StateMachineDraft back to ov6b. Prompt now requires non-empty machines on mutation requests and can revise currentMachines.
+- Verification: syntax plus `check-ov6-workbench`, `check-ov6-product-model`, `check-phase-chain`, `check-research-chat-project-persistence` passed after moving editor-only asserts onto the open dock. Live `GET /api/health` returned 200. Authenticated browser click-through remains unavailable at the login gate.
+
+## Latest completed batch (2026-08-13, state/transition right slide-out)
+
+- Goal: Move the bottom 状态 / 转换 editors off the canvas column so the drawing surface can use the remaining height.
+- Completed: Editors now live in a right `sm-editor-dock`. Closed by default; opens from the toolbar, or automatically when a node, edge, finding, new state, or new transition is selected. Canvas stays in the center column.
+- Verification: syntax plus `check-ov6-workbench`, `check-ov6-product-model`, `check-phase-chain`. Authenticated browser click-through remains unavailable at the login gate.
+
+## Latest completed batch (2026-08-13, remove phase-chain floating ball)
+
+- Goal: Remove the “3b 链 / 阶段行动链” floating ball and its expandable panel.
+- Completed: Unmounted the guide from rule/phase/state/sequence/review pages; deleted `phaseChainGuide.js`, toggle handler, and FAB styles. Left nav / workflow capsule still carry the research path.
+- Verification: `check-phase-chain` now asserts the ball is absent.
+
+## Latest completed batch (2026-08-13, keep canvas frame, move chrome outside)
+
+- Goal: Keep the drawing surface fixed in the workbench. Title, legend, fit control, and editors stay outside the white canvas instead of overlaying it.
+- Completed: Removed the in-canvas caption bar. Machine fields, diagnostics, and the state/transition editors sit above/below a reserved canvas frame.
+- Verification: syntax plus `check-ov6-workbench`, `check-ov6-product-model`, `check-phase-chain`.
+
+## Latest completed batch (2026-08-13, restore state-machine canvas camera)
+
+- Goal: Restore blank-area pan, wheel zoom, and fit-to-view after the fixed-frame experiment.
+- Completed: Camera interaction and world sizing are back. Node drag still follows the pointer and persists `canvasLayout: "manual"` so dropped positions do not snap back.
+- Verification: syntax plus `check-ov6-workbench`, `check-ov6-product-model`, `check-phase-chain`.
+
+## Latest completed batch (2026-08-13, state-machine canvas drag)
+
+- Goal: Make state-machine node drag follow the pointer and keep the dropped position.
+- Cause: live drag remapped every node through world-bounds math, `pointercancel` discarded the drop, and every re-render overwrote saved coordinates with automatic topology.
+- Completed: drag now moves the grabbed node in screen/world CSS, persists all current positions, and sets `canvasLayout: "manual"` so topology no longer snaps nodes back. First paint still uses automatic topology until the researcher moves a node.
+- Verification: syntax checks plus `check-ov6-workbench`, `check-ov6-product-model`, `check-phase-chain`, and `git diff --check` passed. Live `GET /api/health` returned 200. Authenticated browser click-through remains unavailable at the login gate.
+
+## Latest completed batch (2026-08-13, OV-6c last-sequence leftover)
+
+- Goal: Deleting the last sequence diagram must not leave a revived leftover.
+- Cause: `normalizeDodafOv6c` treated empty `sequences: []` as missing and rebuilt a “遗留事件序列” from flattened `events` on the cloned model.
+- Completed: Align with OV-6b — only migrate the flat legacy shape when `sequences` is genuinely absent. Explicit empty arrays stay empty.
+- Verification: `check-ov6-product-model` and `check-ov6-workbench` now assert last-sequence delete leaves 0 sequences / 0 events; both passed.
+
 ## Latest completed batch (2026-08-12, state-machine subject semantics and decision diagnostics)
 
 - Goal: Position state machines as lifecycle/trigger/exception/termination validation for key tasks and continuously operating objects, rather than duplicating every phase as a machine.
@@ -9,6 +89,21 @@
 - Completed: Local/shared diagnostics now cover missing entry/exit, unreachable states, final-state outgoing edges, empty/TBD conditions, missing decision expressions, fewer than two decision branches, missing/duplicate branch results, and paths that cannot reach a final state.
 - Decision: Adding a decision splits the existing transition but does not invent a second destination; the incomplete decision is diagnosed until the researcher explicitly adds and labels the alternate branch.
 - Verification: syntax checks passed for all changed JS/MJS files; `check-ov6-workbench`, `check-ov6-product-model`, `check-phase-chain`, `git diff --check`, and live `GET /api/health` (200) passed. Authenticated browser visual proof remains unavailable at the login gate.
+
+### Follow-up (2026-08-12, actionable diagnostics)
+
+- State-machine findings now retain state/transition targets and render as a compact clickable strip. Selecting a finding highlights its canvas element and scrolls the corresponding lower editor into view.
+- Placeholder transition conditions (`TBD`, `待补充`, `新转换条件`) are incomplete in both local and shared diagnostics.
+- Modeling candidates now show phase context for task names and include mission-bearing concept/combat forces while excluding empty force records.
+- Decision nodes now include a compact branch composer for selecting an unused target, branch result, and observable condition in one action. Duplicate targets/results, missing conditions, self-links, and invalid transition endpoints are rejected before persistence.
+- Follow-up verification: transition condition edits are asserted against the normalized machine model; branch target reuse is allowed when branch results remain distinct, while self-links and duplicate results remain blocked.
+
+## Latest completed batch (2026-08-13, state-machine canvas readability)
+
+- Goal: Improve first-paint state-machine drawing based on the supplied screenshot.
+- Completed: Enlarged state cards, start/final symbols, decision diamonds, canvas height, grid spacing, and two-line transition/state labels. Replaced forced single-row placement with rank-based columns and vertically separated branches.
+- Completed: Decision edges now emphasize branch results; ordinary edges show conditions; backward transitions use an internal return lane and dashed labels to avoid the forward chain.
+- Verification: Rendered a real state-machine fixture through the served workbench path with headless Edge and inspected the screenshot. Syntax, OV-6 workbench/product, phase-chain, and diff checks passed. Authenticated project visual proof remains unavailable.
 
 ## Latest completed batch (2026-08-12, state-machine canvas and flow continuity)
 

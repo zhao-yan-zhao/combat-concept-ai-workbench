@@ -19,6 +19,10 @@ import {
   normalizeSequenceChat,
   persistSequenceChat
 } from "./sequenceChatStore.js";
+import {
+  normalizeStateMachineChat,
+  persistStateMachineChat
+} from "./stateMachineChatStore.js";
 import { stripPendingResearchChatTurns } from "./researchChat/index.js";
 
 /**
@@ -135,7 +139,8 @@ export function captureResearchChatsModel(state = {}) {
     phaseAction: toDurableSession(state.phaseActionChat),
     forceMission: toDurableSession(state.forceMissionChat),
     ruleLibrary: toDurableSession(state.ruleLibraryChat),
-    sequence: toDurableSession(state.sequenceChat)
+    sequence: toDurableSession(state.sequenceChat),
+    stateMachine: toDurableSession(state.stateMachineChat)
   };
 }
 
@@ -167,6 +172,13 @@ export function applyRemoteResearchChats(state, model = {}, { projectId, force =
   if (shouldApplySession(state.sequenceChat, remote.sequence, force)) {
     state.sequenceChat = persistSequenceChat(
       normalizeSequenceChat(remote.sequence || { messages: [] }),
+      projectId
+    );
+    applied = true;
+  }
+  if (shouldApplySession(state.stateMachineChat, remote.stateMachine, force)) {
+    state.stateMachineChat = persistStateMachineChat(
+      normalizeStateMachineChat(remote.stateMachine || { messages: [] }),
       projectId
     );
     applied = true;
@@ -205,7 +217,8 @@ function hasMeaningfulResearchChats(model = {}) {
   return hasUserTurns(model.phaseAction)
     || hasUserTurns(model.forceMission)
     || hasUserTurns(model.ruleLibrary)
-    || hasUserTurns(model.sequence);
+    || hasUserTurns(model.sequence)
+    || hasUserTurns(model.stateMachine);
 }
 
 function hasUserTurns(session) {

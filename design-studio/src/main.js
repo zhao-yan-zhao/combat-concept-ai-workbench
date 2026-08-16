@@ -28,6 +28,7 @@ import { renderPhaseActionChatFloatButton } from "./phaseActionView.js";
 import { renderForceMissionChatFloatButton } from "./forceMissionView.js";
 import { renderRuleLibraryChatFloatButton } from "./ruleLibraryView.js";
 import { renderSequenceChatFloatButton } from "./ov6cView.js";
+import { renderStateMachineToolboxFloatButton } from "./stateMachineView.js";
 
 import { deleteModelSnapshot, persistModelSnapshots, saveModelSnapshot, snapshotContextFromState, upsertModelSnapshot } from "./modelSnapshotStore.js";
 import { restoreModelSnapshot } from "./modelSnapshotRestore.js";
@@ -87,6 +88,7 @@ const {
   ruleLibraryChatController,
   sequenceChatController,
   sequenceCanvasController,
+  stateMachineChatController,
   stateMachineCanvasController,
   researchChatProjectSync,
   collaborationController
@@ -211,7 +213,15 @@ const VIEW_SCROLL_PRESERVE_SELECTORS = [
   ".phase-chain-list",
   ".phase-main-stage",
   ".phase-chat-dock .research-chat-body",
-  ".phase-chat-dock .phase-review-chat-messages"
+  ".phase-chat-dock .phase-review-chat-messages",
+  // State machine workbench: keep list/editor position when switching machines
+  ".sm-machine-list",
+  ".sm-editor",
+  ".sm-state-list",
+  ".sm-transition-list",
+  ".sm-editor-dock",
+  ".sm-chat-dock .research-chat-body",
+  ".sm-main-panel"
 ];
 
 /** Inner content panes reset on phase change; outer reading position stays. */
@@ -371,6 +381,8 @@ function renderOv1ToolboxFloatHost() {
   // Sequence validation (ov6c): AI chat FAB while chat is collapsed.
   const onSequence = state.activeView === "ov6c";
   const sequenceFloating = onSequence && state.sequenceChatOpen !== true;
+  const onStateMachine = state.activeView === "ov6b";
+  const stateMachineFloating = onStateMachine && state.ov6bToolsOpen !== true;
   if (ov1Floating) {
     host.hidden = false;
     host.innerHTML = renderOv1ToolboxFloatButton();
@@ -394,6 +406,12 @@ function renderOv1ToolboxFloatHost() {
       chatGenerating: Boolean(state.sequenceChatGenerating),
       disabled: Boolean(state.sequenceChatGenerating)
     });
+    return;
+  }
+  if (stateMachineFloating) {
+    host.hidden = false;
+    host.removeAttribute("hidden");
+    host.innerHTML = renderStateMachineToolboxFloatButton({ toolsOpen: false });
     return;
   }
   if (phaseFloating) {
@@ -775,6 +793,7 @@ function bindDynamicEvents() {
   forceMissionChatController.bind(document);
   ruleLibraryChatController.bind(document);
   sequenceChatController.bind(document);
+  stateMachineChatController.bind(document);
   aiDirectionController.bind(document);
   ov1Controller.bind(document);
   ov1CanvasController.bind(document);
@@ -983,6 +1002,29 @@ function handleAction(action, source = null) {
     render();
     return;
   }
+  if (action === "toggle-state-machine-chat") {
+    state.ov6bToolsOpen = true;
+    state.stateMachineChatOpen = !state.stateMachineChatOpen;
+    if (state.stateMachineChatOpen) {
+      state.ov6bEditorOpen = false;
+      stateMachineChatController.ensureWelcome(state.ov6b || {});
+    }
+    render();
+    return;
+  }
+  if (action === "close-state-machine-chat") {
+    state.stateMachineChatOpen = false;
+    render();
+    return;
+  }
+  if (action === "open-state-machine-chat") {
+    state.ov6bToolsOpen = true;
+    state.stateMachineChatOpen = true;
+    state.ov6bEditorOpen = false;
+    stateMachineChatController.ensureWelcome(state.ov6b || {});
+    render();
+    return;
+  }
   if (action === "open-custom-direction") {
     resetCustomDirectionDialog();
     document.querySelector("#customDirectionDialog")?.showModal();
@@ -1036,11 +1078,6 @@ function handleAction(action, source = null) {
   if (action === "toggle-workflow-gate") {
     // Capsule only expands/collapses the panel; primary advance stays on the panel button.
     setWorkflowGateOpen(!state.workflowGateOpen);
-    return;
-  }
-  if (action === "toggle-phase-chain-guide") {
-    state.phaseChainGuideOpen = !state.phaseChainGuideOpen;
-    render();
     return;
   }
   if (action === "advance-workflow-step") {

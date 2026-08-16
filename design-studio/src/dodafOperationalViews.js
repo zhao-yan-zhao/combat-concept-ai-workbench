@@ -2,7 +2,6 @@ import { resolveDodafProduct } from "./dodafProductStore.js";
 import { renderDerivedViewProvenance } from "./derivedViewProvenance.js";
 import { renderProjectStorageState } from "./projectStorageView.js";
 import { entityStyleAttrs, renderDodafLegend, renderEdgeBadge, renderEntityBadge } from "./dodafDraftingView.js";
-import { renderPhaseChainGuide } from "./phaseChainGuide.js";
 import { renderRuleLibrary } from "./ruleLibraryView.js";
 import { renderOv6bPage } from "./stateMachineView.js";
 
