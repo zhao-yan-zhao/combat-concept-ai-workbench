@@ -140,7 +140,29 @@ const {
   hydrateProjectDirectory
 });
 
+let textCompositionActive = false;
+let deferredRenderOptions = null;
+
+document.addEventListener("compositionstart", () => {
+  textCompositionActive = true;
+}, true);
+
+document.addEventListener("compositionend", () => {
+  textCompositionActive = false;
+  if (!deferredRenderOptions) return;
+  const options = deferredRenderOptions;
+  deferredRenderOptions = null;
+  requestAnimationFrame(() => render(options));
+}, true);
+
 function render(options = {}) {
+  if (textCompositionActive) {
+    deferredRenderOptions = deferredRenderOptions
+      ? { ...deferredRenderOptions, ...options, skipViewRoot: Boolean(deferredRenderOptions.skipViewRoot && options.skipViewRoot) }
+      : { ...options };
+    return;
+  }
+  const appFocusSnapshot = captureViewFocus(document);
   const meta = getViewMeta(state.activeView);
   $("#conceptTree").innerHTML = renderTree(state.activeView, currentWorkflow());
   $("#viewEyebrow").textContent = meta.subtitle;
@@ -198,6 +220,7 @@ function render(options = {}) {
     closeOv1ModalIfOpen();
     bindDynamicEvents();
   }
+  restoreViewFocus(document, appFocusSnapshot);
 }
 
 /**
@@ -299,13 +322,59 @@ function renderViewRoot(options = {}) {
   const viewRoot = $("#viewRoot");
   if (!viewRoot) return;
   const scrollSnapshots = captureViewScroll(viewRoot);
+  const focusSnapshot = captureViewFocus(viewRoot);
   // Park iframe before wiping viewRoot so the node is never destroyed with innerHTML.
   parkConceptMapFrame();
   viewRoot.innerHTML = renderView(state.activeView, { ...state, oodaDuration: getOodaDuration(state.ooda) });
   mountConceptMapFrame();
+  restoreViewFocus(viewRoot, focusSnapshot);
   restoreViewScroll(viewRoot, scrollSnapshots, {
     resetInnerPhaseScroll: Boolean(options.resetInnerPhaseScroll)
   });
+}
+
+function captureViewFocus(root) {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || !root.contains(active)) return null;
+  if (!active.matches("input, textarea, select")) return null;
+  const scope = active.closest("form[id]") || root;
+  const controls = [...scope.querySelectorAll("input, textarea, select")];
+  const index = controls.indexOf(active);
+  if (index < 0) return null;
+  return {
+    scopeId: scope instanceof HTMLElement ? scope.id : "",
+    index,
+    tagName: active.tagName,
+    type: active.getAttribute("type") || "",
+    id: active.id || "",
+    name: active.getAttribute("name") || "",
+    value: active.value,
+    checked: "checked" in active ? active.checked : undefined,
+    selectionStart: typeof active.selectionStart === "number" ? active.selectionStart : null,
+    selectionEnd: typeof active.selectionEnd === "number" ? active.selectionEnd : null,
+    selectionDirection: active.selectionDirection || "none"
+  };
+}
+
+function restoreViewFocus(root, snapshot) {
+  if (!snapshot) return;
+  const scope = snapshot.scopeId ? root.querySelector(`#${CSS.escape(snapshot.scopeId)}`) : root;
+  if (!scope) return;
+  const controls = [...scope.querySelectorAll("input, textarea, select")];
+  let target = snapshot.id ? scope.querySelector(`#${CSS.escape(snapshot.id)}`) : null;
+  if (!target && snapshot.name) {
+    const candidates = [...scope.querySelectorAll(`[name="${CSS.escape(snapshot.name)}"]`)];
+    target = candidates.find((item) => item.tagName === snapshot.tagName && (item.getAttribute("type") || "") === snapshot.type) || null;
+  }
+  if (!target) target = controls[snapshot.index] || null;
+  if (!(target instanceof HTMLElement) || target.tagName !== snapshot.tagName) return;
+  if ("value" in target) target.value = snapshot.value;
+  if (snapshot.checked !== undefined && "checked" in target) target.checked = snapshot.checked;
+  target.focus({ preventScroll: true });
+  if (snapshot.selectionStart !== null && typeof target.setSelectionRange === "function") {
+    const end = Math.min(snapshot.selectionEnd ?? snapshot.selectionStart, target.value.length);
+    target.setSelectionRange(Math.min(snapshot.selectionStart, end), end, snapshot.selectionDirection);
+  }
 }
 
 function getConceptMapFramePark() {
@@ -2470,6 +2539,8 @@ function scheduleMenubarIdleDismiss() {
   menubarIdleTimer = window.setTimeout(() => {
     menubarIdleTimer = null;
     if (menubarPointerInside) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest("#projectCreateForm")) return;
     dismissMenubarChrome();
   }, MENUBAR_IDLE_DISMISS_MS);
 }
@@ -2495,6 +2566,13 @@ function dismissMenubarChrome() {
 
 function focusOpenMenubarChrome() {
   if (!state.projectManagerOpen) return;
+  if (state.projectCreateOpen) {
+    const titleInput = document.querySelector('#projectCreateForm input[name="title"]');
+    if (titleInput instanceof HTMLElement) {
+      titleInput.focus({ preventScroll: true });
+      return;
+    }
+  }
   const panel = document.querySelector(".project-manager-panel");
   if (panel instanceof HTMLElement) panel.focus({ preventScroll: true });
 }

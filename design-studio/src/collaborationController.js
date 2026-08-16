@@ -293,6 +293,8 @@ export function createCollaborationController({ projectId = "default", getState,
         const firstEmpty = [...activeForm.querySelectorAll("input:not([disabled])")]
           .find((input) => !String(input.value || "").trim());
         requestAnimationFrame(() => {
+          const focused = document.activeElement;
+          if (focused && focused !== document.body && !activeForm.contains(focused)) return;
           if (hasError && passwordInput && String(usernameInput?.value || "").trim()) {
             passwordInput.focus();
             return;
