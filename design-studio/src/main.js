@@ -27,7 +27,7 @@ import { renderOv1ToolboxFloatButton } from "./ov1View.js";
 import { renderPhaseActionChatFloatButton } from "./phaseActionView.js";
 import { renderForceMissionChatFloatButton } from "./forceMissionView.js";
 import { renderRuleLibraryChatFloatButton } from "./ruleLibraryView.js";
-import { renderSequenceChatFloatButton } from "./ov6cView.js";
+import { renderSequenceToolboxFloatButton } from "./ov6cView.js";
 import { renderStateMachineToolboxFloatButton } from "./stateMachineView.js";
 
 import { deleteModelSnapshot, persistModelSnapshots, saveModelSnapshot, snapshotContextFromState, upsertModelSnapshot } from "./modelSnapshotStore.js";
@@ -447,9 +447,9 @@ function renderOv1ToolboxFloatHost() {
   // Rule library (nav 02): always offer research-chat FAB while chat is collapsed.
   const onRuleLibrary = state.activeView === "ov6a";
   const ruleFloating = onRuleLibrary && state.ruleLibraryChatOpen !== true;
-  // Sequence validation (ov6c): AI chat FAB while chat is collapsed.
+  // Sequence validation (ov6c): toolbox FAB while its rail is collapsed.
   const onSequence = state.activeView === "ov6c";
-  const sequenceFloating = onSequence && state.sequenceChatOpen !== true;
+  const sequenceFloating = onSequence && state.ov6cToolsOpen !== true;
   const onStateMachine = state.activeView === "ov6b";
   const stateMachineFloating = onStateMachine && state.ov6bToolsOpen !== true;
   if (ov1Floating) {
@@ -470,11 +470,7 @@ function renderOv1ToolboxFloatHost() {
   if (sequenceFloating) {
     host.hidden = false;
     host.removeAttribute("hidden");
-    host.innerHTML = renderSequenceChatFloatButton({
-      chatOpen: false,
-      chatGenerating: Boolean(state.sequenceChatGenerating),
-      disabled: Boolean(state.sequenceChatGenerating)
-    });
+    host.innerHTML = renderSequenceToolboxFloatButton({ toolsOpen: false });
     return;
   }
   if (stateMachineFloating) {
@@ -1053,8 +1049,10 @@ function handleAction(action, source = null) {
     return;
   }
   if (action === "toggle-sequence-chat") {
+    state.ov6cToolsOpen = true;
     state.sequenceChatOpen = !state.sequenceChatOpen;
     if (state.sequenceChatOpen) {
+      state.ov6cEditorOpen = false;
       sequenceChatController.ensureWelcome(state.ov6c || {});
     }
     render();
@@ -1066,7 +1064,9 @@ function handleAction(action, source = null) {
     return;
   }
   if (action === "open-sequence-chat") {
+    state.ov6cToolsOpen = true;
     state.sequenceChatOpen = true;
+    state.ov6cEditorOpen = false;
     sequenceChatController.ensureWelcome(state.ov6c || {});
     render();
     return;

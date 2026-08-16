@@ -6,6 +6,7 @@ import {
   updateOv6bCanvasLayout,
   updateOv6bTransition,
   addOv6cMessage,
+  duplicateOv6cMessage,
   addOv6cSequence,
   removeOv6cSequence,
   inspectPhaseAgainstOv6,
@@ -21,7 +22,7 @@ import {
 import { applyStateMachineDraft, buildStateMachineGenerationAnalysis } from "../design-studio/src/dodafProductController.js";
 import { generateMockOutput } from "../shared/generator.js";
 import { renderOv6a, renderOv6b } from "../design-studio/src/dodafOperationalViews.js";
-import { renderOv6c, renderSequenceChatFloatButton } from "../design-studio/src/ov6cView.js";
+import { renderOv6c, renderSequenceToolboxFloatButton } from "../design-studio/src/ov6cView.js";
 import { renderStateMachineToolboxFloatButton } from "../design-studio/src/stateMachineView.js";
 import { renderRuleLibraryChatFloatButton } from "../design-studio/src/ruleLibraryView.js";
 import { buildStructureReview } from "../design-studio/src/structureReviewBuilder.js";
@@ -300,6 +301,7 @@ const htmlC = renderOv6c({
   ov6cSelectedSequenceId: ov6c.sequences[0].id,
   ov6cSelectedMessageId: ov6c.sequences[0].messages[0].id,
   ov6cEditorOpen: true,
+  ov6cToolsOpen: true,
   sequenceChatOpen: true,
   sequenceChat: { messages: [{ id: "m1", role: "assistant", text: "欢迎", topic: "welcome", source: "local" }] }
 });
@@ -308,13 +310,15 @@ assert(htmlC.includes("ov6c-canvas") && htmlC.includes("seq-gantt") && htmlC.inc
 assert(htmlC.includes("seq-message-name-input") && htmlC.includes("ov6c-connect-pick"), "Canvas direct edit controls missing");
 assert(htmlC.includes("ov6c-participant-field") && htmlC.includes("ov6c-move-message"), "Lifeline/message canvas mutators missing");
 assert(htmlC.includes("seq-gantt-bar") && htmlC.includes("offsetMinutes") && htmlC.includes("甘特图"), "Gantt timeline chrome missing");
+assert(htmlC.includes("ov6c-adjust-message-time") && htmlC.includes("ov6c-duplicate-message"), "Gantt quick edit controls missing");
 assert(htmlC.includes("seq-engine-tab") && htmlC.includes("Mermaid") && htmlC.includes("UML 序列"), "Open-source engine tabs missing");
 assert(htmlC.includes("sequenceDiagram") || htmlC.includes("data-engine=\"mermaid\""), "Mermaid DSL export missing");
 assert(htmlC.includes("research-chat-panel") || htmlC.includes("seq-review-chat"), "Sequence chat panel missing when open");
 assert(htmlC.includes("close-sequence-chat"), "Sequence chat close missing when open");
+assert(htmlC.includes("时序工具箱") && htmlC.includes("ov6c-toggle-editor"), "Sequence toolbox rail missing");
 assert(!htmlC.includes("<th>时序图</th>") && !htmlC.includes("产品诊断</h3>"), "Legacy full events table / heavy diagnostics block should be removed");
-const fabSeq = renderSequenceChatFloatButton({ chatOpen: false });
-assert(fabSeq.includes("toggle-sequence-chat") && fabSeq.includes("research-chat-float"), "Sequence chat FAB missing");
+const fabSeq = renderSequenceToolboxFloatButton({ toolsOpen: false });
+assert(fabSeq.includes("toggle-ov6c-tools") && fabSeq.includes("seq-toolbox-float"), "Sequence toolbox FAB missing");
 
 const mermaid = sequenceToMermaid(ov6c.sequences[0]);
 const jsSeq = sequenceToJsSequence(ov6c.sequences[0]);
@@ -359,6 +363,8 @@ const gantt = layoutSequenceGantt({
 });
 assert(gantt.rows[0].start === 0 && gantt.rows[2].end === 62, "Gantt layout should place bars by offset/duration");
 assert(gantt.totalMinutes >= 60 && formatSequenceClock(15) === "00:15", "Gantt window and clock format failed");
+const copied = duplicateOv6cMessage(ov6c, ov6c.sequences[0].id, ov6c.sequences[0].messages[0].id);
+assert(copied.sequences[0].messages.length === 2 && copied.sequences[0].messages[1].name.includes("副本"), "Sequence message duplicate failed");
 
 const seeded = seedOv6cFromPhase({ sequences: [] }, state);
 assert((seeded.sequences || []).length >= 1, "Phase seed should create a sequence");

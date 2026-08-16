@@ -688,6 +688,32 @@ export function addOv6cMessage(model, sequenceId, partial = {}) {
   return normalizeDodafOv6c(next);
 }
 
+/** Duplicate a message next to its source and offset it to avoid a full overlap. */
+export function duplicateOv6cMessage(model, sequenceId, messageId) {
+  const current = ensureOv6cModel(model);
+  const sequence = (current.sequences || []).find((item) => item.id === sequenceId);
+  const source = (sequence?.messages || []).find((item) => item.id === messageId);
+  if (!sequence || !source) return normalizeDodafOv6c(cloneModel(current));
+  const start = Number.isFinite(Number(source.offsetMinutes)) ? Number(source.offsetMinutes) : 0;
+  const duration = Number.isFinite(Number(source.durationMinutes)) ? Math.max(0, Number(source.durationMinutes)) : 15;
+  const next = addOv6cMessage(current, sequenceId, {
+    ...source,
+    id: undefined,
+    name: `${source.name || source.title || "消息"}（副本）`,
+    offsetMinutes: start + Math.max(duration, 5)
+  });
+  const target = (next.sequences || []).find((item) => item.id === sequenceId);
+  const duplicate = target?.messages?.at(-1);
+  if (duplicate && source.sequence) {
+    target.messages = target.messages
+      .filter((item) => item.id !== duplicate.id)
+      .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+    target.messages.splice(Math.min(target.messages.length, source.sequence), 0, duplicate);
+    target.messages = target.messages.map((item, index) => ({ ...item, sequence: index + 1 }));
+  }
+  return normalizeDodafOv6c(next);
+}
+
 export function removeOv6cSequence(model, sequenceId) {
   const next = cloneModel(ensureOv6cModel(model));
   next.sequences = (next.sequences || []).filter((item) => item.id !== sequenceId);

@@ -8640,19 +8640,25 @@ a { color: var(--cyan); }
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) 0fr 0fr;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) 0fr 0fr 0fr;
   gap: 10px;
   align-items: stretch;
   transition: grid-template-columns .2s ease;
 }
 .seq-workbench.is-editor-open {
-  grid-template-columns: minmax(170px, 200px) minmax(0, 1fr) minmax(280px, var(--seq-editor-width)) 0fr;
+  grid-template-columns: minmax(170px, 200px) minmax(0, 1fr) minmax(280px, var(--seq-editor-width)) 0fr 0fr;
 }
 .seq-workbench.is-chat-open {
-  grid-template-columns: minmax(170px, 200px) minmax(0, 1fr) 0fr minmax(280px, var(--seq-chat-width));
+  grid-template-columns: minmax(170px, 200px) minmax(0, 1fr) 0fr minmax(300px, var(--seq-chat-width)) 0fr;
 }
-.seq-workbench.is-editor-open.is-chat-open {
-  grid-template-columns: minmax(160px, 190px) minmax(0, 1fr) minmax(260px, var(--seq-editor-width)) minmax(260px, var(--seq-chat-width));
+.seq-workbench.is-tools-docked {
+  grid-template-columns: minmax(170px, 200px) minmax(0, 1fr) 0fr 0fr 58px;
+}
+.seq-workbench.is-tools-docked.is-editor-open {
+  grid-template-columns: minmax(160px, 190px) minmax(0, 1fr) minmax(280px, var(--seq-editor-width)) 0fr 58px;
+}
+.seq-workbench.is-tools-docked.is-chat-open {
+  grid-template-columns: minmax(160px, 190px) minmax(0, 1fr) 0fr minmax(300px, var(--seq-chat-width)) 58px;
 }
 .seq-workbench.is-empty {
   grid-template-columns: minmax(0, 1fr);
@@ -8660,6 +8666,18 @@ a { color: var(--cyan); }
 .seq-workbench.is-empty.is-chat-open {
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
 }
+.seq-workbench.is-empty.is-tools-docked { grid-template-columns: minmax(0, 1fr) 58px; }
+.seq-workbench.is-empty.is-tools-docked.is-chat-open { grid-template-columns: minmax(0, 1fr) minmax(300px, 340px) 58px; }
+.seq-edit-rail { grid-column: -2 / -1; grid-row: 1; }
+.seq-edit-rail .is-danger { color: #fca5a5; }
+.seq-workbench:not(.is-empty) > .seq-list-panel { grid-column: 1; grid-row: 1; }
+.seq-workbench:not(.is-empty) > .seq-main-panel { grid-column: 2; grid-row: 1; }
+.seq-workbench:not(.is-empty) > .seq-editor-dock { grid-column: 3; grid-row: 1; }
+.seq-workbench:not(.is-empty) > .seq-chat-dock { grid-column: 4; grid-row: 1; }
+.seq-workbench:not(.is-empty) > .seq-edit-rail { grid-column: 5; grid-row: 1; }
+.seq-workbench.is-empty > .seq-empty-board { grid-column: 1; grid-row: 1; }
+.seq-workbench.is-empty > .seq-chat-dock { grid-column: 2; grid-row: 1; }
+.seq-workbench.is-empty > .seq-edit-rail { grid-column: 3; grid-row: 1; }
 .seq-list-panel,
 .seq-main-panel,
 .seq-chat-dock,
@@ -8851,12 +8869,15 @@ a { color: var(--cyan); }
   position: relative;
 }
 .seq-editor-dock {
-  display: none;
-  overflow: hidden;
-}
-.seq-editor-dock.is-open {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.seq-editor-dock.is-open {
+  opacity: 1;
+  pointer-events: auto;
 }
 .seq-editor-dock-head {
   display: flex;
@@ -9039,6 +9060,7 @@ a { color: var(--cyan); }
   border-bottom: 1px solid #eef2f7;
 }
 .seq-gantt-row.is-selected { background: rgba(59, 130, 246, .06); }
+.seq-gantt-row.has-conflict { background: rgba(245, 158, 11, .055); }
 .seq-gantt-label {
   display: flex;
   align-items: center;
@@ -9052,7 +9074,13 @@ a { color: var(--cyan); }
   text-align: right;
   justify-content: flex-end;
   cursor: pointer;
+  gap: 5px;
+  overflow: hidden;
 }
+.seq-gantt-label > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seq-row-flag { flex: 0 0 auto; padding: 1px 4px; border-radius: 3px; font-size: 9px; font-style: normal; font-weight: 700; }
+.seq-row-flag.is-conflict { color: #92400e; background: #fef3c7; }
+.seq-row-flag.is-unlinked { color: #9a3412; background: #ffedd5; }
 .seq-gantt-label:hover { color: #0f172a; }
 .seq-gantt-track {
   position: relative;
@@ -9087,7 +9115,33 @@ a { color: var(--cyan); }
 .seq-gantt-bar.is-selected {
   outline: 2px solid #1d4ed8;
   outline-offset: 1px;
+  overflow: visible;
 }
+.seq-gantt-quick-tools {
+  position: absolute;
+  top: 30px;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  padding: 2px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, .16);
+}
+.seq-gantt-quick-tools button {
+  width: 25px;
+  height: 23px;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid #e2e8f0;
+  background: transparent;
+  color: #334155;
+  cursor: pointer;
+}
+.seq-gantt-quick-tools button:last-child { border-right: 0; }
+.seq-gantt-quick-tools button:hover { background: #eff6ff; color: #1d4ed8; }
+.seq-gantt-row.is-selected { position: relative; z-index: 1; }
 .seq-gantt-bar .seq-message-seq {
   background: rgba(15, 23, 42, .22);
   color: #fff;
@@ -9605,12 +9659,15 @@ button.primary-btn.compact {
   color: var(--muted);
 }
 .seq-chat-dock {
-  display: none;
-  overflow: hidden;
-}
-.seq-chat-dock.is-open {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.seq-chat-dock.is-open {
+  opacity: 1;
+  pointer-events: auto;
 }
 .seq-chat-dock .research-chat-panel {
   flex: 1 1 auto;
@@ -9653,7 +9710,18 @@ button.primary-btn.compact {
   .seq-workbench,
   .seq-workbench.is-chat-open,
   .seq-workbench.is-editor-open,
+  .seq-workbench.is-tools-docked,
+  .seq-workbench.is-tools-docked.is-editor-open,
+  .seq-workbench.is-tools-docked.is-chat-open,
   .seq-workbench.is-editor-open.is-chat-open { grid-template-columns: 1fr; }
+  .seq-workbench:not(.is-empty) > .seq-list-panel,
+  .seq-workbench:not(.is-empty) > .seq-main-panel,
+  .seq-workbench:not(.is-empty) > .seq-editor-dock,
+  .seq-workbench:not(.is-empty) > .seq-chat-dock,
+  .seq-workbench:not(.is-empty) > .seq-edit-rail,
+  .seq-workbench.is-empty > .seq-empty-board,
+  .seq-workbench.is-empty > .seq-chat-dock,
+  .seq-workbench.is-empty > .seq-edit-rail { grid-column: 1; grid-row: auto; }
   .seq-list-panel { max-height: 160px; }
   .seq-editor-dock.is-open,
   .seq-chat-dock.is-open { min-height: 240px; }

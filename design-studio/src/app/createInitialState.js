@@ -160,6 +160,7 @@ export function createInitialWorkbenchState(activeProjectId = resolveActiveProje
     sequenceChat,
     sequenceChatGenerating: false,
     sequenceChatOpen: false,
+    ov6cToolsOpen: false,
     stateMachineChat,
     stateMachineChatGenerating: false,
     stateMachineChatOpen: false,

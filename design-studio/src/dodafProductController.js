@@ -38,6 +38,7 @@ import {
   addOv6cMessage,
   addOv6cParticipant,
   addOv6cSequence,
+  duplicateOv6cMessage,
   listForceAndPhaseSubjects,
   listStateMachineSubjects,
   removeOv6aRule,
@@ -517,11 +518,31 @@ export function createDodafProductController({
       state.ov6cSelectedMessageId = ds.messageId || "";
       state.ov6cConnectFromId = "";
       state.ov6cEditorOpen = true;
+      state.ov6cToolsOpen = true;
+      state.sequenceChatOpen = false;
+      render();
+      return true;
+    }
+    if (action === "toggle-ov6c-tools") {
+      state.ov6cToolsOpen = !state.ov6cToolsOpen;
+      if (!state.ov6cToolsOpen) {
+        state.ov6cEditorOpen = false;
+        state.sequenceChatOpen = false;
+      }
+      render();
+      return true;
+    }
+    if (action === "ov6c-toggle-editor") {
+      state.ov6cToolsOpen = true;
+      state.ov6cEditorOpen = !state.ov6cEditorOpen;
+      if (state.ov6cEditorOpen) state.sequenceChatOpen = false;
       render();
       return true;
     }
     if (action === "ov6c-open-editor") {
+      state.ov6cToolsOpen = true;
       state.ov6cEditorOpen = true;
+      state.sequenceChatOpen = false;
       render();
       return true;
     }
@@ -603,6 +624,32 @@ export function createDodafProductController({
       if (!ds.sequenceId || !ds.messageId) return true;
       const model = resolveDodafProduct(state, "ov6c").model;
       persistOv6("ov6c", reverseOv6cMessage(model, ds.sequenceId, ds.messageId), "已反转消息方向");
+      return true;
+    }
+    if (action === "ov6c-adjust-message-time") {
+      if (!ds.sequenceId || !ds.messageId) return true;
+      const model = resolveDodafProduct(state, "ov6c").model;
+      const sequence = (model.sequences || []).find((item) => item.id === ds.sequenceId);
+      const message = (sequence?.messages || []).find((item) => item.id === ds.messageId);
+      if (!message) return true;
+      const field = ds.field === "durationMinutes" ? "durationMinutes" : "offsetMinutes";
+      const fallback = field === "durationMinutes" ? 15 : 0;
+      const current = Number.isFinite(Number(message[field])) ? Number(message[field]) : fallback;
+      const value = Math.max(0, current + Number(ds.delta || 0));
+      state.ov6cSelectedMessageId = ds.messageId;
+      state.ov6cEditorOpen = true;
+      persistOv6("ov6c", updateOv6cMessage(model, ds.sequenceId, ds.messageId, { [field]: value }));
+      return true;
+    }
+    if (action === "ov6c-duplicate-message") {
+      if (!ds.sequenceId || !ds.messageId) return true;
+      const model = resolveDodafProduct(state, "ov6c").model;
+      const next = duplicateOv6cMessage(model, ds.sequenceId, ds.messageId);
+      const sequence = (next.sequences || []).find((item) => item.id === ds.sequenceId);
+      const sourceIndex = (sequence?.messages || []).findIndex((item) => item.id === ds.messageId);
+      state.ov6cSelectedMessageId = sequence?.messages?.[sourceIndex + 1]?.id || "";
+      state.ov6cEditorOpen = true;
+      persistOv6("ov6c", next, "已复制消息");
       return true;
     }
     if (action === "ov6c-apply-dsl") {

@@ -18,10 +18,8 @@ import {
   sequenceToJsSequence,
   sequenceToPlantUml
 } from "./sequenceDiagramDsl.js";
-import {
-  renderResearchChatFloatButton,
-  renderResearchChatPanel
-} from "./researchChat/index.js";
+import { renderResearchChatPanel } from "./researchChat/index.js";
+import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
 
 const MESSAGE_TYPES = ["message", "response", "status", "exception", "timeout"];
 
@@ -42,6 +40,7 @@ export function renderOv6c(state = {}) {
   const chatGenerating = Boolean(state.sequenceChatGenerating);
   const connectFromId = String(state.ov6cConnectFromId || "");
   const editorOpen = Boolean(state.ov6cEditorOpen);
+  const toolsOpen = state.ov6cToolsOpen === true;
   const eventCount = Array.isArray(model.events) ? model.events.length : sequences.reduce((sum, seq) => sum + (seq.messages?.length || 0), 0);
   const reviewCount = (model.diagnostics || []).filter((item) => item.state === "review").length;
 
@@ -62,7 +61,7 @@ export function renderOv6c(state = {}) {
     </header>
 
     ${sequences.length
-    ? `<div class="seq-workbench ${editorOpen ? "is-editor-open" : ""} ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}" aria-label="时序研究台">
+    ? `<div class="seq-workbench ${toolsOpen ? "is-tools-docked" : "is-tools-floating"} ${editorOpen ? "is-editor-open" : ""} ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}" aria-label="时序研究台">
         <aside class="seq-list-panel" aria-label="时序图列表">
           <header class="seq-panel-head">
             <strong>时序图</strong>
@@ -102,8 +101,9 @@ export function renderOv6c(state = {}) {
             model
           }) : ""}
         </aside>
+        ${toolsOpen ? renderSequenceToolboxRail({ editorOpen, chatOpen, chatGenerating, sequenceId: selectedId }) : ""}
       </div>`
-    : renderEmptyWorkbench({ chatOpen, chatGenerating, chat: state.sequenceChat, model })}
+    : renderEmptyWorkbench({ toolsOpen, chatOpen, chatGenerating, chat: state.sequenceChat, model })}
 
     ${(model.diagnostics || []).length
     ? `<section class="seq-diagnostics" aria-label="时序诊断">
@@ -123,20 +123,40 @@ export function renderOv6c(state = {}) {
 }
 
 /** Topbar floating FAB — same host as rule-library / phase-action. */
-export function renderSequenceChatFloatButton({ chatOpen = false, chatGenerating = false, disabled = false } = {}) {
-  return renderResearchChatFloatButton({
-    scope: "sequence",
-    open: chatOpen,
-    generating: chatGenerating,
-    disabled,
-    titleOpen: "收起时序对话",
-    titleClosed: "打开时序对话",
-    action: "toggle-sequence-chat"
+export function renderSequenceToolboxFloatButton({ toolsOpen = false } = {}) {
+  return renderToolboxFloatButton({
+    scope: "ov6c",
+    open: toolsOpen,
+    action: "toggle-ov6c-tools",
+    className: "ov1-edit-rail-brand is-topbar-float seq-toolbox-float"
   });
 }
 
-function renderEmptyWorkbench({ chatOpen, chatGenerating, chat, model }) {
-  return `<div class="seq-workbench is-empty ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}">
+export const renderSequenceChatFloatButton = renderSequenceToolboxFloatButton;
+
+function renderSequenceToolboxRail({ editorOpen = false, chatOpen = false, chatGenerating = false, sequenceId = "" } = {}) {
+  const sequenceAttrs = sequenceId ? { "data-sequence-id": sequenceId } : {};
+  return renderToolboxRail({
+    scope: "ov6c",
+    open: true,
+    label: "时序工具箱",
+    navLabel: "时序工具",
+    className: "sm-edit-rail seq-edit-rail",
+    navClassName: "seq-edit-rail-nav",
+    toggleAction: "toggle-ov6c-tools",
+    items: [
+      { action: "ov6c-toggle-editor", title: "消息 / 参与方属性", icon: "states", active: editorOpen, pressed: editorOpen },
+      { action: "toggle-sequence-chat", title: chatOpen ? "收起 AI 对话" : "打开 AI 对话", icon: "chat", active: chatOpen, attention: chatGenerating, pressed: chatOpen },
+      "sep",
+      { action: "ov6c-add-participant", title: "添加参与方", icon: "plus", attrs: sequenceAttrs, disabled: !sequenceId },
+      { action: "ov6c-add-message", title: "添加消息", icon: "transition", attrs: sequenceAttrs, disabled: !sequenceId },
+      { action: "ov6c-remove-sequence", title: "删除当前时序图", icon: "trash", className: "is-danger", attrs: sequenceAttrs, disabled: !sequenceId }
+    ]
+  });
+}
+
+function renderEmptyWorkbench({ toolsOpen, chatOpen, chatGenerating, chat, model }) {
+  return `<div class="seq-workbench is-empty ${toolsOpen ? "is-tools-docked" : "is-tools-floating"} ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}">
     <div class="seq-empty-board">
       <strong>尚无时序图</strong>
       <p>以消息为时间条、按抽象作战时间展开。可按阶段生成，或对话起草。</p>
@@ -149,6 +169,7 @@ function renderEmptyWorkbench({ chatOpen, chatGenerating, chat, model }) {
     <aside class="seq-chat-dock ${chatOpen ? "is-open" : "is-collapsed"}" id="sequenceChatDock" aria-hidden="${chatOpen ? "false" : "true"}">
       ${chatOpen ? renderSequenceChatPanel({ chat, chatGenerating, model }) : ""}
     </aside>
+    ${toolsOpen ? renderSequenceToolboxRail({ chatOpen, chatGenerating }) : ""}
   </div>`;
 }
 
@@ -301,9 +322,13 @@ function renderGanttCanvas(sequence, { selectedMessageId, layout }) {
     const clock = row.instant
       ? formatSequenceClock(row.start)
       : `${formatSequenceClock(row.start)}~${formatSequenceClock(row.end)}`;
-    return `<div class="seq-gantt-row ${selected ? "is-selected" : ""}" data-message-id="${escapeHtml(message.id)}">
+    const overlaps = layout.rows.some((other) => other.id !== row.id && row.duration > 0 && other.duration > 0 && row.start < other.end && row.end > other.start);
+    const unlinked = !(message.relatedActivityRefs || []).length;
+    return `<div class="seq-gantt-row ${selected ? "is-selected" : ""} ${overlaps ? "has-conflict" : ""}" data-message-id="${escapeHtml(message.id)}">
       <button type="button" class="seq-gantt-label" data-action="ov6c-select-message" data-sequence-id="${escapeHtml(sequence.id)}" data-message-id="${escapeHtml(message.id)}" title="${escapeHtml(message.name || "")}">
-        ${escapeHtml(message.name || message.title || `消息 ${row.index + 1}`)}
+        <span>${escapeHtml(message.name || message.title || `消息 ${row.index + 1}`)}</span>
+        ${overlaps ? `<i class="seq-row-flag is-conflict" title="与其他消息时间重叠">冲突</i>` : ""}
+        ${unlinked ? `<i class="seq-row-flag is-unlinked" title="尚未回链阶段或活动">未回链</i>` : ""}
       </button>
       <div class="seq-gantt-track">
         ${gridLines}
@@ -327,6 +352,12 @@ function renderGanttCanvas(sequence, { selectedMessageId, layout }) {
             placeholder="消息名称"
           />
           <span class="seq-gantt-clock">${clock}</span>
+          ${selected ? `<span class="seq-gantt-quick-tools" aria-label="时间条快捷操作">
+            <button type="button" data-action="ov6c-adjust-message-time" data-field="offsetMinutes" data-delta="-5" data-sequence-id="${escapeHtml(sequence.id)}" data-message-id="${escapeHtml(message.id)}" title="前移 5 分钟">←</button>
+            <button type="button" data-action="ov6c-adjust-message-time" data-field="offsetMinutes" data-delta="5" data-sequence-id="${escapeHtml(sequence.id)}" data-message-id="${escapeHtml(message.id)}" title="后移 5 分钟">→</button>
+            <button type="button" data-action="ov6c-adjust-message-time" data-field="durationMinutes" data-delta="-5" data-sequence-id="${escapeHtml(sequence.id)}" data-message-id="${escapeHtml(message.id)}" title="缩短 5 分钟">−</button>
+            <button type="button" data-action="ov6c-adjust-message-time" data-field="durationMinutes" data-delta="5" data-sequence-id="${escapeHtml(sequence.id)}" data-message-id="${escapeHtml(message.id)}" title="延长 5 分钟">＋</button>
+          </span>` : ""}
         </div>
       </div>
     </div>`;
@@ -434,6 +465,7 @@ function renderMessageInspector(sequence, message, participants, activities) {
       <button type="button" class="seq-icon-btn" data-action="ov6c-move-message" data-sequence-id="${escapeHtml(sequence.id)}" data-message-id="${escapeHtml(message.id)}" data-delta="-1" title="上移">↑</button>
       <button type="button" class="seq-icon-btn" data-action="ov6c-move-message" data-sequence-id="${escapeHtml(sequence.id)}" data-message-id="${escapeHtml(message.id)}" data-delta="1" title="下移">↓</button>
       <button type="button" class="seq-icon-btn" data-action="ov6c-reverse-message" data-sequence-id="${escapeHtml(sequence.id)}" data-message-id="${escapeHtml(message.id)}" title="反转方向">⇄</button>
+      <button type="button" class="seq-icon-btn" data-action="ov6c-duplicate-message" data-sequence-id="${escapeHtml(sequence.id)}" data-message-id="${escapeHtml(message.id)}" title="复制消息">⧉</button>
       <button type="button" class="seq-icon-btn is-danger" data-action="ov6c-remove-message" data-sequence-id="${escapeHtml(sequence.id)}" data-message-id="${escapeHtml(message.id)}" title="删除">×</button>
     </div>
   </section>`;
