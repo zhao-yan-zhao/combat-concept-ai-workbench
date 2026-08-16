@@ -125,6 +125,69 @@ export function summarizeInspirationSession(session) {
   return answers.map((answer, index) => `${labels.get(answer.topic) || (index ? "补充说明" : "初始灵感")}：${answer.text}`).join("；");
 }
 
+export function buildInspirationConversationContext(session, {
+  currentQuestion = "",
+  recentMessages = 8,
+  maxSummaryMessages = 20,
+  maxChars = 6000
+} = {}) {
+  const normalized = normalizeInspirationSession(session);
+  const messages = normalized.messages.filter((message) => {
+    if (message.pending || !clean(message.text)) return false;
+    return message.role === "user"
+      || (message.role === "assistant" && !["error", "cancelled"].includes(message.source));
+  });
+  const current = clean(currentQuestion);
+  if (current && messages.at(-1)?.role === "user" && clean(messages.at(-1).text) === current) {
+    messages.pop();
+  }
+  if (!messages.length) return "";
+
+  const budget = Math.max(800, Number(maxChars) || 6000);
+  const recentCount = Math.max(2, Number(recentMessages) || 8);
+  const recent = messages.slice(-recentCount);
+  const older = messages.slice(0, -recent.length);
+  const recentLines = fitNewestLines(
+    recent.map((message) => formatConversationMessage(message, 1200)),
+    Math.floor(budget * 0.72)
+  );
+  const recentBlock = `【最近对话原文】\n${recentLines.join("\n")}`;
+  if (!older.length) return recentBlock.slice(0, budget);
+
+  const summaryCandidates = older
+    .slice(-Math.max(1, Number(maxSummaryMessages) || 20))
+    .map((message) => formatConversationMessage(message, 180));
+  // Reserve labels and the folded-count line so trimming never cuts the newest verbatim turn.
+  const summaryBudget = Math.max(0, budget - recentBlock.length - 64);
+  const summaryLines = fitNewestLines(summaryCandidates, summaryBudget);
+  const omitted = Math.max(0, older.length - summaryLines.length);
+  const omissionLine = omitted ? `（另有 ${omitted} 条更早消息已折叠）` : "";
+  const summaryBlock = ["【较早对话摘要】", omissionLine, ...summaryLines].filter(Boolean).join("\n");
+  return `${summaryBlock}\n${recentBlock}`;
+}
+
+function formatConversationMessage(message, limit) {
+  const role = message.role === "user" ? "研究人员" : "研究助手";
+  const text = clean(message.text).replace(/\s+/g, " ");
+  return `${role}：${text.length > limit ? `${text.slice(0, limit - 1)}…` : text}`;
+}
+
+function fitNewestLines(lines, budget) {
+  const selected = [];
+  let used = 0;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index];
+    if (used && used + line.length + 1 > budget) break;
+    if (!used && line.length > budget) {
+      selected.unshift(line.slice(0, Math.max(0, budget)));
+      break;
+    }
+    selected.unshift(line);
+    used += line.length + 1;
+  }
+  return selected;
+}
+
 export function getInspirationAnswers(session) {
   const topics = ["idea", ...FOLLOW_UPS.map((item) => item.key)];
   const answers = Object.fromEntries(topics.map((topic) => [topic, ""]));

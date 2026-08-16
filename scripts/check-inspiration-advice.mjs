@@ -2,6 +2,7 @@ import {
   addInspirationAdviceTurn,
   addInspirationReply,
   beginInspirationAdviceTurn,
+  buildInspirationConversationContext,
   completeInspirationAdviceTurn,
   createInspirationSession,
   getInspirationProgress,
@@ -26,6 +27,26 @@ assert(pendingHtml.includes("research-chat-typing") && pendingHtml.includes("AI 
 const completed = completeInspirationAdviceTurn(pending, "Focus on authorization boundaries and evidence gaps.", "ai");
 assert(!completed.messages.at(-1)?.pending && completed.messages.at(-1)?.source === "ai", "Pending assistant was not completed with AI provenance");
 assert(getInspirationProgress(completed).stage === stage, "Optimistic advice flow incorrectly advanced guided inspiration stage");
+
+const contextualPending = beginInspirationAdviceTurn(advised, "What about the research objective?");
+const context = buildInspirationConversationContext(contextualPending, { currentQuestion: "What about the research objective?" });
+assert(context.includes("研究人员：What evidence should be clarified?") && context.includes("研究助手：Clarify assumptions"), "Conversation context omitted a prior user/assistant turn");
+assert(!context.includes("What about the research objective?"), "Conversation context duplicated the current question");
+
+let longSession = createInspirationSession();
+for (let index = 0; index < 18; index += 1) {
+  longSession = addInspirationAdviceTurn(
+    longSession,
+    `Earlier research question ${index} ${"constraint ".repeat(20)}`,
+    `Earlier assistant judgment ${index} ${"evidence ".repeat(20)}`,
+    "ai"
+  );
+}
+const compressed = buildInspirationConversationContext(longSession, { maxChars: 1800, recentMessages: 4 });
+assert(compressed.length <= 1800, "Compressed conversation exceeded its context budget");
+assert(compressed.includes("【较早对话摘要】") && compressed.includes("【最近对话原文】"), "Long conversation was not split into summary and recent windows");
+assert(compressed.includes("Earlier assistant judgment 17"), "Compressed conversation did not preserve the newest assistant reply");
+assert(compressed.includes("已折叠"), "Compressed conversation did not disclose folded older messages");
 
 const html = renderInspirationSession({ session: advised });
 assert(html.includes("researchChatForm") && html.includes("研究对话") && html.includes("data-research-chat-retry"), "Research chat controls were not rendered in inspiration session");
