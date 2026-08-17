@@ -347,7 +347,8 @@ function renderStateMachineFlowCanvas(machine, { selectedStateId = "", selectedT
 
   const bounds = computeOv1WorldBounds(nodes);
   const { widthPct: baseWorldWidth, heightPct: baseWorldHeight } = ov1WorldCssSize(nodes);
-  const worldWidth = Math.max(baseWorldWidth, nodes.length * 20);
+  // Keep enough physical room for 168px state nodes and their transition labels.
+  const worldWidth = Math.max(baseWorldWidth, nodes.length * 24);
   const worldHeight = Math.max(baseWorldHeight, 112);
   // Flowchart nodes are center-positioned (left/top + translate -50%).
   const centers = new Map(nodes.map((node) => {
@@ -509,7 +510,7 @@ function renderSmEdgeLabel(edge, geometry, selectedEdgeId = "") {
   if (!geometry) return "";
   const selected = selectedEdgeId && selectedEdgeId === edge.id ? " is-selected" : "";
   const full = String(edge.isDecisionBranch ? edge.branchResult : edge.condition || edge.label || "转换").trim() || "转换";
-  const label = clip(full, 34);
+  const label = clip(full, 26);
   const empty = !String(edge.isDecisionBranch ? edge.branchResult : edge.condition || "").trim();
   const backward = geometry.backward ? " is-backward" : "";
   const branch = edge.isDecisionBranch ? " is-branch" : "";

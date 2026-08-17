@@ -256,6 +256,27 @@ assert(normalizeDodafOv6b({
 assert(generatedMachines.stateMachines.every((machine) => !state.phaseAction.phases.some((phase) => phase.id === machine.subjectRef)), "Generated machines must not bind directly to phase containers");
 assert(generatedMachines.stateMachines.every((machine) => machine.states.some((item) => item.kind === "initial") && machine.states.some((item) => item.kind === "final")), "Generated machines need entry and exit states");
 assert(generatedMachines.stateMachines.every((machine) => machine.transitions.length >= 2), "Generated machines need observable state transitions");
+assert(generatedMachines.stateMachines.every((machine) => machine.states.length >= 5), "Generated machines need meaningful intermediate lifecycle states");
+assert(generatedMachines.stateMachines.every((machine) => machine.states.filter((item) => item.kind === "normal").length >= 3), "Generated machines must not collapse to one generic in-progress state");
+
+const sparseDraft = applyStateMachineDraft({
+  stateMachines: stateMachineAnalysis.stateMachineSubjects.map((subject) => ({
+    subjectRef: subject.id,
+    subjectType: subject.subjectType,
+    states: [
+      { id: "start", name: "开始", kind: "initial" },
+      { id: "working", name: "进行中", kind: "normal" },
+      { id: "end", name: "结束", kind: "final" }
+    ],
+    transitions: [
+      { id: "t1", fromStateRef: "start", toStateRef: "working", condition: "启动" },
+      { id: "t2", fromStateRef: "working", toStateRef: "end", condition: "完成" }
+    ]
+  }))
+}, stateMachineAnalysis);
+assert(sparseDraft.stateMachines.every((machine) => machine.states.length === 5), "Sparse AI drafts should be expanded into a complete lifecycle");
+assert(sparseDraft.stateMachines.every((machine) => !machine.states.some((item) => item.name === "进行中")), "Generic AI placeholders should not survive draft normalization");
+assert(sparseDraft.stateMachines.every((machine) => machine.transitions.length === 4), "Expanded lifecycle should have a connected main path");
 
 const invalidDecision = normalizeDodafOv6b({
   stateMachines: [{
@@ -289,9 +310,10 @@ const migratedLegacyMachine = normalizeDodafOv6b({
 });
 assert(migratedLegacyMachine.stateMachines.length === 1, "Legacy flat models must remain readable");
 
-let ov6c = addOv6cSequence({ sequences: [] }, { name: "协同序列" });
+let ov6c = addOv6cSequence({ sequences: [] }, { name: "协同序列", diagramType: "force" });
 ov6c = addOv6cMessage(ov6c, ov6c.sequences[0].id, { name: "态势上报", relatedActivityRefs: [] });
 assert(ov6c.sequences[0].messages.length === 1, "Sequence message add failed");
+assert(ov6c.sequences[0].diagramType === "force", "Sequence diagram type should be retained");
 const htmlC = renderOv6c({
   ...state,
   ov6c,
@@ -309,6 +331,7 @@ assert(htmlC.includes("seq-page") && htmlC.includes("seq-workbench"), "Sequence 
 assert(htmlC.includes("ov6c-canvas") && htmlC.includes("seq-gantt") && htmlC.includes("is-interactive") && htmlC.includes("态势上报"), "Interactive sequence canvas missing");
 assert(htmlC.includes("seq-message-name-input") && htmlC.includes("ov6c-move-message"), "Message edit controls missing");
 assert(htmlC.includes("seq-participant-panel") && htmlC.includes("ov6c-participant-field"), "Participant dock controls missing");
+assert(htmlC.includes("ov6c-sequence-field") && htmlC.includes("兵力作战时序图"), "Sequence type selector missing");
 assert(!htmlC.includes("seq-participant-strip") && !htmlC.includes("ov6c-connect-pick"), "Participant controls should not occupy the timeline canvas");
 assert(htmlC.includes("seq-gantt-bar") && htmlC.includes("offsetMinutes") && htmlC.includes("甘特图"), "Gantt timeline chrome missing");
 assert(htmlC.includes("ov6c-adjust-message-time") && htmlC.includes("ov6c-duplicate-message"), "Gantt quick edit controls missing");

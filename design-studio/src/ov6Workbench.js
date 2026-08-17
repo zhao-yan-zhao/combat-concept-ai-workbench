@@ -627,6 +627,7 @@ export function addOv6cSequence(model, partial = {}) {
     {
       id: partial.id || `sequence-${Date.now().toString(36)}-${index}`,
       name: partial.name || `事件序列 ${index}`,
+      diagramType: normalizeSequenceDiagramType(partial.diagramType),
       participants: partial.participants || [
         { id: `participant-${index}-a`, name: "参与方 A", ref: "" },
         { id: `participant-${index}-b`, name: "参与方 B", ref: "" }
@@ -733,7 +734,13 @@ export function updateOv6cSequence(model, sequenceId, patch = {}) {
   const sequence = (next.sequences || []).find((item) => item.id === sequenceId);
   if (!sequence) return normalizeDodafOv6c(next);
   if (patch.name !== undefined) sequence.name = String(patch.name || "").slice(0, 240);
+  if (patch.diagramType !== undefined) sequence.diagramType = normalizeSequenceDiagramType(patch.diagramType);
   return normalizeDodafOv6c(next);
+}
+
+export function normalizeSequenceDiagramType(value) {
+  const type = String(value || "general");
+  return ["general", "phase", "task", "force"].includes(type) ? type : "general";
 }
 
 export function updateOv6cParticipant(model, sequenceId, participantId, patch = {}) {
@@ -900,6 +907,7 @@ export function replaceOv6cSequenceContent(model, sequenceId, nextSequence = {})
   next.sequences[index] = {
     id: current.id,
     name: String(nextSequence.name || current.name || current.id).slice(0, 240),
+    diagramType: normalizeSequenceDiagramType(nextSequence.diagramType || current.diagramType),
     participants: Array.isArray(nextSequence.participants) ? nextSequence.participants : current.participants,
     messages: Array.isArray(nextSequence.messages) ? nextSequence.messages : current.messages,
     fragments: Array.isArray(nextSequence.fragments) ? nextSequence.fragments : (current.fragments || [])
@@ -944,6 +952,7 @@ export function seedOv6cFromPhase(model, state = {}) {
   });
   next = addOv6cSequence(next, {
     name: "事件协同时序",
+    diagramType: "phase",
     participants,
     messages
   });

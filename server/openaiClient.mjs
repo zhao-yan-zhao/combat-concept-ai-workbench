@@ -103,7 +103,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         '  "rules": [{ "id": "rule-1", "name": "规则名称（不超过20字）", "type": "约束|前置条件|转换条件|业务规则|其他", "scope": "全局|某阶段|某域", "description": "可复核的规则描述（40-160字）" }] }'
       ] : isSequenceDraft ? [
         '{ "summary": "1-3 句中文答复（说明改了什么或回答咨询）",',
-        '  "sequences": [{ "id": "sequence-1", "name": "时序图名称",',
+        '  "sequences": [{ "id": "sequence-1", "name": "时序图名称", "diagramType": "phase|task|force|general",',
         '    "participants": [{ "id": "p1", "name": "参与方名", "ref": "兵力或阶段 id" }],',
         '    "messages": [{ "id": "event-1", "sequence": 1, "fromRef": "p1", "toRef": "p2", "name": "消息名", "type": "message|response|status|exception|timeout", "condition": "触发条件", "relatedActivityRefs": ["阶段或活动 id"] }],',
         '    "fragments": [] }] }'
@@ -170,6 +170,8 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         "时序校验要求：用 sequences[] 表达生命线（participants）与时间向下消息（messages）。",
         "若研究人员要求起草/增删改时序：必须返回非空 sequences，禁止只给文字建议。",
         "参与方表示实际发送、接收或处理消息的研究对象/兵力/系统节点，可按本轮事件关系自由确定；不得为了覆盖流程而把每个阶段强制建成参与方。",
+        "diagramType 必须匹配研究意图：phase=阶段时序图，task=任务时序图，force=兵力作战时序图，无法判断时用 general。已有图修订时保持原 diagramType，除非用户明确要求转换。",
+        "phase 类型突出阶段衔接、进入/退出条件与转换；task 类型突出任务/活动的先后、触发、依赖与协同；force 类型以作战兵力/系统为参与方，突出指挥、信息、协同与状态交互。三类均使用同一 participants/messages 数据结构。",
         "消息 fromRef/toRef 必须指向 participants.id。阶段与活动仅作为可选 relatedActivityRefs 回链，不要求逐阶段拆分消息或参与方。",
         "消息 type 用 message|response|status|exception|timeout；name 为短作战语义名，禁止空泛套话。",
         "若仅咨询（analysis.mutationRequest=false）：sequences 可返回空数组，summary 直接回答。",
@@ -178,7 +180,10 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
       ...(isStateMachineDraft ? [
         "状态机校验要求：仅为 analysis.stateMachineSubjects 中的候选建立状态机；subjectRef 与 subjectType 必须原样匹配候选。来自阶段行动的候选 subjectType 必须为 phase（阶段机）；兵力/持续对象用 force；独立任务用 task。不要另为阶段容器再复制一台机。",
         "必须使用 analysis.phaseAction.phases 与候选上的 timeWindow、blueActions、redActions：时窗约束进入/持续/退出条件；红方行动只作为对抗压力、异常或判定分支的上下文，不得为红方行动另建状态机。",
-        "每台至少输出 initial、normal、final；确需分支时使用 decision，并填写 decisionExpression。判定节点至少有两个出边，每条填写明确且不重复的 branchResult（如满足/不满足）。",
+        "每台输出 4 至 7 个节点，形成 initial → 2 至 4 个 normal/decision 中间节点 → final 的完整生命周期；禁止只有一个名为‘进行中’‘执行中’‘中间状态’的空泛中间态。",
+        "normal 名称必须表示对象已经处于的、可区分且有作战语义的状态（例如‘接战准备就绪’‘航迹融合中’‘效果待确认’），不要把进入/退出条件直接当状态名，也不要用‘状态1’‘处理中’等占位名称。initial/final 分别使用‘开始’和‘结束’。",
+        "主路径必须从 initial 连通到 final，且相邻中间状态不得同名。每条转换的 fromStateRef/toStateRef 必须引用本机 states.id；转换 condition 描述触发状态变化的事件或可观察门槛，不得重复状态名称。",
+        "确需分支时使用 decision，并填写 decisionExpression。判定节点至少有两个出边，每条填写明确且不重复的 branchResult（如满足/不满足）。",
         "转换只连接本机状态；condition 必须是可观察门槛；ruleRefs 只能使用 analysis.rules 已存在的 id。",
         "若研究人员要求生成/增删改状态机：必须返回非空 stateMachines，禁止只给文字建议。可只返回被改的那一台（用 subjectRef 或 id 对齐 analysis.currentMachines），也可返回完整列表。",
         "若 analysis.mutationRequest=false 且本轮仅为咨询：stateMachines 可返回空数组，summary 直接回答。",

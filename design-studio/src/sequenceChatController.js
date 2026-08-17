@@ -83,6 +83,11 @@ export function createSequenceChatController({
               phases: compactPhases(state.phaseAction),
               forces: compactForces(state.forceMission),
               currentSequences: compactSequences(current),
+              supportedSequenceTypes: {
+                phase: "阶段时序图：阶段为主要关联对象，表达阶段衔接、进入/退出条件与转换",
+                task: "任务时序图：任务或活动为主要关联对象，表达任务先后、触发、依赖与协同",
+                force: "兵力作战时序图：作战兵力或系统为参与方，表达指挥、信息、协同与状态交互"
+              },
               activityCandidates: listActivityCandidates(state).slice(0, 24).map((item) => ({
                 id: item.id,
                 title: item.title
@@ -91,7 +96,7 @@ export function createSequenceChatController({
               revisionRequest: question,
               mutationRequest: mutation,
               "修订要求": mutation
-                ? "本轮是改图请求。返回 sequences[]（participants + messages），落实增删改；消息须有 fromRef/toRef/name，尽量 relatedActivityRefs 回链阶段/活动。"
+                ? "本轮是改图请求。返回 sequences[]（diagramType + participants + messages），diagramType 只能是 phase、task、force 或 general；消息须有 fromRef/toRef/name，尽量 relatedActivityRefs 回链阶段/活动。"
                 : "根据研究人员本轮要求回答。若仅咨询，sequences 可为空并在 summary 直接回答；若涉及起草/修订时序，返回完整 sequences。"
             },
             evidence: []
@@ -252,6 +257,9 @@ export function applySequenceDraft(current = {}, draft = {}, { mutation = false 
     return {
       id: String(sequence?.id || `sequence-${index + 1}`).slice(0, 180),
       name: String(sequence?.name || `事件序列 ${index + 1}`).slice(0, 240),
+      diagramType: ["general", "phase", "task", "force"].includes(String(sequence?.diagramType || ""))
+        ? String(sequence.diagramType)
+        : "general",
       participants: ensured,
       messages,
       fragments: []
@@ -315,6 +323,7 @@ function compactSequences(model = {}) {
   return (model.sequences || []).slice(0, 8).map((sequence) => ({
     id: sequence.id,
     name: sequence.name,
+    diagramType: sequence.diagramType || "general",
     participants: (sequence.participants || []).slice(0, 12).map((item) => ({
       id: item.id,
       name: item.name,

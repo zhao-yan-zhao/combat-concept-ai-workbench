@@ -1034,6 +1034,9 @@ function normalizeOv6cSequence(sequence, index) {
   return {
     id: clean(sequence?.id, 180) || `sequence-${index + 1}`,
     name: clean(sequence?.name || sequence?.title, 240) || `事件序列 ${index + 1}`,
+    diagramType: ["general", "phase", "task", "force"].includes(clean(sequence?.diagramType, 40))
+      ? clean(sequence?.diagramType, 40)
+      : "general",
     participants,
     messages,
     fragments,

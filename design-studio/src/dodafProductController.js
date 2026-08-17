@@ -59,7 +59,8 @@ import {
   updateOv6bStateMachine,
   updateOv6bTransition,
   updateOv6cMessage,
-  updateOv6cParticipant
+  updateOv6cParticipant,
+  updateOv6cSequence
 } from "./ov6Workbench.js";
 import {
   mergeParsedSequence,
@@ -135,7 +136,7 @@ export function buildStateMachineGenerationAnalysis(state = {}) {
       description: String(rule?.description || "")
     })),
     generationRequest: "为阶段行动中的关键行动、独立任务和持续运行对象生成可编辑状态机草案；来自阶段行动的候选标为阶段机。阶段时窗与红方行动只作转换/异常上下文，不另建机。",
-    modelingInstructions: "输出 StateMachineDraft JSON：stateMachines[] 每项对应一个 stateMachineSubjects[].id，subjectRef 和 subjectType 必须原样匹配候选。来自阶段行动的候选 subjectType=phase。不要再为阶段容器或红方行动额外建机。阶段 timeWindow、blueActions、redActions 用于进入/退出条件和对抗分支。每台至少有 initial、normal、final；确需分支时使用 decision，并给出 decisionExpression，判定出边给出不重复的 branchResult。condition 必须可观察；ruleRefs 仅可引用 analysis.rules 中的 id。只给研究级、可复核内容。"
+    modelingInstructions: "输出 StateMachineDraft JSON：stateMachines[] 每项对应一个 stateMachineSubjects[].id，subjectRef 和 subjectType 必须原样匹配候选。来自阶段行动的候选 subjectType=phase。不要再为阶段容器或红方行动额外建机。阶段 timeWindow、blueActions、redActions 用于进入/退出条件和对抗分支。每台生成 initial、至少两个有具体作战语义且互不重复的 normal/decision 中间状态、final，共 4 至 7 个节点；禁止仅用‘进行中/处理中/中间状态’占位。状态表示对象所处情形，condition 表示触发状态变化的可观察事件或门槛。主路径必须从 initial 连通至 final；确需分支时使用 decision，并给出 decisionExpression，判定出边给出不重复的 branchResult。ruleRefs 仅可引用 analysis.rules 中的 id。只给研究级、可复核内容。"
   };
 }
 
@@ -153,12 +154,25 @@ export function applyStateMachineDraft(draft = {}, analysis = {}) {
     const rawStates = Array.isArray(raw?.states) ? raw.states.slice(0, 12) : [];
     const window = String(candidate?.timeWindow || "").trim();
     const redPressure = (Array.isArray(candidate?.redActions) ? candidate.redActions : []).filter(Boolean)[0] || "";
+    const actionNames = [...new Set([
+      candidate?.taskName,
+      ...(Array.isArray(candidate?.blueActions) ? candidate.blueActions : []),
+      candidate?.context
+    ].map((item) => String(item || "").trim()).filter(Boolean))];
+    const primaryAction = actionNames[0] || candidate?.name || "任务";
+    const secondaryAction = actionNames.find((item) => item !== primaryAction) || "协同条件";
+    const expectedEffect = String(candidate?.expectedEffects?.[0] || "预期效果").trim();
     const fallbackStates = [
-      { name: candidate?.entryConditions?.[0] || (window ? `进入${window}` : "进入条件满足"), kind: "initial" },
-      { name: candidate?.taskName || candidate?.name || candidate?.context || "任务执行中", kind: "normal" },
-      { name: candidate?.exitConditions?.[0] || candidate?.expectedEffects?.[0] || "终止条件满足", kind: "final" }
+      { name: "开始", kind: "initial" },
+      { name: `${String(primaryAction).slice(0, 36)}准备就绪`, kind: "normal" },
+      { name: `${String(secondaryAction).slice(0, 36)}执行中`, kind: "normal" },
+      { name: `${expectedEffect.slice(0, 36)}待确认`, kind: "normal" },
+      { name: "结束", kind: "final" }
     ];
-    const sourceStates = rawStates.length >= 3 ? rawStates : fallbackStates;
+    const meaningfulMiddle = rawStates.filter((item) => !["initial", "final"].includes(item?.kind))
+      .filter((item) => !/^(进行中|执行中|处理中|中间状态|状态\s*\d*)$/i.test(String(item?.name || "").trim()));
+    const useRawLifecycle = rawStates.length >= 4 && meaningfulMiddle.length >= 2;
+    const sourceStates = useRawLifecycle ? rawStates : fallbackStates;
     const states = sourceStates.map((item, stateIndex) => ({
       id: `${machineId}-state-${stateIndex + 1}`,
       name: String(item?.name || fallbackStates[stateIndex]?.name || `状态 ${stateIndex + 1}`).slice(0, 120),
@@ -172,13 +186,13 @@ export function applyStateMachineDraft(draft = {}, analysis = {}) {
     states.forEach((item, stateIndex) => {
       if (stateIndex > 0 && stateIndex < states.length - 1 && (item.kind === "initial" || item.kind === "final")) item.kind = "normal";
     });
-    const rawTransitions = Array.isArray(raw?.transitions) ? raw.transitions : [];
+    const rawTransitions = useRawLifecycle && Array.isArray(raw?.transitions) ? raw.transitions : [];
     const transitions = rawTransitions.length
       ? rawTransitions.map((item, transitionIndex) => ({
         id: `${machineId}-transition-${transitionIndex + 1}`,
         fromStateRef: states[Math.max(0, sourceStates.findIndex((state) => state?.id === item?.fromStateRef))]?.id || states[transitionIndex]?.id,
         toStateRef: states[Math.max(0, sourceStates.findIndex((state) => state?.id === item?.toStateRef))]?.id || states[transitionIndex + 1]?.id || states.at(-1)?.id,
-        condition: String(item?.condition || "阶段转换条件").slice(0, 4000),
+        condition: String(item?.condition || "满足下一状态进入门槛").slice(0, 4000),
         branchResult: String(item?.branchResult || "").slice(0, 400),
         ruleRefs: (Array.isArray(item?.ruleRefs) ? item.ruleRefs : []).filter((id) => validRuleIds.has(id)).slice(0, 24),
         eventRefs: []
@@ -187,7 +201,15 @@ export function applyStateMachineDraft(draft = {}, analysis = {}) {
         id: `${machineId}-transition-${stateIndex + 1}`,
         fromStateRef: item.id,
         toStateRef: states[stateIndex + 1].id,
-        condition: String(candidate?.exitConditions?.[stateIndex] || (stateIndex === 0 && window ? `进入时窗 ${window}` : "") || (redPressure ? `红方压力未阻断：${redPressure}` : "") || candidate?.context || "满足下一状态进入条件").slice(0, 4000),
+        condition: String(
+          stateIndex === 0
+            ? (candidate?.entryConditions?.[0] || (window ? `进入时窗 ${window}` : `${primaryAction}启动条件满足`))
+            : stateIndex === 1
+              ? `${primaryAction}准备完成且执行条件具备`
+              : stateIndex === 2
+                ? (candidate?.expectedEffects?.[0] || (redPressure ? `在${redPressure}压力下完成行动` : `${secondaryAction}完成`))
+                : (candidate?.exitConditions?.[0] || `${expectedEffect}经观察确认`)
+        ).slice(0, 4000),
         branchResult: "",
         ruleRefs: rules.slice(0, 2).map((rule) => rule.id).filter(Boolean),
         eventRefs: []
@@ -521,6 +543,12 @@ export function createDodafProductController({
       state.ov6cToolsOpen = true;
       state.sequenceChatOpen = false;
       render();
+      return true;
+    }
+    if (action === "ov6c-sequence-field") {
+      if (!ds.sequenceId || !ds.field) return true;
+      const model = resolveDodafProduct(state, "ov6c").model;
+      persistOv6("ov6c", updateOv6cSequence(model, ds.sequenceId, { [ds.field]: el?.value || "" }));
       return true;
     }
     if (action === "toggle-ov6c-tools") {

@@ -7830,7 +7830,7 @@ a { color: var(--cyan); }
   transform: translate(-50%, calc(-100% - 10px));
   z-index: 4;
   width: max-content;
-  max-width: 210px;
+  max-width: 168px;
   min-height: 22px;
   padding: 3px 9px;
   border: 1px solid #d8e0e8;
@@ -8874,6 +8874,18 @@ a { color: var(--cyan); }
   overflow: hidden;
   opacity: 0;
   pointer-events: none;
+}
+.seq-type-field { margin: 0; }
+.seq-type-field select {
+  min-height: 30px;
+  max-width: 150px;
+  padding: 4px 24px 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(2, 6, 23, .55);
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
 }
 .seq-editor-dock.is-open {
   opacity: 1;

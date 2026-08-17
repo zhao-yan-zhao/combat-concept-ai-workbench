@@ -22,6 +22,12 @@ import { renderResearchChatPanel } from "./researchChat/index.js";
 import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
 
 const MESSAGE_TYPES = ["message", "response", "status", "exception", "timeout"];
+const SEQUENCE_TYPES = [
+  { id: "general", label: "通用时序图" },
+  { id: "phase", label: "阶段时序图" },
+  { id: "task", label: "任务时序图" },
+  { id: "force", label: "兵力作战时序图" }
+];
 
 export function renderOv6c(state = {}) {
   const resolved = resolveDodafProduct(state, "ov6c");
@@ -178,7 +184,7 @@ function renderSequenceListItem(sequence, selectedId) {
   const unlinked = messages.filter((item) => !(item.relatedActivityRefs || []).length).length;
   return `<button type="button" class="seq-list-item ${selected ? "is-selected" : ""}" role="option" aria-selected="${selected ? "true" : "false"}" data-action="ov6c-select-sequence" data-sequence-id="${escapeHtml(sequence.id)}">
     <strong>${escapeHtml(sequence.name || sequence.id)}</strong>
-    <small>${participants.length} 生命线 · ${messages.length} 消息${unlinked ? ` · ${unlinked} 未回链` : ""}</small>
+    <small>${sequenceTypeLabel(sequence.diagramType)} · ${participants.length} 参与方 · ${messages.length} 消息${unlinked ? ` · ${unlinked} 未回链` : ""}</small>
   </button>`;
 }
 
@@ -201,6 +207,12 @@ function renderSequenceEditor(sequence, { engine, selectedMessageId, editorOpen 
         </label>
         <small class="muted">${participants.length} 生命线 · ${messages.length} 消息 · ${formatSequenceClock(layout.totalMinutes)} 窗口</small>
       </div>
+      <label class="seq-type-field">
+        <span class="visually-hidden">时序图类型</span>
+        <select data-action="ov6c-sequence-field" data-field="diagramType" data-sequence-id="${escapeHtml(sequence.id)}" title="选择时序图语义类型">
+          ${SEQUENCE_TYPES.map((type) => `<option value="${type.id}" ${type.id === (sequence.diagramType || "general") ? "selected" : ""}>${type.label}</option>`).join("")}
+        </select>
+      </label>
       <div class="seq-engine-tabs" role="tablist" aria-label="时序图视图">
         ${SEQUENCE_DIAGRAM_ENGINES.map((item) => `
           <button type="button" role="tab" class="seq-engine-tab ${engine === item.id ? "is-active" : ""}" aria-selected="${engine === item.id ? "true" : "false"}" data-action="ov6c-set-engine" data-engine="${escapeHtml(item.id)}" title="${escapeHtml(item.hint)}">${escapeHtml(item.label)}</button>
@@ -286,6 +298,10 @@ function renderParticipantInspector(sequence, participants) {
     </div>`).join("") || `<p class="seq-message-empty">尚无参与方</p>`}
     </div>
   </section>`;
+}
+
+function sequenceTypeLabel(value) {
+  return SEQUENCE_TYPES.find((type) => type.id === value)?.label || SEQUENCE_TYPES[0].label;
 }
 
 function renderGanttCanvas(sequence, { selectedMessageId, layout }) {
