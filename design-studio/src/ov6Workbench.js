@@ -785,13 +785,7 @@ export function updateOv6cMessage(model, sequenceId, messageId, patch = {}) {
 }
 
 const GANTT_SLOT_MINUTES = 15;
-const GANTT_TYPE_COLORS = Object.freeze({
-  message: { key: "message", label: "协同消息", color: "#ef4444" },
-  response: { key: "response", label: "响应回执", color: "#8b5cf6" },
-  status: { key: "status", label: "状态通报", color: "#0ea5e9" },
-  exception: { key: "exception", label: "异常/对抗", color: "#f59e0b" },
-  timeout: { key: "timeout", label: "超时窗口", color: "#22c55e" }
-});
+const GANTT_BAR_COLOR = "#3b82f6";
 
 /** Layout one sequence as a Gantt timeline (row = message, x = abstract minutes). */
 export function layoutSequenceGantt(sequence = {}, { slotMinutes = GANTT_SLOT_MINUTES } = {}) {
@@ -818,7 +812,7 @@ export function layoutSequenceGantt(sequence = {}, { slotMinutes = GANTT_SLOT_MI
       end,
       instant: span === 0,
       type: message.type || "message",
-      color: (GANTT_TYPE_COLORS[message.type] || GANTT_TYPE_COLORS.message).color
+      color: GANTT_BAR_COLOR
     };
   });
   const starts = rows.map((row) => row.start);
@@ -835,8 +829,7 @@ export function layoutSequenceGantt(sequence = {}, { slotMinutes = GANTT_SLOT_MI
     minStart,
     totalMinutes,
     ticks,
-    span: Math.max(totalMinutes - minStart, 1),
-    types: GANTT_TYPE_COLORS
+    span: Math.max(totalMinutes - minStart, 1)
   };
 }
 
@@ -918,17 +911,17 @@ export function replaceOv6cSequenceContent(model, sequenceId, nextSequence = {})
 export function seedOv6cFromPhase(model, state = {}) {
   let next = ensureOv6cModel(model);
   if ((next.sequences || []).length) return next;
-  const subjects = listForceAndPhaseSubjects(state);
+  const forces = Array.isArray(state.forceMission?.forces) ? state.forceMission.forces : [];
   const phases = Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : [];
-  const participants = (subjects.length
-    ? subjects.slice(0, 6).map((item, index) => ({
-      id: item.id || `participant-${index + 1}`,
-      name: item.name || item.id || `参与方 ${index + 1}`,
-      ref: item.id || ""
+  const participants = (forces.length
+    ? forces.slice(0, 6).map((force, index) => ({
+      id: force.id || `participant-${index + 1}`,
+      name: force.name || force.id || `参与节点 ${index + 1}`,
+      ref: force.id || ""
     }))
     : [
-      { id: "participant-blue", name: "蓝方指挥", ref: "" },
-      { id: "participant-force", name: "行动单元", ref: "" }
+      { id: "participant-subject", name: "研究主体", ref: "" },
+      { id: "participant-peer", name: "协同对象", ref: "" }
     ]);
   const messages = [];
   phases.slice(0, 8).forEach((phase, index) => {
@@ -950,7 +943,7 @@ export function seedOv6cFromPhase(model, state = {}) {
     });
   });
   next = addOv6cSequence(next, {
-    name: phases[0]?.name ? `${phases[0].name}协同时序` : "阶段协同时序",
+    name: "事件协同时序",
     participants,
     messages
   });

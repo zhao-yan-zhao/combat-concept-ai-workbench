@@ -3,7 +3,7 @@ import { readJson, send, sendJson } from "../httpUtils.mjs";
 import { randomUUID } from "node:crypto";
 
 export function createAiHandlers(runtime) {
-  const { getAiApiKey, getAiServiceConfig, openAi } = runtime;
+  const { getAiApiKey, getAiServiceConfig, localIdentity, openAi } = runtime;
   const { callOpenAi, streamOpenAi, callOpenAiRedTeam, mergeAiDraft } = openAi;
   const generationJobs = new Map();
 
@@ -12,10 +12,12 @@ export function createAiHandlers(runtime) {
       send(response, 503, "未配置 OPENAI_API_KEY，已由前端回退到 Demo 生成。", "text/plain;charset=utf-8");
       return;
     }
-    const input = await readJson(request);
+    const payload = await readJson(request);
+    const binding = await resolveJobBinding(request, payload);
     const job = {
       id: randomUUID(),
-      input,
+      input: payload.input,
+      ...binding,
       events: [],
       listeners: new Set(),
       done: false,
@@ -26,10 +28,15 @@ export function createAiHandlers(runtime) {
     sendJson(response, 202, { jobId: job.id, status: "running" });
   }
 
-  async function handleGenerateJobStream(request, response, jobId, after = 0) {
+  async function handleGenerateJobStream(request, response, jobId, after = 0, metadata = {}) {
     const job = generationJobs.get(jobId);
     if (!job) {
       sendJson(response, 404, { error: "Generation job not found or expired" });
+      return;
+    }
+    const binding = await resolveJobBinding(request, metadata);
+    if (job.projectId !== binding.projectId || job.scope !== binding.scope || job.ownerKey !== binding.ownerKey) {
+      sendJson(response, 403, { error: "Generation job does not belong to this project, user, or step" });
       return;
     }
     response.writeHead(200, {
@@ -91,6 +98,17 @@ export function createAiHandlers(runtime) {
     const event = { sequence: job.events.length + 1, payload };
     job.events.push(event);
     for (const listener of job.listeners) listener.write(event);
+  }
+
+  async function resolveJobBinding(request, value) {
+    const projectId = normalizeBindingValue(value?.projectId, "projectId", 160);
+    const scope = normalizeBindingValue(value?.scope, "scope", 80);
+    const session = localIdentity ? await localIdentity.getSession(request) : null;
+    if (session?.authenticated && session.actor?.id) {
+      return { projectId, scope, ownerKey: `actor:${session.actor.id}` };
+    }
+    const clientId = normalizeBindingValue(request.headers["x-workbench-client-id"], "clientId", 128);
+    return { projectId, scope, ownerKey: `client:${clientId}` };
   }
 
   async function handleGenerate(request, response) {
@@ -201,9 +219,9 @@ export function createAiHandlers(runtime) {
 /** Best-effort preview of summary/coreIdea while JSON is still streaming. */
 function extractAdvicePreview(buffer) {
   const text = String(buffer || "");
-  const complete = text.match(/"(?:summary|coreIdea)"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  const complete = text.match(/"(?:answer|summary|coreIdea)"\s*:\s*"((?:\\.|[^"\\])*)"/);
   if (complete) return unescapeJsonString(complete[1]);
-  const partial = text.match(/"(?:summary|coreIdea)"\s*:\s*"((?:\\.|[^"\\])*)$/);
+  const partial = text.match(/"(?:answer|summary|coreIdea)"\s*:\s*"((?:\\.|[^"\\])*)$/);
   if (partial) return unescapeJsonString(partial[1]);
   return "";
 }
@@ -217,4 +235,14 @@ function unescapeJsonString(value) {
       .replace(/\\"/g, "\"")
       .replace(/\\\\/g, "\\");
   }
+}
+
+function normalizeBindingValue(value, label, maximum) {
+  const normalized = String(value || "").trim();
+  if (!normalized || normalized.length > maximum || !/^[a-zA-Z0-9._:-]+$/.test(normalized)) {
+    const error = new Error(`Invalid generation job ${label}`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return normalized;
 }

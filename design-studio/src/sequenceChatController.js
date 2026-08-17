@@ -61,7 +61,7 @@ export function createSequenceChatController({
       }
       return true;
     },
-    async runTurn({ question, state, onDelta, signal }) {
+    async runTurn({ question, state, onDelta, onJob, resumeJobId, signal }) {
       const current = ensureOv6cModel(resolveDodafProduct(state, "ov6c").model);
       const recentChat = summarizeSequenceChat(state.sequenceChat);
       const revisionNotes = [recentChat, `本轮要求：${question}`].filter(Boolean).join("\n");
@@ -96,6 +96,11 @@ export function createSequenceChatController({
             },
             evidence: []
           }, {
+            durable: true,
+            projectId,
+            scope: "sequence",
+            resumeJobId,
+            onJob,
             signal,
             onDelta: (payload) => {
               const preview = String(payload?.preview || "").trim()

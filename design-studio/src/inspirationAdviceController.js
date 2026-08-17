@@ -10,8 +10,10 @@ import {
   updateInspirationPendingText
 } from "./inspirationStore.js";
 import { createResearchChatController } from "./researchChat/index.js";
+import { detectResearchChatBriefField } from "./researchChatBriefUpdate.js";
 
 export function createInspirationAdviceController({
+  projectId,
   getState,
   render,
   notify,
@@ -61,6 +63,7 @@ export function createInspirationAdviceController({
       const conversationContext = buildInspirationConversationContext(state.inspiration, {
         currentQuestion: question
       });
+      const briefField = detectResearchChatBriefField(question);
       try {
         const response = await generateWithAiStream({
           workflowId: "concept",
@@ -69,11 +72,14 @@ export function createInspirationAdviceController({
             "已记录灵感": summarizeInspirationSession(state.inspiration) || "尚未形成结构化灵感。",
             "近期对话上下文": conversationContext || "这是首轮研究咨询，暂无历史对话。",
             "研究人员问题": question,
+            "本轮允许更新的简报字段": briefField || "none",
             "对话回答要求": "必须结合近期对话上下文理解当前问题；对“呢、这个、上述、继续、为什么”等承接或省略表达，沿用上一轮讨论对象和已形成判断，不得当作孤立新问题，也不得重复询问上下文中已有的信息。先直接回答研究人员当前问题，使用 1 至 3 句连贯中文，控制在 120 至 220 字。不得复述整个研究简报，不得罗列任务阶段、待核实、待交接、最小信息集等报告式标签；仅在确有必要时补充不超过两项需要进一步澄清的信息。回答仅限概念研究级判断、假设、约束和验证关注点；不得给出具体行动步骤、目标选择、路线、武器用法或规避建议。"
           },
           evidence: []
         }, {
           durable: true,
+          projectId,
+          scope: "brief",
           resumeJobId,
           onJob,
           signal,

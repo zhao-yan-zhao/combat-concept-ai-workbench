@@ -307,8 +307,9 @@ const htmlC = renderOv6c({
 });
 assert(htmlC.includes("seq-page") && htmlC.includes("seq-workbench"), "Sequence workbench shell missing");
 assert(htmlC.includes("ov6c-canvas") && htmlC.includes("seq-gantt") && htmlC.includes("is-interactive") && htmlC.includes("态势上报"), "Interactive sequence canvas missing");
-assert(htmlC.includes("seq-message-name-input") && htmlC.includes("ov6c-connect-pick"), "Canvas direct edit controls missing");
-assert(htmlC.includes("ov6c-participant-field") && htmlC.includes("ov6c-move-message"), "Lifeline/message canvas mutators missing");
+assert(htmlC.includes("seq-message-name-input") && htmlC.includes("ov6c-move-message"), "Message edit controls missing");
+assert(htmlC.includes("seq-participant-panel") && htmlC.includes("ov6c-participant-field"), "Participant dock controls missing");
+assert(!htmlC.includes("seq-participant-strip") && !htmlC.includes("ov6c-connect-pick"), "Participant controls should not occupy the timeline canvas");
 assert(htmlC.includes("seq-gantt-bar") && htmlC.includes("offsetMinutes") && htmlC.includes("甘特图"), "Gantt timeline chrome missing");
 assert(htmlC.includes("ov6c-adjust-message-time") && htmlC.includes("ov6c-duplicate-message"), "Gantt quick edit controls missing");
 assert(htmlC.includes("seq-engine-tab") && htmlC.includes("Mermaid") && htmlC.includes("UML 序列"), "Open-source engine tabs missing");
@@ -363,6 +364,8 @@ const gantt = layoutSequenceGantt({
 });
 assert(gantt.rows[0].start === 0 && gantt.rows[2].end === 62, "Gantt layout should place bars by offset/duration");
 assert(gantt.totalMinutes >= 60 && formatSequenceClock(15) === "00:15", "Gantt window and clock format failed");
+assert(new Set(gantt.rows.map((row) => row.color)).size === 1, "Gantt bars should use one neutral color instead of strict type colors");
+assert(!htmlC.includes("seq-legend-item"), "Sequence canvas should not render a strict message-type color legend");
 const copied = duplicateOv6cMessage(ov6c, ov6c.sequences[0].id, ov6c.sequences[0].messages[0].id);
 assert(copied.sequences[0].messages.length === 2 && copied.sequences[0].messages[1].name.includes("副本"), "Sequence message duplicate failed");
 

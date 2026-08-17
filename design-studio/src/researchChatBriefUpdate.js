@@ -8,21 +8,14 @@ const FIELD_LABELS = {
 };
 
 export function deriveResearchChatBriefUpdate({ brief = {}, question = "", result = {} }) {
-  const field = selectField(question, brief);
+  const field = detectResearchChatBriefField(question);
   if (!field) return { patch: {}, fields: [] };
-  const coreIdea = clean(result.coreIdea || result.summary);
-  const phases = list(result.phases);
-  const risks = list(result.risks);
-  const value = field === "risk"
-    ? risks.join("；") || coreIdea
-    : field === "assumptions" || field === "expectedEffects"
-      ? phases.join("；") || coreIdea
-      : coreIdea;
+  const value = clean(result?.briefUpdate?.[field]);
   if (!value || value === clean(brief[field])) return { patch: {}, fields: [] };
   return { patch: { [field]: value }, fields: [FIELD_LABELS[field]] };
 }
 
-function selectField(question, brief) {
+export function detectResearchChatBriefField(question) {
   const text = clean(question);
   if (/(研究意图|研究方向|我想研究|我要研究|关注什么)/.test(text)) return "researchIntent";
   if (/(风险|威胁|问题|薄弱|不足)/.test(text)) return "risk";
@@ -33,10 +26,6 @@ function selectField(question, brief) {
   // General consultation must not silently overwrite a brief field. The user can
   // still explicitly ask about the objective, approach, assumptions, effects, or risk.
   return "";
-}
-
-function list(value) {
-  return Array.isArray(value) ? value.map(clean).filter(Boolean).slice(0, 3) : [];
 }
 
 function clean(value) {

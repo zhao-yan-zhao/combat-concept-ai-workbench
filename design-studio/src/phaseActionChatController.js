@@ -66,7 +66,7 @@ export function createPhaseActionChatController({
       }
       return true;
     },
-    async runTurn({ question, state, onDelta, signal }) {
+    async runTurn({ question, state, onDelta, onJob, resumeJobId, signal }) {
       if (state.phaseActionGenerating) {
         const error = new Error("busy");
         error.notifyMessage = "阶段修订进行中，请稍候";
@@ -115,6 +115,11 @@ export function createPhaseActionChatController({
           },
           evidence: []
         }, {
+          durable: true,
+          projectId,
+          scope: "phase-action",
+          resumeJobId,
+          onJob,
           signal,
           onDelta: (payload) => {
             const preview = String(payload?.preview || "").trim()

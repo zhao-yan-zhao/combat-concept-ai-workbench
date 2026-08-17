@@ -49,6 +49,22 @@ export function createLocalBriefDraft({ brief, intent, direction, evidence = [] 
 
 export function applyAiBriefDraft({ brief, intent, direction, draft, evidence = [] }) {
   const current = normalizeConceptBrief(brief, brief);
+  const structured = ["objective", "approach", "assumptions", "expectedEffects", "risk"]
+    .some((field) => cleanResearchField(draft?.[field]));
+  if (structured) {
+    const approach = cleanResearchField(draft.approach) || current.approach;
+    return normalizeConceptBrief({
+      researchIntent: cleanResearchField(intent),
+      objective: cleanResearchField(draft.objective) || current.objective,
+      approach: approach.startsWith(`${direction || "概念研究"}：`)
+        ? approach
+        : `${direction || "概念研究"}：${approach}`,
+      assumptions: cleanResearchField(draft.assumptions) || current.assumptions,
+      expectedEffects: cleanResearchField(draft.expectedEffects) || current.expectedEffects,
+      evidenceRefs: collectEvidenceRefs(evidence, current.evidenceRefs),
+      risk: cleanResearchField(draft.risk) || current.risk
+    }, current);
+  }
   const sections = Array.isArray(draft?.sections) ? draft.sections : [];
   const objective = findSection(sections, ["目标", "任务", "目的"]);
   const assumptions = findSection(sections, ["假设", "约束", "前提"]);

@@ -43,13 +43,19 @@ export async function generateWithAiStream(input, options = {}) {
 }
 
 async function generateWithDurableAiStream(input, options = {}) {
-  const { onDelta, onStart, onJob, signal, resumeJobId = "" } = options;
+  const { onDelta, onStart, onJob, signal, resumeJobId = "", projectId, scope } = options;
+  const binding = normalizeJobBinding(projectId, scope);
+  const clientId = getWorkbenchClientId();
   let jobId = String(resumeJobId || "").trim();
   if (!jobId) {
     const created = await fetch("/api/generate/jobs", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(input),
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "X-Workbench-Client-Id": clientId
+      },
+      body: JSON.stringify({ input, ...binding }),
       signal
     });
     if (!created.ok) throw new Error(await created.text() || `AI 任务创建失败 (${created.status})`);
@@ -58,13 +64,37 @@ async function generateWithDurableAiStream(input, options = {}) {
     if (!jobId) throw new Error("AI 任务未返回可重连标识");
     onJob?.({ jobId });
   }
-  const response = await fetch(`/api/generate/jobs/${encodeURIComponent(jobId)}/stream`, {
+  const query = new URLSearchParams(binding);
+  const response = await fetch(`/api/generate/jobs/${encodeURIComponent(jobId)}/stream?${query}`, {
     method: "GET",
-    headers: { Accept: "text/event-stream" },
+    headers: { Accept: "text/event-stream", "X-Workbench-Client-Id": clientId },
     signal
   });
   if (!response.ok) throw new Error(await response.text() || `AI 任务重连失败 (${response.status})`);
   return readAiStreamResponse(response, input, { onDelta, onStart, signal });
+}
+
+function normalizeJobBinding(projectId, scope) {
+  const normalizedProjectId = String(projectId || "").trim();
+  const normalizedScope = String(scope || "").trim();
+  if (!normalizedProjectId || !normalizedScope) {
+    throw new Error("持久生成任务缺少项目或步骤标识");
+  }
+  return { projectId: normalizedProjectId, scope: normalizedScope };
+}
+
+function getWorkbenchClientId() {
+  const storageKey = "combat-concept-workbench-client-id";
+  try {
+    let value = String(globalThis.localStorage?.getItem(storageKey) || "").trim();
+    if (!/^[a-zA-Z0-9_-]{16,128}$/.test(value)) {
+      value = globalThis.crypto?.randomUUID?.() || `client_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      globalThis.localStorage?.setItem(storageKey, value);
+    }
+    return value;
+  } catch {
+    return globalThis.crypto?.randomUUID?.() || `client_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  }
 }
 
 async function readAiStreamResponse(response, input, { onDelta, onStart, signal } = {}) {

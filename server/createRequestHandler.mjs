@@ -231,7 +231,16 @@ export function createRequestHandler(runtime) {
       }
       const generateJobStreamMatch = url.pathname.match(/^\/api\/generate\/jobs\/([a-f0-9-]+)\/stream$/i);
       if (request.method === "GET" && generateJobStreamMatch) {
-        await ai.handleGenerateJobStream(request, response, generateJobStreamMatch[1], Number(url.searchParams.get("after") || 0));
+        await ai.handleGenerateJobStream(
+          request,
+          response,
+          generateJobStreamMatch[1],
+          Number(url.searchParams.get("after") || 0),
+          {
+            projectId: url.searchParams.get("projectId"),
+            scope: url.searchParams.get("scope")
+          }
+        );
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/red-team") {

@@ -14,8 +14,15 @@ const normalized = normalizeConceptBrief({ ...seed, evidenceRefs: "seed-note、e
 assert(normalized.expectedEffects === "Verify provenance" && normalized.evidenceRefs.join("|") === "seed-note|evidence-one", "Brief normalization lost expected effects or bounded evidence references");
 const localDraft = createLocalBriefDraft({ brief: seed, intent: "Local review", direction: "Review", evidence: [{ id: "local-evidence", title: "Local evidence" }] });
 assert(localDraft.expectedEffects && localDraft.evidenceRefs.includes("local-evidence"), "Local brief draft did not retain expected effects and evidence references");
-const aiDraft = applyAiBriefDraft({ brief: seed, intent: "AI review", direction: "Review", evidence: [{ id: "ai-evidence" }], draft: { expectedEffects: "Confirm bounded evidence", risks: ["Disclosure"] } });
+const aiDraft = applyAiBriefDraft({ brief: seed, intent: "AI review", direction: "Review", evidence: [{ id: "ai-evidence" }], draft: {
+  objective: "Bound the research judgment",
+  approach: "Compare explicit mechanisms",
+  assumptions: "Public evidence remains attributable",
+  expectedEffects: "Confirm bounded evidence",
+  risk: "Evidence becomes stale"
+} });
 assert(aiDraft.expectedEffects === "Confirm bounded evidence" && aiDraft.evidenceRefs.includes("ai-evidence"), "AI brief draft did not retain expected effects and evidence references");
+assert(aiDraft.assumptions === "Public evidence remains attributable" && aiDraft.risk === "Evidence becomes stale", "AI brief fields were mixed or replaced by another field");
 const userResearchIntent = "Confirm the research boundary";
 const aiDraftWithContext = applyAiBriefDraft({ brief: seed, intent: userResearchIntent, direction: "Review", draft: { summary: "AI analysis may use derived inspiration context." } });
 assert(aiDraftWithContext.researchIntent === userResearchIntent, "AI brief drafting expanded the persisted research intent with generation context");

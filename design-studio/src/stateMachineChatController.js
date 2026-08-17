@@ -60,7 +60,7 @@ export function createStateMachineChatController({
       }
       return true;
     },
-    async runTurn({ question, state, onDelta, signal }) {
+    async runTurn({ question, state, onDelta, onJob, resumeJobId, signal }) {
       const current = ensureOv6bModel(resolveDodafProduct(state, "ov6b").model);
       const analysis = buildStateMachineGenerationAnalysis(state);
       const recentChat = summarizeStateMachineChat(state.stateMachineChat);
@@ -94,6 +94,11 @@ export function createStateMachineChatController({
             },
             evidence: []
           }, {
+            durable: true,
+            projectId,
+            scope: "state-machine",
+            resumeJobId,
+            onJob,
             signal,
             onDelta: (payload) => {
               const preview = String(payload?.preview || "").trim()

@@ -38,7 +38,6 @@ export function renderOv6c(state = {}) {
   const activities = listActivityCandidates(state);
   const chatOpen = Boolean(state.sequenceChatOpen);
   const chatGenerating = Boolean(state.sequenceChatGenerating);
-  const connectFromId = String(state.ov6cConnectFromId || "");
   const editorOpen = Boolean(state.ov6cEditorOpen);
   const toolsOpen = state.ov6cToolsOpen === true;
   const eventCount = Array.isArray(model.events) ? model.events.length : sequences.reduce((sum, seq) => sum + (seq.messages?.length || 0), 0);
@@ -81,7 +80,6 @@ export function renderOv6c(state = {}) {
     ? renderSequenceEditor(selected, {
       engine,
       selectedMessageId,
-      connectFromId,
       editorOpen
     })
     : `<div class="seq-empty-editor"><p>请选择左侧时序图</p></div>`}
@@ -184,7 +182,7 @@ function renderSequenceListItem(sequence, selectedId) {
   </button>`;
 }
 
-function renderSequenceEditor(sequence, { engine, selectedMessageId, connectFromId = "", editorOpen = false }) {
+function renderSequenceEditor(sequence, { engine, selectedMessageId, editorOpen = false }) {
   const participants = sequence.participants || [];
   const messages = [...(sequence.messages || [])].sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
   const mermaid = sequenceToMermaid(sequence);
@@ -211,9 +209,6 @@ function renderSequenceEditor(sequence, { engine, selectedMessageId, connectFrom
       <div class="seq-editor-actions">
         <button type="button" class="quiet-button compact" data-action="ov6c-add-participant" data-sequence-id="${escapeHtml(sequence.id)}">加参与方</button>
         <button type="button" class="quiet-button compact" data-action="ov6c-add-message" data-sequence-id="${escapeHtml(sequence.id)}">加消息</button>
-        ${connectFromId
-    ? `<button type="button" class="quiet-button compact is-active" data-action="ov6c-cancel-connect" title="取消连线">取消连线</button>`
-    : ""}
         ${editorOpen
     ? ""
     : `<button type="button" class="quiet-button compact" data-action="ov6c-open-editor">属性</button>`}
@@ -224,17 +219,9 @@ function renderSequenceEditor(sequence, { engine, selectedMessageId, connectFrom
       <header class="seq-canvas-head">
         <div>
           <strong>${escapeHtml(sequence.name || "作战时间线")} — 甘特图</strong>
-          <small>${connectFromId
-    ? `连线中：已选「${escapeHtml(participantName(participants, connectFromId))}」，再点目标参与方`
-    : "点时间条选中 · 在条上改名称 · 右侧改起止与回链"}</small>
-        </div>
-        <div class="seq-legend" aria-hidden="true">
-          ${Object.values(layout.types).map((item) => `<span class="seq-legend-item" style="--swatch:${item.color}">${escapeHtml(item.label)}</span>`).join("")}
+          <small>点时间条选中 · 在条上改名称 · 右侧改起止、参与方与回链</small>
         </div>
       </header>
-      <div class="seq-participant-strip ${connectFromId ? "is-connecting" : ""}" aria-label="参与方">
-        ${renderParticipantStrip(sequence, participants, connectFromId)}
-      </div>
       <div class="seq-canvas-frame">
         ${renderGanttCanvas(sequence, { selectedMessageId, layout })}
       </div>
@@ -262,19 +249,16 @@ function renderSequenceEditor(sequence, { engine, selectedMessageId, connectFrom
   </article>`;
 }
 
-function renderParticipantStrip(sequence, participants, connectFromId) {
-  const connecting = Boolean(connectFromId);
-  if (!participants.length) {
-    return `<div class="seq-lifeline-head"><strong>参与方</strong></div>`;
-  }
-  return participants.map((participant) => {
-    const isFrom = connectFromId === participant.id;
-    return `<div class="seq-lifeline-head ${isFrom ? "is-connect-from" : ""} ${connecting ? "is-connect-target" : ""}" data-participant-id="${escapeHtml(participant.id)}">
-      <button type="button" class="seq-lifeline-pick" data-action="ov6c-connect-pick" data-sequence-id="${escapeHtml(sequence.id)}" data-participant-id="${escapeHtml(participant.id)}" title="${connecting ? (isFrom ? "取消起点" : "设为消息终点") : "点击设为连线起点"}">
-        <span class="seq-lifeline-dot" aria-hidden="true"></span>
-      </button>
-      <label class="seq-lifeline-name">
-        <span class="visually-hidden">参与方名称</span>
+function renderParticipantInspector(sequence, participants) {
+  return `<section class="seq-participant-panel" aria-label="参与方信息">
+    <header class="seq-panel-head">
+      <strong>参与方</strong>
+      <small>${participants.length} 个</small>
+    </header>
+    <div class="seq-participant-list">
+      ${participants.map((participant) => `<div class="seq-participant-item" data-participant-id="${escapeHtml(participant.id)}">
+      <label class="seq-field">
+        <span>名称</span>
         <input
           data-action="ov6c-participant-field"
           data-field="name"
@@ -282,11 +266,11 @@ function renderParticipantStrip(sequence, participants, connectFromId) {
           data-participant-id="${escapeHtml(participant.id)}"
           value="${escapeHtml(participant.name || participant.id)}"
           maxlength="80"
-          title="修改参与方名称"
+          placeholder="参与方名称"
         />
       </label>
-      <label class="seq-lifeline-ref">
-        <span class="visually-hidden">对象引用</span>
+      <label class="seq-field">
+        <span>对象引用</span>
         <input
           data-action="ov6c-participant-field"
           data-field="ref"
@@ -295,12 +279,13 @@ function renderParticipantStrip(sequence, participants, connectFromId) {
           value="${escapeHtml(participant.ref || "")}"
           maxlength="80"
           placeholder="对象引用"
-          title="兵力/阶段等引用"
+          title="兵力、组织或其他对象引用"
         />
       </label>
-      <button type="button" class="seq-lifeline-remove" data-action="ov6c-remove-participant" data-sequence-id="${escapeHtml(sequence.id)}" data-participant-id="${escapeHtml(participant.id)}" title="删除参与方" aria-label="删除参与方">×</button>
-    </div>`;
-  }).join("");
+      <button type="button" class="seq-participant-remove" data-action="ov6c-remove-participant" data-sequence-id="${escapeHtml(sequence.id)}" data-participant-id="${escapeHtml(participant.id)}" title="删除参与方" aria-label="删除参与方">×</button>
+    </div>`).join("") || `<p class="seq-message-empty">尚无参与方</p>`}
+    </div>
+  </section>`;
 }
 
 function renderGanttCanvas(sequence, { selectedMessageId, layout }) {
@@ -372,7 +357,7 @@ function renderGanttCanvas(sequence, { selectedMessageId, layout }) {
       </div>
     </div>
     <div class="seq-gantt-body">
-      ${rows || `<div class="ov6c-message-empty muted">尚无消息。点「加消息」，或先点两个参与方完成连线。</div>`}
+      ${rows || `<div class="ov6c-message-empty muted">尚无消息。点「加消息」，再在右侧设置起点和终点。</div>`}
     </div>
     <div class="seq-gantt-axis">
       <div class="seq-gantt-corner">作战时间</div>
@@ -400,6 +385,7 @@ function renderSequencePropertyDock(sequence, { selectedMessageId, selectedMessa
       <button type="button" class="seq-editor-dock-close" data-action="ov6c-close-editor" title="收起属性" aria-label="收起属性">×</button>
     </header>
     <div class="seq-editor-lower">
+      ${renderParticipantInspector(sequence, participants)}
       ${message ? renderMessageInspector(sequence, message, participants, activities) : `<p class="seq-inspector-hint">点时间线上的一条消息，编辑起止、方向与回链。</p>`}
       <section class="seq-message-list-panel" aria-label="消息清单">
         <header class="seq-panel-head">

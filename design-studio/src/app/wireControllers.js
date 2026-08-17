@@ -485,6 +485,7 @@ export function wireControllers({
   });
 
   const inspirationAdviceController = createInspirationAdviceController({
+    projectId: activeProjectId,
     getState: () => state,
     render,
     notify: showToast,

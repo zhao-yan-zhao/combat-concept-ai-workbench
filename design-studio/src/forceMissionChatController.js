@@ -59,7 +59,7 @@ export function createForceMissionChatController({
       }
       return true;
     },
-    async runTurn({ question, state, onDelta, signal }) {
+    async runTurn({ question, state, onDelta, onJob, resumeJobId, signal }) {
       if (state.forceMissionGenerating) {
         const error = new Error("busy");
         error.notifyMessage = "兵力生成进行中，请稍候";
@@ -95,6 +95,11 @@ export function createForceMissionChatController({
           },
           evidence: []
         }, {
+          durable: true,
+          projectId,
+          scope: "force-mission",
+          resumeJobId,
+          onJob,
           signal,
           onDelta: (payload) => {
             const preview = String(payload?.preview || "").trim()

@@ -59,7 +59,7 @@ export function createRuleLibraryChatController({
       }
       return true;
     },
-    async runTurn({ question, state, onDelta, signal }) {
+    async runTurn({ question, state, onDelta, onJob, resumeJobId, signal }) {
       const current = ensureOv6aModel(resolveDodafProduct(state, "ov6a").model);
       const recentChat = summarizeRuleLibraryChat(state.ruleLibraryChat);
       const revisionNotes = [recentChat, `本轮要求：${question}`].filter(Boolean).join("\n");
@@ -92,6 +92,11 @@ export function createRuleLibraryChatController({
             },
             evidence: []
           }, {
+            durable: true,
+            projectId,
+            scope: "rule-library",
+            resumeJobId,
+            onJob,
             signal,
             onDelta: (payload) => {
               const preview = String(payload?.preview || "").trim()
