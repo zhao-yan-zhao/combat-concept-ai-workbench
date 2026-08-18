@@ -41,6 +41,9 @@ import {
   duplicateOv6cMessage,
   listForceAndPhaseSubjects,
   listStateMachineSubjects,
+  clearOv6aRules,
+  clearOv6bStateMachines,
+  clearOv6cSequences,
   removeOv6aRule,
   removeOv6bState,
   removeOv6bStateMachine,
@@ -68,9 +71,16 @@ import {
   resolveSequenceDiagramEngine
 } from "./sequenceDiagramDsl.js";
 import { applyRuleChangeSet, ignoreRuleChangeSet } from "./ruleLibraryChatController.js";
+import {
+  addOv4Diagram,
+  removeOv4Diagram,
+  toggleOv4DiagramRelation,
+  toggleOv4DiagramRole,
+  updateOv4Diagram
+} from "./ov4DiagramStore.js";
 import { generateWithAiStream, isAiOutput } from "../../shared/aiClient.js";
 import { generateMockOutput } from "../../shared/generator.js";
-import { normalizeDodafOv6b } from "../../shared/dodaf/products.js";
+import { normalizeDodafOv6b, normalizeDodafOv6c } from "../../shared/dodaf/products.js";
 
 const LOADERS = {
   ov2: loadProjectOv2, ov3: loadProjectOv3, ov4: loadProjectOv4, ov5a: loadProjectOv5a,
@@ -81,7 +91,7 @@ const SAVERS = {
   ov6a: saveProjectOv6a, ov6b: saveProjectOv6b, ov6c: saveProjectOv6c
 };
 const LABELS = {
-  ov2: "作战资源流描述", ov3: "作战资源流矩阵", ov4: "责任关系", ov5a: "作战活动分解树",
+  ov2: "作战资源流描述", ov3: "作战资源流矩阵", ov4: "作战组织关系图", ov5a: "作战活动分解树",
   ov6a: "规则库", ov6b: "状态机校验", ov6c: "时序校验"
 };
 
@@ -293,6 +303,56 @@ export function createDodafProductController({
     const state = getState();
     const ds = el?.dataset || {};
 
+    if (action === "toggle-ov4-tools") {
+      state.ov4ToolsOpen = !state.ov4ToolsOpen;
+      if (!state.ov4ToolsOpen) state.ov4EditorOpen = false;
+      render();
+      return true;
+    }
+    if (action === "ov4-toggle-editor") {
+      state.ov4EditorOpen = !state.ov4EditorOpen;
+      render();
+      return true;
+    }
+    if (action === "ov4-close-editor") {
+      state.ov4EditorOpen = false;
+      render();
+      return true;
+    }
+    if (action === "ov4-select-diagram") {
+      state.ov4SelectedDiagramId = ds.diagramId || "";
+      render();
+      return true;
+    }
+    if (action === "ov4-add-diagram") {
+      const next = addOv4Diagram(resolveDodafProduct(state, "ov4").model);
+      state.ov4SelectedDiagramId = next.diagrams?.at(-1)?.id || "";
+      state.ov4ToolsOpen = true;
+      state.ov4EditorOpen = true;
+      persistOv6("ov4", next, "已新增组织关系图");
+      return true;
+    }
+    if (action === "ov4-remove-diagram") {
+      if (!ds.diagramId || !window.confirm("删除当前组织关系图？共享角色和关系不会被删除。")) return true;
+      const next = removeOv4Diagram(resolveDodafProduct(state, "ov4").model, ds.diagramId);
+      state.ov4SelectedDiagramId = next.diagrams?.[0]?.id || "";
+      persistOv6("ov4", next, "已删除组织关系图");
+      return true;
+    }
+    if (action === "ov4-diagram-field") {
+      if (!ds.diagramId || !["name", "description"].includes(ds.field)) return true;
+      persistOv6("ov4", updateOv4Diagram(resolveDodafProduct(state, "ov4").model, ds.diagramId, { [ds.field]: el?.value || "" }));
+      return true;
+    }
+    if (action === "ov4-toggle-diagram-role") {
+      persistOv6("ov4", toggleOv4DiagramRole(resolveDodafProduct(state, "ov4").model, ds.diagramId, ds.roleId, Boolean(el?.checked)));
+      return true;
+    }
+    if (action === "ov4-toggle-diagram-relation") {
+      persistOv6("ov4", toggleOv4DiagramRelation(resolveDodafProduct(state, "ov4").model, ds.diagramId, ds.relationId, Boolean(el?.checked)));
+      return true;
+    }
+
     if (action === "ov6a-add-rule") {
       const model = resolveDodafProduct(state, "ov6a").model;
       const next = addOv6aRule(model);
@@ -317,6 +377,14 @@ export function createDodafProductController({
       const next = removeOv6aRule(model, ds.ruleId);
       if (state.ov6aSelectedRuleId === ds.ruleId) state.ov6aSelectedRuleId = next.rules?.[0]?.id || "";
       persistOv6("ov6a", next, "已删除规则");
+      return true;
+    }
+    if (action === "ov6a-clear-all") {
+      const model = resolveDodafProduct(state, "ov6a").model;
+      const count = model.rules?.length || 0;
+      if (!count || !window.confirm(`清空全部 ${count} 条规则？此操作不可撤销。`)) return true;
+      state.ov6aSelectedRuleId = "";
+      persistOv6("ov6a", clearOv6aRules(model), "已清空规则库");
       return true;
     }
     if (action === "ov6a-apply-change" || action === "ov6a-apply-all-changes") {
@@ -438,6 +506,17 @@ export function createDodafProductController({
         state.ov6bSelectedStateId = "";
       }
       persistOv6("ov6b", next, "已删除状态机");
+      return true;
+    }
+    if (action === "ov6b-clear-all") {
+      const model = resolveDodafProduct(state, "ov6b").model;
+      const count = model.stateMachines?.length || 0;
+      if (!count || !window.confirm(`清空全部 ${count} 台状态机？此操作不可撤销。`)) return true;
+      state.ov6bSelectedMachineId = "";
+      state.ov6bSelectedStateId = "";
+      state.ov6bSelectedTransitionId = "";
+      state.ov6bEditorOpen = false;
+      persistOv6("ov6b", clearOv6bStateMachines(model), "已清空状态机");
       return true;
     }
     if (action === "ov6b-add-transition") {
@@ -757,6 +836,16 @@ export function createDodafProductController({
       persistOv6("ov6c", next, "已删除时序图");
       return true;
     }
+    if (action === "ov6c-clear-all") {
+      const model = resolveDodafProduct(state, "ov6c").model;
+      const count = model.sequences?.length || 0;
+      if (!count || !window.confirm(`清空全部 ${count} 幅时序图？此操作不可撤销。`)) return true;
+      state.ov6cSelectedSequenceId = "";
+      state.ov6cSelectedMessageId = "";
+      state.ov6cEditorOpen = false;
+      persistOv6("ov6c", clearOv6cSequences(model), "已清空时序图");
+      return true;
+    }
     if (action === "ov6c-add-participant") {
       const model = resolveDodafProduct(state, "ov6c").model;
       persistOv6("ov6c", addOv6cParticipant(model, ds.sequenceId), "已添加参与方");
@@ -879,6 +968,34 @@ export function createDodafProductController({
         state.stateMachinePregenerating = false;
         render();
       }
+    },
+
+    /** First state-machine -> sequence transition seeds one editable timeline without overwriting existing work. */
+    async pregenerateOv6cFromPhase({ silent = false } = {}) {
+      const state = getState();
+      const current = state.ov6c && typeof state.ov6c === "object"
+        ? normalizeDodafOv6c(state.ov6c)
+        : normalizeDodafOv6c({ sequences: [] });
+      if (Array.isArray(current.sequences) && current.sequences.length) {
+        return { skipped: true, reason: "has-sequences", count: current.sequences.length };
+      }
+      const next = seedOv6cFromPhase(current, state);
+      if (!Array.isArray(next.sequences) || !next.sequences.length) {
+        if (!silent) notify("未能生成时序草案：请先补充阶段行动或兵力任务");
+        return { skipped: true, reason: "no-source" };
+      }
+      state.ov6c = saveLocalDodafProduct("ov6c", next, projectId);
+      state.ov6cSelectedSequenceId = next.sequences[0]?.id || "";
+      state.ov6cSelectedMessageId = "";
+      try {
+        await syncControllers.ov6c.sync(state.ov6c, { source: "sequence:pregenerate-state-machine-next" });
+        await writebackArchitecture("sequence:pregenerate-state-machine-next");
+      } catch {
+        /* Keep the local draft visible; the regular sync path can retry later. */
+      }
+      render();
+      if (!silent) notify(`已自动生成 ${next.sequences.length} 幅时序草案，请复核参与方、消息与时间`);
+      return { applied: next.sequences.length, source: "phase-force-seed", skipped: false };
     },
 
     async hydrateAll() {

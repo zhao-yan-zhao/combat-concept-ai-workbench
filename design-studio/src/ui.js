@@ -23,6 +23,7 @@ import { renderStructureReview } from "./structureReviewView.js";
 import { renderConceptMap } from "./conceptMapView.js";
 import { renderForceMission } from "./forceMissionView.js";
 import { renderPhaseAction } from "./phaseActionView.js";
+import { renderOperationalTasks } from "./operationalTaskView.js";
 
 /**
  * Floating research path: numbered circles.
@@ -94,7 +95,8 @@ function stepIntroBlurb(view, trackLabel) {
 function stepShortLabel(view) {
   const map = {
     brief: "简报",
-    "force-mission": "兵力任务",
+    "operational-task": "作战任务",
+    "force-mission": "作战兵力",
     "phase-action": "阶段行动",
     "concept-map": "概念图",
     ov1: "总体图",
@@ -104,7 +106,7 @@ function stepShortLabel(view) {
     ov5a: "活动树",
     ov2: "资源流",
     ov3: "交换矩阵",
-    ov4: "责任",
+    ov4: "组织关系",
     ov6a: "规则库",
     ov6b: "状态机",
     ov6c: "时序",
@@ -118,6 +120,7 @@ function stepShortLabel(view) {
 
 export function renderView(viewId, state) {
   if (viewId === "brief") return renderBrief(state);
+  if (viewId === "operational-task") return renderOperationalTasks(state);
   if (viewId === "force-mission") return renderForceMission(state);
   if (viewId === "phase-action") return renderPhaseAction(state);
   if (viewId === "concept-map") return renderConceptMap(state);

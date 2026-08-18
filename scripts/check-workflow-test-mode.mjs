@@ -128,8 +128,9 @@ const phaseLastGate = renderWorkflowGate({
   brief: completeBrief,
   ...confirmedPhase
 });
-assert(phaseLastGate.includes('data-action="complete-workflow-stage"') && phaseLastGate.includes("确认并进入"), "Last phase-check page should complete 阶段行动 when phase-action is confirmed");
-assert(phaseLastGate.includes("兵力任务"), "Completing 阶段行动 should unlock 兵力任务");
+assert(phaseLastGate.includes('data-action="complete-workflow-stage"') && phaseLastGate.includes("确认阶段行动并进入作战任务"), "Last phase-check page should complete 阶段行动 and enter operational-task");
+assert(phaseLastGate.includes("作战任务"), "Completing 阶段行动 should unlock 作战任务");
+assert(phaseLastGate.includes("下一步") && phaseLastGate.includes("确认阶段行动并进入作战任务"), "Sequence next-step gate must explicitly target operational-task");
 
 // Mid 概念图 stage: concept-map → next primary step ov1.
 const midConceptGate = renderWorkflowGate({
@@ -182,14 +183,14 @@ const orderIds = views.map((view) => view.id);
 assert(orderIds.indexOf("brief") < orderIds.indexOf("ov6a"), "Rule library should follow the brief");
 assert(orderIds.indexOf("ov6a") < orderIds.indexOf("phase-action"), "Phase-action should follow rule library");
 assert(orderIds.indexOf("phase-action") < orderIds.indexOf("ov6b") && orderIds.indexOf("ov6b") < orderIds.indexOf("ov6c"), "State then sequence validation follow phase-action");
-assert(orderIds.indexOf("ov6c") < orderIds.indexOf("force-mission"), "Force-mission should follow phase-check products");
+assert(orderIds.indexOf("ov6c") < orderIds.indexOf("operational-task") && orderIds.indexOf("operational-task") < orderIds.indexOf("force-mission"), "Operational tasks should precede combat forces after phase checks");
 assert(orderIds.indexOf("force-mission") < orderIds.indexOf("ov4"), "Responsibility check should follow force-mission");
 assert(orderIds.indexOf("ov4") < orderIds.indexOf("ov2") && orderIds.indexOf("ov2") < orderIds.indexOf("ov3"), "Force track order is responsibility → resource flow → matrix");
 assert(orderIds.indexOf("ov3") < orderIds.indexOf("concept-map"), "Concept-map should follow force-track checks");
 assert(orderIds.indexOf("concept-map") < orderIds.indexOf("ov1"), "Overall concept graphic should follow concept-map");
 assert(!orderIds.includes("concept-graphic"), "Concept-graphic step should be removed from navigation");
 assert(orderIds.indexOf("ov5") < orderIds.indexOf("ov5a"), "Activity model should precede activity tree in full order");
-assert(workflowPrimaryStepIds.join(",") === "brief,ov6a,phase-action,ov6b,ov6c,force-mission,ov4,ov2,ov3,concept-map,ov1,ov5,ov5a,ooda,structure-review,scenario,validate,collaboration,report", "Primary step chain must match fixed phase research path");
+assert(workflowPrimaryStepIds.join(",") === "brief,ov6a,phase-action,ov6b,ov6c,operational-task,force-mission,ov4,ov2,ov3,concept-map,ov1,ov5,ov5a,ooda,structure-review,scenario,validate,collaboration,report", "Primary step chain must match fixed phase research path");
 
 assert(onOv5.includes('data-track="concept"') && onOv5.includes("has-active"), "Concept track should mark active path for activity model");
 assert(onOv5.includes("step-circle") && onOv5.includes("step-ring") && onOv5.includes("step-core") && onOv5.includes("step-spine"), "Step path should render circles and spine");
@@ -200,7 +201,7 @@ assert(onOv5.includes("--step-count:"), "Step path should expose step count");
 assert(workflowTracks.map((track) => track.id).join(",") === "model,phase,force,concept,deliver", "Navigation should use the five research tracks");
 assert(workflowTracks.find((track) => track.id === "model")?.viewIds.join(",") === "brief", "Research-model track should only host the brief");
 assert(workflowTracks.find((track) => track.id === "phase")?.viewIds.join(",") === "ov6a,phase-action,ov6b,ov6c", "Phase track must be 规则库 → 阶段 → 状态 → 时序");
-assert(workflowTracks.find((track) => track.id === "force")?.viewIds.join(",") === "force-mission,ov4,ov2,ov3", "Force track should host force-mission then responsibility and resource-flow checks");
+assert(workflowTracks.find((track) => track.id === "force")?.viewIds.join(",") === "operational-task,force-mission,ov4,ov2,ov3", "Force track should host tasks, forces, then responsibility and resource-flow checks");
 assert(workflowTracks.find((track) => track.id === "concept")?.viewIds.join(",") === "concept-map,ov1,ov5,ov5a,ooda", "Concept track should host map, overall graphic, activities, and cycle");
 assert(workflowTracks.find((track) => track.id === "deliver")?.viewIds[0] === "structure-review", "Delivery track should lead with structure review");
 assert(workflowTracks.find((track) => track.id === "deliver")?.label === "推演演示", "Delivery track should be labeled 推演演示");

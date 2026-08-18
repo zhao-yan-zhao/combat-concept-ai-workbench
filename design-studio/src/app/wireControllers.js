@@ -38,6 +38,7 @@ import { createResearchChatProjectSync } from "../researchChatProjectSync.js";
 import { createCollaborationController } from "../collaborationController.js";
 import { createDodafProductController } from "../dodafProductController.js";
 import { createStateMachineCanvasController } from "../stateMachineCanvasController.js";
+import { createOv4CanvasController } from "../ov4CanvasController.js";
 import { createAiOv1Draft } from "../ov1DraftStore.js";
 import { saveOv1Model } from "../ov1Store.js";
 import { selectionFor } from "../ui.js";
@@ -596,6 +597,11 @@ export function wireControllers({
       forceMissionChatController.seedFromPlan(plan);
       state.forceMissionChatOpen = true;
     },
+    onOperationalTasksConfirmed: async () => {
+      state.activeView = "force-mission";
+      render();
+      await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
+    },
     onPhaseActionConfirmed: async () => {
       // Phase chain: after phase confirm → rule binding / state / sequence, not force yet.
       state.activeView = "ov6a";
@@ -685,6 +691,15 @@ export function wireControllers({
     notify: showToast,
     syncOv6b: (model, options = {}) => dodafProductController.syncResource("ov6b", model, {
       source: options.source || "state-machine-canvas",
+      writeArchitecture: true
+    })
+  });
+  const ov4CanvasController = createOv4CanvasController({
+    projectId: activeProjectId,
+    getState: () => state,
+    render,
+    syncOv4: (model, options = {}) => dodafProductController.syncResource("ov4", model, {
+      source: options.source || "ov4-canvas",
       writeArchitecture: true
     })
   });
@@ -778,6 +793,7 @@ export function wireControllers({
     sequenceCanvasController,
     stateMachineChatController,
     stateMachineCanvasController,
+    ov4CanvasController,
     researchChatProjectSync,
     collaborationController
   };

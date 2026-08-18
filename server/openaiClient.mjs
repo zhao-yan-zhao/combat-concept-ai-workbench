@@ -206,6 +206,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
       ...(isForceMissionPlan ? [
         "兵力与任务要求：直接写入可审阅草案，不是真实编制表，也不是装备清单。",
         "分层模式 analysis.forceLayer：concept=只认真写概念兵力；combat=只认真写作战兵力；both/缺省=两层都写。",
+        "0. analysis.operationalTasks 是上一步已确认的独立作战任务。生成兵力必须承接其 side、phaseId、CMO missionType、area、objective 与 expectedEffect；不得改写任务类型或虚构任务区域。",
         "1. 输入必须使用 analysis 简报 + phaseAction（阶段 id/名称/目标/蓝红行动/时窗）。phaseActionConfirmed=false 时仍按草案阶段生成，并在 openQuestions 注明“阶段未确认”。",
         "2. 红蓝双方都必须有兵力：side 用 friendly=蓝方、hostile=红方。禁止只生成蓝方再加一个“外部压力对象”凑数。",
         "3. forces（概念兵力）= 职责语义 + 真实装备类型（研究级）：",

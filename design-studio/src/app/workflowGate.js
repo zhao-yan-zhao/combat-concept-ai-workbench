@@ -293,6 +293,7 @@ export function resolveWorkflowGateContext(state) {
 
   // Last step of the active stage → confirm and unlock the next stage.
   const nextPhaseLabel = followingPhase || "交付完成";
+  const sequenceToForce = state.activeView === "ov6c" && nextStep?.id === "operational-task";
   return {
     freeMode: false,
     mode: "complete-phase",
@@ -307,13 +308,15 @@ export function resolveWorkflowGateContext(state) {
     completing,
     open,
     action: "complete-workflow-stage",
-    capsuleTitle: current.phase || "当前阶段",
-    capsuleAction: ready ? "确认进入" : `待完成 ${incompleteReasons.length}`,
-    actionLabel: followingPhase ? `确认并进入${followingPhase}` : "确认并完成工作流",
+    capsuleTitle: sequenceToForce ? "下一步" : (current.phase || "当前阶段"),
+    capsuleAction: ready ? (sequenceToForce ? "作战任务" : "确认进入") : `待完成 ${incompleteReasons.length}`,
+    actionLabel: sequenceToForce
+      ? "确认阶段行动并进入作战任务"
+      : (followingPhase ? `确认并进入${followingPhase}` : "确认并完成工作流"),
     headLabel: "当前阶段",
     headTitle: current.phase || "",
     hint: ready
-      ? `本阶段最后一步已就绪，确认后进入${nextPhaseLabel}。`
+      ? (sequenceToForce ? "时序校验完成后，确认阶段行动并进入作战任务。" : `本阶段最后一步已就绪，确认后进入${nextPhaseLabel}。`)
       : `尚需完成：${incompleteReasons.join("、")}。点击确认可查看提示。`,
     detailHtml: incompleteReasons.length
       ? `<ul class="workflow-gate-detail">${incompleteReasons.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`

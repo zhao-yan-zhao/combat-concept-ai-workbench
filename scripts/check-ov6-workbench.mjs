@@ -8,6 +8,9 @@ import {
   addOv6cMessage,
   duplicateOv6cMessage,
   addOv6cSequence,
+  clearOv6aRules,
+  clearOv6bStateMachines,
+  clearOv6cSequences,
   removeOv6cSequence,
   inspectPhaseAgainstOv6,
   listActivityCandidates,
@@ -96,6 +99,11 @@ ov6a = setOv6aBindingStatus(ov6a, "rule-1", "p1::action-1", "verified");
 assert(ov6a.rules[0].reviewStatus === "verified", "Verified binding should update review status");
 ov6a = addOv6aRule(ov6a, { name: "窗口约束" });
 assert(ov6a.rules.length === 2 && ov6a.rules[1].reviewLabel === "待校验", "New rule starts unbound/待校验");
+const emptiedRules = clearOv6aRules({
+  ...ov6a,
+  ruleChangeSet: { source: "phase-action", changes: [{ action: "add", rule: { name: "建议规则" }, status: "pending" }] }
+});
+assert(emptiedRules.rules.length === 0 && !emptiedRules.ruleChangeSet, "clearOv6aRules must drop rules and pending change set");
 
 const htmlA = renderOv6a({
   ...state,
@@ -110,6 +118,7 @@ assert(htmlA.includes("rule-library-workbench") && htmlA.includes("rule-chat-doc
 assert(htmlA.includes("rule-library-bar") && htmlA.includes("rule-library-identity"), "Compact rule library header missing");
 assert(htmlA.includes("research-chat-panel") || htmlA.includes("rule-review-chat"), "Rule library must reuse researchChat panel");
 assert(htmlA.includes("ov6a-add-rule") && htmlA.includes("ov6a-delete-rule") && htmlA.includes("data-dodaf-field"), "Rule form CRUD controls missing");
+assert(htmlA.includes("ov6a-clear-all") && htmlA.includes("清空全部"), "Rule library must expose one-click clear-all");
 assert(htmlA.includes("close-rule-library-chat"), "Rule library chat close missing when open");
 assert(!htmlA.includes("ov6a-toggle-binding") && !htmlA.includes("ov6a-set-binding-status"), "Rule library must not offer binding controls");
 // With rules: one footer add; no duplicate empty-state add cluster
@@ -124,6 +133,7 @@ const htmlEmpty = renderOv6a({
 });
 assert(htmlEmpty.includes("rule-form-empty") && htmlEmpty.includes("ov6a-add-rule"), "Empty board add missing");
 assert(!htmlEmpty.includes("rule-form-footer"), "Empty board should not also show footer add");
+assert(!htmlEmpty.includes("ov6a-clear-all"), "Empty rule library should hide clear-all");
 assert(htmlEmpty.includes("rule-library-workbench") && htmlEmpty.includes("is-chat-collapsed"), "Closed chat workbench state missing");
 
 // FAB host markup (topbar float, same shell as phase-action)
@@ -163,6 +173,7 @@ const invalidTransitionEdit = updateOv6bTransition(branched, branched.stateMachi
 assert(invalidTransitionEdit._transitionError, "Transition editor should reject self-links");
 const htmlB = renderOv6b({ ...state, ov6b, activeView: "ov6b", ov6bSelectedMachineId: ov6b.stateMachines[0].id });
 assert(htmlB.includes("sm-page") && htmlB.includes("sm-canvas-panel") && htmlB.includes("sm-flow-canvas"), "State machine flowchart canvas missing");
+assert(htmlB.includes("ov6b-clear-all") && htmlB.includes("清空全部"), "State-machine workbench must expose one-click clear-all");
 assert(htmlB.includes("sm-canvas-head") && htmlB.includes("data-sm-canvas-fit") && !htmlB.includes("sm-flow-caption"), "Canvas chrome must sit outside the drawing surface");
 assert(htmlB.includes("sm-editor-dock") && htmlB.includes("sm-chat-dock"), "State-machine workbench must host property and chat docks");
 assert(!htmlB.includes("sm-editor-dock is-open") && !htmlB.includes("sm-edit-rail"), "Toolbox and property dock stay closed until opened from the top-right toolbox");
@@ -304,6 +315,8 @@ const clearedMachines = normalizeDodafOv6b({
   transitions: []
 });
 assert(clearedMachines.stateMachines.length === 0, "Explicitly cleared state machines must not revive as a legacy chain");
+const emptiedMachines = clearOv6bStateMachines(invalidDecision);
+assert(emptiedMachines.stateMachines.length === 0, "clearOv6bStateMachines must drop every machine");
 const migratedLegacyMachine = normalizeDodafOv6b({
   states: [{ id: "legacy-start", name: "开始", kind: "initial" }, { id: "legacy-end", name: "结束", kind: "final" }],
   transitions: [{ id: "legacy-t", sourceId: "legacy-start", targetId: "legacy-end", condition: "完成" }]
@@ -340,6 +353,7 @@ assert(htmlC.includes("sequenceDiagram") || htmlC.includes("data-engine=\"mermai
 assert(htmlC.includes("research-chat-panel") || htmlC.includes("seq-review-chat"), "Sequence chat panel missing when open");
 assert(htmlC.includes("close-sequence-chat"), "Sequence chat close missing when open");
 assert(htmlC.includes("时序工具箱") && htmlC.includes("ov6c-toggle-editor"), "Sequence toolbox rail missing");
+assert(htmlC.includes("ov6c-clear-all") && htmlC.includes("清空全部"), "Sequence workbench must expose one-click clear-all");
 assert(!htmlC.includes("<th>时序图</th>") && !htmlC.includes("产品诊断</h3>"), "Legacy full events table / heavy diagnostics block should be removed");
 const fabSeq = renderSequenceToolboxFloatButton({ toolsOpen: false });
 assert(fabSeq.includes("toggle-ov6c-tools") && fabSeq.includes("seq-toolbox-float"), "Sequence toolbox FAB missing");
@@ -401,6 +415,8 @@ leftover = addOv6cMessage(leftover, leftover.sequences[0].id, { name: "待删消
 const clearedLast = removeOv6cSequence(leftover, leftover.sequences[0].id);
 assert(clearedLast.sequences.length === 0, "Deleting the last sequence must not leave a revived leftover");
 assert(clearedLast.events.length === 0, "Deleting the last sequence must clear flattened events");
+const emptiedSequences = clearOv6cSequences(leftover);
+assert(emptiedSequences.sequences.length === 0 && emptiedSequences.events.length === 0, "clearOv6cSequences must drop every sequence and leftover event");
 
 const findings = inspectPhaseAgainstOv6({
   ...state,

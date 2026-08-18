@@ -55,6 +55,7 @@ assert(rulePage.includes("rule-form-board") && !rulePage.includes("ov6a-toggle-b
 // Brief → rule library pregenerate path (static wiring).
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const mainJs = readFileSync(join(root, "design-studio/src/main.js"), "utf8");
+const indexHtml = readFileSync(join(root, "design-studio/index.html"), "utf8");
 const ruleCtrl = readFileSync(join(root, "design-studio/src/ruleLibraryChatController.js"), "utf8");
 const openaiClient = readFileSync(join(root, "server/openaiClient.mjs"), "utf8");
 assert(mainJs.includes("pregenerateFromBrief") && mainJs.includes("stage === 0"), "Brief stage confirm must pregenerate rules");
@@ -62,6 +63,7 @@ assert(mainJs.includes("navigateToResearchView") && mainJs.includes("advanceWork
 assert(mainJs.includes('state.activeView === "phase-action"') && mainJs.includes('state.phaseAction?.phases?.length') && mainJs.includes('proposeChanges("phase-action"') && mainJs.includes('navigateToResearchView("ov6a"'), "Phase-action capsule must propose rules and return to rule review");
 assert(mainJs.includes('entrySource: "phase-action"') && mainJs.includes('state.ruleLibraryEntrySource === "phase-action"') && mainJs.includes('change.status === "pending"') && mainJs.includes('navigateToResearchView("ov6b"'), "Only a rule-library visit entered from phase analysis may continue to the state machine");
 const workflowGateJs = readFileSync(join(root, "design-studio/src/app/workflowGate.js"), "utf8");
+assert(workflowGateJs.includes('state.activeView === "ov6c"') && workflowGateJs.includes('nextStep?.id === "operational-task"'), "Sequence completion must explicitly route to operational-task");
 assert(workflowGateJs.includes('state.ruleLibraryEntrySource === "phase-action"') && workflowGateJs.includes('capsuleAction: "规则库审核"') && workflowGateJs.includes('capsuleAction: pendingCount ? `待审核 ${pendingCount}` : "状态机校验"'), "Capsule labels must follow the current rule-library entry source");
 assert(mainJs.includes("void navigateToResearchView(viewId)"), "Left floating step rail data-view must pregenerate on 规则库");
 assert(mainJs.includes('action === "toggle-workflow-gate"') && mainJs.includes("setWorkflowGateOpen(!state.workflowGateOpen)"), "Capsule click must expand/collapse panel");
@@ -70,6 +72,9 @@ assert(mainJs.includes("ruleLibraryChangeGenerating") && mainJs.includes("正在
 assert(mainJs.includes("ensureCombatFocusOnEnterPhaseAction") && mainJs.includes('viewId === "phase-action"'), "Rule library → phase-action must auto-generate 3 combat focus directions");
 assert(mainJs.includes("根据简报生成 3 个作战聚焦方向"), "Phase-action enter overlay must describe focus generation");
 assert(mainJs.includes("combatFocusGenerating"), "Busy overlay must cover combat focus generation");
+assert(mainJs.includes('viewId === "ov6c"') && mainJs.includes("pregenerateOv6cFromPhase"), "State-machine next step must auto-generate an empty sequence model before review");
+assert(mainJs.includes("updateBusyOverlayProgress") && mainJs.includes("expectedMs") && mainJs.includes("timeoutMs"), "Busy overlay must expose elapsed and estimated progress timing");
+assert(indexHtml.includes('role="progressbar"') && indexHtml.includes("workflowModeElapsed") && indexHtml.includes("workflowModeEstimate"), "Busy overlay must render progress, elapsed time, and estimate");
 assert(ruleCtrl.includes("pregenerateFromBrief") && ruleCtrl.includes("RULE_LIBRARY_MAX_RULES = 240"), "Rule controller must pregenerate with high safety cap");
 assert(ruleCtrl.includes('reason: "has-rules"') && ruleCtrl.includes("existingCount > 0"), "Re-entering step 2 with existing rules must skip regenerate");
 assert(ruleCtrl.includes("state.ov6a && Array.isArray(state.ov6a.rules)"), "Pregenerate empty-check must use project ov6a, not OV-5 seed");

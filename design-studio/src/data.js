@@ -7,12 +7,13 @@
 export const productLabels = Object.freeze({
   brief: "概念简报",
   "phase-action": "阶段与行动",
-  "force-mission": "兵力与任务",
+  "operational-task": "作战任务",
+  "force-mission": "作战兵力",
   "concept-map": "概念图",
   ov1: "高层作战概念图",
   ov2: "作战资源流描述",
   ov3: "作战资源流矩阵",
-  ov4: "责任关系",
+  ov4: "作战组织关系图",
   ov5: "作战活动模型",
   ov5a: "作战活动分解树",
   ov6a: "规则库",
@@ -28,7 +29,8 @@ export const productLabels = Object.freeze({
 
 export const productShortLabels = Object.freeze({
   brief: "简报",
-  "force-mission": "兵力任务",
+  "operational-task": "作战任务",
+  "force-mission": "作战兵力",
   "phase-action": "阶段行动",
   "concept-map": "概念图",
   ov1: "总体图",
@@ -38,7 +40,7 @@ export const productShortLabels = Object.freeze({
   ov5a: "活动树",
   ov2: "资源流",
   ov3: "交换矩阵",
-  ov4: "责任",
+  ov4: "组织关系",
   ov6a: "规则库",
   ov6b: "状态机",
   ov6c: "时序",
@@ -56,6 +58,7 @@ export const workflowStepRoles = Object.freeze({
   "phase-action": "write",
   ov6b: "check",
   ov6c: "check",
+  "operational-task": "write",
   "force-mission": "write",
   ov4: "check",
   ov2: "check",
@@ -79,7 +82,7 @@ export const workflowStepRoles = Object.freeze({
 export const workflowOrder = [
   "brief",
   "ov6a", "phase-action", "ov6b", "ov6c",
-  "force-mission", "ov4", "ov2", "ov3",
+  "operational-task", "force-mission", "ov4", "ov2", "ov3",
   "concept-map", "ov1", "ov5", "ov5a", "ooda",
   "structure-review", "scenario", "validate", "collaboration", "report"
 ];
@@ -91,8 +94,9 @@ export const views = workflowOrder.map((id) => {
     "phase-action": { subtitle: "阶段 · 行动 · 进入退出", status: "ready" },
     ov6b: { subtitle: "分机状态 · 回改阶段", status: "ready" },
     ov6c: { subtitle: "跨对象时序 · 回改阶段", status: "ready" },
-    "force-mission": { subtitle: "谁承担 · 覆盖阶段", status: "ready" },
-    ov4: { subtitle: "职责 · 指挥 · 协同", status: "ready" },
+    "operational-task": { subtitle: "阶段 · 阵营 · 任务 · 效果", status: "ready" },
+    "force-mission": { subtitle: "兵力编成 · 任务承接 · 平台", status: "ready" },
+    ov4: { subtitle: "组织 · 责任 · 协同", status: "ready" },
     ov2: { subtitle: "节点与资源交换", status: "ready" },
     ov3: { subtitle: "接口 · 频率 · 完整性", status: "ready" },
     "concept-map": { subtitle: "阶段兵力空间表达", status: "ready" },
@@ -128,6 +132,7 @@ const workflowPhaseById = {
   "phase-action": "阶段行动",
   ov6b: "阶段行动",
   ov6c: "阶段行动",
+  "operational-task": "兵力任务",
   "force-mission": "兵力任务",
   ov4: "兵力任务",
   ov2: "兵力任务",
@@ -154,6 +159,7 @@ export const workflowPrimaryStepIds = [
   "phase-action",
   "ov6b",
   "ov6c",
+  "operational-task",
   "force-mission",
   "ov4",
   "ov2",
@@ -174,7 +180,7 @@ export const workflowPrimaryStepIds = [
 export const workflowTracks = [
   { id: "model", label: "研究建模", summary: "简报：目标 · 边界 · 假设 · 效果", viewIds: ["brief"], defaultOpen: true },
   { id: "phase", label: "阶段行动", summary: "规则库 → 阶段 → 状态/时序 → 反查", viewIds: ["ov6a", "phase-action", "ov6b", "ov6c"], defaultOpen: false },
-  { id: "force", label: "兵力任务", summary: "兵力 · 责任 · 资源流", viewIds: ["force-mission", "ov4", "ov2", "ov3"], defaultOpen: false },
+  { id: "force", label: "兵力任务", summary: "任务 · 兵力 · 责任 · 资源流", viewIds: ["operational-task", "force-mission", "ov4", "ov2", "ov3"], defaultOpen: false },
   { id: "concept", label: "概念图", summary: "概念图 · 总体 · 活动 · 循环", viewIds: ["concept-map", "ov1", "ov5", "ov5a", "ooda"], defaultOpen: false },
   { id: "deliver", label: "推演演示", summary: "反查 · 想定 · 验证 · 审阅 · 报告", viewIds: ["structure-review", "scenario", "validate", "collaboration", "report"], defaultOpen: false }
 ];

@@ -201,7 +201,7 @@ export function buildMarkdownReport(payload) {
     "## OV-3 作战资源流矩阵（OV-3 资源交换）",
     ...renderOv3Section(payload.ov3),
     "",
-    "## OV-4 作战组织关系图（OV-4 抽象责任关系）",
+    "## OV-4 作战组织关系图",
     ...renderOv4Section(payload.ov4),
     "",
     "## OV-5a 作战活动分解树",

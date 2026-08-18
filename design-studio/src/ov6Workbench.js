@@ -189,6 +189,13 @@ export function removeOv6aRule(model, ruleId) {
   return normalizeDodafOv6a(next);
 }
 
+export function clearOv6aRules(model) {
+  const next = cloneModel(ensureOv6aModel(model));
+  next.rules = [];
+  next.ruleChangeSet = null;
+  return normalizeDodafOv6a(next);
+}
+
 export function resolveOv6aSelectedRuleId(state = {}, rules = []) {
   const list = Array.isArray(rules) ? rules : [];
   if (!list.length) return "";
@@ -286,6 +293,12 @@ export function addOv6bStateMachine(model, { subjectType = "task", subjectRef = 
 export function removeOv6bStateMachine(model, machineId) {
   const next = cloneModel(ensureOv6bModel(model));
   next.stateMachines = (next.stateMachines || []).filter((item) => item.id !== machineId);
+  return normalizeDodafOv6b(next);
+}
+
+export function clearOv6bStateMachines(model) {
+  const next = cloneModel(ensureOv6bModel(model));
+  next.stateMachines = [];
   return normalizeDodafOv6b(next);
 }
 
@@ -718,6 +731,12 @@ export function duplicateOv6cMessage(model, sequenceId, messageId) {
 export function removeOv6cSequence(model, sequenceId) {
   const next = cloneModel(ensureOv6cModel(model));
   next.sequences = (next.sequences || []).filter((item) => item.id !== sequenceId);
+  return normalizeDodafOv6c(next);
+}
+
+export function clearOv6cSequences(model) {
+  const next = cloneModel(ensureOv6cModel(model));
+  next.sequences = [];
   return normalizeDodafOv6c(next);
 }
 

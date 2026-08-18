@@ -443,6 +443,32 @@ export function normalizeDodafOv4(value) {
     targetActivityTitle: clean(relation?.targetActivityTitle, 240),
     state: ["ready", "review", "pending"].includes(clean(relation?.state, 40)) ? clean(relation.state, 40) : "ready"
   })).filter((relation) => relation.sourceRoleId && relation.targetRoleId && relation.sourceRoleId !== relation.targetRoleId);
+  const relationIds = new Set(relations.map((relation) => relation.id));
+  const diagrams = (Array.isArray(value?.diagrams)
+    ? value.diagrams
+    : [{ id: "ov4-diagram-overall", name: "总体组织关系图", description: "", roleIds: [...roleIds], relationIds: [...relationIds] }]
+  ).slice(0, 48).map((diagram, index) => ({
+    id: clean(diagram?.id, 160) || `ov4-diagram-${index + 1}`,
+    name: clean(diagram?.name || diagram?.title, 160) || `组织关系图 ${index + 1}`,
+    description: clean(diagram?.description || diagram?.detail, 800),
+    roleIds: uniqueIds(diagram?.roleIds, 120).filter((id) => roleIds.has(id)),
+    relationIds: uniqueIds(diagram?.relationIds, 240).filter((id) => relationIds.has(id)),
+    positions: (Array.isArray(diagram?.positions) ? diagram.positions : []).slice(0, 120).map((position) => ({
+      roleId: clean(position?.roleId || position?.id, 160),
+      x: clampNumber(position?.x, 0, 1000, 500),
+      y: clampNumber(position?.y, 0, 1000, 500)
+    })).filter((position) => roleIds.has(position.roleId))
+  })).map((diagram) => {
+    const includedRoles = new Set(diagram.roleIds);
+    diagram.relationIds.forEach((id) => {
+      const relation = relations.find((item) => item.id === id);
+      if (relation) {
+        includedRoles.add(relation.sourceRoleId);
+        includedRoles.add(relation.targetRoleId);
+      }
+    });
+    return { ...diagram, roleIds: [...includedRoles] };
+  });
 
   const entities = roles.map((role, index) => normalizeDm2Entity({
     id: role.id,
@@ -476,6 +502,7 @@ export function normalizeDodafOv4(value) {
       generatedAt: nowIso(value?.generatedAt),
       roles,
       relations,
+      diagrams,
       coverage: value?.coverage && typeof value.coverage === "object" ? value.coverage : { activity: null, role: null },
       diagnostics: normalizeDiagnostics(value?.diagnostics),
       unresolved: value?.unresolved && typeof value.unresolved === "object" ? value.unresolved : {}

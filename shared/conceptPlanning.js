@@ -45,6 +45,8 @@ export function createEmptyForceMissionPlan() {
     version: 1,
     status: "empty",
     generation: emptyGeneration(),
+    tasks: [],
+    tasksConfirmedAt: "",
     forces: [],
     combatForces: [],
     relations: [],
@@ -91,6 +93,37 @@ const GRAPHIC_EDGE_TYPES = new Set(["信息流", "控制流", "态势变化", "�
 export function normalizeForceMissionPlan(value) {
   const input = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const status = PLAN_STATUSES.has(clean(input.status, 24)) ? clean(input.status, 24) : "empty";
+  const legacyTaskSources = !Array.isArray(input.tasks)
+    ? [...(Array.isArray(input.forces) ? input.forces : []), ...(Array.isArray(input.combatForces) ? input.combatForces : [])]
+      .filter((item) => clean(item?.task, 400))
+      .map((item, index) => ({
+        id: `legacy-task-${index + 1}`,
+        name: clean(item.task, 120),
+        side: item.side,
+        phaseId: Array.isArray(item.phaseIds) ? item.phaseIds[0] : "",
+        objective: item.task,
+        expectedEffect: "",
+        sourceAction: item.task
+      }))
+    : [];
+  const taskIds = new Set();
+  const tasks = (Array.isArray(input.tasks) ? input.tasks : legacyTaskSources).slice(0, 120).map((item, index) => {
+    const id = slugId(item?.id, `task-${index + 1}`);
+    if (!clean(item?.name, 120) || taskIds.has(id)) return null;
+    taskIds.add(id);
+    return {
+      id,
+      name: clean(item.name, 120),
+      side: FORCE_SIDES.has(clean(item?.side, 20)) ? clean(item.side, 20) : "friendly",
+      phaseId: clean(item?.phaseId, 60),
+      missionType: normalizeCmoMissionType(item?.missionType, inferTaskMissionType(item?.name || item?.objective || item?.sourceAction)),
+      area: clean(item?.area || item?.missionArea || item?.taskArea, 240) || "待人工明确",
+      objective: clean(item?.objective, 500) || clean(item?.description, 500) || "完成阶段作战要求",
+      expectedEffect: clean(item?.expectedEffect, 500),
+      sourceAction: clean(item?.sourceAction, 400),
+      notes: clean(item?.notes, 600)
+    };
+  }).filter(Boolean);
   const forceIds = new Set();
   // Concept forces: duty semantics by phase + exactly one equipment type ref (research-level).
   // slot = abstract relative layout for concept-map (stored, not shown on force roster UI).
@@ -171,6 +204,8 @@ export function normalizeForceMissionPlan(value) {
     version: 1,
     status,
     generation: normalizeGeneration(input.generation),
+    tasks,
+    tasksConfirmedAt: tasks.length ? (clean(input.tasksConfirmedAt, 80) || (status === "confirmed" ? clean(input.confirmedAt, 80) : "")) : "",
     forces,
     combatForces,
     relations,
@@ -237,6 +272,8 @@ export function normalizePhaseActionConcept(value) {
 export function isForceMissionPlanConfirmed(plan, storage = {}) {
   const normalized = normalizeForceMissionPlan(plan);
   return normalized.status === "confirmed"
+    && normalized.tasks.length > 0
+    && Boolean(normalized.tasksConfirmedAt)
     && normalized.forces.length > 0
     && normalized.forces.every((force) => force.role && force.task)
     && normalized.combatForces.length > 0
@@ -256,12 +293,90 @@ export function forceMissionPlanIncompleteReasons(plan, storage = {}) {
   const normalized = normalizeForceMissionPlan(plan);
   const reasons = [];
   if (storage?.stale) reasons.push("复核已过期的兵力与任务");
+  if (!normalized.tasks.length) reasons.push("作战任务草案");
+  else if (!normalized.tasksConfirmedAt) reasons.push("确认作战任务");
   if (!normalized.forces.length) reasons.push("概念兵力草案");
   else if (normalized.forces.some((force) => !force.task)) reasons.push("补全概念兵力任务");
   if (!normalized.combatForces.length) reasons.push("作战兵力草案");
   else if (normalized.combatForces.some((force) => !force.task || !force.missionType)) reasons.push("补全作战兵力任务/类型");
   if (normalized.status !== "confirmed") reasons.push("确认兵力与任务");
   return reasons;
+}
+
+export function createOperationalTasksFromPhaseAction(plan = {}, phaseAction = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  const phases = Array.isArray(phaseAction?.phases) ? phaseAction.phases : [];
+  const tasks = [];
+  for (const phase of phases) {
+    const blue = Array.isArray(phase?.blueActions) ? phase.blueActions : (phase?.primaryActions || []);
+    const red = Array.isArray(phase?.redActions) ? phase.redActions : (phase?.secondaryActions || []);
+    for (const [side, actions] of [["friendly", blue], ["hostile", red]]) {
+      actions.slice(0, 8).forEach((action, index) => {
+        const text = clean(action, 400);
+        if (!text) return;
+        tasks.push({
+          id: `${slugId(phase?.id, "phase")}-${side === "friendly" ? "blue" : "red"}-${index + 1}`,
+          name: text.slice(0, 120),
+          side,
+          phaseId: clean(phase?.id, 60),
+          missionType: inferTaskMissionType(text),
+          area: clean(phase?.area || phase?.missionArea || phase?.taskArea, 240) || "待人工明确",
+          objective: text,
+          expectedEffect: (phase?.expectedEffects || [])[0] || "",
+          sourceAction: text,
+          notes: ""
+        });
+      });
+    }
+  }
+  return normalizeForceMissionPlan({
+    ...normalized,
+    status: normalized.status === "empty" ? "draft" : normalized.status,
+    tasks,
+    tasksConfirmedAt: ""
+  });
+}
+
+export function confirmOperationalTasks(plan = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  if (!normalized.tasks.length) throw new Error("Operational tasks require at least one task");
+  return normalizeForceMissionPlan({ ...normalized, tasksConfirmedAt: new Date().toISOString() });
+}
+
+export function updateOperationalTask(plan = {}, taskId = "", patch = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  return normalizeForceMissionPlan({
+    ...normalized,
+    tasks: normalized.tasks.map((task) => task.id === taskId ? { ...task, ...patch } : task),
+    tasksConfirmedAt: ""
+  });
+}
+
+function inferTaskMissionType(value = "") {
+  const text = clean(value, 500).toLowerCase();
+  const rules = [
+    ["sead", /防空压制|sead/],
+    ["dead", /防空摧毁|dead/],
+    ["recon", /侦察|监视|监测|搜索|识别|态势/],
+    ["intercept", /截击|拦截/],
+    ["air_superiority", /制空|空中优势/],
+    ["patrol_aaw", /防空巡逻|空中巡逻|cap/],
+    ["patrol_asuw", /反舰巡逻|海上打击/],
+    ["patrol_asw", /反潜巡逻/],
+    ["asw_attack", /反潜攻击/],
+    ["aew", /预警/],
+    ["ecm", /电子对抗|电子干扰|压制干扰/],
+    ["escort", /护航|伴随掩护/],
+    ["tanker", /空中加油/],
+    ["cargo", /运输|输送|投送/],
+    ["landing", /登陆|两栖/],
+    ["sar", /搜救|救援/],
+    ["area_defense", /区域防御|要地防御|防卫/],
+    ["command", /指挥|控制|协同决策/],
+    ["support", /支援|保障|补给/],
+    ["strike", /打击|突击|攻击|摧毁/]
+  ];
+  return rules.find(([, pattern]) => pattern.test(text))?.[0] || "other";
 }
 
 export function phaseActionConceptIncompleteReasons(plan, storage = {}) {
@@ -375,6 +490,8 @@ export function createForceMissionPlanFromBrief(brief = {}, plan = null, {
       promptSummary: summaryByLayer[scope],
       reviewNotes: clean(draft.reviewNotes || prev.reviewNotes, 2000)
     },
+    tasks: Array.isArray(prev.tasks) ? prev.tasks : [],
+    tasksConfirmedAt: clean(prev.tasksConfirmedAt, 80),
     forces,
     combatForces,
     relations,
@@ -1023,6 +1140,7 @@ function listHasSimilar(list = [], clause = "") {
 
 export function confirmForceMissionPlan(plan, { reviewNotes = "" } = {}) {
   const normalized = normalizeForceMissionPlan(plan);
+  if (!normalized.tasks.length || !normalized.tasksConfirmedAt) throw new Error("Operational tasks must be confirmed first");
   if (!normalized.forces.length) throw new Error("Force mission plan requires at least one concept force");
   if (!normalized.combatForces.length) throw new Error("Force mission plan requires at least one combat force");
   return normalizeForceMissionPlan({
@@ -1885,6 +2003,16 @@ export function compactForceMissionForAnalysis(plan = {}) {
     basis: item.basis || ""
   }));
   return {
+    tasks: normalized.tasks.map((task) => ({
+      id: task.id,
+      name: task.name,
+      side: task.side,
+      phaseId: task.phaseId,
+      missionType: task.missionType,
+      area: task.area,
+      objective: task.objective,
+      expectedEffect: task.expectedEffect
+    })),
     forces: normalized.forces.map((force) => ({
       id: force.id,
       name: force.name,

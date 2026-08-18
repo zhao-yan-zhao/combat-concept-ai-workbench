@@ -59,6 +59,7 @@ export function renderOv6c(state = {}) {
         <div class="seq-toolbar">
           ${storage ? renderProjectStorageActions(storage, { refreshAction: "refresh-project-ov6c" }) : ""}
           <button type="button" class="quiet-button" data-action="ov6c-seed-phase" title="按阶段/兵力生成协同时序（仅空库时）">按阶段生成</button>
+          ${sequences.length ? `<button type="button" class="quiet-button danger-quiet" data-action="ov6c-clear-all" title="清空全部时序图">清空全部</button>` : ""}
           <button type="button" class="primary-btn" data-action="save-dodaf-ov6c">保存</button>
           <button type="button" class="quiet-button" data-view="structure-review">下一步</button>
         </div>

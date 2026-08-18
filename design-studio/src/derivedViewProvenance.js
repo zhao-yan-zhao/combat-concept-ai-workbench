@@ -53,7 +53,7 @@ const CATALOG = {
   },
   ov4: {
     id: "ov4",
-    title: "责任关系",
+    title: "作战组织关系图",
     dodaf: "研究级产品：抽象责任关系。",
     workbench: "工作台：可编辑持久化产品。可从高层概念图节点与活动归属关系种子生成。",
     sources: [
@@ -62,7 +62,7 @@ const CATALOG = {
     ],
     revise: "可在本页编辑角色说明并保存；或从上游重新种子。",
     reviseActions: [
-      { view: "ov4", label: "编辑责任关系" },
+      { view: "ov4", label: "编辑作战组织关系图" },
       { view: "ov1", label: "打开高层作战概念图" },
       { view: "ov5", label: "打开作战活动模型" }
     ]

@@ -29,6 +29,7 @@ import { renderForceMissionChatFloatButton } from "./forceMissionView.js";
 import { renderRuleLibraryChatFloatButton } from "./ruleLibraryView.js";
 import { renderSequenceToolboxFloatButton } from "./ov6cView.js";
 import { renderStateMachineToolboxFloatButton } from "./stateMachineView.js";
+import { renderOv4ToolboxFloatButton } from "./ov4View.js";
 
 import { deleteModelSnapshot, persistModelSnapshots, saveModelSnapshot, snapshotContextFromState, upsertModelSnapshot } from "./modelSnapshotStore.js";
 import { restoreModelSnapshot } from "./modelSnapshotRestore.js";
@@ -45,6 +46,9 @@ import { normalizePhaseActionConcept, persistPhaseAction } from "./phaseActionSt
 import { normalizeConceptGraphicPlan, persistConceptGraphic } from "./conceptGraphicStore.js";
 
 const { state, projectBriefSeed, activeProjectId } = createInitialWorkbenchState();
+let busyOverlayTimer = 0;
+let busyOverlayKey = "";
+let busyOverlayStartedAt = 0;
 
 const {
   oodaController,
@@ -90,6 +94,7 @@ const {
   sequenceCanvasController,
   stateMachineChatController,
   stateMachineCanvasController,
+  ov4CanvasController,
   researchChatProjectSync,
   collaborationController
 } = wireControllers({
@@ -452,9 +457,16 @@ function renderOv1ToolboxFloatHost() {
   const sequenceFloating = onSequence && state.ov6cToolsOpen !== true;
   const onStateMachine = state.activeView === "ov6b";
   const stateMachineFloating = onStateMachine && state.ov6bToolsOpen !== true;
+  const ov4Floating = state.activeView === "ov4" && state.ov4ToolsOpen !== true;
   if (ov1Floating) {
     host.hidden = false;
     host.innerHTML = renderOv1ToolboxFloatButton();
+    return;
+  }
+  if (ov4Floating) {
+    host.hidden = false;
+    host.removeAttribute("hidden");
+    host.innerHTML = renderOv4ToolboxFloatButton({ toolsOpen: false });
     return;
   }
   if (ruleFloating) {
@@ -863,6 +875,7 @@ function bindDynamicEvents() {
   ov1Controller.bind(document);
   ov1CanvasController.bind(document);
   stateMachineCanvasController.bind(document);
+  ov4CanvasController.bind(document);
   sequenceCanvasController.bind(document);
   ov5CanvasController.bind(document);
   briefController.bind(document);
@@ -2121,6 +2134,7 @@ function goToWorkflowView(viewId) {
  * - 规则库: empty → AI pregenerate rules from brief
  * - 阶段与行动: no combat-focus options yet → AI generate 3 directions + transition overlay
  * - 状态机校验: empty → AI derives editable task machines from phase actions
+ * - 时序校验: empty → derive one editable phase/force timeline
  * Used by: top gate capsule, gate panel buttons, left floating step rail, menus.
  */
 async function navigateToResearchView(viewId, { toast = "", force = false, entrySource = "default" } = {}) {
@@ -2138,6 +2152,12 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
   }
   if (viewId === "ov6b") {
     await dodafProductController.pregenerateOv6bFromPhaseAction({ silent: false });
+  }
+  if (viewId === "ov6c") {
+    await dodafProductController.pregenerateOv6cFromPhase({ silent: false });
+  }
+  if (viewId === "operational-task" && !(state.forceMission?.tasks || []).length) {
+    await conceptPlanningController.generateOperationalTasks({ silent: false });
   }
 }
 
@@ -2232,9 +2252,9 @@ async function completeWorkflowStage() {
       render();
       await ruleLibraryChatController.pregenerateFromBrief({ silent: false });
     }
-    // Completing 阶段行动 (after phase confirm + soft validation walk) opens 兵力任务 and seeds concept forces.
-    if (stage === 1 && nextView === "force-mission") {
-      void conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
+    // Completing 阶段行动 first forms an independent task product; force generation follows after review.
+    if (stage === 1 && nextView === "operational-task") {
+      await conceptPlanningController.generateOperationalTasks({ silent: false });
     }
   } catch {
     showToast("\u9636\u6bb5\u72b6\u6001\u4fdd\u5b58\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5");
@@ -2269,39 +2289,57 @@ async function setWorkflowMode(mode) {
 function getBusyOverlayState() {
   if (state.ruleLibraryPregenerating) {
     return {
+      key: "rule-library-pregenerate",
       title: "正在进入阶段行动",
-      detail: "根据简报生成作战规则…"
+      detail: "根据简报生成作战规则…",
+      expectedMs: 90000,
+      timeoutMs: 180000
     };
   }
   if (state.ruleLibraryChangeGenerating) {
     return {
+      key: "rule-library-change",
       title: "正在分析阶段规则",
-      detail: "根据阶段目标、行动、进入与退出条件生成待审核规则建议…"
+      detail: "根据阶段目标、行动、进入与退出条件生成待审核规则建议…",
+      expectedMs: 90000,
+      timeoutMs: 180000
     };
   }
   if (state.combatFocusGenerating) {
     return {
+      key: "combat-focus",
       title: "正在进入阶段行动",
-      detail: "根据简报生成 3 个作战聚焦方向…"
+      detail: "根据简报生成 3 个作战聚焦方向…",
+      expectedMs: 60000,
+      timeoutMs: 180000
     };
   }
   if (state.stateMachinePregenerating) {
     return {
+      key: "state-machine-pregenerate",
       title: "正在进入状态机校验",
-      detail: "根据阶段与行动分析任务状态和转换条件…"
+      detail: "根据阶段与行动分析任务状态和转换条件…",
+      expectedMs: 90000,
+      timeoutMs: 180000
     };
   }
   if (state.workflowModeSwitching) {
     const testModeActive = currentWorkflow().mode === "free";
     return {
+      key: "workflow-mode",
       title: testModeActive ? "正在进入测试模式" : "正在恢复阶段门禁",
-      detail: testModeActive ? "所有研究阶段将可自由访问" : "工作流将按阶段门禁恢复"
+      detail: testModeActive ? "所有研究阶段将可自由访问" : "工作流将按阶段门禁恢复",
+      expectedMs: 1500,
+      timeoutMs: 10000
     };
   }
   if (state.reportArchiving) {
     return {
+      key: "report-archive",
       title: "正在保存报告版本",
-      detail: "打包研究成果、生成校验并写入归档…"
+      detail: "打包研究成果、生成校验并写入归档…",
+      expectedMs: 8000,
+      timeoutMs: 30000
     };
   }
   return null;
@@ -2313,16 +2351,65 @@ function updateBusyOverlay(busy = getBusyOverlayState()) {
   const title = $("#workflowModeOverlayTitle");
   const detail = $("#workflowModeOverlayDetail");
   if (busy) {
+    const key = busy.key || busy.title;
+    if (busyOverlayKey !== key) {
+      busyOverlayKey = key;
+      busyOverlayStartedAt = Date.now();
+    }
     if (title) title.textContent = busy.title;
     if (detail) detail.textContent = busy.detail;
+    updateBusyOverlayProgress(busy);
+    if (!busyOverlayTimer) {
+      busyOverlayTimer = window.setInterval(() => {
+        const current = getBusyOverlayState();
+        if (current) updateBusyOverlayProgress(current);
+      }, 500);
+    }
     overlay.hidden = false;
     requestAnimationFrame(() => overlay.classList.add("is-visible"));
     return;
   }
+  if (busyOverlayTimer) window.clearInterval(busyOverlayTimer);
+  busyOverlayTimer = 0;
+  busyOverlayKey = "";
+  busyOverlayStartedAt = 0;
   overlay.classList.remove("is-visible");
   window.setTimeout(() => {
     if (!getBusyOverlayState()) overlay.hidden = true;
   }, 220);
+}
+
+function updateBusyOverlayProgress(busy) {
+  const elapsedMs = Math.max(0, Date.now() - busyOverlayStartedAt);
+  const expectedMs = Math.max(1000, Number(busy.expectedMs) || 30000);
+  const timeoutMs = Math.max(expectedMs, Number(busy.timeoutMs) || expectedMs * 2);
+  const estimatedPercent = elapsedMs <= expectedMs
+    ? Math.min(90, Math.round(8 + (elapsedMs / expectedMs) * 82))
+    : Math.min(97, Math.round(90 + ((elapsedMs - expectedMs) / Math.max(1, timeoutMs - expectedMs)) * 7));
+  const progress = $(".workflow-mode-progress");
+  const bar = $("#workflowModeProgressBar");
+  const elapsed = $("#workflowModeElapsed");
+  const estimate = $("#workflowModeEstimate");
+  const hint = $("#workflowModeProgressHint");
+  if (progress) progress.setAttribute("aria-valuenow", String(estimatedPercent));
+  if (bar) bar.style.width = `${estimatedPercent}%`;
+  if (elapsed) elapsed.textContent = `已用时 ${formatBusyDuration(elapsedMs)}`;
+  if (estimate) estimate.textContent = elapsedMs <= expectedMs
+    ? `通常 ${formatBusyDuration(expectedMs / 2)}～${formatBusyDuration(expectedMs)}`
+    : `服务超时上限 ${formatBusyDuration(timeoutMs)}`;
+  if (hint) hint.textContent = elapsedMs <= expectedMs
+    ? "进度按预计耗时估算，实际以 AI 返回为准"
+    : (elapsedMs < timeoutMs
+      ? "已超过常见耗时，服务仍在处理；到达上限后会自动结束并提示重试"
+      : "已到达超时上限，正在等待请求结束");
+}
+
+function formatBusyDuration(ms) {
+  const seconds = Math.max(0, Math.round(Number(ms) / 1000));
+  if (seconds < 60) return `${seconds} 秒`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest ? `${minutes} 分 ${rest} 秒` : `${minutes} 分钟`;
 }
 
 function settleBusyTransition(minMs = 280) {

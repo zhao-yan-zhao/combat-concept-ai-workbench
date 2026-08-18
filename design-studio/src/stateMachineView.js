@@ -67,6 +67,7 @@ export function renderStateMachineWorkbench(state = {}) {
         </div>
         <div class="sm-toolbar">
           ${storage ? renderProjectStorageActions(storage, { refreshAction: "refresh-project-ov6b" }) : ""}
+          ${machines.length ? `<button type="button" class="quiet-button danger-quiet" data-action="ov6b-clear-all" title="清空全部状态机">清空全部</button>` : ""}
           <button type="button" class="primary-btn" data-action="save-dodaf-ov6b">保存</button>
           <button type="button" class="quiet-button" data-view="ov6c">下一步</button>
         </div>

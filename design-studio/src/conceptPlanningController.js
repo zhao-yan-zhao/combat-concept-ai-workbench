@@ -32,6 +32,8 @@ import {
   attachForcePlatforms,
   compactForceMissionForAnalysis,
   confirmForceMissionPlan,
+  confirmOperationalTasks,
+  createOperationalTasksFromPhaseAction,
   createForceMissionPlanFromBrief,
   isForceMissionPlanConfirmed,
   persistForceMission,
@@ -45,7 +47,8 @@ import {
   seedConceptEquipmentType,
   setForcePlatformQuantity,
   updateCombatConceptLink,
-  updateForceMissionType
+  updateForceMissionType,
+  updateOperationalTask
 } from "./forceMissionStore.js";
 import {
   applyPhaseActionReviewNotes,
@@ -66,6 +69,7 @@ export function createConceptPlanningController({
   syncConceptGraphic,
   onForceMissionConfirmed,
   onForceMissionGenerated,
+  onOperationalTasksConfirmed,
   onPhaseActionConfirmed,
   onPhaseActionGenerated,
   onConceptGraphicConfirmed
@@ -101,6 +105,14 @@ export function createConceptPlanningController({
           state.forceMissionLayerTab = layer;
           render();
         }
+        return true;
+      }
+      if (action === "generate-operational-tasks") {
+        void generateOperationalTasks({ silent: false });
+        return true;
+      }
+      if (action === "confirm-operational-tasks") {
+        void confirmTasks();
         return true;
       }
       if (action === "generate-force-mission" || action === "generate-concept-forces") {
@@ -248,6 +260,11 @@ export function createConceptPlanningController({
       return false;
     },
     bind(root = document) {
+      root.querySelectorAll("[data-operational-task-field]").forEach((control) => {
+        control.addEventListener("change", () => {
+          void changeOperationalTask(control.dataset.taskId, control.dataset.operationalTaskField, control.value);
+        });
+      });
       root.querySelectorAll("[data-force-mission-type]").forEach((control) => {
         control.addEventListener("change", () => {
           void changeForceMissionType(
@@ -311,10 +328,48 @@ export function createConceptPlanningController({
       });
     },
     generateCombatFocus,
+    generateOperationalTasks,
     generateForceMission,
     generatePhaseAction,
     generateConceptGraphic
   };
+
+  async function generateOperationalTasks({ silent = false } = {}) {
+    const state = getState();
+    if (state.phaseAction?.status !== "confirmed" || state.phaseActionStorage?.stale) {
+      if (!silent) notify("请先确认阶段与行动");
+      return null;
+    }
+    state.forceMission = persistForceMission(
+      createOperationalTasksFromPhaseAction(state.forceMission, state.phaseAction),
+      projectId
+    );
+    await syncForceMission(state.forceMission, { source: "operational-task:generate" });
+    if (!silent) notify(`已形成 ${state.forceMission.tasks.length} 项作战任务，请复核后确认`);
+    render();
+    return state.forceMission;
+  }
+
+  async function changeOperationalTask(taskId, field, value) {
+    if (!["name", "missionType", "area", "objective", "expectedEffect"].includes(field)) return;
+    const state = getState();
+    state.forceMission = persistForceMission(updateOperationalTask(state.forceMission, taskId, { [field]: value }), projectId);
+    await syncForceMission(state.forceMission, { source: "operational-task:edit" });
+    render();
+  }
+
+  async function confirmTasks() {
+    const state = getState();
+    try {
+      state.forceMission = persistForceMission(confirmOperationalTasks(state.forceMission), projectId);
+      await syncForceMission(state.forceMission, { source: "operational-task:confirm" });
+      notify("作战任务已确认，进入作战兵力");
+      await onOperationalTasksConfirmed?.(state.forceMission);
+      render();
+    } catch {
+      notify("请先生成并复核作战任务");
+    }
+  }
 
   function normalizeLayer(layer) {
     return layer === "combat" ? "combat" : "concept";
@@ -1186,6 +1241,10 @@ export function createConceptPlanningController({
     }
     const scope = layer === "concept" || layer === "combat" ? layer : "both";
     const previous = state.forceMission || null;
+    if (!(previous?.tasks || []).length || !previous?.tasksConfirmedAt) {
+      if (!silent) notify("请先生成并确认作战任务");
+      return null;
+    }
     if (scope === "combat") {
       const conceptCount = Array.isArray(previous?.forces) ? previous.forces.length : 0;
       if (!conceptCount) {
@@ -1228,6 +1287,7 @@ export function createConceptPlanningController({
           cmoCatalog: cmoHint.catalog,
           reviewNotes: String(reviewNotes || "").trim(),
           forceLayer: scope,
+          operationalTasks: existingConcept.tasks,
           existingForceMission: scope === "combat" ? existingConcept : null
         },
         evidence: []

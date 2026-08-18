@@ -1,5 +1,68 @@
 # project-context.md
 
+## Latest design handoff (2026-08-18, seven-step mainline and model topology)
+
+- Goal: Replace the growing page-by-page workflow with a seven-step mainline and source-linked associated-model layer.
+- Completed: Added `plans/WORKFLOW_MAINLINE_MODEL_TOPOLOGY.md` as the approved target specification. It freezes the mainline as brief → phase action → operational task → combat force → OV1a overall graphic → concept map → simulation demonstration; defines associated-model placement, shared OV6 reuse, contextual per-step flows, full topology, relation types, ownership, stale propagation, implementation batches, and acceptance criteria.
+- Decisions: Each main step displays its local dependency flow only while being edited, with object-scoped status, filtered related-model entry, and return-context restoration. Activity tree is removed; OV5a becomes decomposition list/hierarchy rather than a separate tree view. OV3 is an OV2 projection. OV1c and OV7 are persisted mapping products. Rules/state/sequence are single shared resources exposed through phase/task/force filters.
+- Changed files: `plans/WORKFLOW_MAINLINE_MODEL_TOPOLOGY.md`, `plans/README.md`, `project-context.md`.
+- Remaining: No product code or data migration has been implemented. The next smallest action is batch 1 in the specification: topology references/compiler and orphan diagnostics without navigation changes.
+- Verification: Documentation structure, links, terminology, and diff cleanliness only; no runtime or browser claim.
+
+## Latest completed batch (2026-08-18, operational task type and area)
+
+- Goal: Add task type and task area to the independent operational-task product.
+- Completed: Each task now persists `missionType` from the existing 26-item CMO-aligned taxonomy and a researcher-editable `area`. Generation infers common CMO types from action wording; when no trustworthy area exists it uses `待人工明确` instead of inventing geography.
+- Downstream: Confirmed task id/side/phase/type/area/objective/effect are included in force-generation analysis, and the AI prompt requires combat forces to inherit them without changing task type or fabricating areas.
+- Verification: syntax, operational-task, concept-planning, workflow test-mode, phase-chain, served-resource markers, live SQLite/CMO health, and diff checks passed.
+
+## Latest completed batch (2026-08-18, operational task before combat force)
+
+- Goal: Split the old combined force-mission step so operational tasks are an explicit upstream product and the existing page becomes combat force.
+- Completed: Added `operational-task` before `force-mission`; task drafts are generated from confirmed blue/red phase actions, editable, separately confirmed, persisted in the existing `forceMissionPlan`, and required before force generation/confirmation. Confirming tasks enters 作战兵力 and starts concept-force generation.
+- Compatibility: Existing saved plans without `tasks` derive a compatibility task list from embedded force tasks; confirmed legacy plans retain confirmed task semantics.
+- Changed files: `shared/conceptPlanning.js`, `design-studio/src/operationalTaskView.js`, `design-studio/src/forceMissionStore.js`, `design-studio/src/conceptPlanningController.js`, `design-studio/src/app/wireControllers.js`, `design-studio/src/app/workflowGate.js`, `design-studio/src/data.js`, `design-studio/src/ui.js`, `design-studio/src/main.js`, `design-studio/src/forceMissionView.js`, `design-studio/styles.css`, and focused acceptance scripts.
+- Verification: syntax, operational-task, workflow test-mode, concept-planning workflow, phase-chain, diff, served-resource, live health and SQLite checks passed. Browser reached the collaboration login gate; authenticated visual/click-through verification remains outstanding.
+
+## Latest completed batch (2026-08-18, sequence next target)
+
+- Goal: Make the next step after sequence validation explicitly point to force-mission.
+- Completed: The OV-6c stage-end capsule now shows `下一步 / 兵力任务`; its action confirms the phase-action stage and enters `force-mission` through the existing workflow completion path.
+- Changed files: `design-studio/src/app/workflowGate.js`, `scripts/check-workflow-test-mode.mjs`, `scripts/check-phase-chain.mjs`.
+- Verification: workflow test-mode, phase-chain, syntax, diff, served-resource, and live health checks passed.
+
+## Latest completed batch (2026-08-18, state-machine next auto-sequences)
+
+- Goal: Clicking next from state-machine validation should enter sequence validation with an initial sequence draft.
+- Completed: The shared research navigation now calls `pregenerateOv6cFromPhase` on entry to OV-6c. It reuses the existing phase/force sequence seed, selects the generated timeline, persists it locally and to the project repository, and never overwrites existing sequences.
+- Failure boundary: If project sync fails, the local sequence draft remains visible and navigation still completes.
+- Changed files: `design-studio/src/main.js`, `design-studio/src/dodafProductController.js`, `scripts/check-phase-chain.mjs`.
+- Verification: syntax, `check-ov6-workbench`, `check-phase-chain`, `git diff --check`, served-resource checks, and live health passed.
+
+## Latest completed batch (2026-08-18, timed transition progress)
+
+- Goal: Make long AI transition overlays explain whether they are still within the expected window.
+- Completed: The shared full-screen busy overlay now shows estimated progress, elapsed time, a typical duration range, and the operation timeout. Progress slows after the expected window and explicitly says that it is time-based rather than model-reported.
+- Scope: Covers rule pregeneration/change analysis, combat-focus generation, state-machine pregeneration, workflow-mode switching, and report archiving. Rule AI generation keeps its existing 180-second server timeout.
+- Changed files: `design-studio/index.html`, `design-studio/src/main.js`, `design-studio/styles.css`, `scripts/check-phase-chain.mjs`.
+- Verification: `node --check design-studio/src/main.js`, `node scripts/check-phase-chain.mjs`, `git diff --check`, served-resource marker checks, and `GET /api/health` passed. Authenticated browser visual inspection was unavailable because no browser-control connection was exposed in this run.
+
+## Latest completed batch (2026-08-18, OV-4 multi-diagram organization relationships)
+
+- Goal: Present OV-4 as multiple organization relationship diagrams rather than a list of organization roles.
+- Completed: OV-4 now uses the state-machine workbench pattern: compact title/actions, a left diagram list, the selected diagram on the central canvas, and a toolbox/property dock for diagram name, description, included roles, included relations, and diagnostics. Roles and relations remain the shared upstream-derived pool; diagrams only define scoped views. Legacy data receives one overall diagram, while an explicitly empty diagram collection remains empty.
+- Canvas: Reuses the state-machine interaction model (blank-area pan, wheel zoom, fit-to-view, draggable nodes) while rendering organization-specific gradient boxes and orthogonal top-down hierarchy connectors. Per-diagram manual node positions persist independently.
+- Changed files: `shared/dodaf/products.js`, `design-studio/src/ov4Builder.js`, `design-studio/src/ov4DiagramStore.js`, `design-studio/src/ov4View.js`, `design-studio/src/app/createInitialState.js`, `design-studio/src/dodafProductController.js`, `design-studio/src/main.js`, `design-studio/styles.css`, `scripts/check-ov4-responsibility.mjs`.
+- Startup repair: moved the existing busy-overlay timer declarations before the first render so the current progress-overlay work no longer throws during initial page load.
+- Boundary: The canvas remains an abstract research model; it explicitly does not assert real organizations, command authority, or authorization.
+- Verification: `node scripts/check-ov4-responsibility.mjs`, `node --check design-studio/src/ov4View.js`, `git diff --check`, and `GET /api/health` (200) passed. Browser visual inspection remained at the collaboration login gate.
+
+## Latest completed batch (2026-08-14, one-click clear OV-6)
+
+- Goal: One-click delete all content on 规则库 / 状态机 / 时序图.
+- Completed: `clearOv6aRules` / `clearOv6bStateMachines` / `clearOv6cSequences` persist empty arrays (rules also drop pending change set). Toolbar 清空全部 with confirm; hidden when empty.
+- Verification: `check-ov6-workbench`. Authenticated browser click-through remains unavailable at the login gate.
+
 ## Latest completed batch (2026-08-14, shared toolbox shell)
 
 - Goal: Extract the OV-1 toolbox into a shared template like research-chat, then reuse it on every page that already has a toolbox.

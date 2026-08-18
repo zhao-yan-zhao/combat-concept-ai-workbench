@@ -90,6 +90,14 @@
           <span class="workflow-mode-spinner" aria-hidden="true"></span>
           <strong id="workflowModeOverlayTitle">正在切换模式</strong>
           <p id="workflowModeOverlayDetail">请稍候…</p>
+          <div class="workflow-mode-progress" role="progressbar" aria-label="预计进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span id="workflowModeProgressBar"></span>
+          </div>
+          <div class="workflow-mode-progress-meta">
+            <span id="workflowModeElapsed">已用时 0 秒</span>
+            <span id="workflowModeEstimate">通常少于 1 分钟</span>
+          </div>
+          <small id="workflowModeProgressHint">进度按预计耗时估算，实际以 AI 返回为准</small>
         </div>
       </div>
 

@@ -8,9 +8,11 @@ import {
   conceptGraphicToOv1Draft,
   confirmConceptGraphicPlan,
   confirmForceMissionPlan,
+  confirmOperationalTasks,
   confirmPhaseActionConcept,
   createConceptGraphicPlanFromPlanning,
   createForceMissionPlanFromBrief,
+  createOperationalTasksFromPhaseAction,
   createPhaseActionConceptFromBrief,
   forceMissionPlanIncompleteReasons,
   isConceptGraphicPlanConfirmed,
@@ -48,11 +50,12 @@ try {
   const phaseConfirmed = confirmPhaseActionConcept(phaseDraft);
   assert(isPhaseActionConceptConfirmed(phaseConfirmed) && phaseActionConceptIncompleteReasons(phaseConfirmed).length === 0, "Confirmed phase action failed gate checks");
 
+  const taskDraft = confirmOperationalTasks(createOperationalTasksFromPhaseAction({}, phaseConfirmed));
   const forceDraft = createForceMissionPlanFromBrief(brief, generateMockOutput({
     workflow: { id: "force-mission", title: "兵力与任务", outputSchema: "ForceMissionPlan" },
     analysis: { 任务目标: brief.objective, phaseAction: { phases: phaseConfirmed.phases } },
     evidence: []
-  }).result, { source: "ai" });
+  }).result, { source: "ai", previous: taskDraft });
   assert(forceDraft.status === "draft" && forceDraft.forces.length >= 3, "Force mission AI draft was incomplete");
   const forceConfirmed = confirmForceMissionPlan(forceDraft);
   assert(isForceMissionPlanConfirmed(forceConfirmed) && forceMissionPlanIncompleteReasons(forceConfirmed).length === 0, "Confirmed force mission failed gate checks");

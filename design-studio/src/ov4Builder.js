@@ -81,7 +81,8 @@ export function buildOv4Model({ ov1, ov5, ooda, scenario } = {}) {
     check("role-relationships", "跨角色关系", brokenEdgeIds.length ? "review" : relations.length ? "ready" : "pending", brokenEdgeIds.length ? `${brokenEdgeIds.length} 条 OV-5 关系无法推导责任关系` : relations.length ? `已推导 ${relations.length} 条跨角色关系` : "尚未找到跨角色 OV-5 关系"),
     check("role-coverage", "责任覆盖", unassignedRoleIds.length ? "review" : roles.length ? "ready" : "pending", unassignedRoleIds.length ? `${unassignedRoleIds.length} 个抽象责任角色尚未覆盖 OV-5 活动` : roles.length ? "全部抽象责任角色均有关联活动" : "尚未定义抽象责任角色")
   ];
-  return { version: 1, kind: "derived-ov4-abstract-responsibility", generatedAt: new Date().toISOString(), source: { ov1NodeCount: sourceRoles.length, ov5ActivityCount: activities.length, ov5EdgeCount: edges.length, oodaNodeCount: oodaNodes.length, scenarioEntityCount: entities.length }, roles, relations, coverage, diagnostics, unresolved: { unmappedActivityIds, brokenEdgeIds, unassignedRoleIds } };
+  const diagrams = [{ id: "ov4-diagram-overall", name: "总体组织关系图", description: "覆盖当前推导出的全部组织角色与协同关系。", roleIds: roles.map((role) => role.id), relationIds: relations.map((relation) => relation.id) }];
+  return { version: 1, kind: "derived-ov4-abstract-responsibility", generatedAt: new Date().toISOString(), source: { ov1NodeCount: sourceRoles.length, ov5ActivityCount: activities.length, ov5EdgeCount: edges.length, oodaNodeCount: oodaNodes.length, scenarioEntityCount: entities.length }, roles, relations, diagrams, coverage, diagnostics, unresolved: { unmappedActivityIds, brokenEdgeIds, unassignedRoleIds } };
 }
 
 function check(id, label, state, detail) { return { id, label, state, statusLabel: ({ ready: "已满足", review: "需复核", pending: "未完成" })[state] || "需复核", detail }; }

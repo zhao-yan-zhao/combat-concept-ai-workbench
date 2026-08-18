@@ -21,7 +21,7 @@ const PLATFORM_DOMAINS = [
 ];
 
 /**
- * 兵力与任务研究台。
+ * 作战兵力研究台。
  * 闭环：上游就绪 → 概念兵力 → 作战编成 → 点改/对话 → 确认 → 下游作战概念图。
  */
 export function renderForceMission(state) {
@@ -52,9 +52,10 @@ export function renderForceMission(state) {
   const busy = generating || chatGenerating || Boolean(recommend.running);
   // 已确认后仍可点改；改动会把计划降回草案，形成「改 → 再确认」闭环。
   const editable = hasDraft && !generating && !recommend.running && !chatGenerating;
-  const canConfirm = forces.length > 0 && combatForces.length > 0 && !confirmed && !busy;
-  const canGenerateConcept = !busy && upstream.canGenerate;
-  const canGenerateCombat = !busy && upstream.canGenerate && forces.length > 0;
+  const tasksReady = Boolean(plan.tasks?.length && plan.tasksConfirmedAt);
+  const canConfirm = tasksReady && forces.length > 0 && combatForces.length > 0 && !confirmed && !busy;
+  const canGenerateConcept = tasksReady && !busy && upstream.canGenerate;
+  const canGenerateCombat = tasksReady && !busy && upstream.canGenerate && forces.length > 0;
   const phases = [...(Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : [])]
     .filter((phase) => phase?.id)
     .sort((a, b) => (Number(a.sequence) || 0) - (Number(b.sequence) || 0));
@@ -240,7 +241,7 @@ export function renderForceMission(state) {
   return `<section class="planning-page force-mission-page force-mission-page--bench ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}">
     ${renderPlanningMigrationBanner(state)}
     ${renderUpstreamBanners(upstream)}
-    <div class="phase-workbench ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}" aria-label="兵力与任务研究台">
+    <div class="phase-workbench ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}" aria-label="作战兵力研究台">
       <div class="force-mission-main-stage">
         ${mainBody}
       </div>

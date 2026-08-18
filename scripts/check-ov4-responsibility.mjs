@@ -1,5 +1,7 @@
 import { buildOv4Model } from "../design-studio/src/ov4Builder.js";
-import { selectionForOv4Relation, selectionForOv4Role } from "../design-studio/src/ov4View.js";
+import { renderOv4, selectionForOv4Relation, selectionForOv4Role } from "../design-studio/src/ov4View.js";
+import { normalizeDodafOv4 } from "../shared/dodaf/products.js";
+import { addOv4Diagram, removeOv4Diagram, toggleOv4DiagramRelation, toggleOv4DiagramRole, updateOv4Diagram } from "../design-studio/src/ov4DiagramStore.js";
 import { buildMarkdownReport, buildReportPayload, buildXmlReport } from "../design-studio/src/reportBuilder.js";
 import { generateValidation } from "../design-studio/src/validationStore.js";
 
@@ -13,9 +15,28 @@ const model = buildOv4Model({ ov1, ov5, ooda, scenario });
 assert(model.kind === "derived-ov4-abstract-responsibility" && model.roles.length === 2 && model.relations.length === 1, "OV-4 did not derive roles and a cross-role relation");
 assert(model.roles.find((role) => role.id === "sense")?.oodaCount === 1 && model.roles.find((role) => role.id === "sense")?.entityCount === 1 && model.unresolved.unmappedActivityIds.includes("orphan"), "OV-4 lost activity, OODA, scenario, or unresolved provenance");
 assert(model.coverage.activity.percent === 67 && model.coverage.role.percent === 100, "OV-4 did not derive responsibility coverage percentages");
+assert(model.diagrams.length === 1 && model.diagrams[0].roleIds.length === 2 && model.diagrams[0].relationIds.length === 1, "OV-4 seed did not create the overall organization relationship diagram");
+const legacy = normalizeDodafOv4({ roles: model.roles, relations: model.relations });
+assert(legacy.diagrams.length === 1 && legacy.diagrams[0].name === "总体组织关系图", "Legacy OV-4 did not normalize to one default diagram");
+assert(normalizeDodafOv4({ roles: model.roles, relations: model.relations, diagrams: [] }).diagrams.length === 0, "Explicitly empty OV-4 diagrams were regenerated");
+let edited = addOv4Diagram({ ...model, diagrams: [] }, { name: "情报协同关系图" });
+const diagramId = edited.diagrams[0].id;
+edited = toggleOv4DiagramRelation(edited, diagramId, model.relations[0].id, true);
+assert(edited.diagrams[0].relationIds.length === 1 && edited.diagrams[0].roleIds.length === 2, "Adding a relation did not include both endpoint roles");
+edited = toggleOv4DiagramRole(edited, diagramId, "sense", false);
+assert(edited.diagrams[0].relationIds.length === 0, "Removing a role did not remove invalid scoped relations");
+edited = updateOv4Diagram(edited, diagramId, { description: "情报协同范围" });
+assert(edited.diagrams[0].description === "情报协同范围" && removeOv4Diagram(edited, diagramId).diagrams.length === 0, "OV-4 diagram update/remove did not persist");
 assert(generateValidation(ov5, ooda, scenario, ov1).issues.some((issue) => issue.title === "OV-4 活动责任待复核"), "OV-4 unresolved activity did not enter low-priority validation review");
 assert(selectionForOv4Role("sense", { ov1, ov5, ooda, scenario })?.kind === "ov4-role" && selectionForOv4Relation(model.relations[0].id, { ov1, ov5, ooda, scenario })?.kind === "ov4-relation", "OV-4 inspector selections lost traceability");
+const canvas = renderOv4({ ov1, ov5, ooda, scenario, ov4ToolsOpen: true, ov4EditorOpen: true });
+assert(canvas.includes("作战组织关系图") && canvas.includes("ov4-workbench") && canvas.includes("ov4-diagram-panel") && canvas.includes("ov4-main-panel") && canvas.includes("ov4-editor-dock"), "OV-4 did not render the state-machine-style workbench layout");
+assert(canvas.includes("组织关系图列表") && canvas.includes("总体组织关系图") && canvas.includes("组织关系工具箱") && canvas.includes("包含的组织角色") && canvas.includes("包含的组织关系"), "OV-4 did not render a diagram list and diagram property toolbox");
+assert(canvas.includes("ov4-org-canvas") && canvas.includes('data-ov4-role="sense"') && !canvas.includes('aria-label="组织角色列表"'), "OV-4 canvas or diagram list semantics are incorrect");
+assert(canvas.includes("data-ov4-stage") && canvas.includes("data-ov4-world") && canvas.includes("data-ov4-canvas-fit") && canvas.includes("data-ov4-node") && canvas.includes("data-ov4-edge"), "OV-4 did not adopt the state-machine camera canvas hooks");
+assert(canvas.includes(" L ") && canvas.includes('marker-end="url(#ov4-arrow)"'), "OV-4 did not render orthogonal hierarchy connectors");
+assert(!canvas.includes("dodaf-standard-legend") && !canvas.includes("derived-view-provenance") && !canvas.includes("project-storage-state"), "OV-4 retained redundant legend, provenance, or storage sections");
 const payload = buildReportPayload({ project: { title: "OV-4 acceptance", brief: { objective: "Review", approach: "Derived role", assumptions: "Abstract", risk: "Unmapped" }, citations: [] }, direction: "Review", ov1, ov5, ooda, scenario: null, validationResult: null, knowledge: null, deployment: { settings: {}, status: "not-configured" } });
-assert(payload.ov4.roles.length === 2 && buildMarkdownReport(payload).includes("OV-4 抽象责任关系") && buildMarkdownReport(payload).includes("Sense role") && buildXmlReport(payload).includes('<ov4 kind="derived-ov4-abstract-responsibility"') && buildXmlReport(payload).includes('<relation id="ov4-'), "OV-4 report output is incomplete");
+assert(payload.ov4.roles.length === 2 && buildMarkdownReport(payload).includes("OV-4 作战组织关系图") && buildMarkdownReport(payload).includes("Sense role") && buildXmlReport(payload).includes('<ov4 kind="derived-ov4-abstract-responsibility"') && buildXmlReport(payload).includes('<relation id="ov4-'), "OV-4 report output is incomplete");
 console.log(`OV-4 acceptance passed: ${model.roles.length} roles, ${model.relations.length} relation.`);
 function assert(condition, message) { if (!condition) throw new Error(message); }
