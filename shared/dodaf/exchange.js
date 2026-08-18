@@ -23,8 +23,8 @@ export function buildArchitectureExchangePackage({
     const product = productName
       || (key.startsWith("OV-") ? key : null)
       || ({
-        ov1: "OV-1", ov2: "OV-2", ov3: "OV-3", ov4: "OV-4", ov5a: "OV-5a", ov5: "OV-5b",
-        ov6a: "OV-6a", ov6b: "OV-6b", ov6c: "OV-6c"
+        ov1: "OV-1", ov1b: "OV-1b", ov1c: "OV-1c", ov2: "OV-2", ov3: "OV-3", ov4: "OV-4", ov5a: "OV-5a", ov5: "OV-5b",
+        ov6a: "OV-6a", ov6b: "OV-6b", ov6c: "OV-6c", ov7: "OV-7"
       })[key];
     if (!product) continue;
     try {
@@ -85,8 +85,8 @@ export function normalizeArchitectureExchangePackage(value) {
     const product = key.startsWith("OV-")
       ? key
       : ({
-        ov1: "OV-1", ov2: "OV-2", ov3: "OV-3", ov4: "OV-4", ov5a: "OV-5a", ov5: "OV-5b",
-        ov6a: "OV-6a", ov6b: "OV-6b", ov6c: "OV-6c"
+        ov1: "OV-1", ov1b: "OV-1b", ov1c: "OV-1c", ov2: "OV-2", ov3: "OV-3", ov4: "OV-4", ov5a: "OV-5a", ov5: "OV-5b",
+        ov6a: "OV-6a", ov6b: "OV-6b", ov6c: "OV-6c", ov7: "OV-7"
       })[key];
     if (!product || !payload) continue;
     products[product] = normalizeProductByName(product, payload);

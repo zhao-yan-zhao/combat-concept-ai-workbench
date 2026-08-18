@@ -1,6 +1,7 @@
 const STORAGE_KEY = "concept-studio-validation-v1";
 const OODA_WINDOW_MINUTES = 30;
 import { buildSimulationDiagnostics } from "./simulationAdapter.js";
+import { buildOv2Model } from "./ov2Builder.js";
 import { buildOv3Model } from "./ov3Builder.js";
 import { buildOv6cModel } from "./ov6cBuilder.js";
 import { buildOv4Model } from "./ov4Builder.js";
@@ -66,8 +67,12 @@ function normalizeValidationResult(result, stale) {
   };
 }
 
-export function generateValidation(ov5Model, oodaModel, scenario, ov1Model) {
+export function generateValidation(ov5Model, oodaModel, scenario, ov1Model, context = {}) {
   const issues = [];
+  const forceMission = context?.forceMission || null;
+  const ov2Model = context?.ov2 || buildOv2Model({ forceMission, ov1: ov1Model, ov5: ov5Model, ooda: oodaModel, scenario });
+  const ov3Model = context?.ov3 || buildOv3Model({ ov2: ov2Model, scenario });
+  const ov4Model = context?.ov4 || buildOv4Model({ forceMission, ov1: ov1Model, ov5: ov5Model, ooda: oodaModel, scenario });
   const incoming = new Map(ov5Model.activities.map((activity) => [activity.id, 0]));
   ov5Model.edges.forEach((edge) => incoming.set(edge.targetId, (incoming.get(edge.targetId) || 0) + 1));
 
@@ -95,10 +100,10 @@ export function generateValidation(ov5Model, oodaModel, scenario, ov1Model) {
 
   const traceabilityDiagnostics = inspectTraceability(ov5Model, ov1Model);
   issues.push(...traceabilityDiagnostics.issues);
-  const flowDiagnostics = inspectActivityFlow(ov5Model, scenario);
+  const flowDiagnostics = inspectActivityFlow(ov5Model, scenario, ov3Model);
   issues.push(...flowDiagnostics.issues);
   issues.push(...inspectEventTrace(buildOv6cModel({ ooda: oodaModel, scenario })));
-  issues.push(...inspectOv4Responsibilities(buildOv4Model({ ov1: ov1Model, ov5: ov5Model, ooda: oodaModel, scenario })));
+  issues.push(...inspectOv4Responsibilities(ov4Model));
   const derivedOperationalDiagnostics = inspectDerivedOperationalViews(ov5Model, oodaModel);
   issues.push(...derivedOperationalDiagnostics.issues);
   const simulationDiagnostics = buildSimulationDiagnostics(scenario);
@@ -158,9 +163,9 @@ export function inspectDerivedOperationalViews(ov5Model, oodaModel) {
   const ov6b = buildOv6bModel({ ooda: oodaModel });
   const issues = [];
   const activities = Array.isArray(ov5Model?.activities) ? ov5Model.activities : [];
-  const hierarchyConfigured = ov5a.tree.some((node) => node.children?.length);
+  const hierarchyConfigured = (ov5a.decompositions || []).length > 0;
   if (activities.length && !hierarchyConfigured) {
-    issues.push(createIssue("low", "OV-5a 活动分解待补充", "当前 OV-5b 活动均为并列项；可在 OV-5b 设 parentId 后重新种子 OV-5a，或直接编辑 OV-5a 分解树。", ""));
+    issues.push(createIssue("low", "OV-5a 活动分解待补充", "当前 OV-5b 活动均为并列项；可在 OV-5b 设置 parentId 后重新同步 OV-5a，或在 OV-5a 层级表中调整父级引用。", ""));
   }
   if (!ov6a.rules.length) {
     issues.push(createIssue("low", "OV-6a 规则来源待补充", "尚未从 OV-5b 种子出前提、约束或关系条件；请在 OV-5b 补充字段后种子，或直接编辑 OV-6a 规则。", ""));
@@ -317,8 +322,7 @@ function inspectTraceability(ov5Model, ov1Model) {
   };
 }
 
-function inspectActivityFlow(ov5Model, scenario) {
-  const exchangeModel = buildOv3Model({ ov5: ov5Model, scenario });
+function inspectActivityFlow(ov5Model, scenario, exchangeModel = buildOv3Model({ ov5: ov5Model, scenario })) {
   const unresolvedCount = exchangeModel.unresolved.unresolvedEdgeIds.length;
   const missingContractCount = exchangeModel.unresolved.missingContractCount;
   const mismatchCount = exchangeModel.unresolved.mismatchCount;

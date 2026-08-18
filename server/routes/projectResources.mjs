@@ -95,13 +95,13 @@ export function createProjectResourceHandlers(runtime) {
   function createOvResourceHandler(resourceKey, label) {
     const getter = {
       forceMissionPlan: "getForceMissionPlan", phaseActionConcept: "getPhaseActionConcept",
-      conceptMap: "getConceptMap", conceptGraphicPlan: "getConceptGraphicPlan", ov1: "getOv1", ov2: "getOv2", ov3: "getOv3", ov4: "getOv4", ov5a: "getOv5a", ov5: "getOv5",
-      ov6a: "getOv6a", ov6b: "getOv6b", ov6c: "getOv6c", architecture: "getArchitecture"
+      conceptMap: "getConceptMap", conceptGraphicPlan: "getConceptGraphicPlan", ov1: "getOv1", ov1b: "getOv1b", ov1c: "getOv1c", ov2: "getOv2", ov3: "getOv3", ov4: "getOv4", ov5a: "getOv5a", ov5: "getOv5",
+      ov6a: "getOv6a", ov6b: "getOv6b", ov6c: "getOv6c", ov7: "getOv7", architecture: "getArchitecture"
     }[resourceKey];
     const saver = {
       forceMissionPlan: "saveForceMissionPlan", phaseActionConcept: "savePhaseActionConcept",
-      conceptMap: "saveConceptMap", conceptGraphicPlan: "saveConceptGraphicPlan", ov1: "saveOv1", ov2: "saveOv2", ov3: "saveOv3", ov4: "saveOv4", ov5a: "saveOv5a", ov5: "saveOv5",
-      ov6a: "saveOv6a", ov6b: "saveOv6b", ov6c: "saveOv6c", architecture: "saveArchitecture"
+      conceptMap: "saveConceptMap", conceptGraphicPlan: "saveConceptGraphicPlan", ov1: "saveOv1", ov1b: "saveOv1b", ov1c: "saveOv1c", ov2: "saveOv2", ov3: "saveOv3", ov4: "saveOv4", ov5a: "saveOv5a", ov5: "saveOv5",
+      ov6a: "saveOv6a", ov6b: "saveOv6b", ov6c: "saveOv6c", ov7: "saveOv7", architecture: "saveArchitecture"
     }[resourceKey];
     return async function handleProjectOvResource(request, response, projectId) {
       try {
@@ -117,6 +117,8 @@ export function createProjectResourceHandlers(runtime) {
   }
 
   const handleProjectOv1 = createOvResourceHandler("ov1", "OV-1");
+  const handleProjectOv1b = createOvResourceHandler("ov1b", "OV-1b");
+  const handleProjectOv1c = createOvResourceHandler("ov1c", "OV-1c");
   const handleProjectForceMissionPlan = createOvResourceHandler("forceMissionPlan", "force mission plan");
   const handleProjectPhaseActionConcept = createOvResourceHandler("phaseActionConcept", "phase action concept");
   const handleProjectConceptMap = createOvResourceHandler("conceptMap", "concept map");
@@ -141,6 +143,7 @@ export function createProjectResourceHandlers(runtime) {
   const handleProjectOv6a = createOvResourceHandler("ov6a", "OV-6a");
   const handleProjectOv6b = createOvResourceHandler("ov6b", "OV-6b");
   const handleProjectOv6c = createOvResourceHandler("ov6c", "OV-6c");
+  const handleProjectOv7 = createOvResourceHandler("ov7", "OV-7");
   const handleProjectArchitecture = createOvResourceHandler("architecture", "Architecture");
 
   async function handleArchitectureExport(request, response, projectId, format) {
@@ -310,6 +313,8 @@ export function createProjectResourceHandlers(runtime) {
     handleProjectConceptMap,
     handleProjectConceptGraphicPlan,
     handleProjectOv1,
+    handleProjectOv1b,
+    handleProjectOv1c,
     handleProjectOv2,
     handleProjectOv3,
     handleProjectOv4,
@@ -318,6 +323,7 @@ export function createProjectResourceHandlers(runtime) {
     handleProjectOv6a,
     handleProjectOv6b,
     handleProjectOv6c,
+    handleProjectOv7,
     handleProjectArchitecture,
     handleArchitectureExport,
     handleArchitectureImport,

@@ -2,6 +2,7 @@
  * Acceptance: CMO DB3 catalog + force-mission upstream packing + mission types.
  */
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -22,6 +23,7 @@ import {
   attachForcePlatforms,
   removeForcePlatform,
   setForcePlatformQuantity,
+  toggleForceTaskRef,
   updateForceMissionType
 } from "../design-studio/src/forceMissionStore.js";
 import {
@@ -74,6 +76,10 @@ const phaseAction = {
   ],
   transitions: [{ fromPhaseId: "p1", toPhaseId: "p2", condition: "到位" }]
 };
+const operationalTasks = [
+  { id: "task-recon", name: "前沿空情侦察任务", side: "friendly", phaseId: "p1", missionType: "recon", objective: "形成前沿态势" },
+  { id: "task-sead", name: "防空压制任务", side: "friendly", phaseId: "p2", missionType: "sead", objective: "打开行动窗口" }
+];
 
 const mockOutput = generateMockOutput({
   workflow: { id: "force-mission", title: "兵力与任务", outputSchema: "ForceMissionPlan" },
@@ -81,6 +87,7 @@ const mockOutput = generateMockOutput({
     任务目标: brief.objective,
     phaseAction,
     phaseActionConfirmed: true,
+    operationalTasks,
     cmoCatalog: { available: true, platforms: ships.slice(0, 2) }
   },
   evidence: []
@@ -89,11 +96,13 @@ const mock = mockOutput.result;
 assert.ok(mock.forces.every((force) => force.missionType));
 assert.ok(Array.isArray(mock.combatForces) && mock.combatForces.length >= 3, "combat forces required");
 assert.ok(mock.combatForces.every((force) => force.missionType && force.conceptForceId));
+assert.ok(mock.forces.some((force) => force.taskRefs?.includes("task-recon") || force.taskRefs?.includes("task-sead")), "local generation should reference confirmed task ids");
 
-const normalized = normalizeForceMissionPlan(mock);
+const normalized = normalizeForceMissionPlan({ ...mock, tasks: operationalTasks });
 assert.ok(normalized.forces.every((force) => force.missionType));
 assert.ok(normalized.combatForces.length >= 3);
 assert.ok(normalized.combatForces.every((force) => force.conceptForceId));
+assert.ok(normalized.forces.some((force) => force.taskRefs.length), "normalization must preserve force-to-task refs");
 
 const fromBrief = createForceMissionPlanFromBrief(brief, mock, { source: "ai" });
 assert.equal(fromBrief.status, "draft");
@@ -125,6 +134,9 @@ let edited = normalizeForceMissionPlan({
   confirmedAt: new Date().toISOString()
 });
 assert.equal(edited.status, "confirmed");
+edited = toggleForceTaskRef(edited, edited.combatForces[0].id, "task-recon", true, "combat");
+assert.equal(edited.status, "draft", "editing a task binding must return a confirmed plan to draft");
+assert.ok(edited.combatForces[0].taskRefs.includes("task-recon"), "manual task binding must persist on the selected force");
 edited = updateForceMissionType(edited, edited.combatForces[0].id, "sead", "combat");
 assert.equal(edited.status, "draft");
 assert.equal(edited.combatForces[0].missionType, "sead");
@@ -196,6 +208,7 @@ assert.ok(Array.isArray(diagnostics));
 const compact = compactForceMissionForAnalysis(fromBrief);
 assert.ok(compact.combatForces.length >= 1);
 assert.ok(compact.forces[0].missionType);
+assert.ok(Array.isArray(compact.forces[0].taskRefs) && Array.isArray(compact.combatForces[0].taskRefs), "downstream force context must retain task refs");
 const layoutForces = mapForcesForLayout(fromBrief);
 assert.equal(layoutForces[0].layer, "combat");
 // Abstract layout slots are stored on both layers for concept-map (not real geo).
@@ -313,6 +326,11 @@ assert.ok(cnHits.length > 0, `China CMO AEW term ${cnAewTerms[0]} should hit`);
 assert.ok(usHits.every((h) => /United States/i.test(h.country)));
 assert.ok(cnHits.every((h) => /China/i.test(h.country)));
 assert.notEqual(usHits[0].name, cnHits[0].name);
+
+const openAiSource = await readFile(join(root, "server", "openaiClient.mjs"), "utf8");
+assert.ok(openAiSource.includes('required: ["id", "name", "side", "role", "group", "missionType", "task", "taskRefs"'), "concept-force schema must require taskRefs");
+assert.ok(openAiSource.includes('required: ["id", "name", "side", "role", "conceptForceId", "group", "missionType", "task", "taskRefs"'), "combat-force schema must require taskRefs");
+assert.ok(openAiSource.includes("taskRefs 必须引用 analysis.operationalTasks"), "force prompt must require stable operational-task refs");
 
 cmo.close();
 console.log("check-cmo-force-mission: ok");

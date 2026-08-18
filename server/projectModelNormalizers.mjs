@@ -1,6 +1,8 @@
 import {
   normalizeArchitecture as normalizeDodafArchitecture,
   normalizeDodafOv1,
+  normalizeDodafOv1b,
+  normalizeDodafOv1c,
   normalizeDodafOv2,
   normalizeDodafOv3,
   normalizeDodafOv4,
@@ -8,7 +10,8 @@ import {
   normalizeDodafOv5a,
   normalizeDodafOv6a,
   normalizeDodafOv6b,
-  normalizeDodafOv6c
+  normalizeDodafOv6c,
+  normalizeDodafOv7
 } from "../shared/dodaf/products.js";
 import {
   buildArchitectureExchangePackage,
@@ -45,6 +48,14 @@ export function normalizeOv1(value) {
   return withLegacyProvenance(model, value?.provenance);
 }
 
+export function normalizeOv1b(value) {
+  return withLegacyProvenance(normalizeDodafOv1b(value), value?.provenance);
+}
+
+export function normalizeOv1c(value) {
+  return withLegacyProvenance(normalizeDodafOv1c(value), value?.provenance);
+}
+
 /** OV-5b DoDAF 2.02/DM2 product (keeps activities/edges for UI compatibility). */
 export function normalizeOv5(value) {
   const model = normalizeDodafOv5(value);
@@ -65,6 +76,10 @@ export function normalizeOv4(value) {
 
 export function normalizeOv5a(value) {
   return withLegacyProvenance(normalizeDodafOv5a(value), value?.provenance);
+}
+
+export function normalizeOv7(value) {
+  return withLegacyProvenance(normalizeDodafOv7(value), value?.provenance);
 }
 
 export function normalizeOv6a(value) {
@@ -530,6 +545,8 @@ export function normalizeModelSnapshotInput(value) {
       brief: normalizeBriefSnapshot(model.brief),
       inspiration: normalizeSnapshotInspiration(model.inspiration),
       ov1: normalizeOv1Snapshot(model.ov1),
+      ov1b: optionalDodafProduct(normalizeOv1b, model.ov1b),
+      ov1c: optionalDodafProduct(normalizeOv1c, model.ov1c),
       ov2: optionalDodafProduct(normalizeOv2, model.ov2),
       ov3: optionalDodafProduct(normalizeOv3, model.ov3),
       ov4: optionalDodafProduct(normalizeOv4, model.ov4),
@@ -538,6 +555,7 @@ export function normalizeModelSnapshotInput(value) {
       ov6a: optionalDodafProduct(normalizeOv6a, model.ov6a),
       ov6b: optionalDodafProduct(normalizeOv6b, model.ov6b),
       ov6c: optionalDodafProduct(normalizeOv6c, model.ov6c),
+      ov7: optionalDodafProduct(normalizeOv7, model.ov7),
       architecture: optionalDodafProduct(normalizeArchitecture, model.architecture),
       ooda: {
         ...ooda,

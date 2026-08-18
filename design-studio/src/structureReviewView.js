@@ -19,10 +19,12 @@ const VIEW_LABEL = {
   ov2: "作战资源流描述",
   ov3: "作战资源流矩阵",
   ov4: "作战组织关系图",
-  ov5a: "作战活动分解树",
+  ov5a: "作战活动分解",
   ov6a: "规则库",
   ov6b: "状态机校验",
   ov6c: "时序校验",
+  ov1c: "任务活动映射",
+  ov7: "状态活动映射",
   "phase-action": "阶段与行动",
   "force-mission": "兵力与任务",
   "structure-review": "核对台"
@@ -98,6 +100,8 @@ export function renderStructureReview(state) {
         ${renderDerivedChip("OV-6a", model.derived.ov6a, "ov6a")}
         ${renderDerivedChip("OV-6b", model.derived.ov6b, "ov6b")}
         ${renderDerivedChip("OV-6c", model.derived.ov6c, "ov6c")}
+        ${renderDerivedChip("OV-1c", model.derived.ov1c, "ov1c")}
+        ${renderDerivedChip("OV-7", model.derived.ov7, "ov7")}
         <button class="structure-review-chip ${summary.validationStale ? "review" : summary.validationRan ? (summary.validation ? "review" : "ready") : "pending"}" type="button" data-structure-jump="validate" title="打开设计验证">
           <strong>设计验证</strong>
           <span>${summary.validationRan ? (summary.validationStale ? "已过期" : `${summary.validationIssueCount} 项问题`) : "尚未运行"}</span>

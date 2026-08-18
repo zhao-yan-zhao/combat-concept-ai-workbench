@@ -93,6 +93,7 @@ export function renderForceMission(state) {
 
   const conceptBody = phaseConceptForces.length
     ? renderConceptForceRoster(phaseConceptForces, {
+      tasks: plan.tasks || [],
       picker,
       catalogOpen,
       editable,
@@ -109,6 +110,7 @@ export function renderForceMission(state) {
 
   const combatBody = phaseCombatForces.length
     ? renderCombatCompositionTables(phaseCombatForces, {
+      tasks: plan.tasks || [],
       missionTypes,
       conceptForces: forces,
       picker,
@@ -517,7 +519,7 @@ function filterCombatForcesForPhase(combatForces = [], conceptForces = [], phase
  * 概念兵力：左名单 + 右详情边栏（点选不顶开列表）。
  */
 function renderConceptForceRoster(forces = [], options = {}) {
-  const { picker = {}, catalogOpen = false, editable = false, drawerEnter = false } = options;
+  const { tasks = [], picker = {}, catalogOpen = false, editable = false, drawerEnter = false } = options;
   const blue = forces.filter((force) => force.side === "friendly");
   const red = forces.filter((force) => force.side === "hostile");
   const other = forces.filter((force) => force.side !== "friendly" && force.side !== "hostile");
@@ -555,7 +557,7 @@ function renderConceptForceRoster(forces = [], options = {}) {
     </div>
     <button type="button" class="force-concept-drawer-scrim" data-action="close-force-platform-picker" tabindex="-1" aria-label="关闭详情" ${activeForce ? "" : "hidden"}></button>
     <aside class="force-concept-sidebar ${activeForce ? "is-open" : ""} ${activeForce && drawerEnter ? "is-entering" : ""}" aria-label="概念兵力详情" aria-hidden="${activeForce ? "false" : "true"}">
-      ${activeForce ? renderConceptForceDetail(activeForce, { picker, catalogOpen, editable }) : ""}
+      ${activeForce ? renderConceptForceDetail(activeForce, { tasks, picker, catalogOpen, editable }) : ""}
     </aside>
   </div>`;
 }
@@ -627,7 +629,7 @@ function renderForceRosterItem({
   </li>`;
 }
 
-function renderConceptForceDetail(force, { picker = {}, catalogOpen = false, editable = false } = {}) {
+function renderConceptForceDetail(force, { tasks = [], picker = {}, catalogOpen = false, editable = false } = {}) {
   const equip = formatConceptEquipment(force);
   const platforms = Array.isArray(force.platforms) ? force.platforms : [];
   return `<article class="force-concept-detail is-open" data-force-card="${escapeAttribute(force.id)}" data-force-layer="concept">
@@ -645,6 +647,7 @@ function renderConceptForceDetail(force, { picker = {}, catalogOpen = false, edi
         <p>${escapeHtml(force.task || "（未写任务）")}</p>
         ${force.notes ? `<small>${escapeHtml(force.notes)}</small>` : ""}
       </section>
+      ${renderForceTaskRefs(force, tasks, { editable, layer: "concept" })}
       <section class="force-concept-detail-block">
         <strong>装备类型 <em>仅 1 个</em></strong>
         <div class="force-concept-equip-row">
@@ -667,6 +670,7 @@ function renderConceptForceDetail(force, { picker = {}, catalogOpen = false, edi
  */
 function renderCombatCompositionTables(forces = [], options = {}) {
   const {
+    tasks = [],
     missionTypes = [],
     conceptForces = [],
     picker = {},
@@ -718,6 +722,7 @@ function renderCombatCompositionTables(forces = [], options = {}) {
         ? renderCombatForceDetail(activeForce, {
           missionTypes,
           conceptForces,
+          tasks,
           picker,
           catalogOpen,
           editable
@@ -775,6 +780,7 @@ function renderCombatSideColumn({
 }
 
 function renderCombatForceDetail(force, {
+  tasks = [],
   missionTypes = [],
   conceptForces = [],
   picker = {},
@@ -802,6 +808,7 @@ function renderCombatForceDetail(force, {
         <p>${escapeHtml(force.task || "（未写任务）")}</p>
         ${force.notes ? `<small>${escapeHtml(force.notes)}</small>` : ""}
       </section>
+      ${renderForceTaskRefs(force, tasks, { editable, layer: "combat" })}
       <section class="force-concept-detail-block">
         <strong>编成摘要</strong>
         <p class="force-combat-composition-text">${escapeHtml(composition)}</p>
@@ -834,6 +841,19 @@ function renderCombatForceDetail(force, {
       </section>
     </div>
   </article>`;
+}
+
+function renderForceTaskRefs(force, tasks = [], { editable = false, layer = "concept" } = {}) {
+  const selected = new Set(Array.isArray(force.taskRefs) ? force.taskRefs : []);
+  const candidates = (tasks || []).filter((task) => !force.side || !task.side || task.side === force.side);
+  const missing = [...selected].filter((ref) => !(tasks || []).some((task) => task.id === ref));
+  return `<section class="force-concept-detail-block force-task-ref-block">
+    <strong>承接作战任务 <em>${selected.size}</em></strong>
+    <div class="force-task-ref-list">
+      ${candidates.map((task) => `<label><input type="checkbox" data-force-task-ref data-force-id="${escapeAttribute(force.id)}" data-force-layer="${escapeAttribute(layer)}" data-task-ref="${escapeAttribute(task.id)}" ${selected.has(task.id) ? "checked" : ""} ${editable ? "" : "disabled"}><span>${escapeHtml(task.name || task.id)}</span></label>`).join("") || `<small>当前阵营暂无正式任务。</small>`}
+      ${missing.map((ref) => `<span class="is-warn-text">失效引用：${escapeHtml(ref)}</span>`).join("")}
+    </div>
+  </section>`;
 }
 
 function displayCombatName(force = {}) {

@@ -12,6 +12,7 @@ import { buildOv6cModel } from "./ov6cBuilder.js";
 import { buildOv5aModel, buildOv6aModel, buildOv6bModel } from "./dodafOperationalBuilders.js";
 import { filterKnowledgeForReportCitation } from "../../server/projectKnowledgeCitationPolicy.mjs";
 import { getReportTemplate } from "./reportTemplateStore.js";
+import { buildOv1cModel, buildOv7Model } from "./mappingProductStore.js";
 
 export function buildExportArtifact(type, context) {
   return buildExportArtifactFromPayload(type, buildReportPayload(context));
@@ -68,7 +69,7 @@ export function buildExportArtifactFromPayload(type, payload) {
   };
 }
 
-export function buildReportPayload({ project, brief, inspiration, direction, ov1, ov5, ooda, scenario, validationResult, knowledge, deployment, modelSnapshots = [], modelComparison = null, projectRepository = null, collaboration = null, knowledgeCitationApprovals = [], reportTemplate = null, ov2: persistedOv2 = null, ov3: persistedOv3 = null, ov4: persistedOv4 = null, ov5a: persistedOv5a = null, ov6a: persistedOv6a = null, ov6b: persistedOv6b = null, ov6c: persistedOv6c = null }) {
+export function buildReportPayload({ project, brief, inspiration, direction, forceMission = null, ov1, ov5, ooda, scenario, validationResult, knowledge, deployment, modelSnapshots = [], modelComparison = null, projectRepository = null, collaboration = null, knowledgeCitationApprovals = [], reportTemplate = null, ov1c: persistedOv1c = null, ov2: persistedOv2 = null, ov3: persistedOv3 = null, ov4: persistedOv4 = null, ov5a: persistedOv5a = null, ov6a: persistedOv6a = null, ov6b: persistedOv6b = null, ov6c: persistedOv6c = null, ov7: persistedOv7 = null }) {
   const activityRefs = unique(ov5.activities.flatMap((activity) => activity.refs || []));
   const deploymentData = scenario ? createDeploymentData(scenario) : null;
   const knowledgeSummary = buildKnowledgeSummary(knowledge, activityRefs, knowledgeCitationApprovals);
@@ -76,13 +77,15 @@ export function buildReportPayload({ project, brief, inspiration, direction, ov1
   const ov1Snapshot = buildOv1Snapshot(ov1);
   const traceability = buildTraceability({ ov1: ov1Snapshot, ov5, ooda, scenario });
   // Prefer persisted DoDAF products when present; otherwise seed from builders.
-  const ov2 = persistedOv2 || buildOv2Model({ ov1: ov1Snapshot, ov5, ooda, scenario });
-  const ov3 = persistedOv3 || buildOv3Model({ ov5, scenario });
-  const ov4 = persistedOv4 || buildOv4Model({ ov1: ov1Snapshot, ov5, ooda, scenario });
+  const ov2 = persistedOv2 || buildOv2Model({ forceMission, ov1: ov1Snapshot, ov5, ooda, scenario });
+  const ov3 = persistedOv3 || buildOv3Model({ ov2, scenario });
+  const ov4 = persistedOv4 || buildOv4Model({ forceMission, ov1: ov1Snapshot, ov5, ooda, scenario });
   const ov5a = persistedOv5a || buildOv5aModel({ ov5 });
   const ov6a = persistedOv6a || buildOv6aModel({ ov5 });
   const ov6b = persistedOv6b || buildOv6bModel({ ooda });
   const ov6c = persistedOv6c || buildOv6cModel({ ooda, scenario });
+  const ov1c = buildOv1cModel({ forceMission, ov5, ov1c: persistedOv1c || { mappings: [] } });
+  const ov7 = buildOv7Model({ ov5, ov6b, ov7: persistedOv7 || { mappings: [] } });
   return {
     generatedAt: new Date().toISOString(),
     reportTemplate: getReportTemplate(reportTemplate),
@@ -90,6 +93,7 @@ export function buildReportPayload({ project, brief, inspiration, direction, ov1
     project: { title: project.title, direction, brief: reportBrief, citations: project.citations },
     inspiration: toInspirationReportSnapshot(inspiration),
     ov1: ov1Snapshot,
+    ov1c,
     ov2,
     ov3,
     ov4,
@@ -97,6 +101,7 @@ export function buildReportPayload({ project, brief, inspiration, direction, ov1
     ov6a,
     ov6b,
     ov6c,
+    ov7,
     ov5: {
       provenance: ov5.provenance || null,
       activities: ov5.activities.map((activity) => ({
@@ -204,8 +209,8 @@ export function buildMarkdownReport(payload) {
     "## OV-4 作战组织关系图",
     ...renderOv4Section(payload.ov4),
     "",
-    "## OV-5a 作战活动分解树",
-    ...renderDerivedTree(payload.ov5a),
+    "## OV-5a 作战活动分解",
+    ...renderActivityDecompositions(payload.ov5a, payload.ov5.activities),
     "",
     "## OV-6a 作战规则模型",
     ...renderDerivedRules(payload.ov6a),
@@ -215,6 +220,12 @@ export function buildMarkdownReport(payload) {
     "",
     "## OV-6c 事件序列",
     ...renderOv6cSection(payload.ov6c),
+    "",
+    "## OV-1c 任务与作战活动映射",
+    ...renderMappingSection(payload.ov1c, "task"),
+    "",
+    "## OV-7 状态与活动映射",
+    ...renderMappingSection(payload.ov7, "state"),
     "",
     "## 跨视图追溯",
     ...renderTraceabilitySection(payload.traceability),
@@ -298,6 +309,8 @@ export function buildXmlReport(payload) {
   const ov3 = payload.ov3 || {};
   const ov4 = payload.ov4 || {};
   const ov6c = payload.ov6c || {};
+  const ov1c = payload.ov1c || {};
+  const ov7 = payload.ov7 || {};
   const ov5 = payload.ov5 || {};
   const ooda = payload.ooda || {};
   const scenario = payload.scenario;
@@ -340,6 +353,8 @@ export function buildXmlReport(payload) {
     ...renderXmlOv3(ov3),
     ...renderXmlOv4(ov4),
     ...renderXmlOv6c(ov6c),
+    ...renderXmlMappings("ov1c", ov1c),
+    ...renderXmlMappings("ov7", ov7),
     ...renderXmlTraceability(traceability),
     `  <ov5 generationSource="${xml(payload.ov5?.provenance?.mode || "manual")}"${evidenceSelectionAttributes(payload.ov5?.provenance?.evidenceSelection)}>`,
     ...(ov5.activities || []).flatMap((activity) => [
@@ -508,9 +523,14 @@ function renderOv6cSection(ov6c) {
   ];
 }
 
-function renderDerivedTree(model) {
-  if (!model?.tree?.length) return ["- 尚无可派生活动层级。"];
-  return flattenTree(model.tree).map(({ title, depth }) => `${"  ".repeat(depth)}- ${inline(title)}`);
+function renderActivityDecompositions(model, activities = []) {
+  if (!model?.decompositions?.length) return ["- 尚无活动父子分解关系。"];
+  const activityById = new Map((activities || []).map((activity) => [activity.id, activity]));
+  return [
+    "| 上级活动 | 下级活动 | 状态 |",
+    "| --- | --- | --- |",
+    ...model.decompositions.map((item) => `| ${cell(activityById.get(item.parentActivityRef)?.title || item.parentActivityRef)} | ${cell(activityById.get(item.childActivityRef)?.title || item.childActivityRef)} | ${cell(item.status || "pending_review")} |`)
+  ];
 }
 
 function renderDerivedRules(model) {
@@ -521,10 +541,6 @@ function renderDerivedRules(model) {
 function renderDerivedTransitions(model) {
   if (!model?.transitions?.length) return ["- 尚无可派生状态转换。"];
   return model.transitions.map((item) => `- ${inline(item.sourceLabel)} -> ${inline(item.targetLabel)}：${inline(item.condition)}`);
-}
-
-function flattenTree(nodes, depth = 0) {
-  return (nodes || []).flatMap((node) => [{ title: node.title, depth }, ...flattenTree(node.children, depth + 1)]);
 }
 
 function renderXmlOv6c(ov6c) {
@@ -539,6 +555,36 @@ function renderXmlOv6c(ov6c) {
     ...(ov6c.diagnostics || []).map((item) => `      <check id="${xml(item.id)}" state="${xml(item.state)}" statusLabel="${xml(item.statusLabel)}"><label>${xml(item.label)}</label><detail>${xml(item.detail)}</detail></check>`),
     "    </diagnostics>",
     "  </ov6c>"
+  ];
+}
+
+function renderMappingSection(model, kind) {
+  const mappings = Array.isArray(model?.mappings) ? model.mappings : [];
+  if (!mappings.length) return [kind === "task" ? "- 尚无任务与活动映射。" : "- 尚无状态/转换与活动映射。"];
+  const sourceLabel = kind === "task" ? "任务" : "状态/转换";
+  return [
+    `- 产品状态：${inline(model.status || "pending_review")}；映射 ${mappings.length} 条。`,
+    `| ${sourceLabel} | 活动引用 | 语义/覆盖 | 人工判定 | 状态 |`,
+    "| --- | --- | --- | --- | --- |",
+    ...mappings.map((item) => `| ${cell(kind === "task" ? item.taskRef : `${item.subjectType}:${item.sourceRef}`)} | ${cell((item.activityRefs || []).join("、") || "未映射")} | ${cell(kind === "task" ? item.coverageStatus : item.semantic)} | ${cell(item.judgment)} | ${cell(item.status)} |`),
+    "",
+    "### 覆盖诊断",
+    ...(model.diagnostics || []).map((item) => `- [${inline(item.statusLabel)}] ${inline(item.label)}：${inline(item.detail)}`)
+  ];
+}
+
+function renderXmlMappings(tag, model) {
+  const mappings = Array.isArray(model?.mappings) ? model.mappings : [];
+  if (!mappings.length) return [`  <${tag} status="not-mapped"/>`];
+  return [
+    `  <${tag} status="${xml(model.status)}" mappingCount="${xml(mappings.length)}">`,
+    "    <mappings>",
+    ...mappings.map((item) => `      <mapping id="${xml(item.id)}" taskRef="${xml(item.taskRef)}" subjectType="${xml(item.subjectType)}" sourceRef="${xml(item.sourceRef)}" semantic="${xml(item.semantic)}" coverageStatus="${xml(item.coverageStatus)}" judgment="${xml(item.judgment)}" status="${xml(item.status)}"><activityRefs>${(item.activityRefs || []).map((ref) => `<activityRef>${xml(ref)}</activityRef>`).join("")}</activityRefs><note>${xml(item.note)}</note></mapping>`),
+    "    </mappings>",
+    "    <diagnostics>",
+    ...(model.diagnostics || []).map((item) => `      <check id="${xml(item.id)}" state="${xml(item.state)}"><label>${xml(item.label)}</label><detail>${xml(item.detail)}</detail></check>`),
+    "    </diagnostics>",
+    `  </${tag}>`
   ];
 }
 
@@ -1096,14 +1142,16 @@ function buildProjectRepositorySummary(repository) {
   const resources = [
     ["brief", "概念简报", repository.brief],
     ["ov1", "OV-1 总体概念", repository.ov1],
+    ["ov1c", "OV-1c 任务活动映射", repository.ov1c],
     ["ov5", "OV-5", repository.ov5],
+    ["ov7", "OV-7 状态活动映射", repository.ov7],
     ["ooda", "OODA", repository.ooda],
     ["scenario", "自动想定", repository.scenario],
     ["validation", "设计验证", repository.validation],
     ["knowledge", "Obsidian 知识索引", repository.knowledge],
     ["reportArchives", "成果报告归档", repository.reportArchives],
     ["modelSnapshots", "模型快照", repository.modelSnapshots]
-  ].map(([id, label, storage]) => ({
+  ].filter(([id, , storage]) => !["ov1c", "ov7"].includes(id) || storage).map(([id, label, storage]) => ({
     id,
     label,
     status: String(storage?.status || "local"),
@@ -1115,8 +1163,12 @@ function buildProjectRepositorySummary(repository) {
     updatedAt: String(storage?.updatedAt || ""),
     stale: Boolean(storage?.stale || storage?.status === "stale"),
     briefRevision: storage?.briefRevision,
+    forceMissionPlanRevision: storage?.forceMissionPlanRevision,
     ov1Revision: storage?.ov1Revision,
+    ov1bRevision: storage?.ov1bRevision,
     ov5Revision: storage?.ov5Revision,
+    ov6bRevision: storage?.ov6bRevision,
+    ov6cRevision: storage?.ov6cRevision,
     oodaRevision: storage?.oodaRevision,
     scenarioRevision: storage?.scenarioRevision,
     validationRevision: storage?.validationRevision
@@ -1136,8 +1188,12 @@ function renderProjectRepositorySection(repository) {
     ...repository.resources.map((resource) => {
       const lineage = [
         resource.briefRevision !== undefined && `简报 r${resource.briefRevision}`,
+        resource.forceMissionPlanRevision !== undefined && `任务/兵力 r${resource.forceMissionPlanRevision}`,
         resource.ov1Revision !== undefined && `OV-1 r${resource.ov1Revision}`,
+        resource.ov1bRevision !== undefined && `OV-1b r${resource.ov1bRevision}`,
         resource.ov5Revision !== undefined && `OV-5 r${resource.ov5Revision}`,
+        resource.ov6bRevision !== undefined && `OV-6b r${resource.ov6bRevision}`,
+        resource.ov6cRevision !== undefined && `OV-6c r${resource.ov6cRevision}`,
         resource.oodaRevision !== undefined && `OODA r${resource.oodaRevision}`,
         resource.scenarioRevision !== undefined && `想定 r${resource.scenarioRevision}`,
         resource.validationRevision !== undefined && `验证 r${resource.validationRevision}`
@@ -1151,7 +1207,7 @@ function renderProjectRepositorySection(repository) {
 }
 
 function renderXmlResourceLineage(resource) {
-  return ["briefRevision", "ov1Revision", "ov5Revision", "oodaRevision", "scenarioRevision", "validationRevision"]
+  return ["briefRevision", "forceMissionPlanRevision", "ov1Revision", "ov1bRevision", "ov5Revision", "ov6bRevision", "ov6cRevision", "oodaRevision", "scenarioRevision", "validationRevision"]
     .filter((key) => resource[key] !== undefined)
     .map((key) => ` ${key}="${xml(resource[key])}"`)
     .join("");

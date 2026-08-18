@@ -145,11 +145,13 @@ export function createRequestHandler(runtime) {
         await projects.handleProjectConceptGraphicPlan(request, response, decodeProjectId(projectConceptGraphicMatch[1]));
         return;
       }
-      const projectOvResourceMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/(ov1|ov2|ov3|ov4|ov5a|ov5|ov6a|ov6b|ov6c)$/);
+      const projectOvResourceMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/(ov1|ov1b|ov1c|ov2|ov3|ov4|ov5a|ov5|ov6a|ov6b|ov6c|ov7)$/);
       if (projectOvResourceMatch && (request.method === "GET" || request.method === "PUT")) {
         const resource = projectOvResourceMatch[2];
         const handler = {
           ov1: projects.handleProjectOv1,
+          ov1b: projects.handleProjectOv1b,
+          ov1c: projects.handleProjectOv1c,
           ov2: projects.handleProjectOv2,
           ov3: projects.handleProjectOv3,
           ov4: projects.handleProjectOv4,
@@ -157,7 +159,8 @@ export function createRequestHandler(runtime) {
           ov5: projects.handleProjectOv5,
           ov6a: projects.handleProjectOv6a,
           ov6b: projects.handleProjectOv6b,
-          ov6c: projects.handleProjectOv6c
+          ov6c: projects.handleProjectOv6c,
+          ov7: projects.handleProjectOv7
         }[resource];
         await handler(request, response, decodeProjectId(projectOvResourceMatch[1]));
         return;
@@ -267,10 +270,10 @@ export function createRequestHandler(runtime) {
             mode: projectRepository.getStatus().storage,
             durable: projectRepository.getStatus().storage === "sqlite",
             conceptBrief: true, forceMissionPlan: true, phaseActionConcept: true, researchChats: true, conceptMap: true, conceptGraphicPlan: true,
-            ov1: true, ov2: true, ov3: true, ov4: true, ov5a: true, ov5: true, ov6a: true, ov6b: true, ov6c: true,
+            ov1: true, ov1b: true, ov1c: true, ov2: true, ov3: true, ov4: true, ov5a: true, ov5: true, ov6a: true, ov6b: true, ov6c: true, ov7: true,
             architecture: true,
             ooda: true, scenario: true, validation: true, knowledge: true, reportArchives: true, modelSnapshots: true, collaboration: true,
-            resources: ["brief", "forceMissionPlan", "phaseActionConcept", "researchChats", "conceptMap", "conceptGraphicPlan", "ov1", "ov2", "ov3", "ov4", "ov5a", "ov5", "ov6a", "ov6b", "ov6c", "architecture", "ooda", "scenario", "validation", "knowledge", "reportArchives", "modelSnapshots", "collaboration", "audit"]
+            resources: ["brief", "forceMissionPlan", "phaseActionConcept", "researchChats", "conceptMap", "conceptGraphicPlan", "ov1", "ov1b", "ov1c", "ov2", "ov3", "ov4", "ov5a", "ov5", "ov6a", "ov6b", "ov6c", "ov7", "architecture", "ooda", "scenario", "validation", "knowledge", "reportArchives", "modelSnapshots", "collaboration", "audit"]
           },
           knowledgeRetrieval: { defaultMode: knowledgeRetrievalMode, modes: listKnowledgeRetrievalModes(), externalVector: externalVectorAdapter.getStatus() },
           collaborationIdentity: localIdentity.getStatus(),

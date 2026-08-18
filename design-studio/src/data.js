@@ -5,23 +5,26 @@
  * Step roles and gates: plans/RESEARCH_WORKFLOW_18.md
  */
 export const productLabels = Object.freeze({
-  brief: "概念简报",
+  brief: "简报",
   "phase-action": "阶段与行动",
   "operational-task": "作战任务",
   "force-mission": "作战兵力",
   "concept-map": "概念图",
-  ov1: "高层作战概念图",
+  ov1: "总体图（OV1a）",
+  ov1b: "任务分解（OV1b）",
+  ov1c: "任务与作战活动映射（OV1c）",
   ov2: "作战资源流描述",
   ov3: "作战资源流矩阵",
   ov4: "作战组织关系图",
-  ov5: "作战活动模型",
-  ov5a: "作战活动分解树",
+  ov5: "作战活动（OV5b）",
+  ov5a: "作战活动分解（OV5a）",
   ov6a: "规则库",
   ov6b: "状态机校验",
-  ov6c: "时序校验",
+  ov6c: "时序图",
+  ov7: "状态与活动映射（OV7）",
   ooda: "研究辅助循环",
   "structure-review": "结构核对台",
-  scenario: "自动想定",
+  scenario: "仿真演示",
   validate: "设计验证",
   collaboration: "协同审阅",
   report: "成果报告"
@@ -34,16 +37,19 @@ export const productShortLabels = Object.freeze({
   "phase-action": "阶段行动",
   "concept-map": "概念图",
   ov1: "总体图",
+  ov1b: "任务分解",
+  ov1c: "任务活动映射",
   ov5: "活动",
   ooda: "循环",
   "structure-review": "核对台",
-  ov5a: "活动树",
+  ov5a: "活动分解",
   ov2: "资源流",
   ov3: "交换矩阵",
   ov4: "组织关系",
   ov6a: "规则库",
   ov6b: "状态机",
   ov6c: "时序",
+  ov7: "状态活动映射",
   scenario: "想定",
   validate: "验证",
   collaboration: "协同",
@@ -53,12 +59,15 @@ export const productShortLabels = Object.freeze({
 /** Step role: write = 主写, check = 校验, deliver = 交付. */
 export const workflowStepRoles = Object.freeze({
   brief: "write",
-  // Phase chain: rule library → phase → bind/state/sequence → reverse check
-  ov6a: "write",
+  // Associated models remain editable products, but do not occupy mainline steps.
+  ov6a: "check",
   "phase-action": "write",
   ov6b: "check",
   ov6c: "check",
+  ov7: "check",
   "operational-task": "write",
+  ov1b: "check",
+  ov1c: "check",
   "force-mission": "write",
   ov4: "check",
   ov2: "check",
@@ -76,15 +85,14 @@ export const workflowStepRoles = Object.freeze({
 });
 
 /**
- * Canonical order. Phase chain is fixed:
- * 规则库 → 阶段与行动 → 状态机/时序校验 → … → 结构反查
+ * Canonical product order. Only workflowPrimaryStepIds are numbered mainline steps.
  */
 export const workflowOrder = [
   "brief",
-  "ov6a", "phase-action", "ov6b", "ov6c",
-  "operational-task", "force-mission", "ov4", "ov2", "ov3",
-  "concept-map", "ov1", "ov5", "ov5a", "ooda",
-  "structure-review", "scenario", "validate", "collaboration", "report"
+  "phase-action", "ov6a", "ov6b", "ov6c",
+  "operational-task", "ov1b", "force-mission", "ov4", "ov2", "ov3",
+  "ov1", "ov5a", "ov5", "ov1c", "ooda", "concept-map", "ov7",
+  "scenario", "validate", "structure-review", "collaboration", "report"
 ];
 
 export const views = workflowOrder.map((id) => {
@@ -94,7 +102,10 @@ export const views = workflowOrder.map((id) => {
     "phase-action": { subtitle: "阶段 · 行动 · 进入退出", status: "ready" },
     ov6b: { subtitle: "分机状态 · 回改阶段", status: "ready" },
     ov6c: { subtitle: "跨对象时序 · 回改阶段", status: "ready" },
+    ov7: { subtitle: "状态 · 转换 · 活动语义", status: "ready" },
     "operational-task": { subtitle: "阶段 · 阵营 · 任务 · 效果", status: "ready" },
+    ov1b: { subtitle: "父任务 · 子任务 · 分解依据", status: "ready" },
+    ov1c: { subtitle: "任务 · 活动 · 覆盖判定", status: "ready" },
     "force-mission": { subtitle: "兵力编成 · 任务承接 · 平台", status: "ready" },
     ov4: { subtitle: "组织 · 责任 · 协同", status: "ready" },
     ov2: { subtitle: "节点与资源交换", status: "ready" },
@@ -121,75 +132,67 @@ export const views = workflowOrder.map((id) => {
 });
 
 /**
- * Five research stages — same as left-rail tracks.
- * Gate confirm unlocks the next stage; mid-stage “下一步” walks the primary path.
+ * Seven authoritative mainline products. Associated models reuse an anchor phase
+ * for context, but never become numbered steps.
  */
-export const workflowPhases = ["研究建模", "阶段行动", "兵力任务", "概念图", "推演演示"];
+export const workflowPhases = ["简报", "阶段行动", "作战任务", "作战兵力", "总体图", "概念图", "仿真演示"];
 
 const workflowPhaseById = {
-  brief: "研究建模",
+  brief: "简报",
   ov6a: "阶段行动",
   "phase-action": "阶段行动",
   ov6b: "阶段行动",
   ov6c: "阶段行动",
-  "operational-task": "兵力任务",
-  "force-mission": "兵力任务",
-  ov4: "兵力任务",
-  ov2: "兵力任务",
-  ov3: "兵力任务",
+  ov7: "仿真演示",
+  "operational-task": "作战任务",
+  ov1b: "作战任务",
+  ov1c: "仿真演示",
+  "force-mission": "作战兵力",
+  ov4: "作战兵力",
+  ov2: "作战兵力",
+  ov3: "作战兵力",
+  ov1: "总体图",
+  ov5: "总体图",
+  ov5a: "总体图",
+  ooda: "总体图",
   "concept-map": "概念图",
-  ov1: "概念图",
-  ov5: "概念图",
-  ov5a: "概念图",
-  ooda: "概念图",
-  "structure-review": "推演演示",
-  scenario: "推演演示",
-  validate: "推演演示",
-  collaboration: "推演演示",
-  report: "推演演示"
+  "structure-review": "仿真演示",
+  scenario: "仿真演示",
+  validate: "仿真演示",
+  collaboration: "仿真演示",
+  report: "仿真演示"
 };
 
 /**
- * Linear research path for the top gate capsule.
- * Phase chain: 规则库 → 阶段 → 状态机 → 时序 → … → 结构反查
+ * Linear seven-step mainline for navigation and gate progression.
  */
 export const workflowPrimaryStepIds = [
   "brief",
-  "ov6a",
   "phase-action",
-  "ov6b",
-  "ov6c",
   "operational-task",
   "force-mission",
-  "ov4",
-  "ov2",
-  "ov3",
-  "concept-map",
   "ov1",
-  "ov5",
-  "ov5a",
-  "ooda",
-  "structure-review",
-  "scenario",
-  "validate",
-  "collaboration",
-  "report"
+  "concept-map",
+  "scenario"
 ];
 
-/** Navigation five tracks — phase track follows fixed chain order. */
+/** Left rail contains only the seven authoritative mainline products. */
 export const workflowTracks = [
-  { id: "model", label: "研究建模", summary: "简报：目标 · 边界 · 假设 · 效果", viewIds: ["brief"], defaultOpen: true },
-  { id: "phase", label: "阶段行动", summary: "规则库 → 阶段 → 状态/时序 → 反查", viewIds: ["ov6a", "phase-action", "ov6b", "ov6c"], defaultOpen: false },
-  { id: "force", label: "兵力任务", summary: "任务 · 兵力 · 责任 · 资源流", viewIds: ["operational-task", "force-mission", "ov4", "ov2", "ov3"], defaultOpen: false },
-  { id: "concept", label: "概念图", summary: "概念图 · 总体 · 活动 · 循环", viewIds: ["concept-map", "ov1", "ov5", "ov5a", "ooda"], defaultOpen: false },
-  { id: "deliver", label: "推演演示", summary: "反查 · 想定 · 验证 · 审阅 · 报告", viewIds: ["structure-review", "scenario", "validate", "collaboration", "report"], defaultOpen: false }
+  { id: "brief", label: "简报", summary: "目标 · 边界 · 假设 · 效果", viewIds: ["brief"], defaultOpen: true },
+  { id: "phase", label: "阶段行动", summary: "阶段 · 行动 · 进入退出", viewIds: ["phase-action"], defaultOpen: false },
+  { id: "task", label: "作战任务", summary: "阵营 · 类型 · 区域 · 效果", viewIds: ["operational-task"], defaultOpen: false },
+  { id: "force", label: "作战兵力", summary: "编成 · 任务承接 · 平台", viewIds: ["force-mission"], defaultOpen: false },
+  { id: "overall", label: "总体图", summary: "OV1a · 主体 · 关系 · 闭环", viewIds: ["ov1"], defaultOpen: false },
+  { id: "map", label: "概念图", summary: "空间化表达 · 研究参考", viewIds: ["concept-map"], defaultOpen: false },
+  { id: "simulation", label: "仿真演示", summary: "输入 · 运行 · 结果校核", viewIds: ["scenario"], defaultOpen: false }
 ];
 
 views.forEach((view) => { view.phase = workflowPhaseById[view.id] || "其他"; });
 views.sort((left, right) => workflowOrder.indexOf(left.id) - workflowOrder.indexOf(right.id));
-// Rail numbers follow visible navigation order continuously: 01, 02, 03…
-views.forEach((view, index) => {
-  view.number = String(index + 1).padStart(2, "0");
+// Only mainline products receive navigation numbers.
+views.forEach((view) => {
+  const mainlineIndex = workflowPrimaryStepIds.indexOf(view.id);
+  view.number = mainlineIndex >= 0 ? String(mainlineIndex + 1).padStart(2, "0") : "";
 });
 
 export function productLabel(id, fallback = "") {

@@ -8,6 +8,7 @@ import {
   formatSequenceClock,
   layoutSequenceGantt,
   listActivityCandidates,
+  listStableReferenceCandidates,
   resolveOv6cSelectedSequenceId
 } from "./ov6Workbench.js";
 import {
@@ -42,6 +43,7 @@ export function renderOv6c(state = {}) {
     : null;
   const engine = resolveSequenceDiagramEngine(state.ov6cDiagramEngine || "workbench");
   const activities = listActivityCandidates(state);
+  const referenceCandidates = listStableReferenceCandidates(state);
   const chatOpen = Boolean(state.sequenceChatOpen);
   const chatGenerating = Boolean(state.sequenceChatGenerating);
   const editorOpen = Boolean(state.ov6cEditorOpen);
@@ -96,6 +98,7 @@ export function renderOv6c(state = {}) {
           selectedMessageId,
           selectedMessage,
           activities,
+          referenceCandidates,
           editorOpen
         })}
 
@@ -262,7 +265,7 @@ function renderSequenceEditor(sequence, { engine, selectedMessageId, editorOpen 
   </article>`;
 }
 
-function renderParticipantInspector(sequence, participants) {
+function renderParticipantInspector(sequence, participants, referenceCandidates = []) {
   return `<section class="seq-participant-panel" aria-label="参与方信息">
     <header class="seq-panel-head">
       <strong>参与方</strong>
@@ -284,21 +287,33 @@ function renderParticipantInspector(sequence, participants) {
       </label>
       <label class="seq-field">
         <span>对象引用</span>
-        <input
+        <select
           data-action="ov6c-participant-field"
           data-field="ref"
           data-sequence-id="${escapeHtml(sequence.id)}"
           data-participant-id="${escapeHtml(participant.id)}"
-          value="${escapeHtml(participant.ref || "")}"
-          maxlength="80"
-          placeholder="对象引用"
-          title="兵力、组织或其他对象引用"
-        />
+          title="选择阶段、任务或兵力的稳定引用"
+        >${renderParticipantReferenceOptions(participant, referenceCandidates)}</select>
       </label>
       <button type="button" class="seq-participant-remove" data-action="ov6c-remove-participant" data-sequence-id="${escapeHtml(sequence.id)}" data-participant-id="${escapeHtml(participant.id)}" title="删除参与方" aria-label="删除参与方">×</button>
     </div>`).join("") || `<p class="seq-message-empty">尚无参与方</p>`}
     </div>
   </section>`;
+}
+
+function renderParticipantReferenceOptions(participant, candidates = []) {
+  const groups = [["phase", "阶段"], ["task", "任务"], ["force", "兵力"]];
+  const currentRef = String(participant.ref || "");
+  const currentType = String(participant.refType || "");
+  const hasCurrent = candidates.some((item) => item.ref === currentRef && item.refType === currentType);
+  const options = [`<option value="" data-ref-type="" ${currentRef ? "" : "selected"}>不关联对象</option>`];
+  if (currentRef && !hasCurrent) options.push(`<option value="${escapeHtml(currentRef)}" data-ref-type="${escapeHtml(currentType)}" selected>引用失效：${escapeHtml(currentRef)}</option>`);
+  groups.forEach(([type, label]) => {
+    const items = candidates.filter((item) => item.refType === type);
+    if (!items.length) return;
+    options.push(`<optgroup label="${label}">${items.map((item) => `<option value="${escapeHtml(item.ref)}" data-ref-type="${type}" ${item.ref === currentRef && type === currentType ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</optgroup>`);
+  });
+  return options.join("");
 }
 
 function sequenceTypeLabel(value) {
@@ -385,7 +400,7 @@ function renderGanttCanvas(sequence, { selectedMessageId, layout }) {
   </div>`;
 }
 
-function renderSequencePropertyDock(sequence, { selectedMessageId, selectedMessage, activities, editorOpen } = {}) {
+function renderSequencePropertyDock(sequence, { selectedMessageId, selectedMessage, activities, referenceCandidates, editorOpen } = {}) {
   if (!sequence || !editorOpen) {
     return `<aside class="seq-editor-dock is-collapsed" id="sequenceEditorDock" aria-hidden="true" aria-label="消息属性"></aside>`;
   }
@@ -402,7 +417,7 @@ function renderSequencePropertyDock(sequence, { selectedMessageId, selectedMessa
       <button type="button" class="seq-editor-dock-close" data-action="ov6c-close-editor" title="收起属性" aria-label="收起属性">×</button>
     </header>
     <div class="seq-editor-lower">
-      ${renderParticipantInspector(sequence, participants)}
+      ${renderParticipantInspector(sequence, participants, referenceCandidates)}
       ${message ? renderMessageInspector(sequence, message, participants, activities) : `<p class="seq-inspector-hint">点时间线上的一条消息，编辑起止、方向与回链。</p>`}
       <section class="seq-message-list-panel" aria-label="消息清单">
         <header class="seq-panel-head">

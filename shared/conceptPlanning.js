@@ -13,6 +13,8 @@ const FORCE_ROLES = new Set(["sense", "command", "maneuver", "air", "airDefense"
 const FORCE_SIDES = new Set(["friendly", "hostile", "neutral", "unknown"]);
 const RELATION_TYPES = new Set(["command", "support", "coordination", "information"]);
 const PLAN_STATUSES = new Set(["empty", "draft", "confirmed"]);
+const TASK_AREA_TYPES = new Set(["patrol", "prosecution", "support", "transit", "target", "exclusion", "other"]);
+const TASK_AREA_GEOMETRIES = new Set(["point", "circle", "polygon", "corridor"]);
 /** Abstract relative layout slots for concept-map compile (not real geo; hidden in force UI). */
 const LAYOUT_SLOTS = new Set([
   "northwest", "north", "northeast", "west", "center", "east", "southwest", "south", "southeast"
@@ -117,7 +119,7 @@ export function normalizeForceMissionPlan(value) {
       side: FORCE_SIDES.has(clean(item?.side, 20)) ? clean(item.side, 20) : "friendly",
       phaseId: clean(item?.phaseId, 60),
       missionType: normalizeCmoMissionType(item?.missionType, inferTaskMissionType(item?.name || item?.objective || item?.sourceAction)),
-      area: clean(item?.area || item?.missionArea || item?.taskArea, 240) || "待人工明确",
+      area: normalizeOperationalTaskArea(item?.area || item?.missionArea || item?.taskArea),
       objective: clean(item?.objective, 500) || clean(item?.description, 500) || "完成阶段作战要求",
       expectedEffect: clean(item?.expectedEffect, 500),
       sourceAction: clean(item?.sourceAction, 400),
@@ -142,6 +144,7 @@ export function normalizeForceMissionPlan(value) {
       group: clean(item?.group, 120) || "概念编组",
       missionType,
       task: clean(item?.task, 400) || "研究级概念任务",
+      taskRefs: normalizeStringList(item?.taskRefs || item?.taskIds, 24, 60),
       phaseIds: normalizeStringList(item?.phaseIds, 12, 60),
       // One real equipment type per concept unit; combat layer refines quantities/composition.
       platforms: normalizePlatformRefs(item?.platforms, 1),
@@ -174,6 +177,7 @@ export function normalizeForceMissionPlan(value) {
       group: clean(item?.group, 120) || "作战编组",
       missionType: normalizeCmoMissionType(item?.missionType, inferMissionTypeFromRole(role)),
       task: clean(item?.task, 400) || "研究级作战任务",
+      taskRefs: normalizeStringList(item?.taskRefs || item?.taskIds, 24, 60),
       // Phase coverage for stage switcher (inherit from concept when missing).
       phaseIds: phaseIds.length ? phaseIds : inheritedPhases,
       platforms: normalizePlatformRefs(item?.platforms),
@@ -281,6 +285,34 @@ export function isForceMissionPlanConfirmed(plan, storage = {}) {
     && !storage?.stale;
 }
 
+export function isOperationalTaskPlanConfirmed(plan, storage = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  return normalized.tasks.length > 0
+    && Boolean(normalized.tasksConfirmedAt)
+    && !storage?.stale;
+}
+
+export function operationalTaskPlanIncompleteReasons(plan, storage = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  const reasons = [];
+  if (storage?.stale) reasons.push("复核已过期的作战任务");
+  if (!normalized.tasks.length) reasons.push("作战任务草案");
+  else if (!normalized.tasksConfirmedAt) reasons.push("确认作战任务");
+  return reasons;
+}
+
+export function combatForcePlanIncompleteReasons(plan, storage = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  const reasons = [];
+  if (storage?.stale) reasons.push("复核已过期的作战兵力");
+  if (!normalized.forces.length) reasons.push("概念兵力草案");
+  else if (normalized.forces.some((force) => !force.task)) reasons.push("补全概念兵力任务");
+  if (!normalized.combatForces.length) reasons.push("作战兵力草案");
+  else if (normalized.combatForces.some((force) => !force.task || !force.missionType)) reasons.push("补全作战兵力任务/类型");
+  if (normalized.status !== "confirmed") reasons.push("确认作战兵力");
+  return reasons;
+}
+
 export function isPhaseActionConceptConfirmed(plan, storage = {}) {
   const normalized = normalizePhaseActionConcept(plan);
   return normalized.status === "confirmed"
@@ -290,23 +322,16 @@ export function isPhaseActionConceptConfirmed(plan, storage = {}) {
 }
 
 export function forceMissionPlanIncompleteReasons(plan, storage = {}) {
-  const normalized = normalizeForceMissionPlan(plan);
-  const reasons = [];
-  if (storage?.stale) reasons.push("复核已过期的兵力与任务");
-  if (!normalized.tasks.length) reasons.push("作战任务草案");
-  else if (!normalized.tasksConfirmedAt) reasons.push("确认作战任务");
-  if (!normalized.forces.length) reasons.push("概念兵力草案");
-  else if (normalized.forces.some((force) => !force.task)) reasons.push("补全概念兵力任务");
-  if (!normalized.combatForces.length) reasons.push("作战兵力草案");
-  else if (normalized.combatForces.some((force) => !force.task || !force.missionType)) reasons.push("补全作战兵力任务/类型");
-  if (normalized.status !== "confirmed") reasons.push("确认兵力与任务");
-  return reasons;
+  return [
+    ...operationalTaskPlanIncompleteReasons(plan, storage),
+    ...combatForcePlanIncompleteReasons(plan, storage)
+  ];
 }
 
-export function createOperationalTasksFromPhaseAction(plan = {}, phaseAction = {}) {
+export function createOperationalTasksFromPhaseAction(plan = {}, phaseAction = {}, draft = null, { source = "local" } = {}) {
   const normalized = normalizeForceMissionPlan(plan);
   const phases = Array.isArray(phaseAction?.phases) ? phaseAction.phases : [];
-  const tasks = [];
+  const fallbackTasks = [];
   for (const phase of phases) {
     const blue = Array.isArray(phase?.blueActions) ? phase.blueActions : (phase?.primaryActions || []);
     const red = Array.isArray(phase?.redActions) ? phase.redActions : (phase?.secondaryActions || []);
@@ -314,13 +339,13 @@ export function createOperationalTasksFromPhaseAction(plan = {}, phaseAction = {
       actions.slice(0, 8).forEach((action, index) => {
         const text = clean(action, 400);
         if (!text) return;
-        tasks.push({
+        fallbackTasks.push({
           id: `${slugId(phase?.id, "phase")}-${side === "friendly" ? "blue" : "red"}-${index + 1}`,
           name: text.slice(0, 120),
           side,
           phaseId: clean(phase?.id, 60),
           missionType: inferTaskMissionType(text),
-          area: clean(phase?.area || phase?.missionArea || phase?.taskArea, 240) || "待人工明确",
+          area: normalizeOperationalTaskArea(phase?.area || phase?.missionArea || phase?.taskArea),
           objective: text,
           expectedEffect: (phase?.expectedEffects || [])[0] || "",
           sourceAction: text,
@@ -329,17 +354,70 @@ export function createOperationalTasksFromPhaseAction(plan = {}, phaseAction = {
       });
     }
   }
+  const generatedTasks = (Array.isArray(draft?.tasks) && draft.tasks.length ? draft.tasks : fallbackTasks).map((task) => ({
+    ...task,
+    name: normalizeGeneratedTaskName(task?.name, task?.missionType, task?.objective || task?.sourceAction)
+  }));
+  const tasks = uniquifyOperationalTaskNames(generatedTasks, phases);
   return normalizeForceMissionPlan({
     ...normalized,
     status: normalized.status === "empty" ? "draft" : normalized.status,
+    generation: {
+      source,
+      generatedAt: new Date().toISOString(),
+      promptSummary: source === "ai" ? "AI 根据简报与阶段行动生成作战任务及任务区域候选" : "根据阶段行动生成本地作战任务草案"
+    },
     tasks,
     tasksConfirmedAt: ""
   });
 }
 
+export function buildOperationalTaskGenerationBatches(phaseAction = {}, maxTasks = 6) {
+  const limit = Math.max(1, Math.min(12, Number(maxTasks) || 6));
+  const entries = [];
+  for (const phase of Array.isArray(phaseAction?.phases) ? phaseAction.phases : []) {
+    const blueActions = Array.isArray(phase?.blueActions) ? phase.blueActions : (phase?.primaryActions || []);
+    const redActions = Array.isArray(phase?.redActions) ? phase.redActions : (phase?.secondaryActions || []);
+    blueActions.forEach((action) => entries.push({ phase, side: "friendly", action }));
+    redActions.forEach((action) => entries.push({ phase, side: "hostile", action }));
+  }
+  const batches = [];
+  for (let offset = 0; offset < entries.length; offset += limit) {
+    const slice = entries.slice(offset, offset + limit);
+    const phases = [];
+    const byId = new Map();
+    for (const entry of slice) {
+      const phaseId = clean(entry.phase?.id, 60) || `phase-${phases.length + 1}`;
+      let copy = byId.get(phaseId);
+      if (!copy) {
+        copy = { ...entry.phase, id: phaseId, blueActions: [], redActions: [], primaryActions: [], secondaryActions: [] };
+        byId.set(phaseId, copy);
+        phases.push(copy);
+      }
+      if (entry.side === "hostile") {
+        copy.redActions.push(entry.action);
+        copy.secondaryActions.push(entry.action);
+      } else {
+        copy.blueActions.push(entry.action);
+        copy.primaryActions.push(entry.action);
+      }
+    }
+    batches.push({
+      status: phaseAction?.status || "confirmed",
+      phases,
+      transitions: [],
+      expectedTaskCount: slice.length
+    });
+  }
+  return batches;
+}
+
 export function confirmOperationalTasks(plan = {}) {
   const normalized = normalizeForceMissionPlan(plan);
   if (!normalized.tasks.length) throw new Error("Operational tasks require at least one task");
+  if (normalized.tasks.some((task) => !task.area?.name || task.area.name === "待人工明确" || !(task.area.points || []).some((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude)))) {
+    throw new Error("Operational tasks require complete task areas and coordinates");
+  }
   return normalizeForceMissionPlan({ ...normalized, tasksConfirmedAt: new Date().toISOString() });
 }
 
@@ -350,6 +428,86 @@ export function updateOperationalTask(plan = {}, taskId = "", patch = {}) {
     tasks: normalized.tasks.map((task) => task.id === taskId ? { ...task, ...patch } : task),
     tasksConfirmedAt: ""
   });
+}
+
+export function updateOperationalTaskArea(plan = {}, taskId = "", patch = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  const task = normalized.tasks.find((item) => item.id === taskId);
+  if (!task) return normalized;
+  return updateOperationalTask(normalized, taskId, {
+    area: normalizeOperationalTaskArea({ ...task.area, ...patch })
+  });
+}
+
+export function updateOperationalTaskAreaPoint(plan = {}, taskId = "", pointId = "", patch = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  const task = normalized.tasks.find((item) => item.id === taskId);
+  if (!task) return normalized;
+  const points = task.area.points.map((point) => point.id === pointId ? { ...point, ...patch } : point);
+  return updateOperationalTaskArea(normalized, taskId, { points });
+}
+
+export function addOperationalTaskAreaPoint(plan = {}, taskId = "") {
+  const normalized = normalizeForceMissionPlan(plan);
+  const task = normalized.tasks.find((item) => item.id === taskId);
+  if (!task) return normalized;
+  const index = task.area.points.length + 1;
+  return updateOperationalTaskArea(normalized, taskId, {
+    points: [...task.area.points, { id: `point-${index}`, label: `参考点 ${index}`, latitude: null, longitude: null }]
+  });
+}
+
+export function removeOperationalTaskAreaPoint(plan = {}, taskId = "", pointId = "") {
+  const normalized = normalizeForceMissionPlan(plan);
+  const task = normalized.tasks.find((item) => item.id === taskId);
+  if (!task) return normalized;
+  return updateOperationalTaskArea(normalized, taskId, {
+    points: task.area.points.filter((point) => point.id !== pointId)
+  });
+}
+
+function normalizeOperationalTaskArea(value) {
+  const input = value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : { name: clean(value, 160) };
+  const type = TASK_AREA_TYPES.has(clean(input.type, 30)) ? clean(input.type, 30) : "other";
+  const geometryType = TASK_AREA_GEOMETRIES.has(clean(input.geometryType, 30))
+    ? clean(input.geometryType, 30)
+    : "polygon";
+  const pointIds = new Set();
+  const points = (Array.isArray(input.points) ? input.points : Array.isArray(input.coordinates) ? input.coordinates : [])
+    .slice(0, 24)
+    .map((point, index) => {
+      const latitude = finiteCoordinate(point?.latitude ?? point?.lat, -90, 90);
+      const longitude = finiteCoordinate(point?.longitude ?? point?.lon ?? point?.lng, -180, 180);
+      const id = slugId(point?.id, `point-${index + 1}`);
+      if (pointIds.has(id)) return null;
+      pointIds.add(id);
+      return {
+        id,
+        label: clean(point?.label || point?.name, 80) || `参考点 ${index + 1}`,
+        latitude,
+        longitude
+      };
+    })
+    .filter(Boolean);
+  return {
+    name: clean(input.name, 160) || "待人工明确",
+    type,
+    geometryType,
+    coordinateSystem: "WGS84",
+    points,
+    radiusNm: geometryType === "circle" ? Math.max(0, Math.min(5000, Number(input.radiusNm) || 0)) : 0,
+    description: clean(input.description || input.notes, 500),
+    basis: clean(input.basis, 500),
+    needsReview: input.needsReview !== false
+  };
+}
+
+function finiteCoordinate(value, min, max) {
+  if (value === "" || value === null || value === undefined) return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= min && number <= max ? Number(number.toFixed(6)) : null;
 }
 
 function inferTaskMissionType(value = "") {
@@ -377,6 +535,46 @@ function inferTaskMissionType(value = "") {
     ["strike", /打击|突击|攻击|摧毁/]
   ];
   return rules.find(([, pattern]) => pattern.test(text))?.[0] || "other";
+}
+
+function normalizeGeneratedTaskName(value = "", missionType = "other", context = "") {
+  const raw = clean(value, 120)
+    .replace(/^T\s*[+-]?\s*\d{1,3}(?::\d{1,2})?\s*(?:起|后|前)?[，,、:：\s]*/iu, "")
+    .replace(/[，,；;。].*$/u, "")
+    .trim();
+  const fallbackByType = {
+    strike: "对地打击任务", standoff_strike: "防区外打击任务", sead: "防空压制任务", dead: "防空摧毁任务",
+    bai_cas: "战场遮断支援任务", intercept: "空中截击任务", air_superiority: "制空任务", patrol_aaw: "防空巡逻任务",
+    patrol_asuw: "反舰巡逻任务", patrol_asw: "反潜巡逻任务", asw_attack: "反潜攻击任务", recon: "侦察监视任务",
+    aew: "空中预警任务", ecm: "电子对抗任务", escort: "护航任务", support: "作战支援任务", command: "指挥控制任务",
+    ferry: "兵力转场任务", cargo: "运输投送任务", tanker: "空中加油任务", sar: "战斗搜救任务", mining: "海上布雷任务",
+    mcm: "反水雷任务", landing: "登陆投送任务", area_defense: "区域防御任务", other: "综合作战任务"
+  };
+  const inferredType = normalizeCmoMissionType(missionType, inferTaskMissionType(`${raw} ${context}`));
+  const concise = raw.replace(/任务$/u, "");
+  if (raw.endsWith("任务") && concise.length >= 2 && concise.length <= 12 && !/[+\d]/u.test(concise)) return raw;
+  return fallbackByType[inferredType] || fallbackByType.other;
+}
+
+function uniquifyOperationalTaskNames(tasks = [], phases = []) {
+  const phaseNames = new Map(phases.map((phase) => [clean(phase?.id, 60), clean(phase?.name, 40).replace(/阶段$/u, "")]));
+  const totals = new Map();
+  tasks.forEach((task) => totals.set(task.name, (totals.get(task.name) || 0) + 1));
+  const used = new Set();
+  return tasks.map((task, index) => {
+    let name = task.name;
+    if ((totals.get(name) || 0) > 1 || used.has(name)) {
+      const phase = phaseNames.get(clean(task.phaseId, 60)) || "";
+      const area = task.area?.name && task.area.name !== "待人工明确" ? clean(task.area.name, 20).replace(/[区域区]$/u, "") : "";
+      const side = task.side === "hostile" ? "红方" : "蓝方";
+      const base = name.replace(/任务$/u, "");
+      const qualifier = `${side}${phase || area}`.slice(0, 10);
+      name = `${qualifier}${base}任务`.slice(0, 30);
+    }
+    if (used.has(name)) name = `${name.replace(/任务$/u, "")}第${index + 1}任务`.slice(0, 30);
+    used.add(name);
+    return { ...task, name };
+  });
 }
 
 export function phaseActionConceptIncompleteReasons(plan, storage = {}) {
@@ -2021,6 +2219,7 @@ export function compactForceMissionForAnalysis(plan = {}) {
       group: force.group,
       missionType: force.missionType,
       task: force.task,
+      taskRefs: force.taskRefs || [],
       phaseIds: force.phaseIds || [],
       platforms: compactPlatforms((force.platforms || []).slice(0, 1)),
       slot: force.slot || ""
@@ -2034,6 +2233,7 @@ export function compactForceMissionForAnalysis(plan = {}) {
       group: force.group,
       missionType: force.missionType,
       task: force.task,
+      taskRefs: force.taskRefs || [],
       phaseIds: force.phaseIds || [],
       platforms: compactPlatforms(force.platforms),
       slot: force.slot || ""

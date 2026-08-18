@@ -83,6 +83,9 @@ function createResultBySchema(schema, workflow, analysis, evidenceRefs) {
   if (schema === "ForceMissionPlan") {
     return createForceMissionPlanResult(analysis);
   }
+  if (schema === "OperationalTaskDraft") {
+    return createOperationalTaskDraftResult(analysis);
+  }
   if (schema === "PhaseActionConcept") {
     return createPhaseActionConceptResult(analysis);
   }
@@ -153,6 +156,19 @@ function createForceMissionPlanResult(analysis) {
     : [];
   const phaseHint = phaseNames.length ? `覆盖阶段：${phaseNames.join("、")}` : "按简报与阶段需求分配职责";
   const samplePlatforms = Array.isArray(analysis?.cmoCatalog?.platforms) ? analysis.cmoCatalog.platforms : [];
+  const operationalTasks = Array.isArray(analysis?.operationalTasks)
+    ? analysis.operationalTasks
+    : Array.isArray(analysis?.existingForceMission?.tasks)
+      ? analysis.existingForceMission.tasks
+      : [];
+  const taskRefsFor = (force = {}) => {
+    const sameSide = operationalTasks.filter((task) => !force.side || !task?.side || task.side === force.side);
+    const sameMission = sameSide.filter((task) => task?.missionType && task.missionType === force.missionType);
+    return (sameMission.length ? sameMission : sameSide)
+      .slice(0, 4)
+      .map((task) => String(task?.id || ""))
+      .filter(Boolean);
+  };
   const pickPlatform = (index) => {
     const hit = samplePlatforms[index];
     if (!hit?.name) return [];
@@ -181,6 +197,7 @@ function createForceMissionPlanResult(analysis) {
       group: force.group || "概念编组",
       missionType: force.missionType || "other",
       task: force.task || "研究级概念任务",
+      taskRefs: Array.isArray(force.taskRefs) ? force.taskRefs : taskRefsFor(force),
       phaseIds: Array.isArray(force.phaseIds) ? force.phaseIds : [],
       platforms: [],
       notes: force.notes || ""
@@ -195,6 +212,9 @@ function createForceMissionPlanResult(analysis) {
       { id: "red-command", name: "红方协同节点", side: "hostile", role: "command", group: "红方编组", missionType: "command", task: "组织红方多轴协同", platforms: [], notes: "" },
       { id: "red-ew", name: "红方诱偏压制单元", side: "hostile", role: "sense", group: "红方编组", missionType: "sead", task: "实施诱偏与压制", platforms: [], notes: "" }
     ];
+  conceptForces.forEach((force) => {
+    if (!Array.isArray(force.taskRefs)) force.taskRefs = taskRefsFor(force);
+  });
   const conceptId = (roles, side = "friendly", fallback = "") => {
     const hit = conceptForces.find((item) => item.side === side && roles.includes(item.role));
     return hit?.id || fallback;
@@ -207,6 +227,9 @@ function createForceMissionPlanResult(analysis) {
     { id: "combat-red-strike", name: "红方突击分队", side: "hostile", role: "maneuver", conceptForceId: conceptId(["maneuver", "air"], "hostile", "red-strike"), group: "红方作战编组", missionType: "strike", task: "遂行主突防或突击轴行动", platforms: [], notes: "" },
     { id: "combat-red-command", name: "红方行动协同节点", side: "hostile", role: "command", conceptForceId: conceptId(["command"], "hostile", "red-command"), group: "红方作战编组", missionType: "command", task: "组织红方多轴协同与转换", platforms: [], notes: "" }
   ];
+  combatForces.forEach((force) => {
+    force.taskRefs = taskRefsFor(force);
+  });
   return {
     forces: conceptForces,
     combatForces: layer === "concept" ? combatForces.slice(0, 4) : combatForces,
@@ -232,6 +255,26 @@ function createForceMissionPlanResult(analysis) {
       "CMO 平台引用是否仅为类型参考（非真实编制）"
     ]
   };
+}
+
+function createOperationalTaskDraftResult(analysis) {
+  const phases = Array.isArray(analysis?.phaseAction?.phases) ? analysis.phaseAction.phases : [];
+  const tasks = [];
+  for (const phase of phases) {
+    for (const [side, actions] of [["friendly", phase.blueActions || phase.primaryActions || []], ["hostile", phase.redActions || phase.secondaryActions || []]]) {
+      actions.slice(0, 8).forEach((action, index) => {
+        const text = String(action || "").trim();
+        if (!text) return;
+        tasks.push({
+          id: `${phase.id || "phase"}-${side === "friendly" ? "blue" : "red"}-${index + 1}`,
+          name: "综合作战任务", side, phaseId: phase.id || "", missionType: "other",
+          area: { name: "待人工明确", type: "other", geometryType: "polygon", coordinateSystem: "WGS84", points: [], radiusNm: 0, description: "", basis: "输入未提供可核验坐标", needsReview: true },
+          objective: text, expectedEffect: (phase.expectedEffects || [])[0] || "", sourceAction: text, notes: "本地回退草案"
+        });
+      });
+    }
+  }
+  return { tasks, openQuestions: tasks.some((task) => !task.area.points.length) ? ["任务区域坐标缺少可核验输入，请人工补充。"] : [] };
 }
 
 function createPhaseActionConceptResult(analysis) {
@@ -463,17 +506,19 @@ function createSequenceDraftResult(analysis) {
     ? forces.slice(0, 6).map((force, index) => ({
       id: String(force?.id || `force-${index + 1}`),
       name: String(force?.name || force?.id || `参与方 ${index + 1}`),
-      ref: String(force?.id || "")
+      ref: String(force?.id || ""),
+      refType: force?.id ? "force" : ""
     }))
     : phases.slice(0, 4).map((phase, index) => ({
       id: String(phase?.id || `phase-${index + 1}`),
       name: String(phase?.name || `阶段 ${index + 1}`),
-      ref: String(phase?.id || "")
+      ref: String(phase?.id || ""),
+      refType: phase?.id ? "phase" : ""
     })));
   if (participants.length < 2) {
     participants.push(
-      { id: "participant-blue", name: "蓝方指挥", ref: "" },
-      { id: "participant-force", name: "行动单元", ref: "" }
+      { id: "participant-blue", name: "蓝方指挥", ref: "", refType: "" },
+      { id: "participant-force", name: "行动单元", ref: "", refType: "" }
     );
   }
   const messages = (phases.length ? phases : [{ name: "协同", blueActions: ["态势上报"], id: "phase-1" }]).slice(0, 8).map((phase, index) => {
@@ -1018,6 +1063,14 @@ function toMarkdown(output) {
 }
 
 function renderResultMarkdown(result, schema) {
+  if (schema === "OperationalTaskDraft") {
+    return [
+      "## 作战任务草案",
+      ...(result.tasks || []).map((task) => `- **${task.name}**（${task.missionType} · ${task.area?.name || "区域待定"}）：${task.objective}`),
+      "### 开放问题",
+      ...(result.openQuestions || []).map((item) => `- ${item}`)
+    ].join("\n");
+  }
   if (schema === "ForceMissionPlan") {
     return [
       "## 兵力与任务设计草案",
@@ -1075,6 +1128,18 @@ function renderResultMarkdown(result, schema) {
         `### ${machine.name || machine.subjectRef || "状态机"}`,
         `- 状态：${(machine.states || []).map((state) => state.name).filter(Boolean).join(" → ")}`,
         `- 转换：${(machine.transitions || []).map((transition) => transition.condition).filter(Boolean).join("；")}`
+      ].join("\n"))
+    ].join("\n\n");
+  }
+  if (schema === "SequenceDraft") {
+    return [
+      "## 时序图草案",
+      result.summary || "",
+      ...(result.sequences || []).map((sequence) => [
+        `### ${sequence.name || sequence.id || "事件序列"}`,
+        `- 类型：${sequence.diagramType || "general"}`,
+        `- 参与方：${(sequence.participants || []).map((item) => item.name || item.id).filter(Boolean).join("、") || "待补充"}`,
+        `- 消息：${(sequence.messages || []).map((item) => item.name).filter(Boolean).join("；") || "待补充"}`
       ].join("\n"))
     ].join("\n\n");
   }

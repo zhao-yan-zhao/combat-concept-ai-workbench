@@ -3,8 +3,13 @@ import {
   createEmptyForceMissionPlan,
   createForceMissionPlanFromBrief,
   createOperationalTasksFromPhaseAction,
+  buildOperationalTaskGenerationBatches,
   confirmOperationalTasks,
   updateOperationalTask,
+  updateOperationalTaskArea,
+  updateOperationalTaskAreaPoint,
+  addOperationalTaskAreaPoint,
+  removeOperationalTaskAreaPoint,
   cmoMissionTypeLabel,
   compactForceMissionForAnalysis,
   conceptForceContextForOv1,
@@ -12,6 +17,9 @@ import {
   forceMissionContextForDownstream,
   forceMissionDiagnostics,
   forceMissionPlanIncompleteReasons,
+  operationalTaskPlanIncompleteReasons,
+  combatForcePlanIncompleteReasons,
+  isOperationalTaskPlanConfirmed,
   isForceMissionPlanConfirmed,
   listCmoMissionTypes,
   mapForcesForLayout,
@@ -54,11 +62,19 @@ export {
   normalizeForceMissionPlan,
   createForceMissionPlanFromBrief,
   createOperationalTasksFromPhaseAction,
+  buildOperationalTaskGenerationBatches,
   confirmOperationalTasks,
   updateOperationalTask,
+  updateOperationalTaskArea,
+  updateOperationalTaskAreaPoint,
+  addOperationalTaskAreaPoint,
+  removeOperationalTaskAreaPoint,
   confirmForceMissionPlan,
   isForceMissionPlanConfirmed,
   forceMissionPlanIncompleteReasons,
+  operationalTaskPlanIncompleteReasons,
+  combatForcePlanIncompleteReasons,
+  isOperationalTaskPlanConfirmed,
   forceMissionContextForDownstream,
   conceptForceContextForOv1,
   conceptForcesToOv1Draft,
@@ -95,6 +111,18 @@ export function updateCombatConceptLink(plan, forceId, conceptForceId) {
     ...force,
     conceptForceId: String(conceptForceId || "").trim()
   }));
+}
+
+/** @param {"concept"|"combat"} layer */
+export function toggleForceTaskRef(plan, forceId, taskRef, checked, layer = "concept") {
+  const ref = String(taskRef || "").trim();
+  if (!ref) return normalizeForceMissionPlan(plan);
+  return mapForce(plan, forceId, layer, (force) => {
+    const refs = new Set(Array.isArray(force.taskRefs) ? force.taskRefs : []);
+    if (checked) refs.add(ref);
+    else refs.delete(ref);
+    return { ...force, taskRefs: [...refs] };
+  });
 }
 
 /** @param {"concept"|"combat"} layer */

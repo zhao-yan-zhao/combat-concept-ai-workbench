@@ -5,7 +5,12 @@ export function createValidationController({ getState, render, notify, syncValid
     handleAction(action) {
       if (action !== "run-validation") return false;
       const state = getState();
-      state.validationResult = generateValidation(state.ov5, state.ooda, state.scenario, state.ov1);
+      state.validationResult = generateValidation(state.ov5, state.ooda, state.scenario, state.ov1, {
+        forceMission: state.forceMission,
+        ov2: state.ov2,
+        ov3: state.ov3,
+        ov4: state.ov4
+      });
       state.redTeamRunning = false;
       state.selection = null;
       void syncValidation?.(state.validationResult, { source: "rule-validation" });

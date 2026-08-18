@@ -26,18 +26,23 @@ const scenario = {
   deploymentPlan: null
 };
 
-const model = buildOv3Model({ ov5, scenario });
-assert(model.kind === "derived-ov3-resource-exchange" && model.exchanges.length === 3, "OV-3 did not derive the expected activity exchanges");
+const ov2 = {
+  nodes: ov5.activities.map((activity) => ({ id: activity.id, label: activity.title })),
+  exchanges: ov5.edges.map((edge) => {
+    const source = ov5.activities.find((activity) => activity.id === edge.sourceId);
+    const target = ov5.activities.find((activity) => activity.id === edge.targetId);
+    return { id: edge.id, sourceNodeId: edge.sourceId, targetNodeId: edge.targetId, flowType: edge.type, output: source?.output || "", input: target?.input || "", label: source?.output || edge.type };
+  })
+};
+const model = buildOv3Model({ ov2, scenario });
+assert(model.kind === "derived-ov3-ov2-projection" && model.exchanges.length === 3, "OV-3 did not project the expected OV-2 exchanges");
 assert(model.exchanges.find((item) => item.sourceActivityId === "a1")?.compatibility === "ready", "OV-3 did not identify a directly matching input/output contract");
 assert(model.exchanges.find((item) => item.sourceActivityId === "a2")?.exchangeType === "control" && model.exchanges.find((item) => item.sourceActivityId === "a2")?.compatibility === "review", "OV-3 did not classify a reviewable control exchange");
 // Soft token match: shared content words should count as ready without exact string equality.
 const soft = buildOv3Model({
-  ov5: {
-    activities: [
-      { id: "s1", title: "Send", input: "x", output: "目标数据包 摘要" },
-      { id: "s2", title: "Recv", input: "目标数据包", output: "y" }
-    ],
-    edges: [{ id: "soft-edge", sourceId: "s1", targetId: "s2", type: "information" }]
+  ov2: {
+    nodes: [{ id: "s1", label: "Send" }, { id: "s2", label: "Recv" }],
+    exchanges: [{ id: "soft-edge", sourceNodeId: "s1", targetNodeId: "s2", flowType: "information", output: "目标数据包 摘要", input: "目标数据包" }]
   }
 });
 assert(soft.exchanges[0]?.compatibility === "ready", "OV-3 soft token overlap should mark shared resource terms ready");
@@ -45,17 +50,20 @@ assert(model.exchanges.find((item) => item.sourceActivityId === "a3")?.exchangeT
 assert(model.exchanges.find((item) => item.sourceActivityId === "a1")?.scenarioEntityCount === 1 && model.unresolved.unresolvedEdgeIds.includes("broken"), "OV-3 lost scenario coverage or unresolved-edge provenance");
 assert(model.diagnostics.some((item) => item.id === "contract-definition" && item.state === "review"), "OV-3 diagnostics did not flag a missing contract definition");
 assert(model.activities.length === 4 && model.activities[0].id === "a1", "OV-3 did not retain ordered matrix activities");
-const matrixHtml = renderOv3({ ov5, scenario, ov5Storage: { status: "ready", mode: "project", label: "已同步" } });
-assert(matrixHtml.includes("ov3-matrix") && matrixHtml.includes('data-ov3-exchange="ov3-'), "OV-3 did not render a selectable resource-flow matrix");
+const matrixHtml = renderOv3({ ov2, ov5, scenario, ov5Storage: { status: "ready", mode: "project", label: "已同步" } });
+assert(matrixHtml.includes("ov3-matrix") && matrixHtml.includes('data-ov3-exchange="ready"'), "OV-3 did not render a selectable resource-flow matrix");
+assert(!matrixHtml.includes('data-dodaf-field="ov3.exchange.'), "OV-3 must not duplicate editable OV-2 exchange facts");
 assert(matrixHtml.indexOf("ov3-matrix-section") < matrixHtml.indexOf("ov3-table-wrap") && matrixHtml.indexOf("ov3-table-wrap") < matrixHtml.indexOf("ov2-diagnostics"), "OV-3 did not prioritize matrix, then contract details, then diagnostics");
 
-const selection = selectionForOv3Exchange(model.exchanges[0].id, { ov5, scenario });
+const selection = selectionForOv3Exchange(model.exchanges[0].id, { ov2, ov3: model, ov5, scenario });
 assert(selection?.kind === "ov3-exchange" && selection.facts.some(([key]) => key === "源输出"), "OV-3 inspector selection lost exchange fields");
+assert(selection.facts.some(([key, value]) => key === "OV-2 交换" && value === model.exchanges[0].id), "OV-3 inspector must expose its OV-2 source exchange");
 
 const payload = buildReportPayload({
   project: { title: "OV-3 acceptance", brief: { objective: "Review", approach: "Derived exchange", assumptions: "Source model", risk: "Contract mismatch" }, citations: [] },
   direction: "Review",
   ov1,
+  ov2,
   ov5,
   ooda: { sourceActivityIds: [], lanes: [] },
   scenario,
@@ -66,7 +74,7 @@ const payload = buildReportPayload({
 const markdown = buildMarkdownReport(payload);
 const xml = buildXmlReport(payload);
 assert(payload.ov3.exchanges.length === 3 && markdown.includes("OV-3 资源交换") && markdown.includes("Collect -> Assess"), "OV-3 Markdown output is incomplete");
-assert(xml.includes('<ov3 kind="derived-ov3-resource-exchange"') && xml.includes('compatibility="pending"'), "OV-3 XML output is incomplete");
+assert(xml.includes('<ov3 kind="derived-ov3-ov2-projection"') && xml.includes('compatibility="pending"'), "OV-3 XML output is incomplete");
 
 console.log(`OV-3 acceptance passed: ${model.exchanges.length} exchanges, ${model.unresolved.missingContractCount} missing, ${model.unresolved.mismatchCount} review.`);
 

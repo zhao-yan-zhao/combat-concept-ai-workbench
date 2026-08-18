@@ -3,32 +3,39 @@ import { buildOv3Model } from "./ov3Builder.js";
 import { buildOv4Model } from "./ov4Builder.js";
 import { buildOv5aModel, buildOv6aModel, buildOv6bModel } from "./dodafOperationalBuilders.js";
 import { buildOv6cModel } from "./ov6cBuilder.js";
+import { buildOv1bModel } from "./ov1bStore.js";
+import { buildOv1cModel, buildOv7Model } from "./mappingProductStore.js";
 import {
   normalizeDodafOv2,
+  normalizeDodafOv1b,
+  normalizeDodafOv1c,
   normalizeDodafOv3,
   normalizeDodafOv4,
   normalizeDodafOv5a,
   normalizeDodafOv6a,
   normalizeDodafOv6b,
-  normalizeDodafOv6c
+  normalizeDodafOv6c,
+  normalizeDodafOv7
 } from "../../shared/dodaf/products.js";
 
 const STORAGE_PREFIX = "concept-studio-dodaf-product-v1";
 
-export const DODAF_PRODUCT_KEYS = ["ov2", "ov3", "ov4", "ov5a", "ov6a", "ov6b", "ov6c"];
+export const DODAF_PRODUCT_KEYS = ["ov1b", "ov1c", "ov2", "ov3", "ov4", "ov5a", "ov6a", "ov6b", "ov6c", "ov7"];
 
 const SEEDERS = {
+  ov1b: (state) => buildOv1bModel(state),
+  ov1c: (state) => buildOv1cModel(state),
   ov2: (state) => normalizeDodafOv2({
     ...buildOv2Model(state),
-    derivedFrom: { mode: "seeded", sources: ["ov1", "ov5"], generatedAt: new Date().toISOString(), note: "seeded-from-builders" }
+    derivedFrom: { mode: "seeded", sources: ["forceMissionPlan"], generatedAt: new Date().toISOString(), note: "seeded-from-builders" }
   }),
   ov3: (state) => normalizeDodafOv3({
-    ...buildOv3Model(state),
-    derivedFrom: { mode: "seeded", sources: ["ov5"], generatedAt: new Date().toISOString(), note: "seeded-from-builders" }
+    ...buildOv3Model({ ov2: state.ov2 || buildOv2Model(state), scenario: state.scenario }),
+    derivedFrom: { mode: "projection", sources: ["ov2"], generatedAt: new Date().toISOString(), note: "controlled-ov2-projection" }
   }),
   ov4: (state) => normalizeDodafOv4({
     ...buildOv4Model(state),
-    derivedFrom: { mode: "seeded", sources: ["ov1", "ov5"], generatedAt: new Date().toISOString(), note: "seeded-from-builders" }
+    derivedFrom: { mode: "seeded", sources: ["forceMissionPlan"], generatedAt: new Date().toISOString(), note: "seeded-from-builders" }
   }),
   ov5a: (state) => normalizeDodafOv5a({
     ...buildOv5aModel({ ov5: state.ov5 }),
@@ -45,17 +52,21 @@ const SEEDERS = {
   ov6c: (state) => normalizeDodafOv6c({
     ...buildOv6cModel({ ooda: state.ooda, scenario: state.scenario }),
     derivedFrom: { mode: "seeded", sources: ["ooda", "scenario"], generatedAt: new Date().toISOString(), note: "seeded-from-builders" }
-  })
+  }),
+  ov7: (state) => buildOv7Model(state)
 };
 
 const NORMALIZERS = {
+  ov1b: normalizeDodafOv1b,
+  ov1c: normalizeDodafOv1c,
   ov2: normalizeDodafOv2,
   ov3: normalizeDodafOv3,
   ov4: normalizeDodafOv4,
   ov5a: normalizeDodafOv5a,
   ov6a: normalizeDodafOv6a,
   ov6b: normalizeDodafOv6b,
-  ov6c: normalizeDodafOv6c
+  ov6c: normalizeDodafOv6c,
+  ov7: normalizeDodafOv7
 };
 
 export function seedDodafProduct(resourceKey, state) {
@@ -83,6 +94,9 @@ export function resolveDodafProduct(state, resourceKey) {
     || current.stateMachines
     || current.events
     || current.sequences
+    || current.mappings
+    || current.decompositions
+    // Legacy OV-5a payloads are accepted here and migrated by normalizeDodafOv5a.
     || current.tree
     || current.exchanges
   )) {
@@ -136,10 +150,13 @@ export function createEmptyDodafStorageState() {
 export function updateProductField(model, resourceKey, path, value) {
   const clone = structuredClone(model);
   const segments = String(path || "").split(".");
-  if (segments[0] === "exchange" && resourceKey === "ov2") {
-    const exchange = (clone.exchanges || []).find((item) => item.id === segments[1]);
-    if (exchange && segments[2]) exchange[segments[2]] = value;
-  } else if (segments[0] === "exchange" && resourceKey === "ov3") {
+  if (segments[0] === "decomposition" && resourceKey === "ov1b") {
+    const item = (clone.decompositions || []).find((entry) => entry.id === segments[1]);
+    if (item && segments[2] === "rationale") item.rationale = value;
+  } else if (segments[0] === "mapping" && ["ov1c", "ov7"].includes(resourceKey)) {
+    const mapping = (clone.mappings || []).find((item) => item.id === segments[1]);
+    if (mapping && segments[2] === "note") mapping.note = value;
+  } else if (segments[0] === "exchange" && resourceKey === "ov2") {
     const exchange = (clone.exchanges || []).find((item) => item.id === segments[1]);
     if (exchange && segments[2]) exchange[segments[2]] = value;
   } else if (segments[0] === "role" && resourceKey === "ov4") {

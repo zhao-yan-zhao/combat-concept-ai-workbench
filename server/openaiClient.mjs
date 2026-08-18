@@ -31,6 +31,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
     const schema = String(input?.workflow?.outputSchema || input?.outputSchema || "");
     const longSchemas = new Set([
       "PhaseActionConcept",
+      "OperationalTaskDraft",
       "ForceMissionPlan",
       "ConceptGraphicPlan",
       "ConceptMapInitialPlan",
@@ -63,6 +64,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
     const isOperationalConceptGraphic = input.workflow?.outputSchema === "OperationalConceptGraphic";
     const isConceptMapInitialPlan = input.workflow?.outputSchema === "ConceptMapInitialPlan";
     const isForceMissionPlan = input.workflow?.outputSchema === "ForceMissionPlan";
+    const isOperationalTaskDraft = input.workflow?.outputSchema === "OperationalTaskDraft";
     const isPhaseActionConcept = input.workflow?.outputSchema === "PhaseActionConcept";
     const isCombatFocusOptions = input.workflow?.outputSchema === "CombatFocusOptions";
     const isConceptGraphicPlan = input.workflow?.outputSchema === "ConceptGraphicPlan";
@@ -87,9 +89,13 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         '  "edges": [{ "id": "关系标识", "sourceId": "节点标识", "targetId": "节点标识", "type": "信息流|控制流|态势变化|反馈" }] }'
       ] : isCombatFocusOptions ? [
         '{ "options": [{ "id": "focus-1", "title": "作战聚焦名称（不超过12字）", "text": "该聚焦如何服务任务目标的作战语义说明（40-120字）" }, { "id": "focus-2", "title": "…", "text": "…" }, { "id": "focus-3", "title": "…", "text": "…" }] }'
+      ] : isOperationalTaskDraft ? [
+        '{ "tasks": [{ "id": "task-1", "name": "任务短名", "side": "friendly|hostile", "phaseId": "phase-1", "missionType": "recon",',
+        '  "area": { "name": "任务区域名称", "type": "patrol|prosecution|support|transit|target|exclusion|other", "geometryType": "point|circle|polygon|corridor", "coordinateSystem": "WGS84", "points": [{ "id": "point-1", "label": "参考点 1", "latitude": 0, "longitude": 0 }], "radiusNm": 0, "description": "区域用途", "basis": "坐标依据", "needsReview": true },',
+        '  "objective": "任务目的", "expectedEffect": "预期效果", "sourceAction": "对应的阶段行动", "notes": "复核说明" }], "openQuestions": ["待确认项"] }'
       ] : isForceMissionPlan ? [
-        '{ "forces": [{ "id": "p1-fusion", "name": "航迹融合与分批节点", "side": "friendly", "role": "sense", "group": "阶段名", "missionType": "recon", "task": "阶段语境+职责+可观察判据（40-120字）", "phaseIds": ["phase-1"], "notes": "" }],',
-        '  "combatForces": [{ "id": "combat-1", "name": "作战编组名", "side": "friendly", "role": "airDefense", "conceptForceId": "p1-fusion", "group": "作战编组", "missionType": "patrol_aaw", "task": "可执行任务", "platforms": [], "notes": "" }],',
+        '{ "forces": [{ "id": "p1-fusion", "name": "航迹融合与分批节点", "side": "friendly", "role": "sense", "group": "阶段名", "missionType": "recon", "task": "阶段语境+职责+可观察判据（40-120字）", "taskRefs": ["task-1"], "phaseIds": ["phase-1"], "notes": "" }],',
+        '  "combatForces": [{ "id": "combat-1", "name": "作战编组名", "side": "friendly", "role": "airDefense", "conceptForceId": "p1-fusion", "group": "作战编组", "missionType": "patrol_aaw", "task": "可执行任务", "taskRefs": ["task-1"], "phaseIds": ["phase-1"], "platforms": [], "notes": "" }],',
         '  "relations": [{ "fromForceId": "兵力标识", "toForceId": "兵力标识", "type": "command|support|coordination|information", "note": "说明" }],',
         '  "openQuestions": ["待确认项"], "reviewChecklist": ["复核提示"] }'
       ] : isPhaseActionConcept ? [
@@ -104,7 +110,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
       ] : isSequenceDraft ? [
         '{ "summary": "1-3 句中文答复（说明改了什么或回答咨询）",',
         '  "sequences": [{ "id": "sequence-1", "name": "时序图名称", "diagramType": "phase|task|force|general",',
-        '    "participants": [{ "id": "p1", "name": "参与方名", "ref": "兵力或阶段 id" }],',
+        '    "participants": [{ "id": "p1", "name": "参与方名", "refType": "phase|task|force|activity|object|other", "ref": "输入中对应类型的稳定 id" }],',
         '    "messages": [{ "id": "event-1", "sequence": 1, "fromRef": "p1", "toRef": "p2", "name": "消息名", "type": "message|response|status|exception|timeout", "condition": "触发条件", "relatedActivityRefs": ["阶段或活动 id"] }],',
         '    "fragments": [] }] }'
       ] : isStateMachineDraft ? [
@@ -170,6 +176,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         "时序校验要求：用 sequences[] 表达生命线（participants）与时间向下消息（messages）。",
         "若研究人员要求起草/增删改时序：必须返回非空 sequences，禁止只给文字建议。",
         "参与方表示实际发送、接收或处理消息的研究对象/兵力/系统节点，可按本轮事件关系自由确定；不得为了覆盖流程而把每个阶段强制建成参与方。",
+        "participant.refType/ref 必须成对使用，并精确匹配 analysis 中提供的 phase/task/force 等稳定来源 ID；不得根据名称猜测、改写或虚构引用。没有可靠来源时 refType 与 ref 都留空。",
         "diagramType 必须匹配研究意图：phase=阶段时序图，task=任务时序图，force=兵力作战时序图，无法判断时用 general。已有图修订时保持原 diagramType，除非用户明确要求转换。",
         "phase 类型突出阶段衔接、进入/退出条件与转换；task 类型突出任务/活动的先后、触发、依赖与协同；force 类型以作战兵力/系统为参与方，突出指挥、信息、协同与状态交互。三类均使用同一 participants/messages 数据结构。",
         "消息 fromRef/toRef 必须指向 participants.id。阶段与活动仅作为可选 relatedActivityRefs 回链，不要求逐阶段拆分消息或参与方。",
@@ -231,7 +238,19 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         "5. missionType 只能使用 analysis.cmoMissionTypes 的 id。",
         "6. 平台引用为研究级 CMO 类型参考（可进仿真编成表），不是射表/精确编制，但型号与数量应像可部署单元。",
         "7. relations：按需要给出作战层指挥/保障/信息链路。",
-        "8. 若 analysis.reviewNotes 非空，优先按批注调整当前分层。"
+        "8. 每个兵力的 taskRefs 必须引用 analysis.operationalTasks 中已有的稳定任务 id；不得根据任务名称另造 id。无法可靠承接任务时返回空数组并留待人工复核。",
+        "9. 若 analysis.reviewNotes 非空，优先按批注调整当前分层。"
+      ] : isOperationalTaskDraft ? [
+        "作战任务要求：把已确认的阶段行动转换为独立、可复核的任务成果。",
+        "1. 蓝红双方行动都要形成任务，side 与 phaseId 必须沿用 analysis.phaseAction，不得合并丢失。",
+        "2. missionType 只能使用 analysis.cmoMissionTypes 的 id，并选择最接近的 CMO 任务分类。",
+        "2a. name 必须是 6-18 个汉字的规范且全局唯一任务名称，使用“区域/对象/作战功能 + 任务”格式，如“北部警戒空中预警任务”“前沿节点指挥控制任务”“主航渡线电子对抗任务”；禁止重名，禁止把 T+时点、完整行动句、条件或效果塞进名称。",
+        "3. area.type 表达 CMO 式区域用途：patrol 巡逻区、prosecution 交战/追击区、support 支援区、transit 航渡走廊、target 目标区、exclusion 禁入区、other 其他。",
+        "4. geometryType 使用 point、circle、polygon 或 corridor；坐标系固定 WGS84。圆形区至少 1 个中心点并给 radiusNm；多边形至少 3 点；走廊至少 2 点。",
+        "5. 每项任务必须补齐 area.name/type/geometryType 和至少 1 个 WGS84 坐标点。优先使用 analysis.brief 或 phaseAction 的地理依据；只有模糊地域时，可基于公共地理常识形成研究候选，但 needsReview 必须为 true，basis 必须写明“AI 地理候选，待人工复核”。禁止给出真实军事设施精确坐标。",
+        "6. 经纬度是研究候选，保留 6 位小数；圆形区至少 1 点，多边形至少 3 点，走廊至少 2 点。basis 必须说明输入依据或候选性质，不能声称经过真实情报验证。",
+        "7. objective 与 expectedEffect 必须可观察、可复核，不写武器操作步骤、目标选择或真实作战指令。",
+        "8. 直接完成 JSON 草案；禁止输出工具调用、web_search、搜索请求、搜索占位、过程说明或把这些内容伪装成任务。"
       ] : []),
       ...(isPhaseActionConcept ? [
         "阶段与行动要求（专业 CONOPS 草案，供专家复核，不是科普叙述，也不是研究流程）：",
@@ -315,6 +334,8 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
             ? operationalConceptGraphicSchema()
             : isCombatFocusOptions
               ? combatFocusOptionsSchema()
+              : isOperationalTaskDraft
+                ? operationalTaskDraftSchema()
               : isForceMissionPlan
                 ? forceMissionPlanSchema()
                 : isPhaseActionConcept
@@ -323,6 +344,8 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
                   ? ruleLibraryChangeSetSchema()
                   : isRuleLibraryDraft
                   ? ruleLibraryDraftSchema()
+                  : isSequenceDraft
+                    ? sequenceDraftSchema()
                     : isStateMachineDraft
                       ? stateMachineDraftSchema()
                     : isConceptGraphicPlan
@@ -587,7 +610,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
           };
     }
 
-    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft") && draft && typeof draft === "object") {
+    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "OperationalTaskDraft" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft") && draft && typeof draft === "object") {
       base.result = draft;
     }
   
@@ -722,7 +745,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
     };
     const conceptForce = {
       type: "object", additionalProperties: false,
-      required: ["id", "name", "side", "role", "group", "missionType", "task", "phaseIds", "platforms", "notes"],
+      required: ["id", "name", "side", "role", "group", "missionType", "task", "taskRefs", "phaseIds", "platforms", "notes"],
       properties: {
         id: { type: "string", maxLength: 60 },
         name: { type: "string", maxLength: 120 },
@@ -731,6 +754,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         group: { type: "string", maxLength: 120 },
         missionType: { type: "string", enum: missionTypeEnum },
         task: { type: "string", maxLength: 400 },
+        taskRefs: { type: "array", maxItems: 24, items: { type: "string", maxLength: 60 } },
         phaseIds: { type: "array", minItems: 1, maxItems: 12, items: { type: "string", maxLength: 60 } },
         platforms: { type: "array", maxItems: 1, items: platform },
         notes: { type: "string", maxLength: 400 }
@@ -738,7 +762,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
     };
     const combatForce = {
       type: "object", additionalProperties: false,
-      required: ["id", "name", "side", "role", "conceptForceId", "group", "missionType", "task", "platforms", "notes"],
+      required: ["id", "name", "side", "role", "conceptForceId", "group", "missionType", "task", "taskRefs", "phaseIds", "platforms", "notes"],
       properties: {
         id: { type: "string", maxLength: 60 },
         name: { type: "string", maxLength: 120 },
@@ -748,6 +772,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         group: { type: "string", maxLength: 120 },
         missionType: { type: "string", enum: missionTypeEnum },
         task: { type: "string", maxLength: 400 },
+        taskRefs: { type: "array", maxItems: 24, items: { type: "string", maxLength: 60 } },
         phaseIds: { type: "array", maxItems: 12, items: { type: "string", maxLength: 60 } },
         platforms: { type: "array", maxItems: 6, items: platform },
         notes: { type: "string", maxLength: 400 }
@@ -761,6 +786,105 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey }) {
         relations: { type: "array", maxItems: 64, items: { type: "object", additionalProperties: false, required: ["fromForceId", "toForceId", "type", "note"], properties: { fromForceId: { type: "string", maxLength: 60 }, toForceId: { type: "string", maxLength: 60 }, type: { type: "string", enum: ["command", "support", "coordination", "information"] }, note: { type: "string", maxLength: 240 } } } },
         openQuestions: { type: "array", maxItems: 8, items: { type: "string", maxLength: 240 } },
         reviewChecklist: { type: "array", maxItems: 8, items: { type: "string", maxLength: 240 } }
+      }
+    };
+  }
+
+  function sequenceDraftSchema() {
+    return {
+      type: "object", additionalProperties: false, required: ["summary", "sequences"],
+      properties: {
+        summary: { type: "string", maxLength: 1000 },
+        sequences: {
+          type: "array", maxItems: 24,
+          items: {
+            type: "object", additionalProperties: false,
+            required: ["id", "name", "diagramType", "participants", "messages", "fragments"],
+            properties: {
+              id: { type: "string", maxLength: 180 },
+              name: { type: "string", maxLength: 240 },
+              diagramType: { type: "string", enum: ["phase", "task", "force", "general"] },
+              participants: {
+                type: "array", maxItems: 40,
+                items: {
+                  type: "object", additionalProperties: false,
+                  required: ["id", "name", "refType", "ref"],
+                  properties: {
+                    id: { type: "string", maxLength: 160 },
+                    name: { type: "string", maxLength: 240 },
+                    refType: { type: "string", enum: ["", "phase", "task", "force", "activity", "object", "other"] },
+                    ref: { type: "string", maxLength: 160 }
+                  }
+                }
+              },
+              messages: {
+                type: "array", maxItems: 200,
+                items: {
+                  type: "object", additionalProperties: false,
+                  required: ["id", "sequence", "fromRef", "toRef", "name", "type", "condition", "relatedActivityRefs"],
+                  properties: {
+                    id: { type: "string", maxLength: 180 },
+                    sequence: { type: "integer", minimum: 1, maximum: 1000 },
+                    fromRef: { type: "string", maxLength: 160 },
+                    toRef: { type: "string", maxLength: 160 },
+                    name: { type: "string", maxLength: 240 },
+                    type: { type: "string", enum: ["message", "response", "status", "exception", "timeout"] },
+                    condition: { type: "string", maxLength: 800 },
+                    relatedActivityRefs: { type: "array", maxItems: 12, items: { type: "string", maxLength: 160 } }
+                  }
+                }
+              },
+              fragments: { type: "array", maxItems: 0, items: { type: "string" } }
+            }
+          }
+        }
+      }
+    };
+  }
+
+  function operationalTaskDraftSchema() {
+    const missionTypes = [
+      "strike", "standoff_strike", "sead", "dead", "bai_cas", "intercept", "air_superiority",
+      "patrol_aaw", "patrol_asuw", "patrol_asw", "asw_attack", "recon", "aew", "ecm",
+      "escort", "support", "command", "ferry", "cargo", "tanker", "sar", "mining", "mcm",
+      "landing", "area_defense", "other"
+    ];
+    const point = {
+      type: "object", additionalProperties: false, required: ["id", "label", "latitude", "longitude"],
+      properties: {
+        id: { type: "string", maxLength: 60 },
+        label: { type: "string", maxLength: 80 },
+        latitude: { type: "number", minimum: -90, maximum: 90 },
+        longitude: { type: "number", minimum: -180, maximum: 180 }
+      }
+    };
+    return {
+      type: "object", additionalProperties: false, required: ["tasks", "openQuestions"],
+      properties: {
+        tasks: {
+          type: "array", minItems: 1, maxItems: 120,
+          items: {
+            type: "object", additionalProperties: false,
+            required: ["id", "name", "side", "phaseId", "missionType", "area", "objective", "expectedEffect", "sourceAction", "notes"],
+            properties: {
+              id: { type: "string", maxLength: 60 }, name: { type: "string", maxLength: 120 },
+              side: { type: "string", enum: ["friendly", "hostile"] }, phaseId: { type: "string", maxLength: 60 },
+              missionType: { type: "string", enum: missionTypes }, objective: { type: "string", maxLength: 500 },
+              expectedEffect: { type: "string", maxLength: 500 }, sourceAction: { type: "string", maxLength: 400 }, notes: { type: "string", maxLength: 500 },
+              area: {
+                type: "object", additionalProperties: false,
+                required: ["name", "type", "geometryType", "coordinateSystem", "points", "radiusNm", "description", "basis", "needsReview"],
+                properties: {
+                  name: { type: "string", maxLength: 160 }, type: { type: "string", enum: ["patrol", "prosecution", "support", "transit", "target", "exclusion", "other"] },
+                  geometryType: { type: "string", enum: ["point", "circle", "polygon", "corridor"] }, coordinateSystem: { type: "string", enum: ["WGS84"] },
+                  points: { type: "array", minItems: 1, maxItems: 24, items: point }, radiusNm: { type: "number", minimum: 0, maximum: 5000 },
+                  description: { type: "string", maxLength: 500 }, basis: { type: "string", maxLength: 500 }, needsReview: { type: "boolean" }
+                }
+              }
+            }
+          }
+        },
+        openQuestions: { type: "array", maxItems: 12, items: { type: "string", maxLength: 300 } }
       }
     };
   }

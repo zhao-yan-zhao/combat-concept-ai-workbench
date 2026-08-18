@@ -1,15 +1,21 @@
 export function buildOv5aModel({ ov5 } = {}) {
   const activities = Array.isArray(ov5?.activities) ? ov5.activities : [];
-  const byParent = new Map(activities.map((activity) => [String(activity.id), []]));
-  const roots = [];
-  activities.forEach((activity) => {
-    const parentId = String(activity.parentId || "");
-    if (parentId && byParent.has(parentId) && parentId !== activity.id) byParent.get(parentId).push(activity);
-    else roots.push(activity);
+  const activityIds = new Set(activities.map((activity) => String(activity.id)));
+  const decompositions = activities.flatMap((activity) => {
+    const childActivityRef = String(activity.id || "");
+    const parentActivityRef = String(activity.parentId || "");
+    if (!parentActivityRef || parentActivityRef === childActivityRef || !activityIds.has(parentActivityRef)) return [];
+    return [{ parentActivityRef, childActivityRef, status: "pending_review" }];
   });
-  const tree = roots.map((activity) => toTree(activity, byParent, new Set()));
-  const ungroupedCount = roots.length;
-  return { kind: "derived-ov5a-operational-activity-decomposition", generatedAt: new Date().toISOString(), tree, diagnostics: [check("activities", "活动来源", activities.length ? "ready" : "pending", activities.length ? `已从活动模型读取 ${activities.length} 项活动` : "尚未定义活动"), check("hierarchy", "活动分解", activities.length && ungroupedCount === activities.length ? "review" : activities.length ? "ready" : "pending", activities.length && ungroupedCount === activities.length ? "尚未设置父级活动；当前以并列活动显示" : activities.length ? "已识别活动分解关系" : "等待活动定义")] };
+  return {
+    kind: "derived-ov5a-operational-activity-decomposition",
+    generatedAt: new Date().toISOString(),
+    decompositions,
+    diagnostics: [
+      check("activities", "活动来源", activities.length ? "ready" : "pending", activities.length ? `已从活动模型读取 ${activities.length} 项活动引用` : "尚未定义活动"),
+      check("hierarchy", "活动分解", activities.length && !decompositions.length ? "review" : decompositions.length ? "ready" : "pending", activities.length && !decompositions.length ? "尚未设置父子活动关系；当前以并列活动显示" : decompositions.length ? `已识别 ${decompositions.length} 条活动分解关系` : "等待活动定义")
+    ]
+  };
 }
 
 export function buildOv6aModel({ ov5 } = {}) {
@@ -39,7 +45,6 @@ export function buildOv6bModel({ ooda } = {}) {
   return { kind: "derived-ov6b-state-transition", generatedAt: new Date().toISOString(), states, transitions, diagnostics: [check("states", "状态来源", states.length ? "ready" : "pending", states.length ? `已从 OODA 研究循环派生 ${states.length} 个状态` : "尚未定义 OODA 节点"), check("transitions", "状态转换", transitions.length ? "ready" : "review", transitions.length ? `已派生 ${transitions.length} 条状态转换` : "尚未形成可追溯转换")] };
 }
 
-function toTree(activity, byParent, visited) { const id = String(activity.id); if (visited.has(id)) return { id, title: label(activity), cycle: true, children: [] }; const next = new Set(visited); next.add(id); return { id, title: label(activity), type: clean(activity.type), children: (byParent.get(id) || []).map((child) => toTree(child, byParent, next)) }; }
 /** Seed rule body from activity text; activityId becomes a pending binding after normalize (not a create gate). */
 function rule(activity, type, text) {
   return {

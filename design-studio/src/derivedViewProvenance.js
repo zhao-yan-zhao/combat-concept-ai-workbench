@@ -69,15 +69,15 @@ const CATALOG = {
   },
   ov5a: {
     id: "ov5a",
-    title: "作战活动分解树",
+    title: "作战活动分解",
     dodaf: "研究级产品：活动层次分解。",
-    workbench: "工作台：可编辑持久化产品。与作战活动模型 Activity 双向同步（parentId / 标题 / 类型）。",
+    workbench: "工作台：可编辑持久化产品。仅保存 Activity 父子引用；活动标题、类型和正文由 OV5b 拥有。",
     sources: [
-      { view: "ov5", label: "作战活动模型", fields: "activities、parentId、title/type" }
+      { view: "ov5", label: "作战活动模型", fields: "activities.id、parentId" }
     ],
-    revise: "在本页改父级后保存会写回活动模型；在活动模型改 parentId 后可「从活动模型同步」。",
+    revise: "在本页调整父级后应用到 OV5b parentId；活动名称、类型与正文仍在 OV5b 修改。",
     reviseActions: [
-      { view: "ov5a", label: "编辑活动分解树" },
+      { view: "ov5a", label: "编辑活动分解关系" },
       { view: "ov5", label: "打开作战活动模型" }
     ]
   },

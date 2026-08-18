@@ -1,7 +1,13 @@
+import { normalizeForceMissionPlan } from "../../shared/conceptPlanning.js";
+
 const MAX_NODES = 48;
 const MAX_EXCHANGES = 160;
 
-export function buildOv2Model({ ov1, ov5, ooda, scenario } = {}) {
+export function buildOv2Model({ forceMission, ov1, ov5, ooda, scenario } = {}) {
+  const formalPlan = normalizeForceMissionPlan(forceMission);
+  if (formalPlan.forces.length || formalPlan.combatForces.length) {
+    return buildForceLinkedOv2(formalPlan);
+  }
   const sourceNodes = Array.isArray(ov1?.nodes) ? ov1.nodes.slice(0, MAX_NODES) : [];
   const activities = Array.isArray(ov5?.activities) ? ov5.activities : [];
   const edges = Array.isArray(ov5?.edges) ? ov5.edges : [];
@@ -92,6 +98,75 @@ export function buildOv2Model({ ov1, ov5, ooda, scenario } = {}) {
     exchanges,
     diagnostics,
     unresolved: { unmappedActivityIds, brokenEdgeIds }
+  };
+}
+
+function buildForceLinkedOv2(plan) {
+  const tasks = plan.tasks || [];
+  const taskIds = new Set(tasks.map((task) => task.id));
+  const forces = [
+    ...(plan.forces || []).map((force) => ({ ...force, layer: "concept" })),
+    ...(plan.combatForces || []).map((force) => ({ ...force, layer: "combat" }))
+  ].slice(0, MAX_NODES);
+  const forceById = new Map(forces.map((force) => [force.id, force]));
+  const brokenTaskRefs = [];
+  const nodes = forces.map((force) => {
+    const taskRefs = unique(force.taskRefs);
+    taskRefs.filter((ref) => !taskIds.has(ref)).forEach((ref) => brokenTaskRefs.push({ forceRef: force.id, taskRef: ref }));
+    return {
+      id: force.id,
+      label: clean(force.name, 160) || force.id,
+      detail: clean(force.task, 500),
+      sourceOv1NodeId: "",
+      forceRefs: [force.id],
+      taskRefs,
+      layer: force.layer,
+      activityIds: [],
+      activityCount: 0,
+      oodaCount: 0,
+      entityCount: (force.platforms || []).length
+    };
+  });
+  const exchanges = (plan.relations || []).slice(0, MAX_EXCHANGES).flatMap((relation) => {
+    const source = forceById.get(relation.fromForceId);
+    const target = forceById.get(relation.toForceId);
+    if (!source || !target || source.id === target.id) return [];
+    const taskRefs = unique([...(source.taskRefs || []), ...(target.taskRefs || [])]);
+    return [{
+      id: `ov2-${relation.id || stableId(`${source.id}:${target.id}:${relation.type}`)}`,
+      sourceNodeId: source.id,
+      targetNodeId: target.id,
+      sourceNodeLabel: source.name,
+      targetNodeLabel: target.name,
+      label: clean(relation.note, 240) || relation.type || "资源交换",
+      flowType: relation.type || "information",
+      sourceForceRef: source.id,
+      targetForceRef: target.id,
+      taskRefs,
+      sourceActivityId: "",
+      sourceActivityTitle: "",
+      targetActivityId: "",
+      targetActivityTitle: "",
+      input: clean(relation.note, 320),
+      output: clean(relation.note, 320)
+    }];
+  });
+  const linkedTaskIds = new Set(nodes.flatMap((node) => node.taskRefs).filter((ref) => taskIds.has(ref)));
+  const unassignedTaskIds = tasks.map((task) => task.id).filter((id) => !linkedTaskIds.has(id));
+  const diagnostics = [
+    check("operational-nodes", "兵力资源节点", nodes.length ? "ready" : "pending", nodes.length ? `已从作战兵力建立 ${nodes.length} 个资源节点` : "尚无可用作战兵力"),
+    check("task-ownership", "任务来源引用", unassignedTaskIds.length || brokenTaskRefs.length ? "review" : tasks.length ? "ready" : "pending", brokenTaskRefs.length ? `${brokenTaskRefs.length} 个任务引用失效` : unassignedTaskIds.length ? `${unassignedTaskIds.length} 个任务尚未进入资源节点` : tasks.length ? "全部正式任务均进入资源节点" : "尚无正式任务"),
+    check("node-exchanges", "兵力间资源交换", exchanges.length ? "ready" : "pending", exchanges.length ? `已从兵力关系建立 ${exchanges.length} 条资源交换` : "尚无可投影的兵力关系")
+  ];
+  return {
+    version: 2,
+    kind: "derived-ov2-force-resource-flow",
+    generatedAt: new Date().toISOString(),
+    source: { taskCount: tasks.length, forceCount: forces.length, forceRelationCount: (plan.relations || []).length },
+    nodes,
+    exchanges,
+    diagnostics,
+    unresolved: { unmappedActivityIds: [], brokenEdgeIds: [], unassignedTaskIds, brokenTaskRefs }
   };
 }
 

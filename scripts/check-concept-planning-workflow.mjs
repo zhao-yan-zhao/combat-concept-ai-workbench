@@ -14,6 +14,7 @@ import {
   createForceMissionPlanFromBrief,
   createOperationalTasksFromPhaseAction,
   createPhaseActionConceptFromBrief,
+  addOperationalTaskAreaPoint,
   forceMissionPlanIncompleteReasons,
   isConceptGraphicPlanConfirmed,
   isForceMissionPlanConfirmed,
@@ -21,7 +22,9 @@ import {
   normalizeConceptGraphicPlan,
   normalizeForceMissionPlan,
   normalizePhaseActionConcept,
-  phaseActionConceptIncompleteReasons
+  phaseActionConceptIncompleteReasons,
+  updateOperationalTaskArea,
+  updateOperationalTaskAreaPoint
 } from "../shared/conceptPlanning.js";
 import { getWorkflowStageIncompleteReasons } from "../design-studio/src/app/workflowGate.js";
 import { workflowStageByResource } from "../shared/workflowConfirmation.js";
@@ -35,8 +38,8 @@ const filePath = join(directory, "projects.json");
 try {
   assert(workflowStageByResource.phaseActionConcept === 1, "Phase-action resource must map to workflow stage 1");
   assert(workflowStageByResource.forceMissionPlan === 2, "Force-mission resource must map to workflow stage 2");
-  assert(workflowStageByResource.conceptMap === 3, "Concept-map resource must map to workflow stage 3");
-  assert(workflowPhases.includes("阶段行动") && workflowPhases.includes("兵力任务") && workflowPhases.includes("概念图"), "Workflow phases must include the five research steps");
+  assert(workflowStageByResource.ov1 === 4 && workflowStageByResource.conceptMap === 5, "Overall and concept-map resources must map to stages 4 and 5");
+  assert(workflowPhases.join(",") === "简报,阶段行动,作战任务,作战兵力,总体图,概念图,仿真演示", "Workflow phases must expose the seven-step mainline");
   assert(views.some((view) => view.id === "force-mission") && views.some((view) => view.id === "phase-action") && views.some((view) => view.id === "concept-map"), "Navigation must include planning views");
   assert(!views.some((view) => view.id === "concept-graphic"), "Concept-graphic should no longer appear as a navigation step");
 
@@ -50,7 +53,21 @@ try {
   const phaseConfirmed = confirmPhaseActionConcept(phaseDraft);
   assert(isPhaseActionConceptConfirmed(phaseConfirmed) && phaseActionConceptIncompleteReasons(phaseConfirmed).length === 0, "Confirmed phase action failed gate checks");
 
-  const taskDraft = confirmOperationalTasks(createOperationalTasksFromPhaseAction({}, phaseConfirmed));
+  let taskDraft = createOperationalTasksFromPhaseAction({}, phaseConfirmed);
+  for (const [index, task] of taskDraft.tasks.entries()) {
+    taskDraft = updateOperationalTaskArea(taskDraft, task.id, {
+      name: `测试任务区 ${index + 1}`,
+      type: "patrol",
+      geometryType: "point"
+    });
+    taskDraft = addOperationalTaskAreaPoint(taskDraft, task.id);
+    taskDraft = updateOperationalTaskAreaPoint(taskDraft, task.id, "point-1", {
+      label: "测试参考点",
+      latitude: 20 + index * 0.1,
+      longitude: 120 + index * 0.1
+    });
+  }
+  taskDraft = confirmOperationalTasks(taskDraft);
   const forceDraft = createForceMissionPlanFromBrief(brief, generateMockOutput({
     workflow: { id: "force-mission", title: "兵力与任务", outputSchema: "ForceMissionPlan" },
     analysis: { 任务目标: brief.objective, phaseAction: { phases: phaseConfirmed.phases } },
@@ -116,31 +133,33 @@ try {
     forceMission: loadedForce.model,
     forceMissionStorage: { stale: false }
   }, 2).length === 0, "Stage 2 should complete after force-mission confirmation");
-  const incompleteConcept = getWorkflowStageIncompleteReasons({
+  assert(getWorkflowStageIncompleteReasons({
+    forceMission: loadedForce.model,
+    forceMissionStorage: { stale: false }
+  }, 3).length === 0, "Stage 3 should complete after combat-force confirmation");
+  const incompleteOverall = getWorkflowStageIncompleteReasons({
     forceMission: loadedForce.model,
     forceMissionStorage: { stale: false },
     phaseAction: loadedPhase.model,
     phaseActionStorage: { stale: false },
     conceptGraphic: loadedGraphic.model,
     conceptGraphicStorage: { stale: false },
-    conceptMap: { document: { items: [] }, reference: { status: "empty" } },
-    conceptMapStorage: { stale: false },
-    ov1: { nodes: [] },
-    ov5: { activities: [], edges: [] },
-    ooda: { lanes: [] }
-  }, 3);
-  assert(incompleteConcept.some((item) => item.includes("概念图") || item.includes("活动") || item.includes("循环")), "Stage 3 should still require concept products");
-  const completeStage3 = getWorkflowStageIncompleteReasons({
+    ov1: { nodes: [], edges: [] },
+    ov1Storage: { stale: false }
+  }, 4);
+  assert(incompleteOverall.includes("总体图节点") && incompleteOverall.includes("总体图关系"), "Stage 4 should require the overall graph");
+  assert(getWorkflowStageIncompleteReasons({
+    ov1: { nodes: [{ id: "sense" }], edges: [{ id: "e1" }] },
+    ov1Storage: { stale: false }
+  }, 4).length === 0, "Stage 4 should complete after the overall graph is accepted");
+  const completeConceptMap = getWorkflowStageIncompleteReasons({
     conceptMap: {
       document: { items: [{ id: "m1" }] },
       reference: { status: "confirmed", entities: [{ id: "e1", label: "感知", role: "equipment" }] }
     },
-    conceptMapStorage: { stale: false },
-    ov1: { nodes: [{ id: "sense" }] },
-    ov5: { activities: [{ id: "a1" }], edges: [{ id: "e1" }] },
-    ooda: { lanes: [{ nodes: [{ id: "n1" }] }] }
-  }, 3);
-  assert(completeStage3.length === 0, "Stage 3 should complete after concept-map + overall graphic + activities + cycle");
+    conceptMapStorage: { stale: false }
+  }, 5);
+  assert(completeConceptMap.length === 0, "Stage 5 should complete after concept-map confirmation without requiring associated activity models");
 
   await reopened.saveBrief("planning-test", {
     direction: "test",

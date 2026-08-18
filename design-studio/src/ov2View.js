@@ -12,7 +12,7 @@ export function renderOv2(state) {
       <div class="section-heading">
         <div>
           <h2>作战资源流描述</h2>
-          <p>DoDAF 2.02 / DM2 可编辑产品（Needline / ResourceFlow）。可从 OV-1×OV-5 种子生成，保存后独立持久化。</p>
+          <p>DoDAF 2.02 / DM2 资源交换事实（Needline / ResourceFlow）。优先从正式任务、兵力及其关系生成并独立持久化。</p>
         </div>
         <span class="mini-tag">${source === "persisted" ? "已持久化" : "种子/草稿"} · DM2 制图</span>
       </div>
@@ -30,7 +30,7 @@ export function renderOv2(state) {
       <div class="ov2-summary"><span>${(model.nodes || []).length} 个节点</span><span>${(model.exchanges || []).length} 条交换</span><span>${(model.entities || []).length} 个 DM2 实体</span><span>${(model.relations || []).length} 条 DM2 关系</span></div>
       <label class="field-block"><span>产品备注</span><textarea data-dodaf-field="ov2.view.notes" rows="2">${escapeHtml(notes)}</textarea></label>
       <div class="ov2-layout">
-        <section><h3>作战节点 (Performer)</h3><div class="ov2-node-list dodaf-entity-grid">${(model.nodes || []).map((node) => renderEntityChip({ id: node.id, name: node.label, dm2Type: "Performer", detail: `${node.detail || "未填写说明"} · OV-5 ${node.activityCount || 0}` })).join("") || `<p class="report-empty">尚未定义作战节点。可从上游种子生成。</p>`}</div></section>
+        <section><h3>作战节点 (Performer)</h3><div class="ov2-node-list dodaf-entity-grid">${(model.nodes || []).map((node) => renderEntityChip({ id: node.id, name: node.label, dm2Type: "Performer", detail: `${node.detail || "未填写说明"} · 任务引用 ${(node.taskRefs || []).length}` })).join("") || `<p class="report-empty">尚未定义作战节点。可从上游种子生成。</p>`}</div></section>
         <section><h3>节点间交换 (Needline)</h3><div class="ov2-exchange-list">${(model.exchanges || []).map((exchange) => `
           <article class="ov2-exchange editable dodaf-exchange-card" data-ov2-exchange="${escapeHtml(exchange.id)}">
             <span>${escapeHtml(exchange.sourceNodeLabel || exchange.sourceNodeId)} <b>-></b> ${escapeHtml(exchange.targetNodeLabel || exchange.targetNodeId)}</span>
@@ -55,8 +55,8 @@ export function selectionForOv2Exchange(exchangeId, models) {
     title: `${exchange.sourceNodeLabel || exchange.sourceNodeId} -> ${exchange.targetNodeLabel || exchange.targetNodeId}`,
     status: "OV-2 Needline",
     text: "DoDAF 2.02 可编辑交换产品；保存后写入项目仓储。",
-    facts: [["交换内容", exchange.label], ["交换类型", exchange.flowType], ["来源活动", exchange.sourceActivityTitle], ["接收活动", exchange.targetActivityTitle]],
-    refs: [exchange.sourceActivityId, exchange.targetActivityId].filter(Boolean)
+    facts: [["交换内容", exchange.label], ["交换类型", exchange.flowType], ["发送兵力", exchange.sourceForceRef || exchange.sourceNodeLabel], ["接收兵力", exchange.targetForceRef || exchange.targetNodeLabel], ["关联任务", (exchange.taskRefs || []).join("、") || "未关联"], ["来源活动", exchange.sourceActivityTitle], ["接收活动", exchange.targetActivityTitle]],
+    refs: [exchange.sourceForceRef, exchange.targetForceRef, ...(exchange.taskRefs || []), exchange.sourceActivityId, exchange.targetActivityId].filter(Boolean)
   };
 }
 

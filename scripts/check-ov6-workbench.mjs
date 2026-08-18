@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import {
   addOv6aRule,
   addOv6bStateMachine,
@@ -14,15 +15,21 @@ import {
   removeOv6cSequence,
   inspectPhaseAgainstOv6,
   listActivityCandidates,
+  listForceAndPhaseSubjects,
+  listRuleBindingCandidates,
+  listStableReferenceCandidates,
   listStateMachineSubjects,
   diagnoseOv6bMachineLocal,
   seedOv6cFromPhase,
   setOv6aBindingStatus,
+  setOv6aObjectBindingStatus,
   toggleOv6aActivityBinding,
+  toggleOv6aObjectBinding,
   layoutSequenceGantt,
   formatSequenceClock
 } from "../design-studio/src/ov6Workbench.js";
 import { applyStateMachineDraft, buildStateMachineGenerationAnalysis } from "../design-studio/src/dodafProductController.js";
+import { applySequenceDraft } from "../design-studio/src/sequenceChatController.js";
 import { generateMockOutput } from "../shared/generator.js";
 import { renderOv6a, renderOv6b } from "../design-studio/src/dodafOperationalViews.js";
 import { renderOv6c, renderSequenceToolboxFloatButton } from "../design-studio/src/ov6cView.js";
@@ -70,6 +77,7 @@ const state = {
     edges: []
   },
   forceMission: {
+    tasks: [{ id: "task-sense", name: "态势保障任务", phaseId: "p1", objective: "形成持续态势" }],
     forces: [{ id: "force-sense", name: "感知单元", role: "sense", task: "持续汇聚态势" }, { id: "force-empty", name: "空对象" }],
     combatForces: [{ id: "combat-link", name: "链路保障组", role: "support", task: "维持链路可用" }]
   },
@@ -91,12 +99,25 @@ assert(!machineSubjects.some((item) => item.id === "force-empty"), "Forces witho
 assert(!machineSubjects.some((item) => item.id === "p1" || item.id === "p2"), "Phase containers must not automatically become state-machine subjects");
 assert(machineSubjects.find((item) => item.id === "p1::action-1")?.name.includes("感知 · 汇聚态势"), "Task candidates should retain visible phase context");
 assert(machineSubjects.find((item) => item.id === "p1::action-1")?.subjectType === "phase", "Phase-action candidates must be classified as 阶段机");
+assert(machineSubjects.find((item) => item.id === "task-sense")?.subjectType === "task", "Independent operational tasks must become task state-machine subjects");
+const ruleCandidates = listRuleBindingCandidates(state);
+assert(ruleCandidates.some((item) => item.type === "task" && item.ref === "task-sense"), "Rule binding candidates must include stable task refs");
+assert(ruleCandidates.some((item) => item.type === "force" && item.ref === "combat-link"), "Rule binding candidates must include concept and combat force refs");
+const stableRefs = listStableReferenceCandidates(state);
+assert(stableRefs.some((item) => item.refType === "phase" && item.ref === "p1") && stableRefs.some((item) => item.refType === "task" && item.ref === "task-sense") && stableRefs.some((item) => item.refType === "force" && item.ref === "force-sense"), "Sequence reference candidates must preserve phase/task/force types");
+const sequenceSubjects = listForceAndPhaseSubjects(state);
+assert(sequenceSubjects.find((item) => item.id === "p1")?.subjectType === "phase" && sequenceSubjects.find((item) => item.id === "task-sense")?.subjectType === "task" && sequenceSubjects.find((item) => item.id === "combat-link")?.subjectType === "force", "Sequence generation subjects must preserve phase/task/force identity");
 
 let ov6a = state.ov6a;
 ov6a = toggleOv6aActivityBinding(ov6a, "rule-1", "p1::action-1", { checked: true, status: "pending" });
 assert(ov6a.rules[0].activityBindings[0]?.activityRef === "p1::action-1", "Toggle binding should add activity");
 ov6a = setOv6aBindingStatus(ov6a, "rule-1", "p1::action-1", "verified");
 assert(ov6a.rules[0].reviewStatus === "verified", "Verified binding should update review status");
+ov6a = toggleOv6aObjectBinding(ov6a, "rule-1", "task", "task-sense", { checked: true, status: "pending" });
+ov6a = toggleOv6aObjectBinding(ov6a, "rule-1", "force", "force-sense", { checked: true, status: "verified" });
+assert(ov6a.rules[0].taskBindings[0]?.taskRef === "task-sense" && ov6a.rules[0].forceBindings[0]?.forceRef === "force-sense", "Rule task/force bindings must persist stable refs");
+ov6a = setOv6aObjectBindingStatus(ov6a, "rule-1", "task", "task-sense", "verified");
+assert(ov6a.rules[0].taskBindings[0]?.bindingStatus === "verified" && ov6a.rules[0].reviewStatus === "verified", "Task binding review must update rule status");
 ov6a = addOv6aRule(ov6a, { name: "窗口约束" });
 assert(ov6a.rules.length === 2 && ov6a.rules[1].reviewLabel === "待校验", "New rule starts unbound/待校验");
 const emptiedRules = clearOv6aRules({
@@ -120,7 +141,15 @@ assert(htmlA.includes("research-chat-panel") || htmlA.includes("rule-review-chat
 assert(htmlA.includes("ov6a-add-rule") && htmlA.includes("ov6a-delete-rule") && htmlA.includes("data-dodaf-field"), "Rule form CRUD controls missing");
 assert(htmlA.includes("ov6a-clear-all") && htmlA.includes("清空全部"), "Rule library must expose one-click clear-all");
 assert(htmlA.includes("close-rule-library-chat"), "Rule library chat close missing when open");
-assert(!htmlA.includes("ov6a-toggle-binding") && !htmlA.includes("ov6a-set-binding-status"), "Rule library must not offer binding controls");
+assert(htmlA.includes("ov6a-toggle-object-binding") && htmlA.includes("ov6a-set-object-binding-status"), "Rule library must expose lightweight task/force binding review controls");
+const htmlFocusedRule = renderOv6a({
+  ...state,
+  ov6a,
+  activeView: "ov6a",
+  relatedModelReturnContext: { mainViewId: "operational-task", relatedViewId: "ov6a", focusType: "task", focusId: "task-sense" }
+});
+assert(htmlFocusedRule.includes("当前对象") && htmlFocusedRule.includes("态势保障任务"), "Task entry context must open and focus the source task binding");
+assert(!htmlFocusedRule.includes("链路保障组"), "Task entry context must not mix unrelated force candidates into the binding editor");
 // With rules: one footer add; no duplicate empty-state add cluster
 assert((htmlA.match(/data-action="ov6a-add-rule"/g) || []).length === 1, "With rules, only one add-rule control expected");
 
@@ -344,6 +373,7 @@ assert(htmlC.includes("seq-page") && htmlC.includes("seq-workbench"), "Sequence 
 assert(htmlC.includes("ov6c-canvas") && htmlC.includes("seq-gantt") && htmlC.includes("is-interactive") && htmlC.includes("态势上报"), "Interactive sequence canvas missing");
 assert(htmlC.includes("seq-message-name-input") && htmlC.includes("ov6c-move-message"), "Message edit controls missing");
 assert(htmlC.includes("seq-participant-panel") && htmlC.includes("ov6c-participant-field"), "Participant dock controls missing");
+assert(htmlC.includes('data-ref-type="task"') && htmlC.includes('data-ref-type="force"') && !htmlC.includes('placeholder="对象引用"'), "Participant references must use typed source selectors instead of free text");
 assert(htmlC.includes("ov6c-sequence-field") && htmlC.includes("兵力作战时序图"), "Sequence type selector missing");
 assert(!htmlC.includes("seq-participant-strip") && !htmlC.includes("ov6c-connect-pick"), "Participant controls should not occupy the timeline canvas");
 assert(htmlC.includes("seq-gantt-bar") && htmlC.includes("offsetMinutes") && htmlC.includes("甘特图"), "Gantt timeline chrome missing");
@@ -409,6 +439,34 @@ assert(copied.sequences[0].messages.length === 2 && copied.sequences[0].messages
 const seeded = seedOv6cFromPhase({ sequences: [] }, state);
 assert((seeded.sequences || []).length >= 1, "Phase seed should create a sequence");
 assert((seeded.sequences[0].messages || []).length >= 1, "Phase seed should create messages");
+assert(seeded.sequences[0].participants.every((item) => item.refType === "force" && item.ref), "Phase seed force participants must retain typed stable refs");
+
+const generatedSequence = generateMockOutput({
+  workflow: { id: "sequence-check", title: "时序校验", outputSchema: "SequenceDraft" },
+  analysis: { phases: state.phaseAction.phases, forces: state.forceMission.forces },
+  evidence: []
+});
+assert(generatedSequence.result.sequences[0].participants.some((item) => item.refType === "force" && item.ref === "force-sense"), "Local SequenceDraft generation must emit typed force refs");
+const generatedPhaseSequence = generateMockOutput({
+  workflow: { id: "sequence-check", title: "时序校验", outputSchema: "SequenceDraft" },
+  analysis: { phases: state.phaseAction.phases, forces: [] },
+  evidence: []
+});
+assert(generatedPhaseSequence.result.sequences[0].participants.some((item) => item.refType === "phase" && item.ref === "p1"), "Local SequenceDraft generation must emit typed phase refs");
+
+const appliedSequence = applySequenceDraft({ sequences: [] }, {
+  sequences: [{
+    id: "typed-sequence", name: "稳定引用时序", diagramType: "task",
+    participants: [
+      { id: "task-line", name: "态势保障任务", refType: "task", ref: "task-sense" },
+      { id: "invalid-line", name: "未知对象", refType: "invented", ref: "unknown-ref" }
+    ],
+    messages: [{ id: "typed-message", fromRef: "task-line", toRef: "missing-line", name: "协同", type: "message", condition: "", relatedActivityRefs: [] }]
+  }]
+}, { mutation: true });
+assert(appliedSequence.model.sequences[0].participants.find((item) => item.id === "task-line")?.refType === "task", "AI sequence application must preserve valid typed refs");
+assert(appliedSequence.model.sequences[0].participants.find((item) => item.id === "invalid-line")?.refType === "", "AI sequence application must reject unknown ref types");
+assert(appliedSequence.model.sequences[0].participants.find((item) => item.id === "missing-line")?.refType === "", "Synthetic participant rows must not invent source types");
 
 let leftover = addOv6cSequence({ sequences: [] }, { name: "待删序列" });
 leftover = addOv6cMessage(leftover, leftover.sequences[0].id, { name: "待删消息" });
@@ -455,5 +513,13 @@ assert(reverse.some((item) => item.code === "sequence-message-without-activity")
 const review = buildStructureReview(broken);
 assert(review.issues.some((item) => item.code === "phase-activity-without-rule"), "Structure review should surface reverse-check issues");
 assert(review.issues.some((item) => item.code === "sequence-message-without-activity"), "Structure review should surface message source issues");
+
+const productControllerSource = await readFile(new URL("../design-studio/src/dodafProductController.js", import.meta.url), "utf8");
+assert(productControllerSource.includes('action === "ov6a-toggle-object-binding"') && productControllerSource.includes("toggleOv6aObjectBinding"), "Controller must persist task/force binding toggles");
+assert(productControllerSource.includes("selectedOptions?.[0]?.dataset?.refType") && productControllerSource.includes("patch.refType"), "Controller must persist typed sequence participant refs");
+const sequenceChatSource = await readFile(new URL("../design-studio/src/sequenceChatController.js", import.meta.url), "utf8");
+assert(sequenceChatSource.includes("refType: item.refType") && sequenceChatSource.includes("refType: subject.subjectType") && sequenceChatSource.includes("compactTasks(state.forceMission)"), "Sequence chat must carry typed refs through prompt compaction and local drafts");
+const openAiClientSource = await readFile(new URL("../server/openaiClient.mjs", import.meta.url), "utf8");
+assert(openAiClientSource.includes("? sequenceDraftSchema()") && openAiClientSource.includes('required: ["id", "name", "refType", "ref"]') && openAiClientSource.includes("不得根据名称猜测"), "Real AI SequenceDraft must enforce typed stable refs in schema and instructions");
 
 console.log("OV-6 workbench acceptance passed: binding editor, multi machines, sequence canvas, reverse checks.");

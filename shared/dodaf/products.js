@@ -141,6 +141,236 @@ export function normalizeDodafOv1(value) {
   return envelope;
 }
 
+export function normalizeDodafOv1b(value) {
+  const seenIds = new Set();
+  const seenPairs = new Set();
+  const decompositions = (Array.isArray(value?.decompositions) ? value.decompositions : [])
+    .slice(0, 320)
+    .flatMap((item, index) => {
+      const parentTaskRef = clean(item?.parentTaskRef || item?.parentTaskId, 160);
+      const childTaskRef = clean(item?.childTaskRef || item?.childTaskId || item?.taskRef || item?.taskId, 160);
+      if (!parentTaskRef || !childTaskRef || parentTaskRef === childTaskRef) return [];
+      const pair = `${parentTaskRef}::${childTaskRef}`;
+      if (seenPairs.has(pair)) return [];
+      seenPairs.add(pair);
+      let id = clean(item?.id, 180) || `task-decomposition-${index + 1}`;
+      if (seenIds.has(id)) id = stableId("task-decomposition", pair, index + 1);
+      seenIds.add(id);
+      const status = ["pending_review", "confirmed", "stale", "conflict"].includes(clean(item?.status, 40))
+        ? clean(item.status, 40)
+        : item?.confirmedAt
+          ? "confirmed"
+          : "pending_review";
+      return [{
+        id,
+        parentTaskRef,
+        childTaskRef,
+        relationType: "decomposes",
+        rationale: clean(item?.rationale || item?.note, 1200),
+        status,
+        confirmedAt: clean(item?.confirmedAt, 80),
+        sourceRefs: normalizeSourceRefs(item?.sourceRefs, [
+          { resource: "forceMissionPlan", objectId: parentTaskRef },
+          { resource: "forceMissionPlan", objectId: childTaskRef }
+        ])
+      }];
+    });
+
+  const relations = decompositions.map((item) => ({
+    id: item.id,
+    dm2Type: "wholePart",
+    sourceId: item.parentTaskRef,
+    targetId: item.childTaskRef,
+    name: "task decomposes into task",
+    properties: { status: item.status, rationale: item.rationale }
+  }));
+
+  return createProductEnvelope({
+    product: "OV-1b",
+    architectureId: value?.architectureId,
+    entities: [],
+    relations,
+    view: value?.view,
+    provenance: normalizeProvenanceObject(value?.provenance),
+    derivedFrom: value?.derivedFrom,
+    extra: {
+      version: 1,
+      kind: "persisted-ov1b-task-decomposition",
+      generatedAt: nowIso(value?.generatedAt),
+      status: ["draft", "pending_review", "confirmed", "stale", "conflict"].includes(clean(value?.status, 40))
+        ? clean(value.status, 40)
+        : decompositions.some((item) => item.status !== "confirmed")
+          ? "pending_review"
+          : decompositions.length
+            ? "confirmed"
+            : "draft",
+      decompositions,
+      diagnostics: normalizeDiagnostics(value?.diagnostics)
+    }
+  });
+}
+
+export function normalizeDodafOv1c(value) {
+  const seenIds = new Set();
+  const seenTasks = new Set();
+  const inputMappings = [];
+  const inputByTask = new Map();
+  (Array.isArray(value?.mappings) ? value.mappings : []).slice(0, 320).forEach((item) => {
+    const taskRef = clean(item?.taskRef || item?.taskId, 160);
+    if (!taskRef) return;
+    const current = inputByTask.get(taskRef);
+    if (current) {
+      current.activityRefs = uniqueIds([...(current.activityRefs || current.activityIds || []), ...(item?.activityRefs || item?.activityIds || [])], 120);
+      current.sourceRefs = [...(current.sourceRefs || []), ...(item?.sourceRefs || [])];
+      return;
+    }
+    const merged = { ...item, taskRef };
+    inputByTask.set(taskRef, merged);
+    inputMappings.push(merged);
+  });
+  const mappings = inputMappings
+    .slice(0, 320)
+    .flatMap((item, index) => {
+      const taskRef = clean(item?.taskRef || item?.taskId, 160);
+      if (!taskRef || seenTasks.has(taskRef)) return [];
+      seenTasks.add(taskRef);
+      const activityRefs = uniqueIds(item?.activityRefs || item?.activityIds, 120);
+      let id = clean(item?.id, 180) || `task-activity-mapping-${index + 1}`;
+      if (seenIds.has(id)) id = stableId("task-activity-mapping", taskRef, index + 1);
+      seenIds.add(id);
+      const judgment = ["pending", "accepted", "rejected"].includes(clean(item?.judgment, 40)) ? clean(item.judgment, 40) : "pending";
+      const status = ["pending_review", "confirmed", "stale", "conflict"].includes(clean(item?.status, 40))
+        ? clean(item.status, 40)
+        : judgment === "accepted" && activityRefs.length ? "confirmed" : "pending_review";
+      const coverageStatus = ["unmapped", "partial", "covered", "conflict"].includes(clean(item?.coverageStatus, 40))
+        ? clean(item.coverageStatus, 40)
+        : activityRefs.length ? "covered" : "unmapped";
+      return [{
+        id,
+        taskRef,
+        activityRefs,
+        coverageStatus,
+        judgment,
+        status,
+        note: clean(item?.note || item?.rationale, 1200),
+        confirmedAt: clean(item?.confirmedAt, 80),
+        sourceRefs: normalizeSourceRefs(item?.sourceRefs, [
+          { resource: "forceMissionPlan", objectId: taskRef },
+          ...activityRefs.map((objectId) => ({ resource: "ov5", objectId }))
+        ])
+      }];
+    });
+  const relations = mappings.flatMap((item) => item.activityRefs.map((activityRef, index) => ({
+    id: `${item.id}-activity-${index + 1}`,
+    dm2Type: "relationship",
+    sourceId: item.taskRef,
+    targetId: activityRef,
+    name: "task realized by activity",
+    properties: { mappingId: item.id, coverageStatus: item.coverageStatus, judgment: item.judgment, status: item.status }
+  })));
+  return createProductEnvelope({
+    product: "OV-1c",
+    architectureId: value?.architectureId,
+    entities: [],
+    relations,
+    view: value?.view,
+    provenance: normalizeProvenanceObject(value?.provenance),
+    derivedFrom: value?.derivedFrom,
+    extra: {
+      version: 1,
+      kind: "persisted-ov1c-task-activity-mapping",
+      generatedAt: nowIso(value?.generatedAt),
+      status: normalizeMappingProductStatus(value?.status, mappings),
+      mappings,
+      coverage: normalizeMappingCoverage(value?.coverage),
+      diagnostics: normalizeDiagnostics(value?.diagnostics)
+    }
+  });
+}
+
+export function normalizeDodafOv7(value) {
+  const seenIds = new Set();
+  const seenSources = new Set();
+  const inputMappings = [];
+  const inputBySource = new Map();
+  (Array.isArray(value?.mappings) ? value.mappings : []).slice(0, 480).forEach((item) => {
+    const subjectType = clean(item?.subjectType || item?.sourceType, 40);
+    const sourceType = subjectType === "transition" ? "transition" : subjectType === "state" ? "state" : "";
+    const sourceRef = clean(item?.sourceRef || item?.stateRef || item?.transitionRef || item?.stateTransitionRef, 180);
+    const sourceKey = `${sourceType}:${sourceRef}`;
+    if (!sourceType || !sourceRef) return;
+    const current = inputBySource.get(sourceKey);
+    if (current) {
+      current.activityRefs = uniqueIds([...(current.activityRefs || current.activityIds || []), ...(item?.activityRefs || item?.activityIds || [])], 120);
+      current.sourceRefs = [...(current.sourceRefs || []), ...(item?.sourceRefs || [])];
+      return;
+    }
+    const merged = { ...item, subjectType: sourceType, sourceRef };
+    inputBySource.set(sourceKey, merged);
+    inputMappings.push(merged);
+  });
+  const mappings = inputMappings
+    .slice(0, 480)
+    .flatMap((item, index) => {
+      const subjectType = clean(item?.subjectType || item?.sourceType, 40);
+      const sourceType = subjectType === "transition" ? "transition" : subjectType === "state" ? "state" : "";
+      const sourceRef = clean(item?.sourceRef || item?.stateRef || item?.transitionRef || item?.stateTransitionRef, 180);
+      const sourceKey = `${sourceType}:${sourceRef}`;
+      if (!sourceType || !sourceRef || seenSources.has(sourceKey)) return [];
+      seenSources.add(sourceKey);
+      const activityRefs = uniqueIds(item?.activityRefs || item?.activityIds, 120);
+      let id = clean(item?.id, 180) || `state-activity-mapping-${index + 1}`;
+      if (seenIds.has(id)) id = stableId("state-activity-mapping", sourceKey, index + 1);
+      seenIds.add(id);
+      const semantic = ["triggers", "executes", "ends"].includes(clean(item?.semantic, 40)) ? clean(item.semantic, 40) : "executes";
+      const judgment = ["pending", "accepted", "rejected"].includes(clean(item?.judgment, 40)) ? clean(item.judgment, 40) : "pending";
+      const status = ["pending_review", "confirmed", "stale", "conflict"].includes(clean(item?.status, 40))
+        ? clean(item.status, 40)
+        : judgment === "accepted" && activityRefs.length ? "confirmed" : "pending_review";
+      return [{
+        id,
+        subjectType: sourceType,
+        sourceRef,
+        activityRefs,
+        semantic,
+        judgment,
+        status,
+        note: clean(item?.note || item?.rationale, 1200),
+        confirmedAt: clean(item?.confirmedAt, 80),
+        sourceRefs: normalizeSourceRefs(item?.sourceRefs, [
+          { resource: "ov6b", objectId: sourceRef },
+          ...activityRefs.map((objectId) => ({ resource: "ov5", objectId }))
+        ])
+      }];
+    });
+  const relations = mappings.flatMap((item) => item.activityRefs.map((activityRef, index) => ({
+    id: `${item.id}-activity-${index + 1}`,
+    dm2Type: "relationship",
+    sourceId: item.sourceRef,
+    targetId: activityRef,
+    name: `state ${item.semantic} activity`,
+    properties: { mappingId: item.id, subjectType: item.subjectType, semantic: item.semantic, judgment: item.judgment, status: item.status }
+  })));
+  return createProductEnvelope({
+    product: "OV-7",
+    architectureId: value?.architectureId,
+    entities: [],
+    relations,
+    view: value?.view,
+    provenance: normalizeProvenanceObject(value?.provenance),
+    derivedFrom: value?.derivedFrom,
+    extra: {
+      version: 1,
+      kind: "persisted-ov7-state-activity-mapping",
+      generatedAt: nowIso(value?.generatedAt),
+      status: normalizeMappingProductStatus(value?.status, mappings),
+      mappings,
+      coverage: normalizeMappingCoverage(value?.coverage),
+      diagnostics: normalizeDiagnostics(value?.diagnostics)
+    }
+  });
+}
+
 export function normalizeDodafOv5(value) {
   const inputActivities = Array.isArray(value?.activities) ? value.activities.slice(0, 80) : [];
   let activities = inputActivities.map((activity, index) => normalizeActivity(activity, index));
@@ -268,7 +498,10 @@ export function normalizeDodafOv2(value) {
       id,
       label: clean(node?.label || node?.name, 160) || id,
       detail: clean(node?.detail || node?.description, 800),
-      sourceOv1NodeId: clean(node?.sourceOv1NodeId || id, 160),
+      sourceOv1NodeId: node?.sourceOv1NodeId === undefined ? id : clean(node.sourceOv1NodeId, 160),
+      forceRefs: uniqueIds(node?.forceRefs, 24),
+      taskRefs: uniqueIds(node?.taskRefs, 60),
+      layer: clean(node?.layer, 40),
       activityIds: uniqueIds(node?.activityIds, 60),
       activityCount: clampNumber(node?.activityCount, 0, 10000, uniqueIds(node?.activityIds, 60).length),
       oodaCount: clampNumber(node?.oodaCount, 0, 10000, 0),
@@ -284,6 +517,9 @@ export function normalizeDodafOv2(value) {
     targetNodeLabel: clean(exchange?.targetNodeLabel, 160),
     label: clean(exchange?.label, 400) || "Needline",
     flowType: clean(exchange?.flowType, 120) || "信息流",
+    sourceForceRef: clean(exchange?.sourceForceRef, 160),
+    targetForceRef: clean(exchange?.targetForceRef, 160),
+    taskRefs: uniqueIds(exchange?.taskRefs, 60),
     sourceActivityId: clean(exchange?.sourceActivityId, 160),
     sourceActivityTitle: clean(exchange?.sourceActivityTitle, 240),
     targetActivityId: clean(exchange?.targetActivityId, 160),
@@ -300,6 +536,9 @@ export function normalizeDodafOv2(value) {
       description: node.detail,
       properties: {
         sourceOv1NodeId: node.sourceOv1NodeId,
+        forceRefs: node.forceRefs,
+        taskRefs: node.taskRefs,
+        layer: node.layer,
         activityIds: node.activityIds,
         activityCount: node.activityCount,
         oodaCount: node.oodaCount,
@@ -315,6 +554,9 @@ export function normalizeDodafOv2(value) {
         flowType: exchange.flowType,
         sourceNodeId: exchange.sourceNodeId,
         targetNodeId: exchange.targetNodeId,
+        sourceForceRef: exchange.sourceForceRef,
+        targetForceRef: exchange.targetForceRef,
+        taskRefs: exchange.taskRefs,
         sourceActivityId: exchange.sourceActivityId,
         targetActivityId: exchange.targetActivityId,
         input: exchange.input,
@@ -342,7 +584,7 @@ export function normalizeDodafOv2(value) {
     relations,
     view: value?.view,
     provenance: normalizeProvenanceObject(value?.provenance),
-    derivedFrom: value?.derivedFrom || value?.kind ? { mode: "seeded", sources: ["ov1", "ov5"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null,
+    derivedFrom: value?.derivedFrom || value?.kind ? { mode: "seeded", sources: String(value?.kind || "").includes("force") ? ["forceMissionPlan"] : ["ov1", "ov5"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null,
     extra: {
       version: 1,
       kind: "persisted-ov2-operational-exchange",
@@ -363,6 +605,9 @@ export function normalizeDodafOv3(value) {
   }));
   const exchanges = (Array.isArray(value?.exchanges) ? value.exchanges : []).slice(0, 240).map((exchange, index) => ({
     id: clean(exchange?.id, 180) || `ov3-exchange-${index + 1}`,
+    sourceExchangeRef: clean(exchange?.sourceExchangeRef || exchange?.ov2ExchangeRef || exchange?.id, 180),
+    sourceNodeId: clean(exchange?.sourceNodeId, 160),
+    targetNodeId: clean(exchange?.targetNodeId, 160),
     sourceActivityId: clean(exchange?.sourceActivityId, 160),
     sourceActivityTitle: clean(exchange?.sourceActivityTitle, 240),
     targetActivityId: clean(exchange?.targetActivityId, 160),
@@ -403,7 +648,7 @@ export function normalizeDodafOv3(value) {
     relations,
     view: value?.view,
     provenance: normalizeProvenanceObject(value?.provenance),
-    derivedFrom: value?.derivedFrom || value?.kind ? { mode: "seeded", sources: ["ov5"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null,
+    derivedFrom: value?.derivedFrom || value?.kind ? { mode: "projection", sources: ["ov2"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null,
     extra: {
       version: 1,
       kind: "persisted-ov3-resource-exchange",
@@ -422,6 +667,9 @@ export function normalizeDodafOv4(value) {
     id: clean(role?.id, 160) || `ov4-role-${index + 1}`,
     label: clean(role?.label || role?.name, 160) || `Role ${index + 1}`,
     detail: clean(role?.detail || role?.description, 800),
+    forceRefs: uniqueIds(role?.forceRefs, 24),
+    taskRefs: uniqueIds(role?.taskRefs, 60),
+    layer: clean(role?.layer, 40),
     activityIds: uniqueIds(role?.activityIds, 60),
     activityCount: clampNumber(role?.activityCount, 0, 10000, uniqueIds(role?.activityIds, 60).length),
     oodaCount: clampNumber(role?.oodaCount, 0, 10000, 0),
@@ -437,6 +685,8 @@ export function normalizeDodafOv4(value) {
     targetRoleId: clean(relation?.targetRoleId || relation?.targetId, 160),
     targetRoleLabel: clean(relation?.targetRoleLabel, 160),
     relationshipType: clean(relation?.relationshipType || relation?.name || relation?.type, 120) || "coordination",
+    sourceForceRef: clean(relation?.sourceForceRef, 160),
+    targetForceRef: clean(relation?.targetForceRef, 160),
     sourceActivityId: clean(relation?.sourceActivityId, 160),
     sourceActivityTitle: clean(relation?.sourceActivityTitle, 240),
     targetActivityId: clean(relation?.targetActivityId, 160),
@@ -495,7 +745,7 @@ export function normalizeDodafOv4(value) {
     relations: dm2Relations,
     view: value?.view,
     provenance: normalizeProvenanceObject(value?.provenance),
-    derivedFrom: value?.derivedFrom || value?.kind ? { mode: "seeded", sources: ["ov1", "ov5"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null,
+    derivedFrom: value?.derivedFrom || value?.kind ? { mode: "seeded", sources: String(value?.kind || "").includes("force") ? ["forceMissionPlan"] : ["ov1", "ov5"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null,
     extra: {
       version: 1,
       kind: "persisted-ov4-abstract-responsibility",
@@ -511,36 +761,52 @@ export function normalizeDodafOv4(value) {
 }
 
 export function normalizeDodafOv5a(value) {
-  const tree = normalizeTree(value?.tree || value?.nodes, 0);
-  const flat = flattenTree(tree);
-  const entities = flat.map((node, index) => normalizeDm2Entity({
-    id: node.id,
-    dm2Type: "Activity",
-    name: node.title,
-    description: node.type,
-    properties: { parentId: node.parentId || "", type: node.type }
-  }, index, "Activity"));
-  const relations = flat.filter((node) => node.parentId).map((node) => ({
-    id: `part-${node.id}`,
+  const legacyTree = normalizeTree(value?.tree || value?.nodes, 0);
+  const legacyDecompositions = flattenTree(legacyTree)
+    .filter((node) => node.parentId)
+    .map((node) => ({ parentActivityRef: node.parentId, childActivityRef: node.id }));
+  const inputDecompositions = Array.isArray(value?.decompositions) ? value.decompositions : legacyDecompositions;
+  const childRefs = new Set();
+  const decompositions = inputDecompositions.slice(0, 240).flatMap((item, index) => {
+    const parentActivityRef = clean(item?.parentActivityRef || item?.parentRef || item?.parentId, 160);
+    const childActivityRef = clean(item?.childActivityRef || item?.childRef || item?.childId, 160);
+    if (!parentActivityRef || !childActivityRef || parentActivityRef === childActivityRef || childRefs.has(childActivityRef)) return [];
+    childRefs.add(childActivityRef);
+    const status = clean(item?.status, 40);
+    return [{
+      id: clean(item?.id, 180) || `ov5a-${stableId(`${parentActivityRef}:${childActivityRef}`)}`,
+      parentActivityRef,
+      childActivityRef,
+      rationale: clean(item?.rationale, 800),
+      status: ["pending_review", "confirmed", "conflict"].includes(status) ? status : "pending_review",
+      confirmedAt: clean(item?.confirmedAt, 80),
+      sourceRefs: normalizeSourceRefs(item?.sourceRefs, [
+        { resource: "ov5", objectId: parentActivityRef, revision: item?.derivedFromRevision },
+        { resource: "ov5", objectId: childActivityRef, revision: item?.derivedFromRevision }
+      ])
+    }];
+  });
+  const relations = decompositions.map((item) => ({
+    id: item.id,
     dm2Type: "activityPartOfActivity",
-    sourceId: node.id,
-    targetId: node.parentId,
+    sourceId: item.childActivityRef,
+    targetId: item.parentActivityRef,
     name: "part-of",
-    properties: {}
+    properties: { status: item.status, sourceRefs: item.sourceRefs }
   }));
   return createProductEnvelope({
     product: "OV-5a",
     architectureId: value?.architectureId,
-    entities,
+    entities: [],
     relations,
     view: value?.view,
     provenance: normalizeProvenanceObject(value?.provenance),
     derivedFrom: value?.derivedFrom || value?.kind ? { mode: "seeded", sources: ["ov5"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null,
     extra: {
-      version: 1,
+      version: 2,
       kind: "persisted-ov5a-operational-activity-decomposition",
       generatedAt: nowIso(value?.generatedAt),
-      tree,
+      decompositions,
       diagnostics: normalizeDiagnostics(value?.diagnostics)
     }
   });
@@ -560,10 +826,15 @@ function resolveOv6bSubjectType(subjectType, subjectRef) {
 const OV6B_STATE_KINDS = ["initial", "normal", "decision", "final"];
 const OV6C_MESSAGE_TYPES = ["message", "response", "status", "exception", "timeout"];
 const OV6C_FRAGMENT_KINDS = ["alt", "loop", "par", "break", "opt"];
+const OV6C_PARTICIPANT_REF_TYPES = ["phase", "task", "force", "activity", "object", "other"];
 
 /** Rule status for UI: unbound rules are 待校验, not invalid. */
 export function ov6aRuleReviewStatus(rule) {
-  const bindings = Array.isArray(rule?.activityBindings) ? rule.activityBindings : [];
+  const bindings = [
+    ...(Array.isArray(rule?.activityBindings) ? rule.activityBindings : []),
+    ...(Array.isArray(rule?.taskBindings) ? rule.taskBindings : []),
+    ...(Array.isArray(rule?.forceBindings) ? rule.forceBindings : [])
+  ];
   if (!bindings.length) return "pending-validation";
   if (bindings.some((item) => item.bindingStatus === "stale")) return "stale";
   if (bindings.every((item) => item.bindingStatus === "verified")) return "verified";
@@ -606,6 +877,14 @@ function normalizeOv6aRule(rule, index) {
     .map(normalizeOv6aPhaseBinding)
     .filter((item, itemIndex, list) => item.phaseRef && list.findIndex((candidate) => candidate.phaseRef === item.phaseRef) === itemIndex)
     .slice(0, 24);
+  const taskBindings = (Array.isArray(rule?.taskBindings) ? rule.taskBindings : [])
+    .map((item) => normalizeOv6aObjectBinding(item, "task"))
+    .filter((item, itemIndex, list) => item.taskRef && list.findIndex((candidate) => candidate.taskRef === item.taskRef) === itemIndex)
+    .slice(0, 40);
+  const forceBindings = (Array.isArray(rule?.forceBindings) ? rule.forceBindings : [])
+    .map((item) => normalizeOv6aObjectBinding(item, "force"))
+    .filter((item, itemIndex, list) => item.forceRef && list.findIndex((candidate) => candidate.forceRef === item.forceRef) === itemIndex)
+    .slice(0, 40);
   // Legacy single activityId → one pending/verified binding (not a create-time requirement).
   const legacyActivityId = clean(rule?.activityId, 160);
   if (legacyActivityId && !activityBindings.some((item) => item.activityRef === legacyActivityId)) {
@@ -615,7 +894,7 @@ function normalizeOv6aRule(rule, index) {
     ].slice(0, 40);
   }
   const id = clean(rule?.id, 180) || `rule-${index + 1}`;
-  const reviewStatus = ov6aRuleReviewStatus({ activityBindings });
+  const reviewStatus = ov6aRuleReviewStatus({ activityBindings, taskBindings, forceBindings });
   return {
     id,
     name,
@@ -624,6 +903,8 @@ function normalizeOv6aRule(rule, index) {
     type,
     activityBindings,
     phaseBindings,
+    taskBindings,
+    forceBindings,
     reviewStatus,
     reviewLabel: ov6aRuleReviewLabel(reviewStatus),
     // Legacy UI aliases
@@ -635,7 +916,9 @@ function normalizeOv6aRule(rule, index) {
 
 function buildOv6aDiagnostics(rules, provided) {
   const diagnostics = normalizeDiagnostics(provided);
-  const unbound = rules.filter((rule) => !rule.activityBindings.length).length;
+  const hasBinding = (rule) => ["phaseBindings", "activityBindings", "taskBindings", "forceBindings"]
+    .some((field) => Array.isArray(rule[field]) && rule[field].length > 0);
+  const unbound = rules.filter((rule) => !hasBinding(rule)).length;
   const bound = rules.length - unbound;
   if (!diagnostics.some((item) => item.id === "rules")) {
     diagnostics.push({
@@ -643,16 +926,16 @@ function buildOv6aDiagnostics(rules, provided) {
       label: "规则库",
       state: rules.length ? "ready" : "review",
       statusLabel: rules.length ? "已建立" : "需复核",
-      detail: rules.length ? `已有 ${rules.length} 条规则（绑定 ${bound} · 待校验 ${unbound}）` : "尚未建立规则；可先独立建规则库，不必绑定活动"
+      detail: rules.length ? `已有 ${rules.length} 条规则（绑定 ${bound} · 待校验 ${unbound}）` : "尚未建立规则；可先独立建规则库，再按阶段、任务、兵力或活动复核绑定"
     });
   }
   if (unbound > 0 && !diagnostics.some((item) => item.id === "bindings-pending")) {
     diagnostics.push({
       id: "bindings-pending",
-      label: "活动绑定",
+      label: "关联绑定",
       state: "review",
       statusLabel: "待校验",
-      detail: `${unbound} 条规则尚未绑定活动；未绑定不等于规则无效，可在阶段校验时补绑定`
+      detail: `${unbound} 条规则尚未绑定阶段、任务、兵力或活动；未绑定不等于规则无效，可在关联模型入口复核`
     });
   }
   return diagnostics.slice(0, 40);
@@ -670,8 +953,10 @@ export function normalizeDodafOv6a(value) {
       scope: rule.scope,
       reviewStatus: rule.reviewStatus,
       activityId: rule.activityId,
-      activityBindings: rule.activityBindings,
-      phaseBindings: rule.phaseBindings
+      activityBindings: rule.activityBindings.map((binding) => `${binding.activityRef}|${binding.bindingStatus}`),
+      phaseBindings: rule.phaseBindings.map((binding) => binding.phaseRef),
+      taskBindings: rule.taskBindings.map((binding) => `${binding.taskRef}|${binding.bindingStatus}`),
+      forceBindings: rule.forceBindings.map((binding) => `${binding.forceRef}|${binding.bindingStatus}`)
     }
   }, index, "Rule"));
   const activityRelations = rules.flatMap((rule) => rule.activityBindings.map((binding, index) => ({
@@ -690,7 +975,23 @@ export function normalizeDodafOv6a(value) {
     name: "applies during",
     properties: { bindingType: "phase" }
   })));
-  const relations = [...activityRelations, ...phaseRelations]
+  const taskRelations = rules.flatMap((rule) => rule.taskBindings.map((binding, index) => ({
+    id: `${rule.id}-task-${index + 1}`,
+    dm2Type: "constrains",
+    sourceId: rule.id,
+    targetId: binding.taskRef,
+    name: binding.constraintNote || "constrains task",
+    properties: { bindingType: "task", bindingStatus: binding.bindingStatus }
+  })));
+  const forceRelations = rules.flatMap((rule) => rule.forceBindings.map((binding, index) => ({
+    id: `${rule.id}-force-${index + 1}`,
+    dm2Type: "constrains",
+    sourceId: rule.id,
+    targetId: binding.forceRef,
+    name: binding.constraintNote || "constrains force",
+    properties: { bindingType: "force", bindingStatus: binding.bindingStatus }
+  })));
+  const relations = [...activityRelations, ...phaseRelations, ...taskRelations, ...forceRelations]
     .filter((item) => item.sourceId && item.targetId)
     .slice(0, 480);
 
@@ -987,10 +1288,13 @@ export function normalizeDodafOv6b(value) {
 }
 
 function normalizeOv6cParticipant(item, index) {
+  const ref = clean(item?.ref || item?.sourceNodeId || item?.objectId, 160);
+  const refType = clean(item?.refType || item?.sourceType, 40);
   return {
     id: clean(item?.id, 160) || `participant-${index + 1}`,
     name: clean(item?.name || item?.label, 240) || `参与方 ${index + 1}`,
-    ref: clean(item?.ref || item?.sourceNodeId || item?.objectId, 160)
+    ref,
+    refType: ref && OV6C_PARTICIPANT_REF_TYPES.includes(refType) ? refType : ""
   };
 }
 
@@ -1194,6 +1498,8 @@ export function normalizeArchitecture(value) {
   const inputProducts = value?.products && typeof value.products === "object" ? value.products : {};
   for (const [product, resourceKey] of Object.entries({
     "OV-1": "ov1",
+    "OV-1b": "ov1b",
+    "OV-1c": "ov1c",
     "OV-2": "ov2",
     "OV-3": "ov3",
     "OV-4": "ov4",
@@ -1201,7 +1507,8 @@ export function normalizeArchitecture(value) {
     "OV-5b": "ov5",
     "OV-6a": "ov6a",
     "OV-6b": "ov6b",
-    "OV-6c": "ov6c"
+    "OV-6c": "ov6c",
+    "OV-7": "ov7"
   })) {
     const payload = inputProducts[product] || inputProducts[resourceKey];
     if (!payload) continue;
@@ -1226,6 +1533,8 @@ export function normalizeArchitecture(value) {
 export function normalizeProductByName(product, value) {
   switch (product) {
     case "OV-1": return normalizeDodafOv1(value);
+    case "OV-1b": return normalizeDodafOv1b(value);
+    case "OV-1c": return normalizeDodafOv1c(value);
     case "OV-2": return normalizeDodafOv2(value);
     case "OV-3": return normalizeDodafOv3(value);
     case "OV-4": return normalizeDodafOv4(value);
@@ -1234,6 +1543,7 @@ export function normalizeProductByName(product, value) {
     case "OV-6a": return normalizeDodafOv6a(value);
     case "OV-6b": return normalizeDodafOv6b(value);
     case "OV-6c": return normalizeDodafOv6c(value);
+    case "OV-7": return normalizeDodafOv7(value);
     default: throw new Error(`Unsupported DoDAF product: ${product}`);
   }
 }
@@ -1296,6 +1606,50 @@ function normalizeProvenanceObject(value) {
   };
 }
 
+function normalizeOv6aObjectBinding(value, refType) {
+  const status = clean(value?.bindingStatus || value?.status, 40);
+  const refField = `${refType}Ref`;
+  const idField = `${refType}Id`;
+  return {
+    [refField]: clean(typeof value === "string" ? value : value?.[refField] || value?.[idField] || value?.ref, 160),
+    bindingStatus: OV6A_BINDING_STATUSES.includes(status) ? status : "pending",
+    constraintNote: clean(value?.constraintNote || value?.note, 800)
+  };
+}
+
+function normalizeSourceRefs(values, fallback = []) {
+  const refs = Array.isArray(values) && values.length ? values : fallback;
+  const seen = new Set();
+  return refs.slice(0, 16).flatMap((item) => {
+    const resource = clean(item?.resource, 80);
+    const objectId = clean(item?.objectId || item?.id, 160);
+    const key = `${resource}:${objectId}`;
+    if (!resource || !objectId || seen.has(key)) return [];
+    seen.add(key);
+    return [{ resource, objectId, revision: clampNumber(item?.revision, 0, 1000000000, 0) }];
+  });
+}
+
+function normalizeMappingProductStatus(value, mappings) {
+  const status = clean(value, 40);
+  if (mappings.some((item) => item.status === "conflict")) return "conflict";
+  if (["draft", "pending_review", "confirmed", "stale", "conflict"].includes(status)) return status;
+  if (!mappings.length) return "draft";
+  if (mappings.every((item) => item.status === "confirmed")) return "confirmed";
+  return "pending_review";
+}
+
+function normalizeMappingCoverage(value) {
+  return {
+    unmappedTaskRefs: uniqueIds(value?.unmappedTaskRefs, 320),
+    unmappedSourceRefs: uniqueIds(value?.unmappedSourceRefs, 480),
+    uncoveredActivityRefs: uniqueIds(value?.uncoveredActivityRefs, 320),
+    orphanTaskRefs: uniqueIds(value?.orphanTaskRefs, 320),
+    orphanSourceRefs: uniqueIds(value?.orphanSourceRefs, 480),
+    orphanActivityRefs: uniqueIds(value?.orphanActivityRefs, 320)
+  };
+}
+
 function normalizeSourceSummary(value) {
   if (!value || typeof value !== "object") return {};
   return Object.entries(value).slice(0, 20).reduce((result, [key, item]) => {
@@ -1312,7 +1666,7 @@ function normalizeDiagnostics(value) {
   return (Array.isArray(value) ? value : []).slice(0, 40).map((item, index) => ({
     id: clean(item?.id, 160) || `diagnostic-${index + 1}`,
     label: clean(item?.label, 240) || "Check",
-    state: ["ready", "review", "pending", "attention"].includes(clean(item?.state, 40)) ? clean(item.state, 40) : "pending",
+    state: ["ready", "review", "pending", "attention", "conflict"].includes(clean(item?.state, 40)) ? clean(item.state, 40) : "pending",
     statusLabel: clean(item?.statusLabel, 120),
     detail: clean(item?.detail, 1600)
   }));

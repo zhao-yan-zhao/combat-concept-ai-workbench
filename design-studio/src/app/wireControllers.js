@@ -135,7 +135,8 @@ export function wireControllers({
   applyResearchChatBriefUpdate,
   restoreSnapshot,
   exportModelComparison,
-  hydrateProjectDirectory
+  hydrateProjectDirectory,
+  completeCurrentWorkflowStage
 }) {
   const refreshWorkflowConfirmation = () => hydrateProjectDirectory();
 
@@ -546,10 +547,7 @@ export function wireControllers({
     downloadArtifact,
     projectTitle: () => project.title || activeProjectId,
     onReferenceConfirmed: async () => {
-      state.activeView = "ov1";
-      state.selection = null;
-      render();
-      showToast("概念图已确认，请继续高层作战概念图");
+      await completeCurrentWorkflowStage?.();
     }
   });
 
@@ -598,25 +596,29 @@ export function wireControllers({
       state.forceMissionChatOpen = true;
     },
     onOperationalTasksConfirmed: async () => {
-      state.activeView = "force-mission";
-      render();
-      await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
+      await completeCurrentWorkflowStage?.();
     },
     onPhaseActionConfirmed: async () => {
-      // Phase chain: after phase confirm → rule binding / state / sequence, not force yet.
-      state.activeView = "ov6a";
-      render();
-      await ruleLibraryChatController.proposeChanges("phase-action", { silent: false });
-      // Force generation deferred until the 阶段行动 stage is completed (gate), not here.
+      await ruleLibraryChatController.proposeChanges("phase-action", { silent: true });
+      await completeCurrentWorkflowStage?.();
     },
     onForceMissionConfirmed: async () => {
-      await ruleLibraryChatController.proposeChanges("force-mission", { silent: false });
-      state.activeView = "concept-map";
-      render();
-      // Deterministic seed only (no AI on concept-map step).
-      if (typeof conceptMapController.seedFromPlanning === "function") {
-        await conceptMapController.seedFromPlanning({ silent: false });
+      await ruleLibraryChatController.proposeChanges("force-mission", { silent: true });
+      const seeded = saveOv1Model(createAiOv1Draft({
+        brief: state.brief,
+        direction: state.direction,
+        forceMission: state.forceMission
+      }));
+      state.ov1 = seeded;
+      state.ov1Candidate = null;
+      state.selection = null;
+      invalidateValidation();
+      try {
+        await projectOv1SyncController.sync(state.ov1, { source: "force-mission:seed-ov1" });
+      } catch {
+        /* local seed remains available */
       }
+      await completeCurrentWorkflowStage?.();
     },
     onConceptGraphicConfirmed: async (_graphic, ov1Draft) => {
       const seeded = saveOv1Model(createAiOv1Draft({

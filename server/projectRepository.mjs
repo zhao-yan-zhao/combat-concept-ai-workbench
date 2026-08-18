@@ -13,6 +13,8 @@ import {
   normalizeConceptGraphicPlan as normalizeProjectConceptGraphicPlan,
   normalizeModelSnapshotInput as normalizeProjectModelSnapshot,
   normalizeOv1 as normalizeProjectOv1,
+  normalizeOv1b as normalizeProjectOv1b,
+  normalizeOv1c as normalizeProjectOv1c,
   normalizeOv2 as normalizeProjectOv2,
   normalizeOv3 as normalizeProjectOv3,
   normalizeOv4 as normalizeProjectOv4,
@@ -20,6 +22,7 @@ import {
   normalizeOv6a as normalizeProjectOv6a,
   normalizeOv6b as normalizeProjectOv6b,
   normalizeOv6c as normalizeProjectOv6c,
+  normalizeOv7 as normalizeProjectOv7,
   normalizeOoda as normalizeProjectOoda,
   normalizeOv5 as normalizeProjectOv5,
   normalizeReportArchiveInput as normalizeProjectReportArchive,
@@ -35,6 +38,7 @@ import { getCollaborationPolicy, requireCollaborationActor } from "./projectColl
 import { getProjectWriteActor } from "./projectWriteAuditActor.mjs";
 import { createSensitiveCitationApproval, normalizeSensitiveCitationApprovals, revokeSensitiveCitationApproval } from "./projectKnowledgeCitationPolicy.mjs";
 import { earliestWorkflowStage, workflowStageForResource } from "../shared/workflowConfirmation.js";
+import { normalizeWorkflowProgress } from "../shared/workflowProgress.js";
 
 const BRIEF_FIELDS = ["researchIntent", "objective", "approach", "assumptions", "expectedEffects", "risk"];
 const MAX_AUDIT_ENTRIES = 200;
@@ -42,8 +46,8 @@ const MAX_REPORT_ARCHIVES = 20;
 const MAX_MODEL_SNAPSHOTS = 12;
 const MAX_COLLABORATION_REVIEWS = 160;
 const MAX_COLLABORATION_DECISIONS = 160;
-const COLLABORATION_RESOURCES = new Set(["brief", "forceMissionPlan", "phaseActionConcept", "conceptMap", "conceptGraphicPlan", "ov1", "ov2", "ov3", "ov4", "ov5a", "ov5", "ov6a", "ov6b", "ov6c", "architecture", "ooda", "scenario", "validation", "knowledge", "report"]);
-const OV_MODEL_RESOURCES = ["ov1", "ov2", "ov3", "ov4", "ov5a", "ov5", "ov6a", "ov6b", "ov6c", "architecture"];
+const COLLABORATION_RESOURCES = new Set(["brief", "forceMissionPlan", "phaseActionConcept", "conceptMap", "conceptGraphicPlan", "ov1", "ov1b", "ov1c", "ov2", "ov3", "ov4", "ov5a", "ov5", "ov6a", "ov6b", "ov6c", "ov7", "architecture", "ooda", "scenario", "validation", "knowledge", "report"]);
+const OV_MODEL_RESOURCES = ["ov1", "ov1b", "ov1c", "ov2", "ov3", "ov4", "ov5a", "ov5", "ov6a", "ov6b", "ov6c", "ov7", "architecture"];
 
 export function createFileProjectRepository({ filePath, databasePath = "", now = () => new Date().toISOString(), knowledgeRetrievalMode = "hybrid", externalVectorAdapter = null }) {
   if (!filePath) throw new Error("Project repository file path is required");
@@ -145,6 +149,22 @@ export function createFileProjectRepository({ filePath, databasePath = "", now =
 
     saveOv1(projectId, input = {}) {
       return saveModelResource(projectId, input, "ov1");
+    },
+
+    getOv1b(projectId) {
+      return readModelRecord(projectId, "ov1b");
+    },
+
+    saveOv1b(projectId, input = {}) {
+      return saveModelResource(projectId, input, "ov1b");
+    },
+
+    getOv1c(projectId) {
+      return readModelRecord(projectId, "ov1c");
+    },
+
+    saveOv1c(projectId, input = {}) {
+      return saveModelResource(projectId, input, "ov1c");
     },
 
     getForceMissionPlan(projectId) {
@@ -283,6 +303,14 @@ export function createFileProjectRepository({ filePath, databasePath = "", now =
       return saveModelResource(projectId, input, "ov6c");
     },
 
+    getOv7(projectId) {
+      return readModelRecord(projectId, "ov7");
+    },
+
+    saveOv7(projectId, input = {}) {
+      return saveModelResource(projectId, input, "ov7");
+    },
+
     getArchitecture(projectId) {
       return readModelRecord(projectId, "architecture");
     },
@@ -297,7 +325,7 @@ export function createFileProjectRepository({ filePath, databasePath = "", now =
       const catalog = normalizeProjectCatalog(state.projectCatalog, state.projects);
       const meta = catalog[projectId] || { id: projectId, title: projectId };
       const products = {};
-      for (const key of ["ov1", "ov2", "ov3", "ov4", "ov5a", "ov5", "ov6a", "ov6b", "ov6c"]) {
+      for (const key of ["ov1", "ov1b", "ov1c", "ov2", "ov3", "ov4", "ov5a", "ov5", "ov6a", "ov6b", "ov6c", "ov7"]) {
         if (current?.[key]?.model) products[key] = current[key].model;
       }
       const packageModel = buildArchitectureExchangePackage({
@@ -586,7 +614,7 @@ export function createFileProjectRepository({ filePath, databasePath = "", now =
       ].slice(0, MAX_AUDIT_ENTRIES);
       const next = { ...current, revision, updatedAt, [resourceKey]: resource, audit };
       state.projects[projectId] = next;
-      invalidateProjectWorkflow(state, projectId, workflowStageForResource(resourceKey));
+      invalidateProjectWorkflow(state, projectId, workflowStageForResource(resourceKey, input.source));
       await persistState(state);
       return toModelResponse(projectId, next, resourceKey);
     });
@@ -911,6 +939,8 @@ function createProjectPersistence({ filePath, databasePath }) {
     "conceptGraphicPlan",
     "researchChats",
     "ov1",
+    "ov1b",
+    "ov1c",
     "ov2",
     "ov3",
     "ov4",
@@ -919,6 +949,7 @@ function createProjectPersistence({ filePath, databasePath }) {
     "ov6a",
     "ov6b",
     "ov6c",
+    "ov7",
     "architecture",
     "ooda",
     "scenario",
@@ -1082,7 +1113,8 @@ function normalizeProjectMeta(value, timestamp) {
 }
 
 function normalizeWorkflow(value) {
-  return { mode: value?.mode === "free" ? "free" : "gated", completedThrough: Math.max(-1, Math.min(4, Number.isInteger(Number(value?.completedThrough)) ? Number(value.completedThrough) : -1)), updatedAt: clean(value?.updatedAt, 80) };
+  const workflow = normalizeWorkflowProgress(value);
+  return { version: workflow.version, mode: workflow.mode, completedThrough: workflow.completedThrough, updatedAt: clean(value?.updatedAt, 80) };
 }
 
 function invalidateProjectWorkflow(state, projectId, changedStage) {
@@ -1401,6 +1433,11 @@ function reviewContextCounts(resource, model) {
   if (resource === "conceptMap") return { primaryCount: Number(model.summary?.itemCount || 0), secondaryCount: String(model.context || "").length ? 1 : 0 };
   if (resource === "conceptGraphicPlan") return { primaryCount: Array.isArray(model.nodes) ? model.nodes.length : 0, secondaryCount: Array.isArray(model.edges) ? model.edges.length : 0 };
   if (resource === "ov1") return { primaryCount: Array.isArray(model.nodes) ? model.nodes.length : 0, secondaryCount: Array.isArray(model.edges) ? model.edges.length : 0 };
+  if (resource === "ov1b") return { primaryCount: Array.isArray(model.decompositions) ? model.decompositions.length : 0, secondaryCount: 0 };
+  if (resource === "ov1c" || resource === "ov7") return {
+    primaryCount: Array.isArray(model.mappings) ? model.mappings.length : 0,
+    secondaryCount: Array.isArray(model.mappings) ? model.mappings.filter((item) => item.status === "conflict").length : 0
+  };
   if (resource === "ov5") return { primaryCount: Array.isArray(model.activities) ? model.activities.length : 0, secondaryCount: Array.isArray(model.edges) ? model.edges.length : 0 };
   if (resource === "ooda") return { primaryCount: (Array.isArray(model.lanes) ? model.lanes : []).reduce((count, lane) => count + (lane.nodes?.length || 0), 0), secondaryCount: Array.isArray(model.lanes) ? model.lanes.length : 0 };
   if (resource === "scenario") return { primaryCount: Array.isArray(model.entities) ? model.entities.length : 0, secondaryCount: Array.isArray(model.timeline) ? model.timeline.length : 0 };
@@ -1542,14 +1579,39 @@ function getResourceDefinition(resourceKey) {
         || Number(resource?.conceptGraphicPlanRevision || 0) !== Number(record?.conceptGraphicPlan?.resourceRevision || 0),
       summarize: (model) => `${model.nodes?.length || model.entities?.length || 0} nodes / ${model.edges?.length || model.relations?.length || 0} edges`
     },
+    ov1b: {
+      normalize: normalizeProjectOv1b,
+      getLineage: (record) => ({
+        briefRevision: Number(record?.briefRevision || 0),
+        forceMissionPlanRevision: Number(record?.forceMissionPlan?.resourceRevision || 0),
+        phaseActionConceptRevision: Number(record?.phaseActionConcept?.resourceRevision || 0)
+      }),
+      isStale: (resource, record) => Number(resource?.forceMissionPlanRevision || 0) !== Number(record?.forceMissionPlan?.resourceRevision || 0)
+        || Number(resource?.phaseActionConceptRevision || 0) !== Number(record?.phaseActionConcept?.resourceRevision || 0),
+      summarize: (model) => `${model.decompositions?.length || 0} task decompositions`
+    },
+    ov1c: {
+      normalize: normalizeProjectOv1c,
+      getLineage: (record) => ({
+        forceMissionPlanRevision: Number(record?.forceMissionPlan?.resourceRevision || 0),
+        ov1bRevision: Number(record?.ov1b?.resourceRevision || 0),
+        ov5Revision: Number(record?.ov5?.resourceRevision || 0)
+      }),
+      isStale: (resource, record) => Number(resource?.forceMissionPlanRevision || 0) !== Number(record?.forceMissionPlan?.resourceRevision || 0)
+        || Number(resource?.ov1bRevision || 0) !== Number(record?.ov1b?.resourceRevision || 0)
+        || Number(resource?.ov5Revision || 0) !== Number(record?.ov5?.resourceRevision || 0),
+      summarize: (model) => `${model.mappings?.length || 0} task/activity mappings`
+    },
     ov2: {
       normalize: normalizeProjectOv2,
       getLineage: (record) => ({
         briefRevision: Number(record?.briefRevision || 0),
+        forceMissionPlanRevision: Number(record?.forceMissionPlan?.resourceRevision || 0),
         ov1Revision: Number(record?.ov1?.resourceRevision || 0),
         ov5Revision: Number(record?.ov5?.resourceRevision || 0)
       }),
-      isStale: (resource, record) => Number(resource?.ov1Revision || 0) !== Number(record?.ov1?.resourceRevision || 0)
+      isStale: (resource, record) => Number(resource?.forceMissionPlanRevision || 0) !== Number(record?.forceMissionPlan?.resourceRevision || 0)
+        || Number(resource?.ov1Revision || 0) !== Number(record?.ov1?.resourceRevision || 0)
         || Number(resource?.ov5Revision || 0) !== Number(record?.ov5?.resourceRevision || 0),
       summarize: (model) => `${model.nodes?.length || 0} nodes / ${model.exchanges?.length || 0} exchanges`
     },
@@ -1557,19 +1619,22 @@ function getResourceDefinition(resourceKey) {
       normalize: normalizeProjectOv3,
       getLineage: (record) => ({
         briefRevision: Number(record?.briefRevision || 0),
-        ov5Revision: Number(record?.ov5?.resourceRevision || 0)
+        ov2Revision: Number(record?.ov2?.resourceRevision || 0)
       }),
-      isStale: (resource, record) => Number(resource?.ov5Revision || 0) !== Number(record?.ov5?.resourceRevision || 0),
+      isStale: (resource, record) => Number(resource?.ov2Revision || 0) !== Number(record?.ov2?.resourceRevision || 0)
+        || getResourceDefinition("ov2").isStale(record?.ov2 || {}, record),
       summarize: (model) => `${model.exchanges?.length || 0} exchanges`
     },
     ov4: {
       normalize: normalizeProjectOv4,
       getLineage: (record) => ({
         briefRevision: Number(record?.briefRevision || 0),
+        forceMissionPlanRevision: Number(record?.forceMissionPlan?.resourceRevision || 0),
         ov1Revision: Number(record?.ov1?.resourceRevision || 0),
         ov5Revision: Number(record?.ov5?.resourceRevision || 0)
       }),
-      isStale: (resource, record) => Number(resource?.ov1Revision || 0) !== Number(record?.ov1?.resourceRevision || 0)
+      isStale: (resource, record) => Number(resource?.forceMissionPlanRevision || 0) !== Number(record?.forceMissionPlan?.resourceRevision || 0)
+        || Number(resource?.ov1Revision || 0) !== Number(record?.ov1?.resourceRevision || 0)
         || Number(resource?.ov5Revision || 0) !== Number(record?.ov5?.resourceRevision || 0),
       summarize: (model) => `${model.roles?.length || 0} roles / ${model.relations?.length || 0} relations`
     },
@@ -1617,6 +1682,18 @@ function getResourceDefinition(resourceKey) {
       isStale: (resource, record) => Number(resource?.oodaRevision || 0) !== Number(record?.ooda?.resourceRevision || 0)
         || Number(resource?.scenarioRevision || 0) !== Number(record?.scenario?.resourceRevision || 0),
       summarize: (model) => `${model.events?.length || 0} events`
+    },
+    ov7: {
+      normalize: normalizeProjectOv7,
+      getLineage: (record) => ({
+        ov5Revision: Number(record?.ov5?.resourceRevision || 0),
+        ov6bRevision: Number(record?.ov6b?.resourceRevision || 0),
+        ov6cRevision: Number(record?.ov6c?.resourceRevision || 0)
+      }),
+      isStale: (resource, record) => Number(resource?.ov5Revision || 0) !== Number(record?.ov5?.resourceRevision || 0)
+        || Number(resource?.ov6bRevision || 0) !== Number(record?.ov6b?.resourceRevision || 0)
+        || Number(resource?.ov6cRevision || 0) !== Number(record?.ov6c?.resourceRevision || 0),
+      summarize: (model) => `${model.mappings?.length || 0} state/activity mappings`
     },
     architecture: {
       normalize: normalizeProjectArchitecture,
@@ -1730,6 +1807,8 @@ function getCurrentLineage(record) {
     conceptMapRevision: Number(record?.conceptMap?.resourceRevision || 0),
     conceptGraphicPlanRevision: Number(record?.conceptGraphicPlan?.resourceRevision || 0),
     ov1Revision: Number(record?.ov1?.resourceRevision || 0),
+    ov1bRevision: Number(record?.ov1b?.resourceRevision || 0),
+    ov1cRevision: Number(record?.ov1c?.resourceRevision || 0),
     ov2Revision: Number(record?.ov2?.resourceRevision || 0),
     ov3Revision: Number(record?.ov3?.resourceRevision || 0),
     ov4Revision: Number(record?.ov4?.resourceRevision || 0),
@@ -1738,6 +1817,7 @@ function getCurrentLineage(record) {
     ov6aRevision: Number(record?.ov6a?.resourceRevision || 0),
     ov6bRevision: Number(record?.ov6b?.resourceRevision || 0),
     ov6cRevision: Number(record?.ov6c?.resourceRevision || 0),
+    ov7Revision: Number(record?.ov7?.resourceRevision || 0),
     architectureRevision: Number(record?.architecture?.resourceRevision || 0),
     oodaRevision: Number(record?.ooda?.resourceRevision || 0),
     scenarioRevision: Number(record?.scenario?.resourceRevision || 0),
@@ -1753,6 +1833,8 @@ function getStoredLineage(resource) {
     "conceptMapRevision",
     "conceptGraphicPlanRevision",
     "ov1Revision",
+    "ov1bRevision",
+    "ov1cRevision",
     "ov2Revision",
     "ov3Revision",
     "ov4Revision",
@@ -1761,6 +1843,7 @@ function getStoredLineage(resource) {
     "ov6aRevision",
     "ov6bRevision",
     "ov6cRevision",
+    "ov7Revision",
     "architectureRevision",
     "oodaRevision",
     "scenarioRevision",

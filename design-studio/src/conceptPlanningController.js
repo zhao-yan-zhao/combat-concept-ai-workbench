@@ -33,6 +33,7 @@ import {
   compactForceMissionForAnalysis,
   confirmForceMissionPlan,
   confirmOperationalTasks,
+  buildOperationalTaskGenerationBatches,
   createOperationalTasksFromPhaseAction,
   createForceMissionPlanFromBrief,
   isForceMissionPlanConfirmed,
@@ -46,9 +47,14 @@ import {
   resolveSideCountries,
   seedConceptEquipmentType,
   setForcePlatformQuantity,
+  addOperationalTaskAreaPoint,
+  removeOperationalTaskAreaPoint,
   updateCombatConceptLink,
+  toggleForceTaskRef,
   updateForceMissionType,
-  updateOperationalTask
+  updateOperationalTask,
+  updateOperationalTaskArea,
+  updateOperationalTaskAreaPoint
 } from "./forceMissionStore.js";
 import {
   applyPhaseActionReviewNotes,
@@ -109,6 +115,22 @@ export function createConceptPlanningController({
       }
       if (action === "generate-operational-tasks") {
         void generateOperationalTasks({ silent: false });
+        return true;
+      }
+      if (action === "select-operational-task") {
+        const state = getState();
+        const list = source?.closest?.(".operational-task-list")?.querySelector?.(".operational-task-list-scroll");
+        if (list) state.operationalTaskListScrollTop = list.scrollTop;
+        state.operationalTaskSelectedId = source?.dataset?.taskId || "";
+        render();
+        return true;
+      }
+      if (action === "add-operational-task-area-point") {
+        void changeOperationalTaskPlan(addOperationalTaskAreaPoint(getState().forceMission, source?.dataset?.taskId || ""), "operational-task:add-point");
+        return true;
+      }
+      if (action === "remove-operational-task-area-point") {
+        void changeOperationalTaskPlan(removeOperationalTaskAreaPoint(getState().forceMission, source?.dataset?.taskId || "", source?.dataset?.pointId || ""), "operational-task:remove-point");
         return true;
       }
       if (action === "confirm-operational-tasks") {
@@ -260,9 +282,26 @@ export function createConceptPlanningController({
       return false;
     },
     bind(root = document) {
+      const operationalTaskList = root.querySelector(".operational-task-list-scroll");
+      if (operationalTaskList) {
+        operationalTaskList.scrollTop = Number(getState().operationalTaskListScrollTop) || 0;
+        operationalTaskList.addEventListener("scroll", () => {
+          getState().operationalTaskListScrollTop = operationalTaskList.scrollTop;
+        }, { passive: true });
+      }
       root.querySelectorAll("[data-operational-task-field]").forEach((control) => {
         control.addEventListener("change", () => {
           void changeOperationalTask(control.dataset.taskId, control.dataset.operationalTaskField, control.value);
+        });
+      });
+      root.querySelectorAll("[data-operational-task-area-field]").forEach((control) => {
+        control.addEventListener("change", () => {
+          void changeOperationalTaskArea(control.dataset.taskId, control.dataset.operationalTaskAreaField, control.type === "checkbox" ? control.checked : control.value);
+        });
+      });
+      root.querySelectorAll("[data-task-area-point-field]").forEach((control) => {
+        control.addEventListener("change", () => {
+          void changeOperationalTaskPoint(control.dataset.taskId, control.dataset.pointId, control.dataset.taskAreaPointField, control.value);
         });
       });
       root.querySelectorAll("[data-force-mission-type]").forEach((control) => {
@@ -277,6 +316,16 @@ export function createConceptPlanningController({
       root.querySelectorAll("[data-combat-concept-link]").forEach((control) => {
         control.addEventListener("change", () => {
           void changeCombatConceptLink(control.dataset.combatConceptLink, control.value);
+        });
+      });
+      root.querySelectorAll("[data-force-task-ref]").forEach((control) => {
+        control.addEventListener("change", () => {
+          void changeForceTaskRef(
+            control.dataset.forceId,
+            control.dataset.taskRef,
+            control.checked,
+            control.dataset.forceLayer || "concept"
+          );
         });
       });
       root.querySelectorAll("[data-force-platform-qty]").forEach((control) => {
@@ -340,21 +389,102 @@ export function createConceptPlanningController({
       if (!silent) notify("请先确认阶段与行动");
       return null;
     }
-    state.forceMission = persistForceMission(
-      createOperationalTasksFromPhaseAction(state.forceMission, state.phaseAction),
-      projectId
-    );
-    await syncForceMission(state.forceMission, { source: "operational-task:generate" });
-    if (!silent) notify(`已形成 ${state.forceMission.tasks.length} 项作战任务，请复核后确认`);
+    if (state.operationalTaskGenerating) return null;
+    state.operationalTaskGenerating = true;
+    state.operationalTaskGenerationProgress = null;
     render();
-    return state.forceMission;
+    try {
+      const batches = buildOperationalTaskGenerationBatches(compactPhaseAction(state.phaseAction), 3);
+      if (!batches.length) throw new Error("No operational task inputs");
+      state.operationalTaskGenerationProgress = { completed: 0, total: batches.length };
+      render();
+      const results = [];
+      const generateBatch = async (batch) => {
+        let lastError = null;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try {
+            const response = await generateWithAi({
+              workflowId: "operational-task",
+              workflow: { id: "operational-task", title: "作战任务与任务区域", outputSchema: "OperationalTaskDraft" },
+              analysis: {
+                ...briefAnalysis(state.brief),
+                phaseAction: batch,
+                cmoMissionTypes: listCmoMissionTypes(),
+                taskAreaTypes: ["patrol", "prosecution", "support", "transit", "target", "exclusion", "other"],
+                generationConstraint: "直接返回任务 JSON；禁止工具调用、web_search、搜索占位或过程说明。"
+              },
+              evidence: []
+            });
+            if (isAiOutput(response) && Array.isArray(response.result?.tasks) && response.result.tasks.length === batch.expectedTaskCount) return response;
+            lastError = new Error("Incomplete operational task AI batch");
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("Operational task AI batch failed");
+      };
+      for (let offset = 0; offset < batches.length; offset += 2) {
+        const wave = batches.slice(offset, offset + 2);
+        const responses = await Promise.all(wave.map(generateBatch));
+        responses.forEach((response) => {
+          results.push(response.result);
+        });
+        state.operationalTaskGenerationProgress = { completed: Math.min(offset + wave.length, batches.length), total: batches.length };
+        render();
+      }
+      const draft = {
+        tasks: results.flatMap((result, batchIndex) => result.tasks.map((task, taskIndex) => ({
+          ...task,
+          id: `ai-b${batchIndex + 1}-task-${taskIndex + 1}`
+        }))),
+        openQuestions: results.flatMap((result) => Array.isArray(result.openQuestions) ? result.openQuestions : [])
+      };
+      state.forceMission = persistForceMission(
+        createOperationalTasksFromPhaseAction(state.forceMission, state.phaseAction, draft, { source: "ai" }),
+        projectId
+      );
+      state.operationalTaskSelectedId = state.forceMission.tasks[0]?.id || "";
+      await syncForceMission(state.forceMission, { source: "operational-task:generate" });
+      if (!silent) notify(`AI 已形成 ${state.forceMission.tasks.length} 项任务及区域候选，请复核坐标依据`);
+      return state.forceMission;
+    } catch (error) {
+      state.forceMission = persistForceMission(
+        createOperationalTasksFromPhaseAction(state.forceMission, state.phaseAction, null, { source: "local" }),
+        projectId
+      );
+      state.operationalTaskSelectedId = state.forceMission.tasks[0]?.id || "";
+      await syncForceMission(state.forceMission, { source: "operational-task:generate-local" });
+      if (!silent) notify(`AI 分批生成未完成，已保留本地任务草案；区域坐标尚未生成${error?.message ? `（${error.message}）` : ""}`);
+      return state.forceMission;
+    } finally {
+      state.operationalTaskGenerating = false;
+      state.operationalTaskGenerationProgress = null;
+      render();
+    }
   }
 
   async function changeOperationalTask(taskId, field, value) {
-    if (!["name", "missionType", "area", "objective", "expectedEffect"].includes(field)) return;
+    if (!["name", "missionType", "objective", "expectedEffect"].includes(field)) return;
     const state = getState();
-    state.forceMission = persistForceMission(updateOperationalTask(state.forceMission, taskId, { [field]: value }), projectId);
-    await syncForceMission(state.forceMission, { source: "operational-task:edit" });
+    await changeOperationalTaskPlan(updateOperationalTask(state.forceMission, taskId, { [field]: value }), "operational-task:edit");
+  }
+
+  async function changeOperationalTaskArea(taskId, field, value) {
+    if (!["name", "type", "geometryType", "radiusNm", "description", "basis", "needsReview"].includes(field)) return;
+    const state = getState();
+    await changeOperationalTaskPlan(updateOperationalTaskArea(state.forceMission, taskId, { [field]: value }), "operational-task:edit-area");
+  }
+
+  async function changeOperationalTaskPoint(taskId, pointId, field, value) {
+    if (!["label", "latitude", "longitude"].includes(field)) return;
+    const state = getState();
+    await changeOperationalTaskPlan(updateOperationalTaskAreaPoint(state.forceMission, taskId, pointId, { [field]: value }), "operational-task:edit-coordinate");
+  }
+
+  async function changeOperationalTaskPlan(next, source) {
+    const state = getState();
+    state.forceMission = persistForceMission(next, projectId);
+    await syncForceMission(state.forceMission, { source });
     render();
   }
 
@@ -920,6 +1050,21 @@ export function createConceptPlanningController({
     }
     if (wasConfirmed) notify("概念挂接已改，兵力与任务回到草案");
     else notify("已更新作战兵力的概念挂接");
+    render();
+  }
+
+  async function changeForceTaskRef(forceId, taskRef, checked, layer = "concept") {
+    const state = getState();
+    if (!forceId || !taskRef || state.forceMissionGenerating) return;
+    const wasConfirmed = isForceMissionPlanConfirmed(state.forceMission, state.forceMissionStorage);
+    const next = toggleForceTaskRef(state.forceMission, forceId, taskRef, checked, normalizeLayer(layer));
+    state.forceMission = persistForceMission(next, projectId);
+    try {
+      await syncForceMission(state.forceMission, { source: "force-mission:edit-task-ref" });
+    } catch {
+      /* local draft remains */
+    }
+    notify(wasConfirmed ? "任务承接已修改，兵力计划回到草案" : "任务承接关系已更新");
     render();
   }
 

@@ -178,9 +178,9 @@ assert(inspectorHtml.includes('name="sourceOv1NodeIds"') && inspectorHtml.includ
 assert(inspectorHtml.includes('data-ov1-source-suggest') && inspectorHtml.includes('data-ov1-source-clear'), "Activity inspector should offer suggest/clear source actions");
 
 assert(views.some((view) => view.id === "structure-review"), "structure-review view missing from navigation data");
-assert(workflowTracks.find((track) => track.id === "deliver")?.viewIds[0] === "structure-review", "Structure review should lead the delivery/demo track");
-const tree = renderTree("structure-review", { completedThrough: 4, mode: "free" });
-assert((tree.includes("结构核对台") || tree.includes("核对台") || tree.includes("step-label")) && tree.includes('data-track="deliver"') && tree.includes("step-circle"), "Step rail should list structure review under delivery/demo track");
+assert(!workflowTracks.some((track) => track.viewIds.includes("structure-review")), "Structure review must remain an associated cross-model view, not a mainline step");
+const tree = renderTree("structure-review", { version: 2, completedThrough: 6, mode: "free" });
+assert(!tree.includes("结构核对台") && tree.includes('data-track="simulation"') && tree.includes("step-circle"), "Step rail should keep seven mainline products while structure review is open");
 
 const ooda = deriveOodaFromOv5(linkedDraft);
 assert(ooda.sourceOv5Signature === createOv5SourceSignature(linkedDraft), "Derived OODA should stamp OV-5 source signature");

@@ -71,23 +71,79 @@ export function listCriticalActivityIds(state = {}) {
 
 export function listForceAndPhaseSubjects(state = {}) {
   const subjects = [];
-  const forces = Array.isArray(state.forceMission?.forces) ? state.forceMission.forces : [];
+  const seen = new Set();
+  const push = (subject) => {
+    const id = String(subject?.id || "").trim();
+    const key = `${subject?.subjectType}:${id}`;
+    if (!id || seen.has(key)) return;
+    seen.add(key);
+    subjects.push({ ...subject, id });
+  };
+  const forces = [
+    ...(Array.isArray(state.forceMission?.forces) ? state.forceMission.forces : []),
+    ...(Array.isArray(state.forceMission?.combatForces) ? state.forceMission.combatForces : [])
+  ];
   forces.forEach((force, index) => {
-    subjects.push({
+    push({
       id: String(force?.id || `force-${index + 1}`),
       name: String(force?.name || force?.id || `概念兵力 ${index + 1}`),
       subjectType: "force"
     });
   });
-  const phases = Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : [];
-  phases.forEach((phase, index) => {
-    subjects.push({
-      id: String(phase?.id || `phase-${index + 1}`),
-      name: String(phase?.name || phase?.id || `阶段 ${index + 1}`),
+  const tasks = Array.isArray(state.forceMission?.tasks) ? state.forceMission.tasks : [];
+  tasks.forEach((task, index) => {
+    push({
+      id: String(task?.id || `task-${index + 1}`),
+      name: String(task?.name || task?.id || `任务 ${index + 1}`),
       subjectType: "task"
     });
   });
+  const phases = Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : [];
+  phases.forEach((phase, index) => {
+    push({
+      id: String(phase?.id || `phase-${index + 1}`),
+      name: String(phase?.name || phase?.id || `阶段 ${index + 1}`),
+      subjectType: "phase"
+    });
+  });
   return subjects.slice(0, 48);
+}
+
+export function listRuleBindingCandidates(state = {}) {
+  const candidates = [];
+  const seen = new Set();
+  const push = (type, ref, name, source = "") => {
+    const id = String(ref || "").trim();
+    const key = `${type}:${id}`;
+    if (!id || seen.has(key)) return;
+    seen.add(key);
+    candidates.push({ type, ref: id, name: String(name || id).trim() || id, source });
+  };
+  (state.forceMission?.tasks || []).forEach((task, index) => push("task", task?.id || `task-${index + 1}`, task?.name || task?.id || `任务 ${index + 1}`, "forceMissionPlan.tasks"));
+  [
+    ...(state.forceMission?.forces || []),
+    ...(state.forceMission?.combatForces || [])
+  ].forEach((force, index) => push("force", force?.id || `force-${index + 1}`, force?.name || force?.id || `兵力 ${index + 1}`, "forceMissionPlan.forces"));
+  return candidates.slice(0, 96);
+}
+
+export function listStableReferenceCandidates(state = {}) {
+  const candidates = [];
+  const seen = new Set();
+  const push = (refType, ref, name) => {
+    const id = String(ref || "").trim();
+    const key = `${refType}:${id}`;
+    if (!id || seen.has(key)) return;
+    seen.add(key);
+    candidates.push({ refType, ref: id, name: String(name || id).trim() || id });
+  };
+  (state.phaseAction?.phases || []).forEach((phase, index) => push("phase", phase?.id || `phase-${index + 1}`, phase?.name || phase?.id || `阶段 ${index + 1}`));
+  (state.forceMission?.tasks || []).forEach((task, index) => push("task", task?.id || `task-${index + 1}`, task?.name || task?.id || `任务 ${index + 1}`));
+  [
+    ...(state.forceMission?.forces || []),
+    ...(state.forceMission?.combatForces || [])
+  ].forEach((force, index) => push("force", force?.id || `force-${index + 1}`, force?.name || force?.id || `兵力 ${index + 1}`));
+  return candidates.slice(0, 120);
 }
 
 /** State-machine subjects are lifecycle-bearing tasks/objects, not phase containers. */
@@ -127,6 +183,16 @@ export function listStateMachineSubjects(state = {}) {
       expectedEffects: (phase?.expectedEffects || []).filter(Boolean).slice(0, 6)
     }));
   });
+
+  const tasks = Array.isArray(state.forceMission?.tasks) ? state.forceMission.tasks : [];
+  tasks.forEach((task, index) => push({
+    id: String(task?.id || `task-${index + 1}`),
+    name: String(task?.name || task?.id || `任务 ${index + 1}`),
+    taskName: String(task?.name || ""),
+    subjectType: "task",
+    phaseId: String(task?.phaseId || ""),
+    context: String(task?.objective || task?.effect || "")
+  }));
 
   const forces = [
     ...(Array.isArray(state.forceMission?.forces) ? state.forceMission.forces : []),
@@ -175,7 +241,9 @@ export function addOv6aRule(model, partial = {}) {
       description: partial.description || "待补充规则描述",
       scope: partial.scope || "研究级",
       type: partial.type || "约束",
-      activityBindings: []
+      activityBindings: [],
+      taskBindings: [],
+      forceBindings: []
     }
   ];
   const normalized = normalizeDodafOv6a(next);
@@ -227,6 +295,42 @@ export function toggleOv6aActivityBinding(model, ruleId, activityRef, { checked 
     bindings.splice(existingIndex, 1);
   }
   rule.activityBindings = bindings;
+  return normalizeDodafOv6a(next);
+}
+
+export function toggleOv6aObjectBinding(model, ruleId, bindingType, objectRef, { checked = true, status = "pending" } = {}) {
+  const next = cloneModel(ensureOv6aModel(model));
+  const rule = (next.rules || []).find((item) => item.id === ruleId);
+  const config = bindingType === "task"
+    ? { field: "taskBindings", refField: "taskRef" }
+    : bindingType === "force"
+      ? { field: "forceBindings", refField: "forceRef" }
+      : null;
+  if (!rule || !config || !objectRef) return normalizeDodafOv6a(next);
+  const bindings = Array.isArray(rule[config.field]) ? [...rule[config.field]] : [];
+  const existingIndex = bindings.findIndex((item) => item[config.refField] === objectRef);
+  if (checked && existingIndex >= 0) {
+    bindings[existingIndex] = { ...bindings[existingIndex], bindingStatus: BINDING_STATUSES.includes(status) ? status : bindings[existingIndex].bindingStatus || "pending" };
+  } else if (checked) {
+    bindings.push({ [config.refField]: objectRef, bindingStatus: BINDING_STATUSES.includes(status) ? status : "pending", constraintNote: "" });
+  } else if (existingIndex >= 0) {
+    bindings.splice(existingIndex, 1);
+  }
+  rule[config.field] = bindings;
+  return normalizeDodafOv6a(next);
+}
+
+export function setOv6aObjectBindingStatus(model, ruleId, bindingType, objectRef, status) {
+  const next = cloneModel(ensureOv6aModel(model));
+  const rule = (next.rules || []).find((item) => item.id === ruleId);
+  const config = bindingType === "task"
+    ? { field: "taskBindings", refField: "taskRef" }
+    : bindingType === "force"
+      ? { field: "forceBindings", refField: "forceRef" }
+      : null;
+  const binding = config && rule ? (rule[config.field] || []).find((item) => item[config.refField] === objectRef) : null;
+  if (!binding) return normalizeDodafOv6a(next);
+  binding.bindingStatus = BINDING_STATUSES.includes(status) ? status : "pending";
   return normalizeDodafOv6a(next);
 }
 
@@ -642,8 +746,8 @@ export function addOv6cSequence(model, partial = {}) {
       name: partial.name || `事件序列 ${index}`,
       diagramType: normalizeSequenceDiagramType(partial.diagramType),
       participants: partial.participants || [
-        { id: `participant-${index}-a`, name: "参与方 A", ref: "" },
-        { id: `participant-${index}-b`, name: "参与方 B", ref: "" }
+        { id: `participant-${index}-a`, name: "参与方 A", ref: "", refType: "" },
+        { id: `participant-${index}-b`, name: "参与方 B", ref: "", refType: "" }
       ],
       messages: partial.messages || [],
       fragments: partial.fragments || []
@@ -662,7 +766,8 @@ export function addOv6cParticipant(model, sequenceId, partial = {}) {
     {
       id: partial.id || `participant-${Date.now().toString(36)}-${index}`,
       name: partial.name || `参与方 ${index}`,
-      ref: partial.ref || ""
+      ref: partial.ref || "",
+      refType: partial.refType || ""
     }
   ];
   return normalizeDodafOv6c(next);
@@ -675,8 +780,8 @@ export function addOv6cMessage(model, sequenceId, partial = {}) {
   const participants = sequence.participants || [];
   if (participants.length < 2) {
     sequence.participants = [
-      { id: "participant-a", name: "参与方 A", ref: "" },
-      { id: "participant-b", name: "参与方 B", ref: "" }
+      { id: "participant-a", name: "参与方 A", ref: "", refType: "" },
+      { id: "participant-b", name: "参与方 B", ref: "", refType: "" }
     ];
   }
   const list = sequence.participants;
@@ -770,6 +875,7 @@ export function updateOv6cParticipant(model, sequenceId, participantId, patch = 
   if (!participant) return normalizeDodafOv6c(next);
   if (patch.name !== undefined) participant.name = String(patch.name || "").slice(0, 240);
   if (patch.ref !== undefined) participant.ref = String(patch.ref || "").slice(0, 160);
+  if (patch.refType !== undefined) participant.refType = String(patch.refType || "").slice(0, 40);
   return normalizeDodafOv6c(next);
 }
 
@@ -944,11 +1050,12 @@ export function seedOv6cFromPhase(model, state = {}) {
     ? forces.slice(0, 6).map((force, index) => ({
       id: force.id || `participant-${index + 1}`,
       name: force.name || force.id || `参与节点 ${index + 1}`,
-      ref: force.id || ""
+      ref: force.id || "",
+      refType: force.id ? "force" : ""
     }))
     : [
-      { id: "participant-subject", name: "研究主体", ref: "" },
-      { id: "participant-peer", name: "协同对象", ref: "" }
+      { id: "participant-subject", name: "研究主体", ref: "", refType: "" },
+      { id: "participant-peer", name: "协同对象", ref: "", refType: "" }
     ]);
   const messages = [];
   phases.slice(0, 8).forEach((phase, index) => {

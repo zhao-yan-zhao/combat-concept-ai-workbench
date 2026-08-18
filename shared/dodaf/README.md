@@ -1,6 +1,6 @@
 # DoDAF 2.02 / DM2 operational subset
 
-Shared schema and exchange helpers for OV-1 through OV-6c.
+Shared schema and exchange helpers for the workbench operational subset, including persisted OV-1c and OV-7 mappings.
 
 | Item | Value |
 |---|---|
@@ -17,6 +17,8 @@ Shared schema and exchange helpers for OV-1 through OV-6c.
 | Product | Project resource key |
 |---|---|
 | OV-1 | `ov1` |
+| OV-1b | `ov1b` |
+| OV-1c | `ov1c` |
 | OV-2 | `ov2` |
 | OV-3 | `ov3` |
 | OV-4 | `ov4` |
@@ -25,6 +27,7 @@ Shared schema and exchange helpers for OV-1 through OV-6c.
 | OV-6a | `ov6a` |
 | OV-6b | `ov6b` |
 | OV-6c | `ov6c` |
+| OV-7 | `ov7` |
 | ArchitectureDescription | `architecture` |
 
 Each product payload includes DM2 `entities` / `relations` plus product-specific editable projections (`nodes`, `activities`, `exchanges`, …) for the workbench UI.

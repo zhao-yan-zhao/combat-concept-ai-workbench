@@ -22,6 +22,8 @@ import {
   createResearchChatSessionApplier
 } from "./researchChat/index.js";
 
+const SEQUENCE_PARTICIPANT_REF_TYPES = new Set(["phase", "task", "force", "activity", "object", "other"]);
+
 /**
  * 时序校验对话：自然语言修订 sequences/participants/messages。
  * 有结构化草稿时写回 ov6c；仅咨询时只回写对话建议。
@@ -83,6 +85,7 @@ export function createSequenceChatController({
               phases: compactPhases(state.phaseAction),
               forces: compactForces(state.forceMission),
               currentSequences: compactSequences(current),
+              tasks: compactTasks(state.forceMission),
               supportedSequenceTypes: {
                 phase: "阶段时序图：阶段为主要关联对象，表达阶段衔接、进入/退出条件与转换",
                 task: "任务时序图：任务或活动为主要关联对象，表达任务先后、触发、依赖与协同",
@@ -96,7 +99,7 @@ export function createSequenceChatController({
               revisionRequest: question,
               mutationRequest: mutation,
               "修订要求": mutation
-                ? "本轮是改图请求。返回 sequences[]（diagramType + participants + messages），diagramType 只能是 phase、task、force 或 general；消息须有 fromRef/toRef/name，尽量 relatedActivityRefs 回链阶段/活动。"
+                ? "本轮是改图请求。返回 sequences[]（diagramType + participants + messages），diagramType 只能是 phase、task、force 或 general；participants 必须使用输入中已有的稳定 refType + ref，不得根据名称猜测引用；消息须有 fromRef/toRef/name，尽量 relatedActivityRefs 回链阶段/活动。"
                 : "根据研究人员本轮要求回答。若仅咨询，sequences 可为空并在 summary 直接回答；若涉及起草/修订时序，返回完整 sequences。"
             },
             evidence: []
@@ -219,7 +222,8 @@ export function applySequenceDraft(current = {}, draft = {}, { mutation = false 
       .map((item, participantIndex) => ({
         id: String(item?.id || `participant-${index + 1}-${participantIndex + 1}`).slice(0, 160),
         name: String(item?.name || item?.id || `参与方 ${participantIndex + 1}`).slice(0, 240),
-        ref: String(item?.ref || "").slice(0, 160)
+        ref: String(item?.ref || "").slice(0, 160),
+        refType: normalizeSequenceParticipantRefType(item?.refType, item?.ref)
       }));
     const participantIds = new Set(participants.map((item) => item.id));
     const messages = (Array.isArray(sequence.messages) ? sequence.messages : [])
@@ -251,7 +255,7 @@ export function applySequenceDraft(current = {}, draft = {}, { mutation = false 
     const ensured = [...participants];
     for (const id of participantIds) {
       if (!ensured.some((item) => item.id === id)) {
-        ensured.push({ id, name: id, ref: "" });
+        ensured.push({ id, name: id, ref: "", refType: "" });
       }
     }
     return {
@@ -288,7 +292,8 @@ function createLocalSequenceDraft(question, current, state) {
       next = addOv6cParticipant(next, sequence.id, {
         id: subject.id,
         name: subject.name,
-        ref: subject.id
+        ref: subject.id,
+        refType: subject.subjectType
       });
     });
   }
@@ -327,7 +332,8 @@ function compactSequences(model = {}) {
     participants: (sequence.participants || []).slice(0, 12).map((item) => ({
       id: item.id,
       name: item.name,
-      ref: item.ref
+      ref: item.ref,
+      refType: item.refType
     })),
     messages: (sequence.messages || []).slice(0, 40).map((item) => ({
       id: item.id,
@@ -354,8 +360,25 @@ function compactPhases(phaseAction = {}) {
 }
 
 function compactForces(forceMission = {}) {
-  return (forceMission.forces || forceMission.combatForces || []).slice(0, 12).map((force) => ({
+  return [
+    ...(forceMission.forces || []),
+    ...(forceMission.combatForces || [])
+  ].slice(0, 12).map((force) => ({
     id: force.id,
     name: force.name || force.title
   }));
+}
+
+function compactTasks(forceMission = {}) {
+  return (forceMission.tasks || []).slice(0, 12).map((task) => ({
+    id: task.id,
+    name: task.name || task.title,
+    phaseId: task.phaseId || ""
+  }));
+}
+
+function normalizeSequenceParticipantRefType(value, ref) {
+  if (!String(ref || "").trim()) return "";
+  const normalized = String(value || "").trim().toLowerCase();
+  return SEQUENCE_PARTICIPANT_REF_TYPES.has(normalized) ? normalized : "";
 }

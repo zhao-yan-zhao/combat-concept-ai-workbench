@@ -122,6 +122,7 @@ const fakeState = {
   brief: { objective: "o", approach: "a", assumptions: "s", expectedEffects: "e", risk: "r" },
   inspiration: null,
   ov1,
+  ov1b: { product: "OV-1b", decompositions: [{ id: "d1", parentTaskRef: "task-parent", childTaskRef: "task-child", status: "confirmed" }] },
   ov2,
   ov3: null,
   ov4: null,
@@ -137,10 +138,12 @@ const fakeState = {
 };
 const snapshots = saveModelSnapshot(snapshotContextFromState(fakeState, { title: "Demo" }), []);
 assert(snapshots[0].model.ov2?.exchanges?.length === 1, "Client snapshot must include OV-2 exchanges");
+assert(snapshots[0].model.ov1b?.decompositions?.[0]?.childTaskRef === "task-child", "Client snapshot must include OV1b task refs");
 assert(snapshots[0].model.architecture?.entities?.length >= 1, "Client snapshot must include architecture");
 
 const restored = restoreModelSnapshot(snapshots[0], { briefSeed: {}, projectId: "demo" });
 assert(restored.ov2?.product === "OV-2" || restored.ov2?.exchanges?.length === 1, "Restore must return OV-2");
+assert(restored.ov1b?.decompositions?.[0]?.parentTaskRef === "task-parent", "Restore must return OV1b task refs");
 assert(restored.ov6a?.rules?.length === 1, "Restore must return OV-6a");
 assert(restored.architecture?.entities?.length >= 1, "Restore must return architecture");
 

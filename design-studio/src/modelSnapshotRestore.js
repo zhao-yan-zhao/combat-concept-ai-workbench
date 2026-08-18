@@ -8,7 +8,7 @@ import { clearScenario, persistScenario } from "./scenarioStore.js";
 import { clearValidation, persistValidation } from "./validationStore.js";
 import { saveLocalDodafProduct } from "./dodafProductStore.js";
 
-const DODAF_OPTIONAL = ["ov2", "ov3", "ov4", "ov5a", "ov6a", "ov6b", "ov6c", "architecture"];
+const DODAF_OPTIONAL = ["ov1b", "ov1c", "ov2", "ov3", "ov4", "ov5a", "ov6a", "ov6b", "ov6c", "ov7", "architecture"];
 
 export function restoreModelSnapshot(snapshot, { briefSeed, projectId = "default" } = {}) {
   if (!snapshot?.model) throw new Error("Model snapshot is unavailable");

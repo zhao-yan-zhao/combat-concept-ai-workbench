@@ -1,5 +1,6 @@
 ﻿import { directions, project, views, workflowPhases } from "./data.js";
 import { createInitialWorkbenchState } from "./app/createInitialState.js";
+import { workflowPrimaryStepIds } from "./data.js";
 import { $, downloadArtifact as downloadArtifactHelper, downloadBlob, escapeHtml, showToast, writePrintableReport as writePrintableReportHelper } from "./app/domUtils.js";
 import { completedWorkflowStage, currentProjectTitle as currentProjectTitleFor, currentWorkflow as currentWorkflowFor, getWorkflowStageIncompleteReasons, nextWorkflowStage, renderWorkflowGate as renderWorkflowGateFor, resolveWorkflowGateContext } from "./app/workflowGate.js";
 import { wireControllers } from "./app/wireControllers.js";
@@ -26,6 +27,7 @@ import { saveOv1Model } from "./ov1Store.js";
 import { renderOv1ToolboxFloatButton } from "./ov1View.js";
 import { renderPhaseActionChatFloatButton } from "./phaseActionView.js";
 import { renderForceMissionChatFloatButton } from "./forceMissionView.js";
+import { mountRelatedModelReturn, renderRelatedModelReturn, resolveModelFocus } from "./contextualModelFlow.js";
 import { renderRuleLibraryChatFloatButton } from "./ruleLibraryView.js";
 import { renderSequenceToolboxFloatButton } from "./ov6cView.js";
 import { renderStateMachineToolboxFloatButton } from "./stateMachineView.js";
@@ -142,7 +144,8 @@ const {
   applyResearchChatBriefUpdate,
   restoreSnapshot,
   exportModelComparison,
-  hydrateProjectDirectory
+  hydrateProjectDirectory,
+  completeCurrentWorkflowStage: completeWorkflowStage
 });
 
 let textCompositionActive = false;
@@ -169,7 +172,7 @@ function render(options = {}) {
   }
   const appFocusSnapshot = captureViewFocus(document);
   const meta = getViewMeta(state.activeView);
-  $("#conceptTree").innerHTML = renderTree(state.activeView, currentWorkflow());
+  $("#conceptTree").innerHTML = renderTree(state.activeView, currentWorkflow(), state);
   $("#viewEyebrow").textContent = meta.subtitle;
   $("#viewTitle").textContent = meta.label;
   $("#viewContext").title = `${currentProjectTitle()} / ${meta.label}`;
@@ -331,6 +334,7 @@ function renderViewRoot(options = {}) {
   // Park iframe before wiping viewRoot so the node is never destroyed with innerHTML.
   parkConceptMapFrame();
   viewRoot.innerHTML = renderView(state.activeView, { ...state, oodaDuration: getOodaDuration(state.ooda) });
+  mountRelatedModelReturn(viewRoot, renderRelatedModelReturn(state));
   mountConceptMapFrame();
   restoreViewFocus(viewRoot, focusSnapshot);
   restoreViewScroll(viewRoot, scrollSnapshots, {
@@ -658,9 +662,48 @@ function bindDynamicEvents() {
     button.addEventListener("click", () => {
       const viewId = button.dataset.view;
       if (!viewId) return;
+      const focusType = button.dataset.focusType || "";
+      const focusId = button.dataset.focusId || "";
+      if (focusType === "task" && focusId) state.operationalTaskSelectedId = focusId;
+      if (focusType === "activity" && focusId) state.selection = selectionFor("activity", focusId, getModels());
+      if (["state", "transition"].includes(focusType) && focusId) {
+        const machine = (state.ov6b?.stateMachines || []).find((item) => (focusType === "state" ? item.states : item.transitions)?.some((entry) => entry.id === focusId));
+        if (machine) {
+          state.ov6bSelectedMachineId = machine.id;
+          state.ov6bSelectedStateId = focusType === "state" ? focusId : "";
+          state.ov6bSelectedTransitionId = focusType === "transition" ? focusId : "";
+        }
+      }
+      if (button.dataset.relatedModel === "true") {
+        const focus = resolveModelFocus(state.activeView, state);
+        state.relatedModelReturnContext = {
+          mainViewId: state.activeView,
+          mainLabel: getViewMeta(state.activeView)?.label || "主步骤",
+          relatedViewId: viewId,
+          focusType: focus.focusType || "",
+          focusId: focus.focusId || "",
+          focusLabel: focus.focusLabel || "",
+          selection: state.selection ? { ...state.selection } : null,
+          scrollSnapshots: captureViewScroll($("#viewRoot"))
+        };
+      } else if (workflowPrimaryStepIds.includes(viewId)) {
+        state.relatedModelReturnContext = null;
+      }
       closeMenubarMenus();
       // Left floating step rail and menus: same entry path as workflow gate.
       void navigateToResearchView(viewId);
+    });
+  });
+
+  document.querySelectorAll("[data-return-mainline]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const context = state.relatedModelReturnContext;
+      if (!context?.mainViewId) return;
+      state.activeView = context.mainViewId;
+      state.selection = context.selection || null;
+      state.relatedModelReturnContext = null;
+      render();
+      requestAnimationFrame(() => restoreViewScroll($("#viewRoot"), context.scrollSnapshots || []));
     });
   });
 
@@ -1666,7 +1709,10 @@ function exportContext() {
     brief: state.brief,
     inspiration: state.inspiration,
     direction: state.direction,
+    forceMission: state.forceMission,
     ov1: state.ov1,
+    ov1b: state.ov1b,
+    ov1c: state.ov1c,
     ov2: state.ov2,
     ov3: state.ov3,
     ov4: state.ov4,
@@ -1675,6 +1721,7 @@ function exportContext() {
     ov6a: state.ov6a,
     ov6b: state.ov6b,
     ov6c: state.ov6c,
+    ov7: state.ov7,
     ooda: state.ooda,
     scenario: state.scenario,
     validationResult: state.validationResult,
@@ -1689,6 +1736,8 @@ function exportContext() {
       projectRevision: state.projectRevision,
       brief: state.projectStorage,
       ov1: state.ov1Storage,
+      ov1b: state.ov1bStorage,
+      ov1c: state.ov1cStorage,
       ov2: state.ov2Storage,
       ov3: state.ov3Storage,
       ov4: state.ov4Storage,
@@ -1697,6 +1746,7 @@ function exportContext() {
       ov6a: state.ov6aStorage,
       ov6b: state.ov6bStorage,
       ov6c: state.ov6cStorage,
+      ov7: state.ov7Storage,
       architecture: state.architectureStorage,
       ooda: state.oodaStorage,
       scenario: state.scenarioStorage,
@@ -1718,7 +1768,7 @@ function restoreSnapshot(snapshot) {
   state.ooda = restored.ooda;
   state.scenario = restored.scenario;
   state.validationResult = restored.validationResult;
-  for (const key of ["ov2", "ov3", "ov4", "ov5a", "ov6a", "ov6b", "ov6c", "architecture"]) {
+  for (const key of ["ov1b", "ov1c", "ov2", "ov3", "ov4", "ov5a", "ov6a", "ov6b", "ov6c", "ov7", "architecture"]) {
     state[key] = restored[key] ?? null;
   }
   state.lastDeploymentData = null;
@@ -2173,38 +2223,11 @@ async function ensureCombatFocusOnEnterPhaseAction() {
   return conceptPlanningController.generateCombatFocus({ silent: false });
 }
 
-/** Intermediate steps: capsule advances one research page (not a whole phase). */
+/** Revisit an already-confirmed mainline product and continue to its successor. */
 async function advanceWorkflowStep() {
   const ctx = resolveWorkflowGateContext(state);
   if (ctx.mode !== "next-step" || !ctx.nextStep?.id) {
     showToast("当前没有可进入的下一步");
-    return;
-  }
-  // Phase analysis must return to the rule library for explicit human review.
-  if (state.activeView === "phase-action" && state.phaseAction?.phases?.length) {
-    await ruleLibraryChatController.proposeChanges("phase-action", { silent: false });
-    await navigateToResearchView("ov6a", {
-      toast: "阶段规则建议已生成，请采纳或忽略后继续",
-      force: true,
-      entrySource: "phase-action"
-    });
-    return;
-  }
-
-  // A phase-derived change set marks this as the post-phase review visit.
-  // Do not derive a state machine from rules that the user has not resolved.
-  const phaseRuleChanges = state.ov6a?.ruleChangeSet;
-  if (state.activeView === "ov6a" && state.ruleLibraryEntrySource === "phase-action") {
-    const pendingCount = (phaseRuleChanges.changes || []).filter((change) => change.status === "pending").length;
-    if (pendingCount > 0) {
-      showToast(`还有 ${pendingCount} 项阶段规则建议待处理，请采纳或忽略后继续`);
-      document.querySelector(".rule-change-set")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    await navigateToResearchView("ov6b", {
-      toast: "规则审核已完成，正在生成状态机",
-      force: true
-    });
     return;
   }
   await navigateToResearchView(ctx.nextStep.id, {
@@ -2247,14 +2270,15 @@ async function completeWorkflowStage() {
     if (nextView) goToWorkflowView(nextView);
     await hydrateProjectDirectory({ skipRender: true });
     showToast(nextView ? "\u5f53\u524d\u9636\u6bb5\u5df2\u786e\u8ba4\uff0c\u5df2\u8fdb\u5165\u4e0b\u4e00\u9636\u6bb5" : "\u5de5\u4f5c\u6d41\u5df2\u786e\u8ba4\u5b8c\u6210");
-    // Brief → 阶段行动 first page is 规则库: empty library gets AI pregenerate from brief.
-    if (stage === 0 && nextView === "ov6a") {
-      render();
-      await ruleLibraryChatController.pregenerateFromBrief({ silent: false });
-    }
-    // Completing 阶段行动 first forms an independent task product; force generation follows after review.
+    // Completing 阶段行动 forms an independent task product.
     if (stage === 1 && nextView === "operational-task") {
       await conceptPlanningController.generateOperationalTasks({ silent: false });
+    }
+    if (stage === 2 && nextView === "force-mission") {
+      await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
+    }
+    if (stage === 4 && nextView === "concept-map" && typeof conceptMapController.seedFromPlanning === "function") {
+      await conceptMapController.seedFromPlanning({ silent: false });
     }
   } catch {
     showToast("\u9636\u6bb5\u72b6\u6001\u4fdd\u5b58\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5");
@@ -2509,7 +2533,7 @@ function saveActivity(event) {
   void dodafProductController.syncFromOv5b({ source: "manual" });
   state.selection = selectionFor("activity", activity.id, getModels());
   const sourceCount = activity.sourceOv1NodeIds?.length || 0;
-  showToast(sourceCount ? `活动已保存（${sourceCount} 个总体图来源），活动分解树已同步` : "活动已保存；尚未挂接总体图来源；活动分解树已同步");
+  showToast(sourceCount ? `活动已保存（${sourceCount} 个总体图来源），活动分解关系已同步` : "活动已保存；尚未挂接总体图来源；活动分解关系已同步");
   render();
 }
 

@@ -7,12 +7,14 @@ import {
 } from "./dodafProductStore.js";
 import { createProjectModelSyncController } from "./projectModelSyncController.js";
 import { mergeProductsIntoArchitecture } from "../../shared/dodaf/architectureWriteback.js";
-import { applyOv5aToOv5b, applyOv5bToOv5a, syncOv5ActivityPair } from "../../shared/dodaf/ov5ActivitySync.js";
+import { applyOv5aToOv5b, applyOv5bToOv5a, setOv5aParent, syncOv5ActivityPair } from "../../shared/dodaf/ov5ActivitySync.js";
 import { persistOv5Model } from "./ov5Store.js";
 import {
   exportProjectArchitecture,
   importProjectArchitecture,
   loadProjectArchitecture,
+  loadProjectOv1b,
+  loadProjectOv1c,
   loadProjectOv2,
   loadProjectOv3,
   loadProjectOv4,
@@ -20,14 +22,18 @@ import {
   loadProjectOv6a,
   loadProjectOv6b,
   loadProjectOv6c,
+  loadProjectOv7,
   saveProjectArchitecture,
+  saveProjectOv1b,
+  saveProjectOv1c,
   saveProjectOv2,
   saveProjectOv3,
   saveProjectOv4,
   saveProjectOv5a,
   saveProjectOv6a,
   saveProjectOv6b,
-  saveProjectOv6c
+  saveProjectOv6c,
+  saveProjectOv7
 } from "./projectBriefClient.js";
 import {
   addOv6aRule,
@@ -57,7 +63,9 @@ import {
   seedOv6bFromSubjects,
   seedOv6cFromPhase,
   setOv6aBindingStatus,
+  setOv6aObjectBindingStatus,
   toggleOv6aActivityBinding,
+  toggleOv6aObjectBinding,
   updateOv6bState,
   updateOv6bStateMachine,
   updateOv6bTransition,
@@ -81,18 +89,26 @@ import {
 import { generateWithAiStream, isAiOutput } from "../../shared/aiClient.js";
 import { generateMockOutput } from "../../shared/generator.js";
 import { normalizeDodafOv6b, normalizeDodafOv6c } from "../../shared/dodaf/products.js";
+import { addOv1bDecomposition, removeOv1bDecomposition, updateOv1bDecomposition } from "./ov1bStore.js";
+import { buildOv1cModel, buildOv7Model, updateMappingProduct } from "./mappingProductStore.js";
 
 const LOADERS = {
+  ov1b: loadProjectOv1b,
+  ov1c: loadProjectOv1c,
   ov2: loadProjectOv2, ov3: loadProjectOv3, ov4: loadProjectOv4, ov5a: loadProjectOv5a,
-  ov6a: loadProjectOv6a, ov6b: loadProjectOv6b, ov6c: loadProjectOv6c
+  ov6a: loadProjectOv6a, ov6b: loadProjectOv6b, ov6c: loadProjectOv6c, ov7: loadProjectOv7
 };
 const SAVERS = {
+  ov1b: saveProjectOv1b,
+  ov1c: saveProjectOv1c,
   ov2: saveProjectOv2, ov3: saveProjectOv3, ov4: saveProjectOv4, ov5a: saveProjectOv5a,
-  ov6a: saveProjectOv6a, ov6b: saveProjectOv6b, ov6c: saveProjectOv6c
+  ov6a: saveProjectOv6a, ov6b: saveProjectOv6b, ov6c: saveProjectOv6c, ov7: saveProjectOv7
 };
 const LABELS = {
-  ov2: "作战资源流描述", ov3: "作战资源流矩阵", ov4: "作战组织关系图", ov5a: "作战活动分解树",
-  ov6a: "规则库", ov6b: "状态机校验", ov6c: "时序校验"
+  ov1b: "任务分解 OV1b",
+  ov1c: "任务与作战活动映射 OV1c",
+  ov2: "作战资源流描述", ov3: "作战资源流矩阵", ov4: "作战组织关系图", ov5a: "作战活动分解",
+  ov6a: "规则库", ov6b: "状态机校验", ov6c: "时序校验", ov7: "状态与活动映射 OV7"
 };
 
 export function buildStateMachineGenerationAnalysis(state = {}) {
@@ -149,7 +165,6 @@ export function buildStateMachineGenerationAnalysis(state = {}) {
     modelingInstructions: "输出 StateMachineDraft JSON：stateMachines[] 每项对应一个 stateMachineSubjects[].id，subjectRef 和 subjectType 必须原样匹配候选。来自阶段行动的候选 subjectType=phase。不要再为阶段容器或红方行动额外建机。阶段 timeWindow、blueActions、redActions 用于进入/退出条件和对抗分支。每台生成 initial、至少两个有具体作战语义且互不重复的 normal/decision 中间状态、final，共 4 至 7 个节点；禁止仅用‘进行中/处理中/中间状态’占位。状态表示对象所处情形，condition 表示触发状态变化的可观察事件或门槛。主路径必须从 initial 连通至 final；确需分支时使用 decision，并给出 decisionExpression，判定出边给出不重复的 branchResult。ruleRefs 仅可引用 analysis.rules 中的 id。只给研究级、可复核内容。"
   };
 }
-
 export function applyStateMachineDraft(draft = {}, analysis = {}) {
   const candidates = Array.isArray(analysis?.stateMachineSubjects) && analysis.stateMachineSubjects.length
     ? analysis.stateMachineSubjects
@@ -303,6 +318,60 @@ export function createDodafProductController({
     const state = getState();
     const ds = el?.dataset || {};
 
+    if (action === "ov1b-add-decomposition") {
+      const scope = el?.closest?.("[data-action-form='ov1b-add-decomposition']");
+      const parentTaskRef = scope?.querySelector?.('[name="parentTaskRef"]')?.value || "";
+      const childTaskRef = scope?.querySelector?.('[name="childTaskRef"]')?.value || "";
+      const rationale = scope?.querySelector?.('[name="rationale"]')?.value || "";
+      if (!parentTaskRef || !childTaskRef) {
+        notify("请选择父任务和子任务");
+        return true;
+      }
+      if (parentTaskRef === childTaskRef) {
+        notify("父任务与子任务不能相同");
+        return true;
+      }
+      const model = resolveDodafProduct(state, "ov1b").model;
+      persistOv6("ov1b", addOv1bDecomposition(model, { parentTaskRef, childTaskRef, rationale }), "已新增任务分解关系");
+      return true;
+    }
+    if (action === "ov1b-toggle-confirm") {
+      const model = resolveDodafProduct(state, "ov1b").model;
+      const item = (model.decompositions || []).find((entry) => entry.id === ds.decompositionId);
+      if (!item) return true;
+      const status = item.status === "confirmed" ? "pending_review" : "confirmed";
+      persistOv6("ov1b", updateOv1bDecomposition(model, item.id, { status }), status === "confirmed" ? "已确认任务分解" : "已撤回确认");
+      return true;
+    }
+    if (action === "ov1b-remove-decomposition") {
+      if (!ds.decompositionId || !window.confirm("删除该任务分解关系？")) return true;
+      const model = resolveDodafProduct(state, "ov1b").model;
+      persistOv6("ov1b", removeOv1bDecomposition(model, ds.decompositionId), "已删除任务分解关系");
+      return true;
+    }
+
+    if (["mapping-toggle-activity", "mapping-set-semantic", "mapping-set-judgment"].includes(action)) {
+      const resource = ds.resource;
+      if (!["ov1c", "ov7"].includes(resource) || !ds.mappingId) return true;
+      const current = resolveDodafProduct(state, resource).model;
+      const mapping = (current.mappings || []).find((item) => item.id === ds.mappingId);
+      if (!mapping) return true;
+      let patch = {};
+      if (action === "mapping-toggle-activity") {
+        const refs = new Set(mapping.activityRefs || []);
+        if (el.checked) refs.add(el.value); else refs.delete(el.value);
+        patch = { activityRefs: [...refs] };
+      } else if (action === "mapping-set-semantic") {
+        patch = { semantic: el.value };
+      } else {
+        patch = { judgment: el.value };
+      }
+      const updated = updateMappingProduct(current, resource, mapping.id, patch);
+      const refreshed = resource === "ov1c" ? buildOv1cModel({ ...state, ov1c: updated }) : buildOv7Model({ ...state, ov7: updated });
+      persistOv6(resource, refreshed, action === "mapping-set-judgment" ? "已更新人工映射判定" : "已更新映射关系");
+      return true;
+    }
+
     if (action === "toggle-ov4-tools") {
       state.ov4ToolsOpen = !state.ov4ToolsOpen;
       if (!state.ov4ToolsOpen) state.ov4EditorOpen = false;
@@ -412,6 +481,21 @@ export function createDodafProductController({
       const model = resolveDodafProduct(state, "ov6a").model;
       if (ds.ruleId) state.ov6aSelectedRuleId = ds.ruleId;
       persistOv6("ov6a", setOv6aBindingStatus(model, ds.ruleId, ds.activityRef, el?.value || "pending"));
+      return true;
+    }
+    if (action === "ov6a-toggle-object-binding") {
+      const model = resolveDodafProduct(state, "ov6a").model;
+      if (ds.ruleId) state.ov6aSelectedRuleId = ds.ruleId;
+      persistOv6("ov6a", toggleOv6aObjectBinding(model, ds.ruleId, ds.bindingType, ds.objectRef, {
+        checked: Boolean(el?.checked),
+        status: "pending"
+      }));
+      return true;
+    }
+    if (action === "ov6a-set-object-binding-status") {
+      const model = resolveDodafProduct(state, "ov6a").model;
+      if (ds.ruleId) state.ov6aSelectedRuleId = ds.ruleId;
+      persistOv6("ov6a", setOv6aObjectBindingStatus(model, ds.ruleId, ds.bindingType, ds.objectRef, el?.value || "pending"));
       return true;
     }
 
@@ -703,7 +787,11 @@ export function createDodafProductController({
       const field = ds.field;
       if (!field || !ds.sequenceId || !ds.participantId) return true;
       const patch = {};
-      if (field === "name" || field === "ref") patch[field] = el?.value || "";
+      if (field === "name") patch.name = el?.value || "";
+      else if (field === "ref") {
+        patch.ref = el?.value || "";
+        patch.refType = el?.selectedOptions?.[0]?.dataset?.refType || "";
+      }
       else return true;
       persistOv6("ov6c", updateOv6cParticipant(model, ds.sequenceId, ds.participantId, patch));
       return true;
@@ -1094,7 +1182,7 @@ export function createDodafProductController({
 
       if (action === "sync-ov5a-from-ov5b") {
         void api.syncFromOv5b({ source: "manual-sync" }).then(() => {
-          notify("已将活动模型层级同步到活动分解树");
+          notify("已将作战活动父子关系同步到 OV5a");
           render();
         });
         return true;
@@ -1102,7 +1190,7 @@ export function createDodafProductController({
 
       if (action === "sync-ov5b-from-ov5a") {
         void syncOv5aIntoOv5b("manual-sync").then(() => {
-          notify("已将活动分解树写回活动模型 parentId/标题");
+          notify("已将 OV5a 父子关系应用到作战活动");
           render();
         });
         return true;
@@ -1133,15 +1221,21 @@ export function createDodafProductController({
       const state = getState();
       const resolved = resolveDodafProduct(state, resource);
       const path = rest.join(".");
-      // OV-5a parent edits: path like tree.<id>.parentId
-      if (resource === "ov5a" && path.startsWith("tree.") && path.endsWith(".parentId")) {
+      // OV-5a owns only parent/child Activity references; OV-5b owns activity bodies.
+      if (resource === "ov5a" && path.startsWith("decomposition.") && path.endsWith(".parentActivityRef")) {
         const activityId = path.split(".")[1];
-        state.ov5a = saveLocalDodafProduct("ov5a", setTreeParent(resolved.model, activityId, value), projectId);
+        state.ov5a = saveLocalDodafProduct("ov5a", setOv5aParent(resolved.model, activityId, value), projectId);
         void syncOv5aIntoOv5b("manual-edit");
         render();
         return true;
       }
-      state[resource] = saveLocalDodafProduct(resource, updateProductField(resolved.model, resource, path, value), projectId);
+      const updated = updateProductField(resolved.model, resource, path, value);
+      const refreshed = resource === "ov1c"
+        ? buildOv1cModel({ ...state, ov1c: updated })
+        : resource === "ov7"
+          ? buildOv7Model({ ...state, ov7: updated })
+          : updated;
+      state[resource] = saveLocalDodafProduct(resource, refreshed, projectId);
       void syncControllers[resource].sync(state[resource], { source: "manual-edit" }).then(() => writebackArchitecture("manual-edit"));
       render();
       return true;
@@ -1169,7 +1263,7 @@ export function createDodafProductController({
     const state = getState();
     if (resource === "ov5a") {
       await syncOv5aIntoOv5b("manual");
-      notify("已保存活动分解树，并同步写回活动模型");
+      notify("已保存活动分解关系，并同步更新作战活动父级");
       render();
       return;
     }
@@ -1196,6 +1290,7 @@ export function createDodafProductController({
     const state = getState();
     const products = {
       ov1: state.ov1,
+      ov1b: state.ov1b,
       ov2: state.ov2,
       ov3: state.ov3,
       ov4: state.ov4,
@@ -1328,33 +1423,4 @@ export function createDodafProductController({
     notify(`已导入架构包：${(result.imported || []).join(", ")}`);
     render();
   }
-}
-
-function setTreeParent(model, activityId, parentId) {
-  const flat = [];
-  const walk = (nodes, parent = "") => {
-    for (const node of nodes || []) {
-      flat.push({ id: String(node.id), title: node.title, type: node.type, parentId: parent });
-      walk(node.children, String(node.id));
-    }
-  };
-  walk(model.tree || []);
-  const id = String(activityId);
-  const nextParent = String(parentId || "");
-  const byId = new Map(flat.map((node) => [node.id, { ...node, children: [] }]));
-  if (!byId.has(id)) return model;
-  if (nextParent === id) return model;
-  byId.get(id).parentId = nextParent && byId.has(nextParent) ? nextParent : "";
-  const roots = [];
-  for (const node of byId.values()) {
-    if (node.parentId && byId.has(node.parentId)) byId.get(node.parentId).children.push(node);
-    else roots.push(node);
-  }
-  const toTree = (node) => ({
-    id: node.id,
-    title: node.title,
-    type: node.type,
-    children: (node.children || []).map(toTree)
-  });
-  return { ...model, tree: roots.map(toTree) };
 }

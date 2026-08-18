@@ -117,6 +117,10 @@ export async function saveProjectOv5(projectId, { model, source, expectedRevisio
 }
 
 export async function loadProjectOv2(projectId) { return loadProjectModel(projectId, "ov2"); }
+export async function loadProjectOv1b(projectId) { return loadProjectModel(projectId, "ov1b"); }
+export async function saveProjectOv1b(projectId, payload) { return saveProjectModel(projectId, "ov1b", payload); }
+export async function loadProjectOv1c(projectId) { return loadProjectModel(projectId, "ov1c"); }
+export async function saveProjectOv1c(projectId, payload) { return saveProjectModel(projectId, "ov1c", payload); }
 export async function saveProjectOv2(projectId, payload) { return saveProjectModel(projectId, "ov2", payload); }
 export async function loadProjectOv3(projectId) { return loadProjectModel(projectId, "ov3"); }
 export async function saveProjectOv3(projectId, payload) { return saveProjectModel(projectId, "ov3", payload); }
@@ -130,6 +134,8 @@ export async function loadProjectOv6b(projectId) { return loadProjectModel(proje
 export async function saveProjectOv6b(projectId, payload) { return saveProjectModel(projectId, "ov6b", payload); }
 export async function loadProjectOv6c(projectId) { return loadProjectModel(projectId, "ov6c"); }
 export async function saveProjectOv6c(projectId, payload) { return saveProjectModel(projectId, "ov6c", payload); }
+export async function loadProjectOv7(projectId) { return loadProjectModel(projectId, "ov7"); }
+export async function saveProjectOv7(projectId, payload) { return saveProjectModel(projectId, "ov7", payload); }
 export async function loadProjectArchitecture(projectId) { return loadProjectModel(projectId, "architecture"); }
 export async function saveProjectArchitecture(projectId, payload) { return saveProjectModel(projectId, "architecture", payload); }
 

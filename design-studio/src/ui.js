@@ -24,14 +24,19 @@ import { renderConceptMap } from "./conceptMapView.js";
 import { renderForceMission } from "./forceMissionView.js";
 import { renderPhaseAction } from "./phaseActionView.js";
 import { renderOperationalTasks } from "./operationalTaskView.js";
+import { renderOv1b } from "./ov1bView.js";
+import { renderOv1c, renderOv7 } from "./mappingProductView.js";
+import { normalizeWorkflowProgress } from "../../shared/workflowProgress.js";
+import { renderRailContextualModelFlow } from "./contextualModelFlow.js";
 
 /**
  * Floating research path: numbered circles.
  * Hover the rail → every step slides its intro out to the right (single-line, adaptive type).
  */
-export function renderTree(activeView, workflow = {}) {
-  const completedThrough = Number(workflow.completedThrough ?? -1);
-  const freeMode = workflow.mode === "free";
+export function renderTree(activeView, workflow = {}, state = {}) {
+  const progress = normalizeWorkflowProgress(workflow);
+  const completedThrough = progress.completedThrough;
+  const freeMode = progress.mode === "free";
   const viewById = new Map(views.map((view) => [view.id, view]));
   const steps = [];
 
@@ -46,13 +51,17 @@ export function renderTree(activeView, workflow = {}) {
     });
   });
 
-  const activeTrack = steps.find((item) => item.active)?.trackId || "";
+  const relatedMainViewId = state.relatedModelReturnContext?.mainViewId || "";
+  const activeTrack = steps.find((item) => item.active || item.view.id === relatedMainViewId)?.trackId || "";
   const items = steps.map((item, index) => {
     const short = stepShortLabel(item.view);
     const blurb = stepIntroBlurb(item.view, item.trackLabel);
     const title = `${item.trackLabel} · ${short} · ${item.view.label}${blurb ? ` · ${blurb}` : ""}`;
     const core = item.done && !item.active ? "✓" : escapeHtml(item.view.number || short);
-    return `<li class="step-node ${item.nodeState}${item.active ? " is-current" : ""}${item.locked ? " locked" : ""}" data-track="${escapeHtml(item.trackId)}" style="--step-i:${index}">
+    const relatedFlow = (item.active || item.view.id === relatedMainViewId)
+      ? renderRailContextualModelFlow(item.view.id, state)
+      : "";
+    return `<li class="step-node ${item.nodeState}${item.active ? " is-current" : ""}${item.view.id === relatedMainViewId ? " is-related-source" : ""}${item.locked ? " locked" : ""}${relatedFlow ? " has-related" : ""}" data-track="${escapeHtml(item.trackId)}" style="--step-i:${index}">
       <button type="button" class="step-button" data-view="${escapeHtml(item.view.id)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}" ${item.locked ? "disabled" : ""} aria-current="${item.active ? "step" : "false"}">
         <span class="step-circle" aria-hidden="true">
           <span class="step-ring"></span>
@@ -68,7 +77,7 @@ export function renderTree(activeView, workflow = {}) {
           <span class="step-label-blurb">${escapeHtml(blurb)}</span>
         </span>
       </button>
-    </li>`;
+    </li>${relatedFlow}`;
   }).join("");
 
   const trackMeta = workflowTracks.map((track) => {
@@ -76,7 +85,7 @@ export function renderTree(activeView, workflow = {}) {
     return `<span class="step-track-meta${hasActive ? " has-active" : ""}" data-track="${escapeHtml(track.id)}" hidden>${escapeHtml(track.label)}</span>`;
   }).join("");
 
-  return `<div class="step-spine${activeTrack ? " has-active" : ""}" style="--step-count:${Math.max(steps.length, 1)}">
+  return `<div class="step-spine${activeTrack ? " has-active" : ""}${items.includes("step-related-node") ? " has-related" : ""}" style="--step-count:${Math.max(steps.length, 1)}">
     ${trackMeta}
     <i class="step-spine-line" aria-hidden="true"></i>
     <ol class="step-path" aria-label="研究路径">${items}</ol>
@@ -100,16 +109,19 @@ function stepShortLabel(view) {
     "phase-action": "阶段行动",
     "concept-map": "概念图",
     ov1: "总体图",
+    ov1b: "任务分解",
+    ov1c: "任务活动映射",
     ov5: "活动",
     ooda: "循环",
     "structure-review": "核对台",
-    ov5a: "活动树",
+    ov5a: "活动分解",
     ov2: "资源流",
     ov3: "交换矩阵",
     ov4: "组织关系",
     ov6a: "规则库",
     ov6b: "状态机",
     ov6c: "时序",
+    ov7: "状态活动映射",
     scenario: "想定",
     validate: "验证",
     collaboration: "协同",
@@ -121,6 +133,9 @@ function stepShortLabel(view) {
 export function renderView(viewId, state) {
   if (viewId === "brief") return renderBrief(state);
   if (viewId === "operational-task") return renderOperationalTasks(state);
+  if (viewId === "ov1b") return renderOv1b(state);
+  if (viewId === "ov1c") return renderOv1c(state);
+  if (viewId === "ov7") return renderOv7(state);
   if (viewId === "force-mission") return renderForceMission(state);
   if (viewId === "phase-action") return renderPhaseAction(state);
   if (viewId === "concept-map") return renderConceptMap(state);
@@ -360,7 +375,9 @@ function renderReport(state) {
     brief: state.brief,
     inspiration: state.inspiration,
     direction: state.direction,
+    forceMission: state.forceMission,
     ov1: state.ov1,
+    ov1c: state.ov1c,
     ov2: state.ov2,
     ov3: state.ov3,
     ov4: state.ov4,
@@ -369,6 +386,7 @@ function renderReport(state) {
     ov6a: state.ov6a,
     ov6b: state.ov6b,
     ov6c: state.ov6c,
+    ov7: state.ov7,
     ooda: state.ooda,
     scenario: state.scenario,
     validationResult: state.validationResult,
@@ -383,6 +401,7 @@ function renderReport(state) {
       projectRevision: state.projectRevision,
       brief: state.projectStorage,
       ov1: state.ov1Storage,
+      ov1c: state.ov1cStorage,
       ov2: state.ov2Storage,
       ov3: state.ov3Storage,
       ov4: state.ov4Storage,
@@ -391,6 +410,7 @@ function renderReport(state) {
       ov6a: state.ov6aStorage,
       ov6b: state.ov6bStorage,
       ov6c: state.ov6cStorage,
+      ov7: state.ov7Storage,
       architecture: state.architectureStorage,
       ooda: state.oodaStorage,
       scenario: state.scenarioStorage,
@@ -552,15 +572,11 @@ function renderReportDerivedOperationalViews(report) {
   const ov6b = report.ov6b || {};
   const ov6c = report.ov6c || {};
   const diagnostics = report.validation?.derivedOperationalDiagnostics;
-  const hierarchyCount = countDerivedTreeNodes(ov5a.tree || []);
+  const hierarchyCount = ov5a.decompositions?.length || 0;
   const notes = diagnostics?.issues?.length
     ? `<p class="report-unresolved">${diagnostics.issues.map((issue) => escapeHtml(issue.title)).join("、")}</p>`
     : "";
-  return `<div class="report-facts"><span>OV-5a<b>${hierarchyCount} 个活动节点</b></span><span>OV-6a<b>${ov6a.rules?.length || 0} 条规则</b></span><span>OV-6b<b>${ov6b.transitions?.length || 0} 条转换</b></span><span>OV-6c<b>${ov6c.events?.length || 0} 个事件</b></span></div>${notes}<p class="report-empty">OV-5a、OV-6a 与 OV-6b 均从 OV-5b 和研究辅助循环自动派生；请在源模型中维护内容。</p>`;
-}
-
-function countDerivedTreeNodes(nodes) {
-  return nodes.reduce((count, node) => count + 1 + countDerivedTreeNodes(node.children || []), 0);
+  return `<div class="report-facts"><span>OV-5a<b>${hierarchyCount} 条分解关系</b></span><span>OV-6a<b>${ov6a.rules?.length || 0} 条规则</b></span><span>OV-6b<b>${ov6b.transitions?.length || 0} 条转换</b></span><span>OV-6c<b>${ov6c.events?.length || 0} 个事件</b></span></div>${notes}<p class="report-empty">OV-5a 只维护活动父子引用；活动正文由 OV-5b 维护。OV-6a 与 OV-6b 继续从权威来源派生。</p>`;
 }
 
 function reportStateClass(status) {

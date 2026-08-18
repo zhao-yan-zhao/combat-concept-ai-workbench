@@ -1,7 +1,13 @@
+import { normalizeForceMissionPlan } from "../../shared/conceptPlanning.js";
+
 const MAX_ROLES = 48;
 const MAX_RELATIONSHIPS = 160;
 
-export function buildOv4Model({ ov1, ov5, ooda, scenario } = {}) {
+export function buildOv4Model({ forceMission, ov1, ov5, ooda, scenario } = {}) {
+  const formalPlan = normalizeForceMissionPlan(forceMission);
+  if (formalPlan.forces.length || formalPlan.combatForces.length) {
+    return buildForceLinkedOv4(formalPlan);
+  }
   const sourceRoles = Array.isArray(ov1?.nodes) ? ov1.nodes.slice(0, MAX_ROLES) : [];
   const activities = Array.isArray(ov5?.activities) ? ov5.activities : [];
   const edges = Array.isArray(ov5?.edges) ? ov5.edges.slice(0, MAX_RELATIONSHIPS) : [];
@@ -83,6 +89,80 @@ export function buildOv4Model({ ov1, ov5, ooda, scenario } = {}) {
   ];
   const diagrams = [{ id: "ov4-diagram-overall", name: "总体组织关系图", description: "覆盖当前推导出的全部组织角色与协同关系。", roleIds: roles.map((role) => role.id), relationIds: relations.map((relation) => relation.id) }];
   return { version: 1, kind: "derived-ov4-abstract-responsibility", generatedAt: new Date().toISOString(), source: { ov1NodeCount: sourceRoles.length, ov5ActivityCount: activities.length, ov5EdgeCount: edges.length, oodaNodeCount: oodaNodes.length, scenarioEntityCount: entities.length }, roles, relations, diagrams, coverage, diagnostics, unresolved: { unmappedActivityIds, brokenEdgeIds, unassignedRoleIds } };
+}
+
+function buildForceLinkedOv4(plan) {
+  const tasks = plan.tasks || [];
+  const taskIds = new Set(tasks.map((task) => task.id));
+  const forces = [
+    ...(plan.forces || []).map((force) => ({ ...force, layer: "concept" })),
+    ...(plan.combatForces || []).map((force) => ({ ...force, layer: "combat" }))
+  ].slice(0, MAX_ROLES);
+  const forceById = new Map(forces.map((force) => [force.id, force]));
+  const brokenTaskRefs = [];
+  const roles = forces.map((force) => {
+    const taskRefs = unique(force.taskRefs);
+    taskRefs.filter((ref) => !taskIds.has(ref)).forEach((ref) => brokenTaskRefs.push({ forceRef: force.id, taskRef: ref }));
+    return {
+      id: force.id,
+      label: clean(force.name, 160) || force.id,
+      detail: clean(force.task, 500),
+      forceRefs: [force.id],
+      taskRefs,
+      layer: force.layer,
+      activityIds: [],
+      activityCount: 0,
+      oodaCount: 0,
+      phases: unique(force.phaseIds),
+      entityCount: (force.platforms || []).length,
+      state: taskRefs.length && !taskRefs.some((ref) => !taskIds.has(ref)) ? "ready" : "review"
+    };
+  });
+  const relations = (plan.relations || []).slice(0, MAX_RELATIONSHIPS).flatMap((relation, index) => {
+    const source = forceById.get(relation.fromForceId);
+    const target = forceById.get(relation.toForceId);
+    if (!source || !target || source.id === target.id) return [];
+    return [{
+      id: `ov4-${relation.id || stableId(`${source.id}:${target.id}:${relation.type}`)}`,
+      sourceRoleId: source.id,
+      sourceRoleLabel: source.name,
+      targetRoleId: target.id,
+      targetRoleLabel: target.name,
+      relationshipType: relation.type || "coordination",
+      sourceForceRef: source.id,
+      targetForceRef: target.id,
+      sourceActivityId: "",
+      sourceActivityTitle: "",
+      targetActivityId: "",
+      targetActivityTitle: "",
+      state: "ready"
+    }];
+  });
+  const linkedTaskIds = new Set(roles.flatMap((role) => role.taskRefs).filter((ref) => taskIds.has(ref)));
+  const unassignedTaskIds = tasks.map((task) => task.id).filter((id) => !linkedTaskIds.has(id));
+  const unassignedRoleIds = roles.filter((role) => !role.taskRefs.length).map((role) => role.id);
+  const coverage = {
+    activity: coverageSummary(tasks.length, unassignedTaskIds.length),
+    role: coverageSummary(roles.length, unassignedRoleIds.length)
+  };
+  const diagnostics = [
+    check("force-role-source", "兵力组织来源", roles.length ? "ready" : "pending", roles.length ? `已从作战兵力建立 ${roles.length} 个组织角色` : "尚无可用作战兵力"),
+    check("task-responsibility", "任务责任归属", unassignedTaskIds.length || brokenTaskRefs.length ? "review" : tasks.length ? "ready" : "pending", brokenTaskRefs.length ? `${brokenTaskRefs.length} 个任务引用失效` : unassignedTaskIds.length ? `${unassignedTaskIds.length} 个任务尚无兵力承接` : tasks.length ? "全部正式任务均有兵力承接" : "尚无正式任务"),
+    check("force-relationships", "兵力组织关系", relations.length ? "ready" : "pending", relations.length ? `已从兵力关系建立 ${relations.length} 条组织关系` : "尚无兵力指挥、协同或保障关系")
+  ];
+  const diagrams = [{ id: "ov4-diagram-overall", name: "总体组织关系图", description: "按正式作战兵力及其关系生成。", roleIds: roles.map((role) => role.id), relationIds: relations.map((relation) => relation.id) }];
+  return {
+    version: 2,
+    kind: "derived-ov4-force-responsibility",
+    generatedAt: new Date().toISOString(),
+    source: { taskCount: tasks.length, forceCount: forces.length, forceRelationCount: (plan.relations || []).length },
+    roles,
+    relations,
+    diagrams,
+    coverage,
+    diagnostics,
+    unresolved: { unmappedActivityIds: [], brokenEdgeIds: [], unassignedRoleIds, unassignedTaskIds, brokenTaskRefs }
+  };
 }
 
 function check(id, label, state, detail) { return { id, label, state, statusLabel: ({ ready: "已满足", review: "需复核", pending: "未完成" })[state] || "需复核", detail }; }

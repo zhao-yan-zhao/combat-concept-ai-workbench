@@ -88,6 +88,7 @@ export function createInitialWorkbenchState(activeProjectId = resolveActiveProje
     projectManagerOpen: false,
     projectCreateOpen: false,
     workflowCompleting: false,
+    relatedModelReturnContext: null,
     direction: loadSelectedDirection(initialDirectionProposals),
     aiDirections,
     aiDirectionsGenerating: false,
@@ -115,6 +116,10 @@ export function createInitialWorkbenchState(activeProjectId = resolveActiveProje
       localSaved: Boolean(forceMission.forces?.length || forceMission.combatForces?.length)
     },
     forceMissionGenerating: false,
+    operationalTaskGenerating: false,
+    operationalTaskGenerationProgress: null,
+    operationalTaskSelectedId: forceMission.tasks?.[0]?.id || "",
+    operationalTaskListScrollTop: 0,
     forceMissionGeneratingLayer: "",
     forceMissionChat,
     forceMissionChatGenerating: false,

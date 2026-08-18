@@ -47,6 +47,8 @@ export const DM2_RELATION_TYPES = Object.freeze([
 
 export const OV_PRODUCTS = Object.freeze([
   "OV-1",
+  "OV-1b",
+  "OV-1c",
   "OV-2",
   "OV-3",
   "OV-4",
@@ -54,12 +56,15 @@ export const OV_PRODUCTS = Object.freeze([
   "OV-5b",
   "OV-6a",
   "OV-6b",
-  "OV-6c"
+  "OV-6c",
+  "OV-7"
 ]);
 
 /** Resource keys stored on the project record. */
 export const OV_RESOURCE_KEYS = Object.freeze([
   "ov1",
+  "ov1b",
+  "ov1c",
   "ov2",
   "ov3",
   "ov4",
@@ -68,11 +73,14 @@ export const OV_RESOURCE_KEYS = Object.freeze([
   "ov6a",
   "ov6b",
   "ov6c",
+  "ov7",
   "architecture"
 ]);
 
 export const PRODUCT_BY_RESOURCE = Object.freeze({
   ov1: "OV-1",
+  ov1b: "OV-1b",
+  ov1c: "OV-1c",
   ov2: "OV-2",
   ov3: "OV-3",
   ov4: "OV-4",
@@ -81,11 +89,14 @@ export const PRODUCT_BY_RESOURCE = Object.freeze({
   ov6a: "OV-6a",
   ov6b: "OV-6b",
   ov6c: "OV-6c",
+  ov7: "OV-7",
   architecture: "ArchitectureDescription"
 });
 
 export const RESOURCE_BY_PRODUCT = Object.freeze({
   "OV-1": "ov1",
+  "OV-1b": "ov1b",
+  "OV-1c": "ov1c",
   "OV-2": "ov2",
   "OV-3": "ov3",
   "OV-4": "ov4",
@@ -93,7 +104,8 @@ export const RESOURCE_BY_PRODUCT = Object.freeze({
   "OV-5b": "ov5",
   "OV-6a": "ov6a",
   "OV-6b": "ov6b",
-  "OV-6c": "ov6c"
+  "OV-6c": "ov6c",
+  "OV-7": "ov7"
 });
 
 /** Map legacy OV-1 node kinds onto DM2 entity types. */

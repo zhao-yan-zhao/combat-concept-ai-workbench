@@ -73,7 +73,8 @@ try {
   saved = await repository.saveOv5(PROJECT_ID, { model: ov5, source: "live", expectedRevision: saved.revision });
   assert(saved.model.product === "OV-5b", "OV-5b product missing");
   saved = await repository.saveOv5a(PROJECT_ID, { model: ov5a, source: "live", expectedRevision: saved.revision });
-  assert(saved.model.tree?.[0]?.children?.[0]?.id === "a2", "OV-5a hierarchy not saved");
+  assert(saved.model.decompositions?.some((item) => item.parentActivityRef === "a1" && item.childActivityRef === "a2"), "OV-5a decomposition references not saved");
+  assert(!("tree" in saved.model), "OV-5a must not write the legacy activity tree");
   saved = await repository.saveOv2(PROJECT_ID, { model: ov2, source: "live", expectedRevision: saved.revision });
 
   // Architecture writeback from products
@@ -93,7 +94,7 @@ try {
   assert(exported.package.products["OV-1"] && exported.package.products["OV-2"], "Export missing products");
   const xml = encodeArchitecturePackage(exported.package, "xml");
   const fromXml = decodeArchitecturePackage(xml, "xml");
-  assert(fromXml.products["OV-5a"]?.tree?.length, "XML round-trip lost OV-5a");
+  assert(fromXml.products["OV-5a"]?.decompositions?.some((item) => item.childActivityRef === "a2"), "XML round-trip lost OV-5a decomposition references");
 
   // Corrupt then import restore
   saved = await repository.saveOv2(PROJECT_ID, {
@@ -145,7 +146,7 @@ try {
     expectedRevision: saved.revision
   });
   assert(snapshot.item.model.ov2.exchanges.length >= 1, "Snapshot lost OV-2");
-  assert(snapshot.item.model.ov5a.tree.length >= 1, "Snapshot lost OV-5a");
+  assert(snapshot.item.model.ov5a.decompositions.length >= 1, "Snapshot lost OV-5a decomposition references");
   assert(snapshot.item.model.architecture.entities.length >= 1, "Snapshot lost architecture");
 
   saved = await repository.saveOv2(PROJECT_ID, {

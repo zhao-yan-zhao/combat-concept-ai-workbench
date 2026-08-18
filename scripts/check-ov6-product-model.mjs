@@ -61,6 +61,21 @@ const verified = normalizeDodafOv6a({
 assert(verified.rules[0].reviewStatus === "verified" && verified.rules[0].reviewLabel === "已绑定", "Verified binding status");
 assert(verified.relations.some((item) => item.targetId === "activity-007"), "Verified binding should emit relation");
 
+const objectBound = normalizeDodafOv6a({
+  rules: [{
+    id: "rule-object",
+    name: "对象约束",
+    description: "约束任务与兵力",
+    taskBindings: [{ taskRef: "task-1", bindingStatus: "verified", constraintNote: "任务约束" }],
+    forceBindings: [{ forceRef: "force-1", bindingStatus: "verified", constraintNote: "兵力约束" }]
+  }]
+});
+assert(objectBound.rules[0].taskBindings[0]?.taskRef === "task-1" && objectBound.rules[0].forceBindings[0]?.forceRef === "force-1", "Task/force rule bindings must normalize without duplicating source objects");
+assert(objectBound.rules[0].reviewStatus === "verified", "Verified task/force bindings must contribute to rule review status");
+assert(objectBound.relations.some((item) => item.targetId === "task-1" && item.properties.bindingType === "task"), "Task binding must export as a typed relation");
+assert(objectBound.relations.some((item) => item.targetId === "force-1" && item.properties.bindingType === "force"), "Force binding must export as a typed relation");
+assert(objectBound.entities[0].properties.taskBindings.includes("task-1|verified") && objectBound.entities[0].properties.forceBindings.includes("force-1|verified"), "Typed binding refs and review status must be retained in DM2 entity properties");
+
 // Seed builder still normalizes
 const seededA = normalizeDodafOv6a(buildOv6aModel({
   ov5: {
@@ -175,8 +190,8 @@ const sequence = normalizeDodafOv6c({
     id: "sequence-001",
     name: "关键协同序列",
     participants: [
-      { id: "p1", name: "感知单元", ref: "force-sense" },
-      { id: "p2", name: "指挥节点", ref: "force-cmd" }
+      { id: "p1", name: "感知单元", ref: "force-sense", refType: "force" },
+      { id: "p2", name: "指挥节点", ref: "task-command", refType: "task" }
     ],
     messages: [
       {
@@ -211,6 +226,7 @@ assert(sequence.sequences[0].messages[1].relatedActivityRefs.includes("activity-
 assert(sequence.sequences[0].messages[1].offsetMinutes === 12 && sequence.sequences[0].messages[1].durationMinutes === 18, "Message keeps gantt start/duration");
 assert(sequence.events.length === 2 && sequence.events[0].title, "Flattened events for table UI");
 assert(sequence.sequences[0].fragments[0].kind === "alt", "Fragments preserved");
+assert(sequence.sequences[0].participants[0].refType === "force" && sequence.sequences[0].participants[1].refType === "task", "Sequence participants must retain typed stable refs");
 
 const legacyC = normalizeDodafOv6c({
   events: [

@@ -13,6 +13,7 @@ import { resolveDodafProduct } from "./dodafProductStore.js";
 import { inspectArchitectureConsistency } from "../../shared/dodaf/consistency.js";
 import { detectLegacyConceptMapOnly, planningCoverageStatus } from "./planningContext.js";
 import { inspectPhaseAgainstOv6 } from "./ov6Workbench.js";
+import { buildOv1cModel, buildOv7Model } from "./mappingProductStore.js";
 
 const MAX_ISSUES = 64;
 const FILTER_GROUPS = ["mapping", "validation", "concept", "contract", "sequence"];
@@ -28,13 +29,15 @@ export function buildStructureReview(state = {}) {
   const scenario = state.scenario || {};
   const validationResult = state.validationResult || null;
   const ov1Inspect = inspectOv1Model(ov1);
-  const ov2 = resolveProductOrBuild(state, "ov2", () => buildOv2Model({ ov1, ov5, ooda, scenario }));
-  const ov3 = resolveProductOrBuild(state, "ov3", () => buildOv3Model({ ov5, scenario }));
-  const ov4 = resolveProductOrBuild(state, "ov4", () => buildOv4Model({ ov1, ov5, ooda, scenario }));
+  const ov2 = resolveProductOrBuild(state, "ov2", () => buildOv2Model({ forceMission: state.forceMission, ov1, ov5, ooda, scenario }));
+  const ov3 = resolveProductOrBuild(state, "ov3", () => buildOv3Model({ ov2, scenario }));
+  const ov4 = resolveProductOrBuild(state, "ov4", () => buildOv4Model({ forceMission: state.forceMission, ov1, ov5, ooda, scenario }));
   const ov5a = resolveProductOrBuild(state, "ov5a", () => buildOv5aModel({ ov5 }));
   const ov6a = resolveProductOrBuild(state, "ov6a", () => buildOv6aModel({ ov5 }));
   const ov6b = resolveProductOrBuild(state, "ov6b", () => buildOv6bModel({ ooda }));
   const ov6c = resolveProductOrBuild(state, "ov6c", () => buildOv6cModel({ ooda, scenario }));
+  const ov1c = buildOv1cModel({ ...state, ov1c: resolveProductOrBuild(state, "ov1c", () => ({ mappings: [] })) });
+  const ov7 = buildOv7Model({ ...state, ov7: resolveProductOrBuild(state, "ov7", () => ({ mappings: [] })) });
   const consistency = inspectArchitectureConsistency({
     ov1,
     ov5,
@@ -65,6 +68,8 @@ export function buildStructureReview(state = {}) {
   pushDiagnosticIssues(issues, ov6a.diagnostics, "ov6a", "ov5", "rules");
   pushDiagnosticIssues(issues, ov6b.diagnostics, "ov6b", "ooda", "states");
   pushOv6cIssues(issues, ov6c);
+  pushDiagnosticIssues(issues, ov1c.diagnostics, "ov1c", "ov1c", "mapping");
+  pushDiagnosticIssues(issues, ov7.diagnostics, "ov7", "ov7", "mapping");
   pushPhaseOv6ReverseIssues(issues, state);
   const validationStale = Boolean(validationResult && isValidationStale(validationResult, ov5, ooda, scenario, ov1));
   pushValidationIssues(issues, validationResult, ov5, ooda, scenario, validationStale);
@@ -167,7 +172,9 @@ export function buildStructureReview(state = {}) {
       ov5a: summarizeDiagnostics(ov5a.diagnostics),
       ov6a: summarizeDiagnostics(ov6a.diagnostics),
       ov6b: summarizeDiagnostics(ov6b.diagnostics),
-      ov6c: summarizeDiagnostics(ov6c.diagnostics)
+      ov6c: summarizeDiagnostics(ov6c.diagnostics),
+      ov1c: summarizeDiagnostics(ov1c.diagnostics),
+      ov7: summarizeDiagnostics(ov7.diagnostics)
     },
     consistency,
     validation: {
@@ -415,8 +422,8 @@ function pushMappingQualityIssues(issues, quality = {}) {
       group: "mapping",
       severity: "review",
       sourceView: "ov5a",
-      title: "活动分解树过平",
-      detail: `共 ${quality.activityCount} 个活动均无父级，OV-5a 只能并列显示。可按活动类型建议浅层分解（最早类型为根），保存后请人工复核。`,
+      title: "活动分解层级过平",
+      detail: `共 ${quality.activityCount} 个活动均无父级，OV-5a 层级表只能并列显示。可按活动类型建议浅层分解（最早类型为根），保存后请人工复核。`,
       targetView: "ov5",
       action: "apply-mapping-quality"
     }));
@@ -443,7 +450,7 @@ function pushDiagnosticIssues(issues, diagnostics, sourceView, targetView, group
       id: `${sourceView}-${item.id}`,
       code: `${sourceView}-${item.id}`,
       group: group === "rules" ? "contract" : group === "states" ? "sequence" : "mapping",
-      severity: item.state === "pending" ? "pending" : "review",
+      severity: item.state === "pending" ? "pending" : item.state === "conflict" ? "alert" : "review",
       sourceView,
       title: item.label,
       detail: item.detail,
@@ -662,7 +669,7 @@ function groupIssues(issues) {
 function summarizeDiagnostics(diagnostics = []) {
   return {
     ready: diagnostics.filter((item) => item.state === "ready").length,
-    review: diagnostics.filter((item) => item.state === "review").length,
+    review: diagnostics.filter((item) => ["review", "attention", "conflict"].includes(item.state)).length,
     pending: diagnostics.filter((item) => item.state === "pending").length,
     total: diagnostics.length
   };

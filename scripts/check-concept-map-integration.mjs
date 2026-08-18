@@ -193,18 +193,21 @@ try {
   };
   const workflowState = {
     activeProjectId: "concept-map-test",
-    projectDirectory: { projects: [{ id: "concept-map-test", workflow: { completedThrough: 3, mode: "gated" } }] },
+    projectDirectory: { projects: [{ id: "concept-map-test", workflow: { version: 2, completedThrough: 5, mode: "gated" } }] },
     brief: completeBrief("Initial research objective"),
     conceptMap: persisted.model,
     conceptMapStorage: { stale: false },
-    ov1: { nodes: [{ id: "sense" }] },
+    ov1: { nodes: [{ id: "sense" }, { id: "decide" }], edges: [{ id: "overall-edge" }] },
+    ov1Storage: { stale: false },
     ov5: { activities: [{ id: "a1" }], edges: [{ id: "e1" }] },
     ooda: { lanes: [{ nodes: [{ id: "n1" }] }] },
     ...planningComplete
   };
   assert(getWorkflowStageIncompleteReasons(workflowState, 1).length === 0, "Confirmed phase-action satisfies stage 1");
-  assert(getWorkflowStageIncompleteReasons(workflowState, 2).length === 0, "Confirmed force-mission satisfies stage 2");
-  assert(getWorkflowStageIncompleteReasons(workflowState, 3).length === 0 && currentWorkflow(workflowState).completedThrough === 3, "Confirmed concept products satisfy stage 3");
+  assert(getWorkflowStageIncompleteReasons(workflowState, 2).length === 0, "Confirmed operational tasks satisfy stage 2");
+  assert(getWorkflowStageIncompleteReasons(workflowState, 3).length === 0, "Confirmed combat forces satisfy stage 3");
+  assert(getWorkflowStageIncompleteReasons(workflowState, 4).length === 0, "Overall graph satisfies stage 4");
+  assert(getWorkflowStageIncompleteReasons(workflowState, 5).length === 0 && currentWorkflow(workflowState).completedThrough === 5, "Confirmed concept map satisfies stage 5");
   reopened.close();
 
   console.log("Concept-map integration acceptance passed: no-AI seed, project binding, phase deployment, preview UI, persistence.");
