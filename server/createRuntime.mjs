@@ -15,6 +15,7 @@ import { readJson } from "./httpUtils.mjs";
 import { createOpenAiClient } from "./openaiClient.mjs";
 import { loadThemeConfig, saveThemeConfig } from "./themeConfig.mjs";
 import { createCmoDatabaseService } from "./cmoDatabase.mjs";
+import { loadAiPromptOverrides, saveAiPromptOverrides } from "./aiPromptConfig.mjs";
 
 const mimeTypes = {
   ".html": "text/html;charset=utf-8",
@@ -32,8 +33,10 @@ export async function createRuntime() {
   const aiConfigPath = process.env.AI_SERVICE_CONFIG_PATH || join(root, "ai-service-config.json");
   const themeConfigPath = process.env.THEME_CONFIG_PATH || join(root, "data", "theme-config.json");
   const cmoDatabaseConfigPath = process.env.CMO_DATABASE_CONFIG_PATH || join(root, "data", "cmo-database-config.json");
+  const aiPromptConfigPath = process.env.AI_PROMPT_CONFIG_PATH || join(root, "data", "ai-prompts.json");
   let aiServiceConfig = await loadAiServiceConfig({ configPath: aiConfigPath });
   let themeConfig = await loadThemeConfig({ configPath: themeConfigPath });
+  let aiPromptOverrides = await loadAiPromptOverrides({ configPath: aiPromptConfigPath });
   const cmoDatabase = createCmoDatabaseService({ root, configPath: cmoDatabaseConfigPath });
   await cmoDatabase.loadConfig();
   const aiSecretStore = createAiSecretStore({ filePath: process.env.AI_SECRET_STORE_PATH || join(root, "data", "ai-service-secret.json") });
@@ -79,7 +82,7 @@ export async function createRuntime() {
     configurationWrite: aiConfigWriteAuthorizer.getStatus()
   });
 
-  const openAi = createOpenAiClient({ getAiServiceConfig, getAiApiKey });
+  const openAi = createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromptOverrides: () => aiPromptOverrides });
 
   async function readAuthorizedProjectInput(request) {
     const input = await readJson(request);
@@ -93,6 +96,7 @@ export async function createRuntime() {
     port,
     aiConfigPath,
     themeConfigPath,
+    aiPromptConfigPath,
     cmoDatabaseConfigPath,
     cmoDatabase,
     aiSecretStore,
@@ -110,11 +114,14 @@ export async function createRuntime() {
     getThemeConfig: () => themeConfig,
     setAiServiceConfig(value) { aiServiceConfig = value; },
     setThemeConfig(value) { themeConfig = value; },
+    getAiPromptOverrides: () => aiPromptOverrides,
+    setAiPromptOverrides(value) { aiPromptOverrides = value; },
     setStoredAiApiKey(value) { storedAiApiKey = value; },
     readAuthorizedProjectInput,
     openAi,
     saveAiServiceConfig,
     saveThemeConfig,
+    saveAiPromptOverrides,
     getPublicAiServiceConfig,
     listKnowledgeRetrievalModes
   };

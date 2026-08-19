@@ -63,7 +63,7 @@ export function renderOv6c(state = {}) {
           <button type="button" class="quiet-button" data-action="ov6c-seed-phase" title="按阶段/兵力生成协同时序（仅空库时）">按阶段生成</button>
           ${sequences.length ? `<button type="button" class="quiet-button danger-quiet" data-action="ov6c-clear-all" title="清空全部时序图">清空全部</button>` : ""}
           <button type="button" class="primary-btn" data-action="save-dodaf-ov6c">保存</button>
-          <button type="button" class="quiet-button" data-view="structure-review">下一步</button>
+          <button type="button" class="quiet-button" data-action="advance-workflow">下一步</button>
         </div>
       </div>
     </header>
@@ -88,8 +88,7 @@ export function renderOv6c(state = {}) {
           ${selected
     ? renderSequenceEditor(selected, {
       engine,
-      selectedMessageId,
-      editorOpen
+      selectedMessageId
     })
     : `<div class="seq-empty-editor"><p>请选择左侧时序图</p></div>`}
         </div>
@@ -192,7 +191,7 @@ function renderSequenceListItem(sequence, selectedId) {
   </button>`;
 }
 
-function renderSequenceEditor(sequence, { engine, selectedMessageId, editorOpen = false }) {
+function renderSequenceEditor(sequence, { engine, selectedMessageId }) {
   const participants = sequence.participants || [];
   const messages = [...(sequence.messages || [])].sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
   const mermaid = sequenceToMermaid(sequence);
@@ -221,13 +220,6 @@ function renderSequenceEditor(sequence, { engine, selectedMessageId, editorOpen 
         ${SEQUENCE_DIAGRAM_ENGINES.map((item) => `
           <button type="button" role="tab" class="seq-engine-tab ${engine === item.id ? "is-active" : ""}" aria-selected="${engine === item.id ? "true" : "false"}" data-action="ov6c-set-engine" data-engine="${escapeHtml(item.id)}" title="${escapeHtml(item.hint)}">${escapeHtml(item.label)}</button>
         `).join("")}
-      </div>
-      <div class="seq-editor-actions">
-        <button type="button" class="quiet-button compact" data-action="ov6c-add-participant" data-sequence-id="${escapeHtml(sequence.id)}">加参与方</button>
-        <button type="button" class="quiet-button compact" data-action="ov6c-add-message" data-sequence-id="${escapeHtml(sequence.id)}">加消息</button>
-        ${editorOpen
-    ? ""
-    : `<button type="button" class="quiet-button compact" data-action="ov6c-open-editor">属性</button>`}
       </div>
     </header>
 

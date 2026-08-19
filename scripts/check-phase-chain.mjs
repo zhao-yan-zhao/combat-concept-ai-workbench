@@ -63,7 +63,7 @@ assert(mainJs.includes("navigateToResearchView") && mainJs.includes("advanceWork
 assert(wireControllersJs.includes('proposeChanges("phase-action"') && wireControllersJs.includes("completeCurrentWorkflowStage"), "Phase confirmation must generate associated rule candidates without making OV6 a mainline step");
 assert(!wireControllersJs.includes('state.activeView = "ov6a"'), "Phase confirmation must remain in mainline context instead of forcing rule-library navigation");
 const workflowGateJs = readFileSync(join(root, "design-studio/src/app/workflowGate.js"), "utf8");
-assert(workflowGateJs.includes('if (index < 0)') && workflowGateJs.includes('mode: "hidden"'), "Associated OV6 pages must not expose linear mainline progression");
+assert(workflowGateJs.includes("resolveRelatedWorkflowGateContext") && workflowGateJs.includes('action: "advance-related-workflow"'), "Associated OV6 pages must expose contextual floating progression without becoming persisted mainline stages");
 assert(mainJs.includes("void navigateToResearchView(viewId)"), "Left floating step rail data-view must pregenerate on 规则库");
 assert(mainJs.includes('action === "toggle-workflow-gate"') && mainJs.includes("setWorkflowGateOpen(!state.workflowGateOpen)"), "Capsule click must expand/collapse panel");
 assert(mainJs.includes("ruleLibraryPregenerating") && mainJs.includes("根据简报生成作战规则"), "Direct rule-library entry must retain pregeneration feedback");
@@ -72,6 +72,7 @@ assert(mainJs.includes("ensureCombatFocusOnEnterPhaseAction") && mainJs.includes
 assert(mainJs.includes("根据简报生成 3 个作战聚焦方向"), "Phase-action enter overlay must describe focus generation");
 assert(mainJs.includes("combatFocusGenerating"), "Busy overlay must cover combat focus generation");
 assert(mainJs.includes('viewId === "ov6c"') && mainJs.includes("pregenerateOv6cFromPhase"), "Direct sequence entry must auto-generate an empty sequence model before review");
+assert(mainJs.includes("sequencePregenerating") && mainJs.includes("AI 正在生成各推演方及每个阶段的时序图"), "State-machine next must show credible sequence generation progress");
 assert(mainJs.includes("updateBusyOverlayProgress") && mainJs.includes("expectedMs") && mainJs.includes("timeoutMs"), "Busy overlay must expose elapsed and estimated progress timing");
 assert(indexHtml.includes('role="progressbar"') && indexHtml.includes("workflowModeElapsed") && indexHtml.includes("workflowModeEstimate"), "Busy overlay must render progress, elapsed time, and estimate");
 assert(ruleCtrl.includes("pregenerateFromBrief") && ruleCtrl.includes("RULE_LIBRARY_MAX_RULES = 240"), "Rule controller must pregenerate with high safety cap");

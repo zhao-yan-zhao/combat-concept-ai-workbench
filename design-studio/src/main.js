@@ -25,18 +25,17 @@ import { buildDirectionProposals, saveCustomDirections, saveSelectedDirection } 
 import { deriveResearchChatBriefUpdate } from "./researchChatBriefUpdate.js";
 import { saveOv1Model } from "./ov1Store.js";
 import { renderOv1ToolboxFloatButton } from "./ov1View.js";
-import { renderPhaseActionChatFloatButton } from "./phaseActionView.js";
-import { renderForceMissionChatFloatButton } from "./forceMissionView.js";
-import { mountRelatedModelReturn, renderRelatedModelReturn, resolveModelFocus } from "./contextualModelFlow.js";
-import { renderRuleLibraryChatFloatButton } from "./ruleLibraryView.js";
+import { contextualFlowViewIds, mountRelatedModelReturn, relatedViewLabel, renderRelatedModelReturn, resolveModelFocus, resolveRelatedMainViewId } from "./contextualModelFlow.js";
 import { renderSequenceToolboxFloatButton } from "./ov6cView.js";
 import { renderStateMachineToolboxFloatButton } from "./stateMachineView.js";
 import { renderOv4ToolboxFloatButton } from "./ov4View.js";
+import { renderSubflowToolboxFloatButton } from "./subflowToolbox.js";
 
 import { deleteModelSnapshot, persistModelSnapshots, saveModelSnapshot, snapshotContextFromState, upsertModelSnapshot } from "./modelSnapshotStore.js";
 import { restoreModelSnapshot } from "./modelSnapshotRestore.js";
 import { buildModelComparisonArtifact } from "./modelComparisonBuilder.js";
 import { renderAiConfigPanel } from "./aiConfigView.js";
+import { renderAiPromptPanel } from "./aiPromptView.js";
 import { getCmoCatalogStatus } from "./cmoCatalogClient.js";
 import { applyTheme, getThemeConfig } from "./themeConfigClient.js";
 import { renderProjectStorageFooter } from "./projectStorageView.js";
@@ -86,6 +85,7 @@ const {
   obsidianArchiveController,
   redTeamController,
   aiConfigController,
+  aiPromptController,
   deploymentController,
   conceptMapController,
   conceptPlanningController,
@@ -94,6 +94,7 @@ const {
   ruleLibraryChatController,
   sequenceChatController,
   sequenceCanvasController,
+  ov1bCanvasController,
   stateMachineChatController,
   stateMachineCanvasController,
   ov4CanvasController,
@@ -218,6 +219,7 @@ function render(options = {}) {
   loginGate.hidden = authenticated;
   loginGate.innerHTML = authenticated ? "" : renderCollaborationLoginGate(state.collaboration);
   $("#aiConfigRoot").innerHTML = renderAiConfigPanel({ open: state.aiConfigOpen, service: state.aiConfig, saving: state.aiConfigSaving });
+  $("#aiPromptRoot").innerHTML = renderAiPromptPanel({ open: state.aiPromptOpen, catalog: state.aiPromptCatalog, selectedId: state.aiPromptSelectedId, saving: state.aiPromptSaving });
   $("#workflowGateRoot").innerHTML = renderWorkflowGate();
   renderOv1ToolboxFloatHost();
   // Project picker / menubar chrome toggles must not rebuild the concept-map iframe.
@@ -442,79 +444,15 @@ function mountConceptMapFrame() {
 function renderOv1ToolboxFloatHost() {
   const host = $("#ov1ToolboxFloatRoot");
   if (!host) return;
-  // OV-1 toolbox only on OV-1; concept-map has its own action toolbar.
-  const onOv1 = state.activeView === "ov1";
-  const ov1Floating = onOv1 && state.ov1ToolsOpen !== true;
-  const onPhaseAction = state.activeView === "phase-action";
-  const hasPhases = Array.isArray(state.phaseAction?.phases) && state.phaseAction.phases.length > 0;
-  // Match OV-1: show top-right FAB only while the corresponding panel/tools are collapsed.
-  const phaseFloating = onPhaseAction && hasPhases && !state.phaseActionChatOpen;
-  const onForceMission = state.activeView === "force-mission";
-  const hasForceDraft = (Array.isArray(state.forceMission?.forces) && state.forceMission.forces.length > 0)
-    || (Array.isArray(state.forceMission?.combatForces) && state.forceMission.combatForces.length > 0);
-  const forceFloating = onForceMission && hasForceDraft && !state.forceMissionChatOpen;
-  // Rule library (nav 02): always offer research-chat FAB while chat is collapsed.
-  const onRuleLibrary = state.activeView === "ov6a";
-  const ruleFloating = onRuleLibrary && state.ruleLibraryChatOpen !== true;
-  // Sequence validation (ov6c): toolbox FAB while its rail is collapsed.
-  const onSequence = state.activeView === "ov6c";
-  const sequenceFloating = onSequence && state.ov6cToolsOpen !== true;
-  const onStateMachine = state.activeView === "ov6b";
-  const stateMachineFloating = onStateMachine && state.ov6bToolsOpen !== true;
-  const ov4Floating = state.activeView === "ov4" && state.ov4ToolsOpen !== true;
-  if (ov1Floating) {
-    host.hidden = false;
-    host.innerHTML = renderOv1ToolboxFloatButton();
-    return;
-  }
-  if (ov4Floating) {
-    host.hidden = false;
-    host.removeAttribute("hidden");
-    host.innerHTML = renderOv4ToolboxFloatButton({ toolsOpen: false });
-    return;
-  }
-  if (ruleFloating) {
-    host.hidden = false;
-    host.removeAttribute("hidden");
-    host.innerHTML = renderRuleLibraryChatFloatButton({
-      chatOpen: false,
-      chatGenerating: Boolean(state.ruleLibraryChatGenerating || state.ruleLibraryPregenerating),
-      disabled: Boolean(state.ruleLibraryChatGenerating || state.ruleLibraryPregenerating)
-    });
-    return;
-  }
-  if (sequenceFloating) {
-    host.hidden = false;
-    host.removeAttribute("hidden");
-    host.innerHTML = renderSequenceToolboxFloatButton({ toolsOpen: false });
-    return;
-  }
-  if (stateMachineFloating) {
-    host.hidden = false;
-    host.removeAttribute("hidden");
-    host.innerHTML = renderStateMachineToolboxFloatButton({ toolsOpen: false });
-    return;
-  }
-  if (phaseFloating) {
-    host.hidden = false;
-    host.innerHTML = renderPhaseActionChatFloatButton({
-      chatOpen: false,
-      chatGenerating: Boolean(state.phaseActionChatGenerating),
-      disabled: Boolean(state.phaseActionGenerating || state.combatFocusGenerating)
-    });
-    return;
-  }
-  if (forceFloating) {
-    host.hidden = false;
-    host.innerHTML = renderForceMissionChatFloatButton({
-      chatOpen: false,
-      chatGenerating: Boolean(state.forceMissionChatGenerating),
-      disabled: Boolean(state.forceMissionGenerating)
-    });
-    return;
-  }
-  host.hidden = true;
-  host.innerHTML = "";
+  let html = "";
+  if (state.activeView === "ov1" && state.ov1ToolsOpen !== true) html = renderOv1ToolboxFloatButton();
+  else if (state.activeView === "ov4" && state.ov4ToolsOpen !== true) html = renderOv4ToolboxFloatButton({ toolsOpen: false });
+  else if (state.activeView === "ov6b" && state.ov6bToolsOpen !== true) html = renderStateMachineToolboxFloatButton({ toolsOpen: false });
+  else if (state.activeView === "ov6c" && state.ov6cToolsOpen !== true) html = renderSequenceToolboxFloatButton({ toolsOpen: false });
+  else html = renderSubflowToolboxFloatButton(state.activeView, state);
+  host.hidden = !html;
+  if (html) host.removeAttribute("hidden");
+  host.innerHTML = html;
 }
 
 function resizeBriefTextareas() {
@@ -675,16 +613,20 @@ function bindDynamicEvents() {
         }
       }
       if (button.dataset.relatedModel === "true") {
-        const focus = resolveModelFocus(state.activeView, state);
+        const currentContext = state.relatedModelReturnContext;
+        const mainViewId = resolveRelatedMainViewId(state.activeView, viewId, currentContext);
+        const continuingFlow = Boolean(currentContext?.mainViewId && currentContext.mainViewId === mainViewId);
+        const focus = resolveModelFocus(mainViewId, state);
         state.relatedModelReturnContext = {
-          mainViewId: state.activeView,
-          mainLabel: getViewMeta(state.activeView)?.label || "主步骤",
+          ...(continuingFlow ? currentContext : {}),
+          mainViewId,
+          mainLabel: currentContext?.mainLabel || getViewMeta(mainViewId)?.label || "主步骤",
           relatedViewId: viewId,
           focusType: focus.focusType || "",
           focusId: focus.focusId || "",
           focusLabel: focus.focusLabel || "",
-          selection: state.selection ? { ...state.selection } : null,
-          scrollSnapshots: captureViewScroll($("#viewRoot"))
+          selection: continuingFlow ? currentContext.selection || null : state.selection ? { ...state.selection } : null,
+          scrollSnapshots: continuingFlow ? currentContext.scrollSnapshots || [] : captureViewScroll($("#viewRoot"))
         };
       } else if (workflowPrimaryStepIds.includes(viewId)) {
         state.relatedModelReturnContext = null;
@@ -908,6 +850,7 @@ function bindDynamicEvents() {
   });
   bindInspectorEvents();
   aiConfigController.bind(document);
+  aiPromptController.bind(document);
   inspirationAdviceController.bind(document);
   phaseActionChatController.bind(document);
   forceMissionChatController.bind(document);
@@ -920,6 +863,7 @@ function bindDynamicEvents() {
   stateMachineCanvasController.bind(document);
   ov4CanvasController.bind(document);
   sequenceCanvasController.bind(document);
+  ov1bCanvasController.bind(document);
   ov5CanvasController.bind(document);
   briefController.bind(document);
   oodaController.bind(document);
@@ -1209,6 +1153,27 @@ function handleAction(action, source = null) {
     void advanceWorkflowStep();
     return;
   }
+  if (action === "advance-workflow") {
+    const context = resolveWorkflowGateContext(state);
+    void (context.mode === "related-next-step" ? advanceRelatedWorkflow() : advanceWorkflowStep());
+    return;
+  }
+  if (action === "toggle-subflow-toolbox") {
+    state.subflowToolboxOpen = {
+      ...(state.subflowToolboxOpen || {}),
+      [state.activeView]: state.subflowToolboxOpen?.[state.activeView] !== true
+    };
+    render();
+    return;
+  }
+  if (action === "open-subflow-ai") {
+    showToast(`${getViewMeta(state.activeView)?.label || "当前子流程"}的 AI 工具已就绪；请先确认上游内容，再让 AI 生成或检查本页草案。`);
+    return;
+  }
+  if (action === "advance-related-workflow") {
+    void advanceRelatedWorkflow();
+    return;
+  }
   if (action === "complete-workflow-stage") {
     void completeWorkflowStage();
     return;
@@ -1246,6 +1211,7 @@ function handleAction(action, source = null) {
   }
   if (knowledgeController.handleAction(action, $("#knowledgeVaultInput"))) return;
   if (aiConfigController.handleAction(action)) return;
+  if (aiPromptController.handleAction(action, source)) return;
   if (projectBriefSyncController.handleAction(action)) return;
   if (dodafProductController.handleAction(action, source)) return;
   if (projectForceMissionSyncController.handleAction(action)) return;
@@ -2184,10 +2150,10 @@ function goToWorkflowView(viewId) {
  * - 规则库: empty → AI pregenerate rules from brief
  * - 阶段与行动: no combat-focus options yet → AI generate 3 directions + transition overlay
  * - 状态机校验: empty → AI derives editable task machines from phase actions
- * - 时序校验: empty → derive one editable phase/force timeline
+ * - 时序校验: empty → AI generates separate side and per-phase timelines
  * Used by: top gate capsule, gate panel buttons, left floating step rail, menus.
  */
-async function navigateToResearchView(viewId, { toast = "", force = false, entrySource = "default" } = {}) {
+async function navigateToResearchView(viewId, { toast = "", force = false, entrySource = "default", completeOperationalTasks = false } = {}) {
   if (!viewId) return;
   if (!force && state.activeView === viewId && viewId !== "ov6a" && viewId !== "phase-action") return;
   if (viewId === "ov6a") state.ruleLibraryEntrySource = entrySource;
@@ -2195,20 +2161,57 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
   render();
   if (toast) showToast(toast);
   if (viewId === "ov6a") {
-    await ruleLibraryChatController.pregenerateFromBrief({ silent: false });
+    if (entrySource === "operational-task") {
+      await ruleLibraryChatController.proposeChanges("operational-task", { silent: false });
+    } else {
+      await ruleLibraryChatController.pregenerateFromBrief({ silent: false });
+    }
+    // When arriving from the confirmed phase/action step, derive a reviewable
+    // rule change set from that upstream model. Brief pre-generation above only
+    // creates the initial library and intentionally skips non-empty libraries.
+    if (entrySource === "phase-action" && state.phaseAction?.status === "confirmed") {
+      await ruleLibraryChatController.proposeChanges("phase-action", { silent: false });
+    }
+  }
+  if (viewId === "ov1b") {
+    await dodafProductController.pregenerateOv1bFromTasks({ silent: false });
   }
   if (viewId === "phase-action") {
     await ensureCombatFocusOnEnterPhaseAction();
   }
   if (viewId === "ov6b") {
-    await dodafProductController.pregenerateOv6bFromPhaseAction({ silent: false });
+    await dodafProductController.pregenerateOv6bFromPhaseAction({ silent: false, contextType: entrySource === "operational-task" ? "task" : "phase" });
   }
   if (viewId === "ov6c") {
-    await dodafProductController.pregenerateOv6cFromPhase({ silent: false });
+    await dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType: entrySource === "operational-task" ? "task" : "phase" });
   }
-  if (viewId === "operational-task" && !(state.forceMission?.tasks || []).length) {
+  if (viewId === "operational-task" && (
+    !(state.forceMission?.tasks || []).length
+    || ((entrySource === "phase-action" || completeOperationalTasks) && operationalTasksNeedAiCompletion(state.forceMission?.tasks))
+  )) {
     await conceptPlanningController.generateOperationalTasks({ silent: false });
   }
+}
+
+function operationalTasksNeedAiCompletion(tasks = []) {
+  if (!Array.isArray(tasks) || !tasks.length) return true;
+  return tasks.some((task) => {
+    const area = task?.area || {};
+    const points = (area.points || []).filter((point) => Number.isFinite(point?.latitude) && Number.isFinite(point?.longitude));
+    const requiredPoints = area.geometryType === "point" || area.geometryType === "circle"
+      ? 1
+      : area.geometryType === "corridor" ? 2 : 3;
+    return !String(task?.name || "").trim()
+      || !String(task?.missionType || "").trim()
+      || !String(task?.objective || "").trim()
+      || !String(task?.expectedEffect || "").trim()
+      || !String(area.name || "").trim()
+      || area.name === "待人工明确"
+      || !String(area.type || "").trim()
+      || !String(area.geometryType || "").trim()
+      || !String(area.basis || "").trim()
+      || points.length < requiredPoints;
+  });
 }
 
 /**
@@ -2230,9 +2233,50 @@ async function advanceWorkflowStep() {
     showToast("当前没有可进入的下一步");
     return;
   }
+  if (ctx.nextStep.related) {
+    state.relatedModelReturnContext = {
+      mainViewId: ctx.nextStep.mainViewId,
+      mainLabel: getViewMeta(ctx.nextStep.mainViewId)?.label || "主步骤",
+      relatedViewId: ctx.nextStep.id,
+      scrollSnapshots: captureViewScroll($("#viewRoot"))
+    };
+  }
   await navigateToResearchView(ctx.nextStep.id, {
     toast: `已进入${ctx.nextStep.label}`,
-    force: true
+    force: true,
+    entrySource: ctx.nextStep.mainViewId || ctx.current?.id || "default"
+  });
+}
+
+async function advanceRelatedWorkflow() {
+  const ctx = resolveWorkflowGateContext(state);
+  if (ctx.mode !== "related-next-step" || !ctx.nextStep?.id) {
+    showToast("当前没有可进入的下一步");
+    return;
+  }
+  if (state.activeView === "ov6a" && (state.ov6a?.ruleChangeSet?.changes || []).some((item) => item.status === "pending")) {
+    showToast("请先在规则库接受或忽略全部待审核建议，再生成状态机");
+    return;
+  }
+  if (ctx.nextStep.related) {
+    const current = state.relatedModelReturnContext || {};
+    state.relatedModelReturnContext = {
+      ...current,
+      mainViewId: ctx.mainViewId,
+      mainLabel: current.mainLabel || getViewMeta(ctx.mainViewId)?.label || "主步骤",
+      relatedViewId: ctx.nextStep.id
+    };
+  } else {
+    state.relatedModelReturnContext = null;
+  }
+  const completesPhaseSubflow = ctx.mainViewId === "phase-action"
+    && state.activeView === "ov6c"
+    && ctx.nextStep.id === "operational-task";
+  await navigateToResearchView(ctx.nextStep.id, {
+    toast: `已进入${ctx.nextStep.label}`,
+    force: true,
+    entrySource: ctx.mainViewId,
+    completeOperationalTasks: completesPhaseSubflow
   });
 }
 
@@ -2254,7 +2298,7 @@ async function completeWorkflowStage() {
   if (completedWorkflowStage(workflow) >= stage) {
     // Already confirmed — just walk forward if possible (same pregenerate path as “下一步”).
     if (ctx.nextStep?.id) {
-      await navigateToResearchView(ctx.nextStep.id, { force: true });
+      await advanceWorkflowStep();
       return;
     }
     showToast("本阶段已确认");
@@ -2266,18 +2310,31 @@ async function completeWorkflowStage() {
     await updateProject(state.activeProjectId, { workflow: { ...workflow, completedThrough: stage, updatedAt: new Date().toISOString() } });
     state.workflowGateOpen = false;
     const followingPhase = workflowPhases[stage + 1];
-    const nextView = followingPhase ? views.find((view) => view.phase === followingPhase)?.id : "";
+    const nextMainView = followingPhase ? views.find((view) => view.phase === followingPhase)?.id : "";
+    const relatedViewId = contextualFlowViewIds(ctx.current?.id, state)[0] || "";
+    const nextView = relatedViewId || nextMainView;
+    if (relatedViewId) {
+      state.relatedModelReturnContext = {
+        mainViewId: ctx.current.id,
+        mainLabel: ctx.current.label || "主步骤",
+        relatedViewId,
+        scrollSnapshots: captureViewScroll($("#viewRoot"))
+      };
+    }
     if (nextView) goToWorkflowView(nextView);
     await hydrateProjectDirectory({ skipRender: true });
-    showToast(nextView ? "\u5f53\u524d\u9636\u6bb5\u5df2\u786e\u8ba4\uff0c\u5df2\u8fdb\u5165\u4e0b\u4e00\u9636\u6bb5" : "\u5de5\u4f5c\u6d41\u5df2\u786e\u8ba4\u5b8c\u6210");
+    if (relatedViewId === "ov1b") await dodafProductController.pregenerateOv1bFromTasks({ silent: false });
+    showToast(relatedViewId
+      ? `当前阶段已确认，已进入关联流程${relatedViewLabel(relatedViewId)}`
+      : nextView ? "当前阶段已确认，已进入下一阶段" : "工作流已确认完成");
     // Completing 阶段行动 forms an independent task product.
-    if (stage === 1 && nextView === "operational-task") {
+    if (stage === 1 && nextMainView === "operational-task") {
       await conceptPlanningController.generateOperationalTasks({ silent: false });
     }
-    if (stage === 2 && nextView === "force-mission") {
+    if (stage === 2 && nextMainView === "force-mission") {
       await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
     }
-    if (stage === 4 && nextView === "concept-map" && typeof conceptMapController.seedFromPlanning === "function") {
+    if (stage === 4 && nextMainView === "concept-map" && typeof conceptMapController.seedFromPlanning === "function") {
       await conceptMapController.seedFromPlanning({ silent: false });
     }
   } catch {
@@ -2311,6 +2368,24 @@ async function setWorkflowMode(mode) {
 }
 
 function getBusyOverlayState() {
+  if (state.taskDecompositionPregenerating) {
+    return { key: "task-decomposition-pregenerate", title: "正在进入任务分解", detail: "AI 正在仅依据已确认任务生成父子任务 UML…", expectedMs: 90000, timeoutMs: 180000 };
+  }
+  if (state.operationalTaskGenerating) {
+    const progress = state.operationalTaskGenerationProgress;
+    const completed = Number(progress?.completed) || 0;
+    const total = Number(progress?.total) || 0;
+    return {
+      key: "operational-task-generate",
+      title: "正在进入作战任务",
+      detail: total > 0
+        ? `AI 正在生成并补全任务内容（${completed}/${total} 批）…`
+        : "AI 正在依据阶段行动生成任务并补全任务区域…",
+      expectedMs: 120000,
+      timeoutMs: 240000,
+      progressPercent: total > 0 ? Math.round((completed / total) * 100) : null
+    };
+  }
   if (state.ruleLibraryPregenerating) {
     return {
       key: "rule-library-pregenerate",
@@ -2342,7 +2417,16 @@ function getBusyOverlayState() {
     return {
       key: "state-machine-pregenerate",
       title: "正在进入状态机校验",
-      detail: "根据阶段与行动分析任务状态和转换条件…",
+      detail: state.ov6GenerationContext === "task" ? "根据任务规则生成逐任务状态机…" : "根据阶段与行动分析阶段状态和转换条件…",
+      expectedMs: 90000,
+      timeoutMs: 180000
+    };
+  }
+  if (state.sequencePregenerating) {
+    return {
+      key: "sequence-pregenerate",
+      title: "正在进入时序图",
+      detail: state.ov6GenerationContext === "task" ? "AI 正在根据任务状态机生成逐任务时序图…" : "AI 正在生成各推演方及每个阶段的时序图…",
       expectedMs: 90000,
       timeoutMs: 180000
     };
@@ -2410,18 +2494,26 @@ function updateBusyOverlayProgress(busy) {
   const estimatedPercent = elapsedMs <= expectedMs
     ? Math.min(90, Math.round(8 + (elapsedMs / expectedMs) * 82))
     : Math.min(97, Math.round(90 + ((elapsedMs - expectedMs) / Math.max(1, timeoutMs - expectedMs)) * 7));
+  const reportedPercent = Number.isFinite(busy.progressPercent)
+    ? Math.max(0, Math.min(100, busy.progressPercent))
+    : null;
+  const displayedPercent = reportedPercent === null
+    ? estimatedPercent
+    : Math.max(reportedPercent, Math.min(estimatedPercent, 95));
   const progress = $(".workflow-mode-progress");
   const bar = $("#workflowModeProgressBar");
   const elapsed = $("#workflowModeElapsed");
   const estimate = $("#workflowModeEstimate");
   const hint = $("#workflowModeProgressHint");
-  if (progress) progress.setAttribute("aria-valuenow", String(estimatedPercent));
-  if (bar) bar.style.width = `${estimatedPercent}%`;
+  if (progress) progress.setAttribute("aria-valuenow", String(displayedPercent));
+  if (bar) bar.style.width = `${displayedPercent}%`;
   if (elapsed) elapsed.textContent = `已用时 ${formatBusyDuration(elapsedMs)}`;
   if (estimate) estimate.textContent = elapsedMs <= expectedMs
     ? `通常 ${formatBusyDuration(expectedMs / 2)}～${formatBusyDuration(expectedMs)}`
     : `服务超时上限 ${formatBusyDuration(timeoutMs)}`;
-  if (hint) hint.textContent = elapsedMs <= expectedMs
+  if (hint) hint.textContent = reportedPercent !== null
+    ? "进度按已完成生成批次与预计耗时综合显示"
+    : elapsedMs <= expectedMs
     ? "进度按预计耗时估算，实际以 AI 返回为准"
     : (elapsedMs < timeoutMs
       ? "已超过常见耗时，服务仍在处理；到达上限后会自动结束并提示重试"

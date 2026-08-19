@@ -1040,49 +1040,108 @@ export function replaceOv6cSequenceContent(model, sequenceId, nextSequence = {})
   return normalizeDodafOv6c(next);
 }
 
-/** Seed one collaborative sequence from phase/force subjects when empty. */
+/** Seed required side and per-phase sequences when the sequence product is empty. */
 export function seedOv6cFromPhase(model, state = {}) {
   let next = ensureOv6cModel(model);
   if ((next.sequences || []).length) return next;
-  const forces = Array.isArray(state.forceMission?.forces) ? state.forceMission.forces : [];
+  const forces = [
+    ...(Array.isArray(state.forceMission?.forces) ? state.forceMission.forces : []),
+    ...(Array.isArray(state.forceMission?.combatForces) ? state.forceMission.combatForces : [])
+  ];
   const phases = Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : [];
-  const participants = (forces.length
-    ? forces.slice(0, 6).map((force, index) => ({
-      id: force.id || `participant-${index + 1}`,
-      name: force.name || force.id || `参与节点 ${index + 1}`,
-      ref: force.id || "",
-      refType: force.id ? "force" : ""
-    }))
-    : [
-      { id: "participant-subject", name: "研究主体", ref: "", refType: "" },
-      { id: "participant-peer", name: "协同对象", ref: "", refType: "" }
-    ]);
-  const messages = [];
-  phases.slice(0, 8).forEach((phase, index) => {
-    const from = participants[index % participants.length];
-    const to = participants[(index + 1) % participants.length];
-    const action = (phase.blueActions || phase.primaryActions || [])[0] || phase.objective || phase.name || `阶段 ${index + 1}`;
-    messages.push({
-      id: `event-seed-${index + 1}`,
-      sequence: index + 1,
-      fromRef: from.id,
-      toRef: to.id,
-      name: String(action).slice(0, 120),
-      type: "message",
-      condition: String(phase.entryConditions?.[0] || phase.exitConditions?.[0] || "").slice(0, 200),
-      relatedActivityRefs: phase.id ? [String(phase.id)] : [],
-      offsetMinutes: index * 20,
-      durationMinutes: 20,
-      time: `T+${index * 20}`
+  const sides = [
+    { id: "friendly", label: "蓝方", actionKey: "blueActions", fallbackKey: "primaryActions" },
+    { id: "hostile", label: "红方", actionKey: "redActions", fallbackKey: "secondaryActions" }
+  ].filter((side) => forces.some((force) => force?.side === side.id)
+    || phases.some((phase) => (phase?.[side.actionKey] || phase?.[side.fallbackKey] || []).length));
+
+  sides.forEach((side) => {
+    const sideForces = forces.filter((force) => force?.side === side.id).slice(0, 8);
+    const participants = ensureSequenceParticipants(sideForces.map((force, index) => forceParticipant(force, `${side.id}-${index + 1}`)), side.label);
+    const messages = phases.slice(0, 12).flatMap((phase, phaseIndex) => {
+      const actions = (phase?.[side.actionKey] || phase?.[side.fallbackKey] || []).filter(Boolean).slice(0, 4);
+      return (actions.length ? actions : [phase?.objective || phase?.name || `${side.label}阶段行动`]).map((action, actionIndex) => sequenceMessage({
+        id: `event-${side.id}-${phaseIndex + 1}-${actionIndex + 1}`,
+        index: phaseIndex * 4 + actionIndex,
+        participants,
+        name: action,
+        phase,
+        condition: phase?.entryConditions?.[0] || phase?.exitConditions?.[0] || ""
+      }));
+    });
+    next = addOv6cSequence(next, {
+      id: `sequence-side-${side.id}`,
+      name: `${side.label}推演时序`,
+      diagramType: "force",
+      participants,
+      messages
     });
   });
-  next = addOv6cSequence(next, {
-    name: "事件协同时序",
-    diagramType: "phase",
-    participants,
-    messages
+
+  phases.slice(0, 24).forEach((phase, phaseIndex) => {
+    const phaseId = String(phase?.id || `phase-${phaseIndex + 1}`);
+    const phaseForces = forces.filter((force) => !(force?.phaseIds || []).length || force.phaseIds.includes(phaseId)).slice(0, 10);
+    const participants = ensureSequenceParticipants([
+      { id: `phase-${phaseId}`, name: phase?.name || phaseId, ref: phaseId, refType: "phase" },
+      ...phaseForces.map((force, index) => forceParticipant(force, `${phaseId}-${index + 1}`))
+    ], phase?.name || `阶段 ${phaseIndex + 1}`);
+    const actions = [
+      ...(phase?.blueActions || phase?.primaryActions || []),
+      ...(phase?.redActions || phase?.secondaryActions || [])
+    ].filter(Boolean).slice(0, 8);
+    const messages = (actions.length ? actions : [phase?.objective || phase?.name || `阶段 ${phaseIndex + 1}`]).map((action, actionIndex) => sequenceMessage({
+      id: `event-phase-${phaseIndex + 1}-${actionIndex + 1}`,
+      index: actionIndex,
+      participants,
+      name: action,
+      phase,
+      condition: actionIndex === 0 ? phase?.entryConditions?.[0] : phase?.exitConditions?.[0]
+    }));
+    next = addOv6cSequence(next, {
+      id: `sequence-phase-${phaseId}`,
+      name: `${phase?.name || `阶段 ${phaseIndex + 1}`}时序`,
+      diagramType: "phase",
+      participants,
+      messages
+    });
   });
   return ensureOv6cModel(next);
+}
+
+function forceParticipant(force = {}, fallbackId) {
+  const ref = String(force?.id || "");
+  return { id: ref || `participant-${fallbackId}`, name: force?.name || force?.title || ref || fallbackId, ref, refType: ref ? "force" : "" };
+}
+
+function ensureSequenceParticipants(participants = [], label = "推演方") {
+  const unique = participants.filter((item, index, list) => item?.id && list.findIndex((candidate) => candidate.id === item.id) === index);
+  while (unique.length < 2) {
+    const index = unique.length + 1;
+    unique.push({ id: `participant-${stableSequenceKey(label)}-${index}`, name: `${label}协同节点 ${index}`, ref: "", refType: "" });
+  }
+  return unique;
+}
+
+function sequenceMessage({ id, index, participants, name, phase, condition }) {
+  const from = participants[index % participants.length];
+  const to = participants[(index + 1) % participants.length];
+  return {
+    id,
+    sequence: index + 1,
+    fromRef: from.id,
+    toRef: to.id,
+    name: String(name || `消息 ${index + 1}`).slice(0, 120),
+    type: "message",
+    condition: String(condition || "").slice(0, 200),
+    relatedActivityRefs: phase?.id ? [String(phase.id)] : [],
+    offsetMinutes: index * 15,
+    durationMinutes: 15,
+    time: `T+${index * 15}`
+  };
+}
+
+function stableSequenceKey(value) {
+  return String(value || "sequence").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "sequence";
 }
 
 /**

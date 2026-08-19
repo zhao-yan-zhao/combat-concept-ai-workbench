@@ -100,7 +100,7 @@ assert(currentWorkflow({
   conceptMapStorage: { stale: true }
 }).completedThrough === 4, "A stale concept map should return the workflow to before the concept-map stage");
 
-// Associated models never expose a linear mainline gate.
+// Associated models reuse the same floating gate and continue their contextual route.
 const ruleGate = renderWorkflowGate({
   activeProjectId: "demo",
   activeView: "ov6a",
@@ -109,7 +109,7 @@ const ruleGate = renderWorkflowGate({
   brief: completeBrief,
   ...confirmedPhase
 });
-assert(ruleGate === "", "Associated rule library must not expose mainline progression");
+assert(ruleGate.includes('data-action="advance-related-workflow"') && ruleGate.includes("OV6b"), "Associated rule library must expose the floating gate and continue to OV6b");
 
 // Each authoritative product owns one independent mainline gate.
 const phaseGate = renderWorkflowGate({
@@ -120,7 +120,17 @@ const phaseGate = renderWorkflowGate({
   brief: completeBrief,
   ...confirmedPhase
 });
-assert(phaseGate.includes('data-action="complete-workflow-stage"') && phaseGate.includes("作战任务"), "Confirmed phase action should complete stage 1 and enter tasks");
+assert(phaseGate.includes('data-action="complete-workflow-stage"') && phaseGate.includes("OV6a"), "Confirmed phase action should complete stage 1 and enter its associated flow");
+
+const confirmedPhaseGate = renderWorkflowGate({
+  activeProjectId: "demo",
+  activeView: "phase-action",
+  projectDirectory: { projects: [{ id: "demo", workflow: { version: 2, completedThrough: 1, mode: "gated" } }] },
+  workflowCompleting: false,
+  brief: completeBrief,
+  ...confirmedPhase
+});
+assert(confirmedPhaseGate.includes('data-action="advance-workflow-step"') && confirmedPhaseGate.includes("OV6a"), "A confirmed phase step must enter its associated flow before the next main step");
 
 const overallGate = renderWorkflowGate({
   activeProjectId: "demo",
@@ -132,7 +142,7 @@ const overallGate = renderWorkflowGate({
   ...confirmedForce,
   ...confirmedConcept
 });
-assert(overallGate.includes('data-action="complete-workflow-stage"') && overallGate.includes("概念图"), "Overall graph must precede and unlock concept map");
+assert(overallGate.includes('data-action="complete-workflow-stage"') && overallGate.includes("OV5a"), "Overall graph must enter its activity-related flow before the concept-map main step");
 
 const incompleteGate = renderWorkflowGate({
   activeProjectId: "demo",

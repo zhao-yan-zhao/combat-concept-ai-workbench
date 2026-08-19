@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>通用分组列表模板 Test</title>
+    <link rel="stylesheet" href="./grouped-list-test.css">
+  </head>
+  <body>
+    <main class="test-page">
+      <header class="test-header">
+        <div>
+          <span>WORKFLOW UI TEST</span>
+          <h1>通用分组列表模板</h1>
+        </div>
+        <div class="test-header-actions">
+          <label><span>界面样例</span><select id="sampleSelect"></select></label>
+          <output id="resultSummary" aria-live="polite"></output>
+        </div>
+      </header>
+
+      <section class="master-detail" aria-label="通用分组列表测试工作区">
+        <aside class="master-panel">
+          <header class="master-heading">
+            <div><strong id="listTitle"></strong><small id="listSubtitle"></small></div>
+            <span id="visibleCount"></span>
+          </header>
+          <div class="master-tools">
+            <label class="master-search"><span>搜索</span><input id="searchInput" type="search" placeholder="搜索名称、编号或说明"></label>
+            <div class="master-tool-row">
+              <label class="group-control"><span>分组</span><select id="groupSelect" aria-label="分组方式"></select></label>
+              <details class="filter-menu" id="filterMenu">
+                <summary>筛选<span id="filterBadge"></span></summary>
+                <div class="filter-popover">
+                  <label><span>筛选字段</span><select id="filterFieldSelect"></select></label>
+                  <label><span>筛选值</span><select id="filterValueSelect"></select></label>
+                  <button id="resetButton" type="button">全部重置</button>
+                </div>
+              </details>
+            </div>
+            <div class="active-filter-summary" id="activeFilterSummary" hidden><span id="activeFilterText"></span><button id="clearFiltersButton" type="button" title="清除筛选" aria-label="清除筛选">×</button></div>
+          </div>
+          <div id="groupedList" class="grouped-list"></div>
+          <footer><span id="selectionStatus">未选择</span><button id="selectFirstButton" type="button">定位首项</button></footer>
+        </aside>
+
+        <section class="detail-panel" aria-live="polite">
+          <header><span id="detailEyebrow">ITEM DETAIL</span><strong id="detailTitle">选择左侧数据</strong></header>
+          <div id="detailContent" class="detail-empty">当前筛选结果中的条目将在这里显示。</div>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="./grouped-list-test.js"></script>
+  </body>
+</html>

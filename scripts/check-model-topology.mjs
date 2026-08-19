@@ -116,6 +116,21 @@ assert.equal(stateStatus.coverageCount, 1);
 const emptyResourceStatus = getModelContextStatus(topology, { focusType: "force", focusId: "combat-1", targetViewId: "ov2" });
 assert.equal(emptyResourceStatus.status, "empty");
 
+const unrelatedGlobalTopology = buildModelTopology({
+  ...fixture,
+  ov6a: {
+    rules: [{
+      id: "rule-phase-only",
+      name: "Phase-only rule",
+      phaseBindings: [{ phaseRef: "phase-2" }]
+    }]
+  }
+});
+const unrelatedTaskRuleStatus = getModelContextStatus(unrelatedGlobalTopology, { focusType: "task", focusId: "task-1", targetViewId: "ov6a" });
+assert.equal(unrelatedTaskRuleStatus.status, "empty", "Global OV-6a content must not mark an unrelated task as partially covered");
+assert.equal(unrelatedTaskRuleStatus.coverageCount, 0);
+assert.equal(unrelatedTaskRuleStatus.totalCount, 0, "An empty task context must not expose the global model count as task coverage");
+
 const orphanTopology = buildModelTopology({
   ...fixture,
   ov6b: {

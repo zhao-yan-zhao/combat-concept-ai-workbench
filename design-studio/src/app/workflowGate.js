@@ -4,6 +4,7 @@ import { phaseActionConceptIncompleteReasons } from "../phaseActionStore.js";
 import { isValidationStale } from "../validationStore.js";
 import { normalizeWorkflowProgress } from "../../../shared/workflowProgress.js";
 import { escapeHtml } from "./domUtils.js";
+import { contextualFlowViewIds, inferRelatedMainViewId, relatedViewLabel } from "../contextualModelFlow.js";
 
 export function currentWorkflow(state, project) {
   const workflow = normalizeWorkflowProgress(
@@ -121,7 +122,7 @@ export function resolveWorkflowGateContext(state) {
   const completedThrough = completedWorkflowStage(workflow);
   const index = steps.findIndex((step) => step.id === state.activeView);
   if (index < 0) {
-    return { freeMode, mode: "hidden", current: null, nextStep: null, completedThrough };
+    return resolveRelatedWorkflowGateContext(state, { freeMode, steps, completedThrough });
   }
 
   const current = steps[index];
@@ -172,6 +173,26 @@ export function resolveWorkflowGateContext(state) {
   }
 
   if (phaseDone && nextStep) {
+    const relatedViewIds = contextualFlowViewIds(current.id, state);
+    if (relatedViewIds.length) {
+      const relatedNextStep = {
+        id: relatedViewIds[0],
+        label: relatedViewLabel(relatedViewIds[0]),
+        related: true,
+        mainViewId: current.id
+      };
+      return buildAdvanceContext({
+        freeMode,
+        current,
+        nextStep: relatedNextStep,
+        phaseIndex,
+        completedThrough,
+        followingPhase,
+        completing,
+        open,
+        related: true
+      });
+    }
     return {
       freeMode: false,
       mode: "next-step",
@@ -196,7 +217,8 @@ export function resolveWorkflowGateContext(state) {
     };
   }
 
-  const nextPhaseLabel = followingPhase || "交付完成";
+  const confirmationRelatedId = contextualFlowViewIds(current.id, state)[0] || "";
+  const confirmationNextLabel = confirmationRelatedId ? relatedViewLabel(confirmationRelatedId) : (followingPhase || "交付完成");
   return {
     freeMode: false,
     mode: "complete-phase",
@@ -212,16 +234,85 @@ export function resolveWorkflowGateContext(state) {
     open,
     action: "complete-workflow-stage",
     capsuleTitle: current.phase || "当前步骤",
-    capsuleAction: ready ? (followingPhase ? stepShortLabel(nextStep) : "确认完成") : `待完成 ${incompleteReasons.length}`,
-    actionLabel: followingPhase ? `确认并进入${followingPhase}` : "确认并完成工作流",
+    capsuleAction: ready ? (confirmationRelatedId ? relatedViewLabel(confirmationRelatedId) : (followingPhase ? stepShortLabel(nextStep) : "确认完成")) : `待完成 ${incompleteReasons.length}`,
+    actionLabel: confirmationRelatedId ? `确认并进入${relatedViewLabel(confirmationRelatedId)}` : (followingPhase ? `确认并进入${followingPhase}` : "确认并完成工作流"),
     headLabel: "当前步骤",
     headTitle: current.phase || "",
     hint: ready
-      ? `当前成果已就绪，确认后进入${nextPhaseLabel}。`
+      ? `当前成果已就绪，确认后进入${confirmationNextLabel}${confirmationRelatedId ? "（关联流程）" : ""}。`
       : `尚需完成：${incompleteReasons.join("、")}。点击确认可查看提示。`,
     detailHtml: incompleteReasons.length
       ? `<ul class="workflow-gate-detail">${incompleteReasons.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
-      : `<p class="workflow-gate-detail-note">确认后将解锁下一项主线成果。</p>`
+      : `<p class="workflow-gate-detail-note">确认后将进入${escapeHtml(confirmationNextLabel)}${confirmationRelatedId ? "（关联流程）" : ""}。</p>`
+  };
+}
+
+function buildAdvanceContext({ freeMode, current, nextStep, phaseIndex, completedThrough, followingPhase, completing, open, related = false }) {
+  return {
+    freeMode,
+    mode: "next-step",
+    current,
+    nextStep,
+    isLastInPhase: true,
+    phaseIndex,
+    completedThrough,
+    incompleteReasons: [],
+    ready: true,
+    followingPhase,
+    completing,
+    open,
+    action: "advance-workflow-step",
+    capsuleTitle: "下一步",
+    capsuleAction: related ? relatedViewLabel(nextStep.id) : stepShortLabel(nextStep),
+    actionLabel: `进入${nextStep.label}`,
+    headLabel: "当前步骤",
+    headTitle: current.label,
+    hint: related
+      ? `本步骤已确认，先进入关联流程“${nextStep.label}”。`
+      : `本阶段已确认，可进入“${nextStep.label}”。`,
+    detailHtml: `<p class="workflow-gate-detail-note">下一项：${escapeHtml(nextStep.label)}${related ? "（关联流程）" : ""}。</p>`
+  };
+}
+
+function resolveRelatedWorkflowGateContext(state, { freeMode, steps, completedThrough }) {
+  const preferredMainViewId = state.relatedModelReturnContext?.mainViewId
+    || workflowPrimaryStepIds[Math.max(0, Math.min(completedThrough, workflowPrimaryStepIds.length - 1))]
+    || "";
+  const mainViewId = inferRelatedMainViewId(state.activeView, preferredMainViewId);
+  if (!mainViewId) return { freeMode, mode: "hidden", current: null, nextStep: null, completedThrough };
+  const relatedViewIds = contextualFlowViewIds(mainViewId, state);
+  const relatedIndex = relatedViewIds.indexOf(state.activeView);
+  if (relatedIndex < 0) return { freeMode, mode: "hidden", current: null, nextStep: null, completedThrough };
+  const mainIndex = steps.findIndex((step) => step.id === mainViewId);
+  const nextRelatedId = relatedViewIds[relatedIndex + 1] || "";
+  const nextMain = steps[mainIndex + 1] || null;
+  const nextStep = nextRelatedId
+    ? { id: nextRelatedId, label: relatedViewLabel(nextRelatedId), related: true, mainViewId }
+    : nextMain;
+  const currentLabel = relatedViewLabel(state.activeView);
+  if (!nextStep) {
+    return { freeMode, mode: "complete", current: { id: state.activeView, label: currentLabel }, nextStep: null, completedThrough };
+  }
+  return {
+    freeMode,
+    mode: "related-next-step",
+    current: { id: state.activeView, label: currentLabel },
+    nextStep,
+    mainViewId,
+    completedThrough,
+    ready: true,
+    completing: false,
+    open: Boolean(state.workflowGateOpen),
+    action: "advance-related-workflow",
+    capsuleTitle: "下一步",
+    capsuleAction: nextStep.related ? relatedViewLabel(nextStep.id) : stepShortLabel(nextStep),
+    actionLabel: `进入${nextStep.label}`,
+    headLabel: "当前关联步骤",
+    headTitle: currentLabel,
+    hint: nextStep.related
+      ? `继续关联流程，进入“${nextStep.label}”。`
+      : `当前关联流程已走完，进入主流程“${nextStep.label}”。`,
+    detailHtml: `<p class="workflow-gate-detail-note">下一项：${escapeHtml(nextStep.label)}${nextStep.related ? "（关联流程）" : "（主流程）"}。</p>`
   };
 }
 

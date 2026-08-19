@@ -69,9 +69,14 @@ const rendered = renderOperationalTasks({ forceMission: plan, phaseAction, phase
 assert.ok(rendered.includes("任务类型") && rendered.includes("区域用途") && rendered.includes("WGS84"));
 assert.ok(rendered.includes("21.123457") && rendered.includes("121.765432"));
 assert.ok(rendered.includes("AI 一键重新生成") && !rendered.includes("generate-operational-task-area"));
+assert.ok(rendered.includes("filter-operational-tasks") && rendered.includes("蓝方") && rendered.includes("红方"));
+assert.ok(rendered.includes("区域补全") && rendered.includes("operational-task-delete"));
 assert.ok(renderOperationalTasks({ forceMission: plan, phaseAction, phaseActionStorage: {}, operationalTaskGenerating: true, operationalTaskGenerationProgress: { completed: 1, total: 3 } }).includes("AI 正在生成 1/3"));
 const operationalTaskControllerSource = readFileSync(new URL("../design-studio/src/conceptPlanningController.js", import.meta.url), "utf8");
 assert.ok(operationalTaskControllerSource.includes("operationalTaskListScrollTop") && operationalTaskControllerSource.includes("operationalTaskList.scrollTop ="), "Task selection should preserve list scroll position across renders");
+const mainSource = readFileSync(new URL("../design-studio/src/main.js", import.meta.url), "utf8");
+assert.ok(mainSource.includes("state.operationalTaskGenerating") && mainSource.includes('key: "operational-task-generate"'), "Task generation must use the shared AI transition overlay");
+assert.ok(mainSource.includes("AI 正在生成并补全任务内容") && mainSource.includes("operationalTaskGenerationProgress"), "Task transition overlay must expose batch completion status");
 
 const localAiDraft = generateMockOutput({
   workflow: { id: "operational-task", title: "作战任务与任务区域", outputSchema: "OperationalTaskDraft" },

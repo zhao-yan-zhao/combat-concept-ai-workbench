@@ -27,7 +27,7 @@ export function renderOv4ToolboxFloatButton({ toolsOpen = false } = {}) {
 }
 
 function renderOv4ToolboxRail(editorOpen) {
-  return renderToolboxRail({ scope: "ov4", open: true, label: "组织关系工具箱", navLabel: "组织关系工具", className: "sm-edit-rail ov4-edit-rail", navClassName: "ov4-edit-rail-nav", toggleAction: "toggle-ov4-tools", items: [{ action: "ov4-toggle-editor", title: "组织关系信息", icon: "relations", active: editorOpen, pressed: editorOpen }] });
+  return renderToolboxRail({ scope: "ov4", open: true, label: "组织关系工具箱", navLabel: "组织关系工具", className: "sm-edit-rail ov4-edit-rail", navClassName: "ov4-edit-rail-nav", toggleAction: "toggle-ov4-tools", items: [{ action: "open-subflow-ai", title: "AI 检查组织关系", icon: "sparkle", attention: true }, "sep", { action: "ov4-toggle-editor", title: "组织关系信息", icon: "relations", active: editorOpen, pressed: editorOpen }] });
 }
 
 function renderDiagramPanel(diagrams, selectedId) {

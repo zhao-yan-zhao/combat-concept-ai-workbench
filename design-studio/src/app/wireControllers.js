@@ -25,6 +25,7 @@ import { createAiDirectionController } from "../aiDirectionController.js";
 import { createObsidianArchiveController } from "../obsidianArchiveController.js";
 import { createRedTeamController } from "../redTeamController.js";
 import { createAiConfigController } from "../aiConfigController.js";
+import { createAiPromptController } from "../aiPromptController.js";
 import { createDeploymentController } from "../deploymentController.js";
 import { createConceptMapController } from "../conceptMapController.js";
 import { createConceptPlanningController } from "../conceptPlanningController.js";
@@ -34,6 +35,7 @@ import { createRuleLibraryChatController } from "../ruleLibraryChatController.js
 import { createSequenceChatController } from "../sequenceChatController.js";
 import { createStateMachineChatController } from "../stateMachineChatController.js";
 import { createSequenceCanvasController } from "../sequenceCanvasController.js";
+import { createOv1bCanvasController } from "../ov1bCanvasController.js";
 import { createResearchChatProjectSync } from "../researchChatProjectSync.js";
 import { createCollaborationController } from "../collaborationController.js";
 import { createDodafProductController } from "../dodafProductController.js";
@@ -696,6 +698,7 @@ export function wireControllers({
       writeArchitecture: true
     })
   });
+  const aiPromptController = createAiPromptController({ getState: () => state, render, notify: showToast });
   const ov4CanvasController = createOv4CanvasController({
     projectId: activeProjectId,
     getState: () => state,
@@ -750,6 +753,7 @@ export function wireControllers({
   });
 
   const sequenceCanvasController = createSequenceCanvasController();
+  const ov1bCanvasController = createOv1bCanvasController();
 
   return {
     oodaController,
@@ -785,6 +789,7 @@ export function wireControllers({
     obsidianArchiveController,
     redTeamController,
     aiConfigController,
+    aiPromptController,
     deploymentController,
     conceptMapController,
     conceptPlanningController,
@@ -793,6 +798,7 @@ export function wireControllers({
     ruleLibraryChatController,
     sequenceChatController,
     sequenceCanvasController,
+    ov1bCanvasController,
     stateMachineChatController,
     stateMachineCanvasController,
     ov4CanvasController,

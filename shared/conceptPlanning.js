@@ -430,6 +430,12 @@ export function updateOperationalTask(plan = {}, taskId = "", patch = {}) {
   });
 }
 
+export function removeOperationalTask(plan = {}, taskId = "") {
+  const normalized = normalizeForceMissionPlan(plan);
+  const tasks = normalized.tasks.filter((task) => task.id !== taskId);
+  return normalizeForceMissionPlan({ ...normalized, tasks, tasksConfirmedAt: "" });
+}
+
 export function updateOperationalTaskArea(plan = {}, taskId = "", patch = {}) {
   const normalized = normalizeForceMissionPlan(plan);
   const task = normalized.tasks.find((item) => item.id === taskId);

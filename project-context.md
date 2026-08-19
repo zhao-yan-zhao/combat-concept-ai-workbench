@@ -1,5 +1,54 @@
 # project-context.md
 
+## Latest completed change (2026-08-19, OV1b pan and connector correction)
+
+- Fixed OV1b decomposition canvas panning with pointer capture and scroll-based horizontal/vertical movement from blank canvas areas; form controls and nodes retain normal interaction.
+- Replaced the canvas-wide child bus with a child-row-owned bus spanning exactly the first and last child centers. The parent trunk lands at its midpoint and each vertical child branch terminates at its node center.
+- Verification: task AI chain, OV1b dynamic binding, workflow test mode, syntax, diff, health, and served-controller checks passed. Login-gated visual drag verification remains open.
+
+## Latest completed change (2026-08-19, separate phase and task AI chains)
+
+- Goal: Preserve the existing phase rule/state/sequence chain while adding an independent task chain: operational tasks -> AI task-decomposition UML -> task-bound rules -> task state machines -> task sequence diagrams.
+- Behavior: Related-flow navigation carries its main-step context. First task-decomposition entry calls the new `TaskDecompositionDraft`; task rule proposals use `taskRefs` and persist accepted `taskBindings`; shared OV6b/OV6c stores append only the missing `task` or `phase` type and never overwrite the other chain. Pending rule proposals block progression to state-machine generation until human review.
+- AI prompts: Added editable stable prompt ID `ai.generate.task-decomposition`; the catalog now contains 18 entries. Task generation requests consume only confirmed task fields and stable IDs.
+- Verification: `check-task-ai-chain`, AI prompt management, OV1b dynamic binding, phase chain, OV6 product/workbench, contextual flow, workflow test mode, syntax, and diff checks passed.
+
+## Latest completed change (2026-08-19, state-machine to side and per-phase sequences)
+
+- Goal: When advancing from the state-machine page, automatically generate sequence diagrams with AI, including separate diagrams for each wargaming side and one diagram for every phase.
+- Behavior: First entry to an empty sequence product calls `SequenceDraft`; existing human-owned sequences are never overwritten. The request carries explicit side/phase coverage and the shared `ai.generate.sequence` prompt requires separate outputs. Missing AI coverage, or AI unavailability, is filled by deterministic side/per-phase drafts with stable force and phase references.
+- UI: Sequence generation has a dedicated busy state describing side and per-phase generation.
+- Changed files: `design-studio/src/{app/createInitialState,dodafProductController,main,ov6Workbench}.js`, `server/openaiClient.mjs`, `scripts/{check-ov6-workbench,check-phase-chain}.mjs`, and this handoff.
+- Verification: Syntax checks, OV-6 workbench, phase-chain, AI-prompt-management, and workflow-test-mode checks passed. The focused fixture proves two side diagrams plus one diagram per phase and supplements incomplete AI output.
+- Remaining proof: The running 8792 process was not restarted because its real-AI credential is process-only; restart it through the existing secure launcher before live-testing the updated server prompt text.
+
+## Latest completed change (2026-08-19, AI prompt catalog and editor)
+
+- Goal: Add a top-menu entry for browsing and editing every prompt that is actually sent to the AI service, and require future prompts to join the same catalog.
+- Design: Added a server-owned prompt catalog with 17 stable IDs: 14 generation variants, the common generation instruction, and red-team body/instruction prompts. Each entry exposes purpose, defaults, customization state, and dynamically appended context fields. Editable overrides persist in `data/ai-prompts.json`, reuse lead-controlled AI configuration authorization, and take effect on subsequent Responses requests without storing project context in templates. The six legacy `shared/data.js` templates remain excluded because they only describe local mock output metadata and are not sent to the live model.
+- UI: The top `工具` menu now includes `AI 提示词`. Its restrained management dialog provides a scrollable catalog, stable ID, usage description, dynamic-context note, editable body, save, and restore-default actions.
+- Changed files: `server/{aiPromptConfig,openaiClient,createRuntime,createRequestHandler}.mjs`, `design-studio/src/{aiPromptClient,aiPromptView,aiPromptController}.js`, `design-studio/src/app/{createInitialState,wireControllers}.js`, `design-studio/{index.html,styles.css}`, `scripts/check-ai-prompt-management.mjs`, `AGENTS.md`, and this handoff.
+- Verification: Syntax and `check-ai-prompt-management.mjs` passed, including persistence reload and proof that a saved generic override enters the next real request body. Design-studio workflow regression and targeted diff check passed. Restarted 8792 as PID 18236; health and `/api/ai-prompts` return 200, SQLite mode remains active, and the catalog returns 17 entries. A temporary same-origin fixture using the real renderer/styles verified all 17 items, a stable desktop split/editor, and no horizontal overflow; it was removed. The browser's CSS viewport could not go below 960px, so true phone-width screenshot proof remains open.
+- Remaining: Authenticated live-menu click-through was blocked by the collaboration login gate. Existing unrelated dirty worktree changes were preserved.
+
+## Latest completed change (2026-08-19, content-specific subflow toolboxes)
+
+- Goal: Give every auxiliary workflow page a toolbox whose actions match that page's content, while making an AI action mandatory and visible as the first entry.
+- Design: Reused the original Git state-machine toolbox interaction: when closed, a single toolbox button floats at the top right; clicking it hides the float and opens a 58px vertical tool rail on the right side of the page, with the toolbox button at the top and icon tools below. Each subflow has an independent tool list and an AI item. OV-1, OV-4, OV-6b, and OV-6c retain their native rails; OV-4 gains an AI organization check. Other pages use the generic state-machine-shaped float/right-rail shell. The brief page remains excluded.
+- Changed files: `design-studio/src/subflowToolbox.js`, `design-studio/src/ui.js`, `design-studio/src/main.js`, `design-studio/styles.css`, `scripts/check-subflow-toolboxes.mjs`.
+- Spacing: Rail space is now conditional on a real rendered rail. Closed toolboxes reserve `0px`; open toolboxes consistently use a compact `46px` rail plus `6px` gap (`52px` total). OV-4 editor, state-machine chat/editor, and sequence chat/editor states no longer retain an empty rail column when tools are closed.
+- Verification: Syntax checks passed; `check-subflow-toolboxes.mjs` proves 20 content-specific toolboxes, top-right floats, right-side rails, mandatory AI entries, native toolbox reuse, and conditional compact rail spacing. OV-4, OV-6, and contextual-flow regressions passed. A temporary same-origin browser fixture measured closed reserve `0px`, open reserve `52px`, OV-4 no-rail final column `0px`, and no horizontal overflow; the fixture was removed.
+- Remaining: Root `data.js` remains user-owned and untracked. Existing unrelated dirty worktree changes were preserved.
+
+## Latest completed batch (2026-08-19, shared floating progression for main and related flows)
+
+- Goal: Reuse the top-right floating workflow capsule on both seven-step mainline pages and contextual related-model pages; after a main step is confirmed, route through its applicable related models before entering the next main step.
+- Routing: Main-step confirmation keeps the existing `completedThrough` gate, then enters the first topology-applicable related view. Related pages continue in the existing contextual order and the final related page returns to the next main step. Direct related-page entry infers the nearest applicable main-step owner, while left-rail entry preserves focused phase/task/force context.
+- UI: The same capsule, expandable panel, action placement, and open/close behavior now render for related pages. Labels distinguish related-flow and main-flow destinations. The active related node keeps its numbered marker highlighted; its connector and text label collapse together when the rail is not hovered, then return with active styling on hover. Concept-map confirmation no longer promises the retired high-level-concept-map destination.
+- Changed files: `design-studio/src/{contextualModelFlow,app/workflowGate,main,conceptMapView,conceptMapController}.js`, `scripts/{check-workflow-test-mode,check-phase-chain,check-concept-map-integration}.mjs`, and this handoff.
+- Verification: Syntax and focused workflow, contextual flow, phase chain, concept-map integration, and confirmation invalidation checks passed. Same-origin fixtures using the real renderer/styles verified expanded main-to-related and related-to-related capsule content plus the active OV6b marker, connector, and label computed styles; the fixtures were removed. Full suite remains `83/85`, with only the pre-existing OV-4 legend and legacy OV-6b-to-OODA provenance assertions failing.
+- Remaining: Authenticated live-project click-through was unavailable because the browser session was signed out. The route resolver and real rendered DOM were verified without changing project data.
+
 ## Latest completed batch (2026-08-18, OV1c and OV7 persisted mappings)
 
 - Goal: Complete batch 7 of `plans/WORKFLOW_MAINLINE_MODEL_TOPOLOGY.md` without redesigning any of the seven existing main-step pages.
@@ -70,9 +119,10 @@
 - Goal: Replace the operational-task card wall and make task names, CMO area semantics, coordinates, and AI generation reviewable.
 - UI: `operationalTaskView.js` is now a master/detail workbench: task list, selected task editor, and a dedicated area/coordinate editor with a schematic WGS84 plot. Responsive layout collapses at 1180px and 720px.
 - Selection behavior: task-list scroll position is stored independently and restored after the detail view rerenders, so selecting a task no longer jumps or refreshes the list back to the top.
+- Entry behavior: entering `operational-task` from the confirmed `phase-action` step now auto-runs AI generation when existing tasks lack required area coordinates; revisiting the task page from other entry points does not regenerate automatically.
 - Model: Task area is structured as `name/type/geometryType/coordinateSystem/points/radiusNm/description/basis/needsReview`; legacy strings migrate safely. Area types cover patrol/prosecution/support/transit/target/exclusion/other; geometry supports point/circle/polygon/corridor.
 - AI: Added `OperationalTaskDraft`. AI receives brief, confirmed phase actions and the existing CMO mission taxonomy, and returns task names/types plus evidence-bounded area candidates. Without geographic grounding it must return no points and flag review instead of inventing coordinates. Human confirmation is blocked until every task has a named area and at least one valid WGS84 point.
-- Large-generation reliability: The single `AI 一键生成` action splits confirmed actions into batches of three, runs two batches per wave, retries each incomplete/failed batch once, shows batch progress, rejects incomplete batch counts, and rewrites per-batch IDs before merging. The prompt explicitly forbids `web_search`/tool-call placeholders. This fixes the 33-action `fkfd` project silently falling back to local tasks with empty areas.
+- Large-generation reliability: The single `AI 一键生成` action splits confirmed actions into batches of three, runs three batches per wave, retries each incomplete/failed batch once, shows batch progress, rejects incomplete batch counts, and rewrites per-batch IDs before merging. The prompt explicitly forbids `web_search`/tool-call placeholders. This fixes the 33-action `fkfd` project silently falling back to local tasks with empty areas.
 - Naming: Generated names use concise professional `作战功能 + 任务` form; T+ timestamps, full action sentences and conditions stay in objective/source fields. Duplicate base names receive side plus phase/area qualifiers and a final deterministic ordinal fallback.
 - Verification: syntax, operational-task model/UI/AI fallback, batching/progress, unique-name/area-completion rules, model-topology, seven-step workflow, concept-planning, phase-chain, served-resource, live health and diff checks passed. A real no-write generation against the current `fkfd` project's first three actions returned exactly three tasks with complete named areas and WGS84 points. A same-origin visual fixture verified the desktop master/detail structure; authenticated click-through and reliable 390px browser screenshot remain outstanding.
 
@@ -1588,3 +1638,15 @@
 - `node scripts/check-concept-map-integration.mjs` and `node scripts/check-workflow-test-mode.mjs` passed.
 - All 70 `scripts/check-*.mjs` acceptance scripts passed after the automatic-title and center-picker-entry change.
 - The live `8794` static `conceptMapController.js` route returned `200`; no restart was needed because the change is client-side only.
+### 2026-08-19 Task child-flow empty-state correction
+
+- `shared/modelTopology.js`: a focused object with no links to a target model now reports `empty` with zero contextual totals, even when that model contains unrelated global content. Task child flows therefore stay gray until task-specific content is generated.
+- `scripts/check-model-topology.mjs` and `scripts/check-contextual-model-flow.mjs`: added regressions for global OV content that is unrelated to the selected task; all four task child nodes remain `status-empty`, while existing linked-task checks retain their pending-review behavior.
+- Verification: model-topology and contextual-flow checks passed, as did syntax checks and `git diff --check`. Live `8792` reached the login page, so authenticated visual inspection of the project rail remains pending.
+### 2026-08-19 Standalone grouped-list template test page
+
+- Added an isolated, no-write test page at `/design-studio/grouped-list-test.html`; it is not linked from the production menu and does not read or persist project data.
+- The page exercises eight workflow data shapes with dynamic grouping dimensions, field/value dropdown filters, search, collapsible groups, selection state, and a right-side detail slot.
+- Final layout keeps search, grouping, filtering, active-condition summary, and clear action inside the 310px left data column. The 290px filter popover remains within that column and closes after a value is selected.
+- Changed files: `design-studio/grouped-list-test.{html,css,js}` and `scripts/check-grouped-list-test-page.mjs`.
+- Verification: syntax, focused acceptance, static HTTP `200`, desktop browser grouping/filtering, no horizontal overflow, and no browser warnings/errors passed. The browser viewport override did not expose the requested mobile dimensions, so narrow-screen CSS is statically covered but not visually proven.

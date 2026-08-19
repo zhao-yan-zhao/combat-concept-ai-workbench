@@ -28,7 +28,12 @@ import {
   layoutSequenceGantt,
   formatSequenceClock
 } from "../design-studio/src/ov6Workbench.js";
-import { applyStateMachineDraft, buildStateMachineGenerationAnalysis } from "../design-studio/src/dodafProductController.js";
+import {
+  applyStateMachineDraft,
+  buildSequenceGenerationAnalysis,
+  buildStateMachineGenerationAnalysis,
+  ensureRequiredSequenceCoverage
+} from "../design-studio/src/dodafProductController.js";
 import { applySequenceDraft } from "../design-studio/src/sequenceChatController.js";
 import { generateMockOutput } from "../shared/generator.js";
 import { renderOv6a, renderOv6b } from "../design-studio/src/dodafOperationalViews.js";
@@ -78,8 +83,8 @@ const state = {
   },
   forceMission: {
     tasks: [{ id: "task-sense", name: "态势保障任务", phaseId: "p1", objective: "形成持续态势" }],
-    forces: [{ id: "force-sense", name: "感知单元", role: "sense", task: "持续汇聚态势" }, { id: "force-empty", name: "空对象" }],
-    combatForces: [{ id: "combat-link", name: "链路保障组", role: "support", task: "维持链路可用" }]
+    forces: [{ id: "force-sense", name: "感知单元", side: "friendly", role: "sense", task: "持续汇聚态势" }, { id: "force-red", name: "对抗单元", side: "hostile", role: "maneuver", task: "形成对抗压力" }, { id: "force-empty", name: "空对象" }],
+    combatForces: [{ id: "combat-link", name: "链路保障组", side: "friendly", role: "support", task: "维持链路可用" }]
   },
   ov6a: normalizeDodafOv6a({
     rules: [{ id: "rule-1", name: "链路可用", description: "链路保持", scope: "全局" }]
@@ -437,9 +442,14 @@ const copied = duplicateOv6cMessage(ov6c, ov6c.sequences[0].id, ov6c.sequences[0
 assert(copied.sequences[0].messages.length === 2 && copied.sequences[0].messages[1].name.includes("副本"), "Sequence message duplicate failed");
 
 const seeded = seedOv6cFromPhase({ sequences: [] }, state);
-assert((seeded.sequences || []).length >= 1, "Phase seed should create a sequence");
-assert((seeded.sequences[0].messages || []).length >= 1, "Phase seed should create messages");
-assert(seeded.sequences[0].participants.every((item) => item.refType === "force" && item.ref), "Phase seed force participants must retain typed stable refs");
+assert((seeded.sequences || []).length === 4, "Sequence seed must create one diagram per side and one per phase");
+assert(seeded.sequences.filter((item) => item.diagramType === "force").length === 2, "Sequence seed must create separate friendly and hostile diagrams");
+assert(seeded.sequences.filter((item) => item.diagramType === "phase").length === state.phaseAction.phases.length, "Every phase must receive its own sequence diagram");
+assert(seeded.sequences.every((item) => (item.messages || []).length >= 1), "Every required sequence must contain messages");
+const sequenceAnalysis = buildSequenceGenerationAnalysis(state);
+assert(sequenceAnalysis.requiredSequenceCoverage.sideSequences.length === 2 && sequenceAnalysis.requiredSequenceCoverage.phaseSequences.length === 2, "AI sequence analysis must explicitly require side and phase coverage");
+const completedCoverage = ensureRequiredSequenceCoverage({ sequences: [seeded.sequences[0]] }, state, sequenceAnalysis);
+assert(completedCoverage.sequences.length === 4, "AI sequence output must be supplemented when required side or phase diagrams are missing");
 
 const generatedSequence = generateMockOutput({
   workflow: { id: "sequence-check", title: "时序校验", outputSchema: "SequenceDraft" },
@@ -517,9 +527,11 @@ assert(review.issues.some((item) => item.code === "sequence-message-without-acti
 const productControllerSource = await readFile(new URL("../design-studio/src/dodafProductController.js", import.meta.url), "utf8");
 assert(productControllerSource.includes('action === "ov6a-toggle-object-binding"') && productControllerSource.includes("toggleOv6aObjectBinding"), "Controller must persist task/force binding toggles");
 assert(productControllerSource.includes("selectedOptions?.[0]?.dataset?.refType") && productControllerSource.includes("patch.refType"), "Controller must persist typed sequence participant refs");
+assert(productControllerSource.includes("requiredSequenceCoverage") && productControllerSource.includes("generateWithAiStream") && productControllerSource.includes("ensureRequiredSequenceCoverage"), "State-machine next must use AI and enforce side plus per-phase sequence coverage");
 const sequenceChatSource = await readFile(new URL("../design-studio/src/sequenceChatController.js", import.meta.url), "utf8");
 assert(sequenceChatSource.includes("refType: item.refType") && sequenceChatSource.includes("refType: subject.subjectType") && sequenceChatSource.includes("compactTasks(state.forceMission)"), "Sequence chat must carry typed refs through prompt compaction and local drafts");
 const openAiClientSource = await readFile(new URL("../server/openaiClient.mjs", import.meta.url), "utf8");
 assert(openAiClientSource.includes("? sequenceDraftSchema()") && openAiClientSource.includes('required: ["id", "name", "refType", "ref"]') && openAiClientSource.includes("不得根据名称猜测"), "Real AI SequenceDraft must enforce typed stable refs in schema and instructions");
+assert(openAiClientSource.includes("每个推演方分别生成一幅") && openAiClientSource.includes("每个 phaseId 分别生成一幅"), "Real AI prompt must require separate side and per-phase sequence diagrams");
 
 console.log("OV-6 workbench acceptance passed: binding editor, multi machines, sequence canvas, reverse checks.");

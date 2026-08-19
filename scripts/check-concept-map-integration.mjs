@@ -48,7 +48,7 @@ try {
     "Preview UI should offer planning seed without AI wording"
   );
   assert(viewSource.includes("拉取最新") || viewSource.includes("同步工具内容"), "Preview UI should offer manual tool pull as recovery");
-  assert(viewSource.includes("确认并进入高层作战概念图") || viewSource.includes("进入高层作战概念图"), "Preview UI should offer confirm/next step");
+  assert(viewSource.includes("确认并进入关联流程") || viewSource.includes("进入关联流程"), "Preview UI should offer confirm/related-flow step");
 
   const mapProjectId = boundMapProjectIdFor("proj-demo-1");
   assert(mapProjectId.startsWith("workbench-"), "Bound map project id must use workbench- prefix");

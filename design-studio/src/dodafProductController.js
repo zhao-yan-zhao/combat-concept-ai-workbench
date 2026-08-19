@@ -88,7 +88,8 @@ import {
 } from "./ov4DiagramStore.js";
 import { generateWithAiStream, isAiOutput } from "../../shared/aiClient.js";
 import { generateMockOutput } from "../../shared/generator.js";
-import { normalizeDodafOv6b, normalizeDodafOv6c } from "../../shared/dodaf/products.js";
+import { normalizeDodafOv1b, normalizeDodafOv6b, normalizeDodafOv6c } from "../../shared/dodaf/products.js";
+import { applySequenceDraft } from "./sequenceChatController.js";
 import { addOv1bDecomposition, removeOv1bDecomposition, updateOv1bDecomposition } from "./ov1bStore.js";
 import { buildOv1cModel, buildOv7Model, updateMappingProduct } from "./mappingProductStore.js";
 
@@ -164,6 +165,109 @@ export function buildStateMachineGenerationAnalysis(state = {}) {
     generationRequest: "为阶段行动中的关键行动、独立任务和持续运行对象生成可编辑状态机草案；来自阶段行动的候选标为阶段机。阶段时窗与红方行动只作转换/异常上下文，不另建机。",
     modelingInstructions: "输出 StateMachineDraft JSON：stateMachines[] 每项对应一个 stateMachineSubjects[].id，subjectRef 和 subjectType 必须原样匹配候选。来自阶段行动的候选 subjectType=phase。不要再为阶段容器或红方行动额外建机。阶段 timeWindow、blueActions、redActions 用于进入/退出条件和对抗分支。每台生成 initial、至少两个有具体作战语义且互不重复的 normal/decision 中间状态、final，共 4 至 7 个节点；禁止仅用‘进行中/处理中/中间状态’占位。状态表示对象所处情形，condition 表示触发状态变化的可观察事件或门槛。主路径必须从 initial 连通至 final；确需分支时使用 decision，并给出 decisionExpression，判定出边给出不重复的 branchResult。ruleRefs 仅可引用 analysis.rules 中的 id。只给研究级、可复核内容。"
   };
+}
+
+export function buildSequenceGenerationAnalysis(state = {}) {
+  const phases = Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : [];
+  const forces = [
+    ...(Array.isArray(state.forceMission?.forces) ? state.forceMission.forces : []),
+    ...(Array.isArray(state.forceMission?.combatForces) ? state.forceMission.combatForces : [])
+  ];
+  const sideRequirements = [
+    { id: "friendly", label: "蓝方", actionKeys: ["blueActions", "primaryActions"] },
+    { id: "hostile", label: "红方", actionKeys: ["redActions", "secondaryActions"] }
+  ].filter((side) => forces.some((force) => force?.side === side.id)
+    || phases.some((phase) => side.actionKeys.some((key) => (phase?.[key] || []).length)));
+  return {
+    briefObjective: String(state.brief?.objective || "").slice(0, 400),
+    phases: phases.slice(0, 24).map((phase, index) => ({
+      id: String(phase?.id || `phase-${index + 1}`),
+      name: String(phase?.name || `阶段 ${index + 1}`),
+      objective: String(phase?.objective || ""),
+      timeWindow: String(phase?.timeWindow || phase?.timeRange || ""),
+      blueActions: (phase?.blueActions || phase?.primaryActions || []).filter(Boolean).slice(0, 8),
+      redActions: (phase?.redActions || phase?.secondaryActions || []).filter(Boolean).slice(0, 8),
+      entryConditions: (phase?.entryConditions || []).filter(Boolean).slice(0, 6),
+      exitConditions: (phase?.exitConditions || []).filter(Boolean).slice(0, 6)
+    })),
+    forces: forces.slice(0, 48).map((force, index) => ({
+      id: String(force?.id || `force-${index + 1}`),
+      name: String(force?.name || force?.title || `兵力 ${index + 1}`),
+      side: force?.side === "hostile" ? "hostile" : force?.side === "neutral" ? "neutral" : "friendly",
+      role: String(force?.role || ""),
+      task: String(force?.task || ""),
+      phaseIds: (force?.phaseIds || []).map(String).slice(0, 12)
+    })),
+    stateMachines: (state.ov6b?.stateMachines || []).slice(0, 48).map((machine) => ({
+      id: machine.id,
+      subjectRef: machine.subjectRef,
+      subjectType: machine.subjectType,
+      name: machine.name,
+      states: (machine.states || []).slice(0, 12).map((item) => ({ id: item.id, name: item.name, kind: item.kind })),
+      transitions: (machine.transitions || []).slice(0, 20).map((item) => ({
+        id: item.id,
+        fromStateRef: item.fromStateRef,
+        toStateRef: item.toStateRef,
+        condition: item.condition,
+        branchResult: item.branchResult
+      }))
+    })),
+    tasks: (state.forceMission?.tasks || []).slice(0, 80).map((task) => ({ id: String(task.id || ""), name: String(task.name || ""), side: task.side === "hostile" ? "hostile" : "friendly", objective: String(task.objective || ""), expectedEffect: String(task.expectedEffect || "") })),
+    requiredSequenceCoverage: {
+      sideSequences: sideRequirements.map(({ id, label }) => ({ side: id, label, diagramType: "force" })),
+      phaseSequences: phases.slice(0, 24).map((phase, index) => ({
+        phaseId: String(phase?.id || `phase-${index + 1}`),
+        phaseName: String(phase?.name || `阶段 ${index + 1}`),
+        diagramType: "phase"
+      }))
+    },
+    mutationRequest: true,
+    generationReason: "从状态机点击下一步，自动生成各推演方及逐阶段时序图"
+  };
+}
+
+export function ensureRequiredSequenceCoverage(model = {}, state = {}, analysis = buildSequenceGenerationAnalysis(state)) {
+  const next = normalizeDodafOv6c(model);
+  const baseline = seedOv6cFromPhase({ sequences: [] }, state);
+  const forceSideById = new Map((analysis.forces || []).map((force) => [String(force.id), force.side]));
+  const hasPhaseSequence = (phaseId) => (next.sequences || []).some((sequence) => (
+    sequence.diagramType === "phase"
+    && ((sequence.participants || []).some((item) => item.refType === "phase" && item.ref === phaseId)
+      || (sequence.messages || []).some((item) => (item.relatedActivityRefs || []).includes(phaseId)))
+  ));
+  const hasSideSequence = (side, label) => (next.sequences || []).some((sequence) => {
+    if (sequence.diagramType !== "force") return false;
+    const participantSides = (sequence.participants || [])
+      .map((item) => item.refType === "force" ? forceSideById.get(String(item.ref || "")) : "")
+      .filter(Boolean);
+    return participantSides.includes(side) || String(sequence.name || "").includes(label);
+  });
+  const additions = [];
+  (analysis.requiredSequenceCoverage?.sideSequences || []).forEach(({ side, label }) => {
+    if (hasSideSequence(side, label)) return;
+    const fallback = (baseline.sequences || []).find((sequence) => sequence.id === `sequence-side-${side}`);
+    if (fallback) additions.push(fallback);
+  });
+  (analysis.requiredSequenceCoverage?.phaseSequences || []).forEach(({ phaseId }) => {
+    if (hasPhaseSequence(phaseId)) return;
+    const fallback = (baseline.sequences || []).find((sequence) => sequence.id === `sequence-phase-${phaseId}`);
+    if (fallback) additions.push(fallback);
+  });
+  return normalizeDodafOv6c({ ...next, sequences: [...(next.sequences || []), ...additions] });
+}
+
+export function ensureTaskSequenceCoverage(model = {}, analysis = {}) {
+  const next = normalizeDodafOv6c(model);
+  const additions = [];
+  for (const task of analysis.tasks || []) {
+    const exists = (next.sequences || []).some((sequence) => sequence.diagramType === "task" && ((sequence.participants || []).some((item) => item.refType === "task" && item.ref === task.id) || (sequence.messages || []).some((item) => (item.relatedActivityRefs || []).includes(task.id))));
+    if (exists) continue;
+    const machine = (analysis.stateMachines || []).find((item) => item.subjectType === "task" && item.subjectRef === task.id);
+    const participants = [{ id: `task-${task.id}`, name: task.name || task.id, ref: task.id, refType: "task" }, { id: `context-${task.id}`, name: "任务条件与效果", ref: "", refType: "" }];
+    const steps = (machine?.transitions || []).slice(0, 12);
+    additions.push({ id: `sequence-task-${task.id}`, name: `${task.name || task.id}时序`, diagramType: "task", participants, messages: (steps.length ? steps : [{ condition: task.objective || "任务启动" }, { condition: task.expectedEffect || "效果确认" }]).map((step, index) => ({ id: `task-message-${task.id}-${index + 1}`, sequence: index + 1, fromRef: index % 2 ? participants[1].id : participants[0].id, toRef: index % 2 ? participants[0].id : participants[1].id, name: step.condition || `任务事件 ${index + 1}`, type: index % 2 ? "status" : "message", condition: step.condition || "", relatedActivityRefs: [task.id] })), fragments: [] });
+  }
+  return normalizeDodafOv6c({ ...next, sequences: [...(next.sequences || []), ...additions] });
 }
 export function applyStateMachineDraft(draft = {}, analysis = {}) {
   const candidates = Array.isArray(analysis?.stateMachineSubjects) && analysis.stateMachineSubjects.length
@@ -317,6 +421,18 @@ export function createDodafProductController({
   function handleOv6WorkbenchAction(action, el) {
     const state = getState();
     const ds = el?.dataset || {};
+
+    if (action === "ov1b-select-side") {
+      state.ov1bSide = ds.side === "hostile" ? "hostile" : "friendly";
+      state.ov1bSelectedParentTaskId = "";
+      render();
+      return true;
+    }
+    if (action === "ov1b-select-parent") {
+      state.ov1bSelectedParentTaskId = ds.taskId || "";
+      render();
+      return true;
+    }
 
     if (action === "ov1b-add-decomposition") {
       const scope = el?.closest?.("[data-action-form='ov1b-add-decomposition']");
@@ -982,11 +1098,42 @@ export function createDodafProductController({
   }
 
   const api = {
+    async pregenerateOv1bFromTasks({ silent = false } = {}) {
+      const state = getState();
+      const tasks = (state.forceMission?.tasks || []).map((task) => ({ id: task.id, name: task.name, side: task.side, missionType: task.missionType, objective: task.objective, expectedEffect: task.expectedEffect }));
+      const current = normalizeDodafOv1b(state.ov1b || { decompositions: [] });
+      if (state.taskDecompositionPregenerating) return { skipped: true, reason: "busy" };
+      if (current.decompositions.length) return { skipped: true, reason: "has-decompositions" };
+      if (tasks.length < 2) return { skipped: true, reason: "insufficient-tasks" };
+      state.taskDecompositionPregenerating = true; render();
+      try {
+        let draft; let source = "ai";
+        try {
+          const response = await generateWithAiStream({ workflowId: "task-decomposition", workflow: { id: "task-decomposition", title: "任务分解 UML", outputSchema: "TaskDecompositionDraft" }, analysis: { tasks }, evidence: [] });
+          if (!isAiOutput(response) || !Array.isArray(response.result?.decompositions)) throw new Error("task decomposition empty");
+          draft = response.result;
+        } catch {
+          const grouped = ["friendly", "hostile"].flatMap((side) => {
+            const items = tasks.filter((task) => (task.side === "hostile" ? "hostile" : "friendly") === side);
+            return items.slice(1).map((task) => ({ parentTaskRef: items[0].id, childTaskRef: task.id, rationale: "按同一推演方任务目标与预期效果形成待复核的支撑关系。" }));
+          });
+          draft = { decompositions: grouped }; source = "local-fallback";
+        }
+        const ids = new Set(tasks.map((task) => task.id)); const pairs = new Set();
+        const decompositions = (draft.decompositions || []).filter((item) => ids.has(item.parentTaskRef) && ids.has(item.childTaskRef) && item.parentTaskRef !== item.childTaskRef).filter((item) => { const key = `${item.parentTaskRef}|${item.childTaskRef}`; if (pairs.has(key)) return false; pairs.add(key); return true; }).map((item, index) => ({ id: `task-decomposition-ai-${index + 1}`, parentTaskRef: item.parentTaskRef, childTaskRef: item.childTaskRef, rationale: String(item.rationale || "").slice(0, 600), status: "pending_review", sourceRefs: [{ resource: "forceMissionPlan", objectId: item.parentTaskRef }, { resource: "forceMissionPlan", objectId: item.childTaskRef }] }));
+        state.ov1b = saveLocalDodafProduct("ov1b", normalizeDodafOv1b({ ...current, decompositions, status: decompositions.length ? "pending_review" : "draft" }), projectId);
+        await syncControllers.ov1b.sync(state.ov1b, { source: "task-decomposition:pregenerate-tasks" });
+        await writebackArchitecture("task-decomposition:pregenerate-tasks");
+        if (!silent) notify(source === "ai" ? `AI 已生成 ${decompositions.length} 条任务分解关系，请复核 UML` : `AI 暂不可用，已生成 ${decompositions.length} 条本地任务分解草案`);
+        return { applied: decompositions.length, source };
+      } finally { state.taskDecompositionPregenerating = false; render(); }
+    },
+
     /**
      * First entry from 阶段行动 → 状态机：derive editable task machines once.
      * Existing models are human-owned and must never be regenerated implicitly.
      */
-    async pregenerateOv6bFromPhaseAction({ silent = false } = {}) {
+    async pregenerateOv6bFromPhaseAction({ silent = false, contextType = "phase" } = {}) {
       const state = getState();
       if (state.stateMachinePregenerating) return { skipped: true, reason: "busy" };
       // Do not use the display resolver here: its OODA legacy seed is only a
@@ -994,13 +1141,15 @@ export function createDodafProductController({
       const current = state.ov6b && typeof state.ov6b === "object"
         ? normalizeDodafOv6b(state.ov6b)
         : normalizeDodafOv6b({ stateMachines: [] });
-      if (Array.isArray(current.stateMachines) && current.stateMachines.length) {
-        return { skipped: true, reason: "has-machines", count: current.stateMachines.length };
-      }
+      const existingForContext = (current.stateMachines || []).filter((item) => item.subjectType === contextType);
+      if (existingForContext.length) return { skipped: true, reason: "has-context-machines", count: existingForContext.length };
       const analysis = buildStateMachineGenerationAnalysis(state);
+      analysis.stateMachineSubjects = analysis.stateMachineSubjects.filter((item) => item.subjectType === contextType);
+      analysis.rules = analysis.rules.filter((rule) => contextType !== "task" || (state.ov6a?.rules || []).some((source) => source.id === rule.id && (source.taskBindings || []).length));
       if (!analysis.stateMachineSubjects.length) return { skipped: true, reason: "no-subjects" };
 
       state.stateMachinePregenerating = true;
+      state.ov6GenerationContext = contextType;
       render();
       await new Promise((resolve) => {
         if (typeof requestAnimationFrame === "function") {
@@ -1033,7 +1182,8 @@ export function createDodafProductController({
           source = "local-fallback";
         }
 
-        const next = applyStateMachineDraft(draft, analysis);
+        const generated = applyStateMachineDraft(draft, analysis);
+        const next = normalizeDodafOv6b({ ...current, stateMachines: [...(current.stateMachines || []).filter((item) => item.subjectType !== contextType), ...(generated.stateMachines || [])] });
         if (!next.stateMachines.length) throw new Error("state machine draft produced no machines");
         state.ov6b = saveLocalDodafProduct("ov6b", next, projectId);
         state.ov6bSelectedMachineId = next.stateMachines[0]?.id || "";
@@ -1058,32 +1208,73 @@ export function createDodafProductController({
       }
     },
 
-    /** First state-machine -> sequence transition seeds one editable timeline without overwriting existing work. */
-    async pregenerateOv6cFromPhase({ silent = false } = {}) {
+    /** First state-machine -> sequence transition generates side and per-phase timelines without overwriting human work. */
+    async pregenerateOv6cFromPhase({ silent = false, contextType = "phase" } = {}) {
       const state = getState();
+      if (state.sequencePregenerating) return { skipped: true, reason: "busy" };
       const current = state.ov6c && typeof state.ov6c === "object"
         ? normalizeDodafOv6c(state.ov6c)
         : normalizeDodafOv6c({ sequences: [] });
-      if (Array.isArray(current.sequences) && current.sequences.length) {
-        return { skipped: true, reason: "has-sequences", count: current.sequences.length };
+      const diagramType = contextType === "task" ? "task" : "phase";
+      const existingForContext = (current.sequences || []).filter((item) => item.diagramType === diagramType);
+      if (existingForContext.length) return { skipped: true, reason: "has-context-sequences", count: existingForContext.length };
+      const analysis = buildSequenceGenerationAnalysis(state);
+      if (contextType === "task") {
+        analysis.stateMachines = analysis.stateMachines.filter((item) => item.subjectType === "task");
+        analysis.requiredSequenceCoverage = { sideSequences: [], phaseSequences: [], taskSequences: analysis.tasks.map((task) => ({ taskId: task.id, taskName: task.name, diagramType: "task" })) };
+        analysis.generationReason = "从任务状态机自动生成逐任务时序图";
       }
-      const next = seedOv6cFromPhase(current, state);
-      if (!Array.isArray(next.sequences) || !next.sequences.length) {
-        if (!silent) notify("未能生成时序草案：请先补充阶段行动或兵力任务");
+      if (contextType === "task" ? !analysis.tasks.length : (!analysis.requiredSequenceCoverage.phaseSequences.length && !analysis.requiredSequenceCoverage.sideSequences.length)) {
+        if (!silent) notify("未能生成时序草案：请先补充阶段行动或推演方兵力");
         return { skipped: true, reason: "no-source" };
       }
-      state.ov6c = saveLocalDodafProduct("ov6c", next, projectId);
-      state.ov6cSelectedSequenceId = next.sequences[0]?.id || "";
-      state.ov6cSelectedMessageId = "";
+
+      state.sequencePregenerating = true;
+      state.ov6GenerationContext = contextType;
+      render();
+      const startedAt = Date.now();
       try {
+        let draft = null;
+        let source = "ai";
+        try {
+          const response = await generateWithAiStream({
+            workflowId: "sequence-check",
+            workflow: { id: "sequence-check", title: "状态机到多方分阶段时序生成", outputSchema: "SequenceDraft" },
+            analysis,
+            evidence: []
+          });
+          if (!isAiOutput(response) || !Array.isArray(response.result?.sequences) || !response.result.sequences.length) {
+            throw new Error("sequence draft empty");
+          }
+          draft = response.result;
+        } catch {
+          draft = { summary: "已生成各推演方及逐阶段时序草案。", sequences: [] };
+          source = "local-fallback";
+        }
+
+        const generated = applySequenceDraft({ sequences: [] }, draft, { mutation: true }).model || normalizeDodafOv6c({ sequences: [] });
+        const covered = contextType === "task" ? ensureTaskSequenceCoverage(generated, analysis) : ensureRequiredSequenceCoverage(generated, state, analysis);
+        const next = normalizeDodafOv6c({ ...current, sequences: [...(current.sequences || []).filter((item) => item.diagramType !== diagramType), ...(covered.sequences || [])] });
+        if (!Array.isArray(next.sequences) || !next.sequences.length) throw new Error("sequence coverage empty");
+        state.ov6c = saveLocalDodafProduct("ov6c", next, projectId);
+        state.ov6cSelectedSequenceId = next.sequences[0]?.id || "";
+        state.ov6cSelectedMessageId = "";
         await syncControllers.ov6c.sync(state.ov6c, { source: "sequence:pregenerate-state-machine-next" });
         await writebackArchitecture("sequence:pregenerate-state-machine-next");
-      } catch {
-        /* Keep the local draft visible; the regular sync path can retry later. */
+
+        const elapsed = Date.now() - startedAt;
+        if (elapsed < 600) await new Promise((resolve) => setTimeout(resolve, 600 - elapsed));
+        if (!silent) notify(source === "ai"
+          ? `AI 已自动生成 ${next.sequences.length} 幅推演方/阶段时序图，请复核参与方、消息与时间`
+          : `AI 暂不可用，已生成 ${next.sequences.length} 幅本地推演方/阶段时序草案，请复核`);
+        return { applied: next.sequences.length, source, skipped: false };
+      } catch (error) {
+        if (!silent) notify("时序图自动生成失败，请在时序图页重试");
+        return { skipped: true, reason: "error", error: error instanceof Error ? error.message : String(error || "") };
+      } finally {
+        state.sequencePregenerating = false;
+        render();
       }
-      render();
-      if (!silent) notify(`已自动生成 ${next.sequences.length} 幅时序草案，请复核参与方、消息与时间`);
-      return { applied: next.sequences.length, source: "phase-force-seed", skipped: false };
     },
 
     async hydrateAll() {

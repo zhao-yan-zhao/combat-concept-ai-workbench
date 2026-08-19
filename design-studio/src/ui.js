@@ -28,6 +28,7 @@ import { renderOv1b } from "./ov1bView.js";
 import { renderOv1c, renderOv7 } from "./mappingProductView.js";
 import { normalizeWorkflowProgress } from "../../shared/workflowProgress.js";
 import { renderRailContextualModelFlow } from "./contextualModelFlow.js";
+import { renderSubflowPage } from "./subflowToolbox.js";
 
 /**
  * Floating research path: numbered circles.
@@ -131,30 +132,33 @@ function stepShortLabel(view) {
 }
 
 export function renderView(viewId, state) {
-  if (viewId === "brief") return renderBrief(state);
-  if (viewId === "operational-task") return renderOperationalTasks(state);
-  if (viewId === "ov1b") return renderOv1b(state);
-  if (viewId === "ov1c") return renderOv1c(state);
-  if (viewId === "ov7") return renderOv7(state);
-  if (viewId === "force-mission") return renderForceMission(state);
-  if (viewId === "phase-action") return renderPhaseAction(state);
-  if (viewId === "concept-map") return renderConceptMap(state);
-  if (viewId === "ov1") return renderOv1(state);
-  if (viewId === "structure-review") return renderStructureReview(state);
-  if (viewId === "ov2") return renderOv2(state);
-  if (viewId === "ov3") return renderOv3(state);
-  if (viewId === "ov4") return renderOv4(state);
-  if (viewId === "ov5a") return renderOv5a(state);
-  if (viewId === "ov6a") return renderOv6a(state);
-  if (viewId === "ov6b") return renderOv6b(state);
-  if (viewId === "ov6c") return renderOv6c(state);
-  if (viewId === "ov5") return renderOv5(state);
-  if (viewId === "ooda") return renderOoda(state);
-  if (viewId === "scenario") return renderScenario(state);
-  if (viewId === "validate") return renderValidation(state);
-  if (viewId === "collaboration") return renderCollaboration(state);
-  if (viewId === "account-management") return renderAccountManagement(state);
-  return renderReport(state);
+  const pages = {
+    brief: renderBrief,
+    "operational-task": renderOperationalTasks,
+    ov1b: renderOv1b,
+    ov1c: renderOv1c,
+    ov7: renderOv7,
+    "force-mission": renderForceMission,
+    "phase-action": renderPhaseAction,
+    "concept-map": renderConceptMap,
+    ov1: renderOv1,
+    "structure-review": renderStructureReview,
+    ov2: renderOv2,
+    ov3: renderOv3,
+    ov4: renderOv4,
+    ov5a: renderOv5a,
+    ov6a: renderOv6a,
+    ov6b: renderOv6b,
+    ov6c: renderOv6c,
+    ov5: renderOv5,
+    ooda: renderOoda,
+    scenario: renderScenario,
+    validate: renderValidation,
+    collaboration: renderCollaboration,
+    "account-management": renderAccountManagement
+  };
+  const page = (pages[viewId] || renderReport)(state);
+  return renderSubflowPage(viewId, page, state);
 }
 
 export function renderInspector(selection, context = {}) {

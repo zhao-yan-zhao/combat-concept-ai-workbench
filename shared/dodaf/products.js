@@ -1016,7 +1016,7 @@ export function normalizeDodafOv6a(value) {
 
 function normalizeRuleChangeSet(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const sources = ["phase-action", "force-mission"];
+  const sources = ["phase-action", "operational-task", "force-mission"];
   const source = sources.includes(value.source) ? value.source : "phase-action";
   const changes = (Array.isArray(value.changes) ? value.changes : []).slice(0, 48).map((change, index) => {
     const action = ["add", "revise", "retire"].includes(change?.action) ? change.action : "add";
@@ -1025,7 +1025,11 @@ function normalizeRuleChangeSet(value) {
       id: clean(change?.id, 120) || `rule-change-${index + 1}`,
       action,
       ruleId: clean(change?.ruleId || (action === "add" ? "" : rule.id), 180),
-      rule: { id: rule.id, name: rule.name, type: rule.type, scope: rule.scope, description: rule.description },
+      rule: {
+        id: rule.id, name: rule.name, type: rule.type, scope: rule.scope, description: rule.description,
+        phaseRefs: (change?.rule?.phaseRefs || []).map((item) => clean(item, 160)).filter(Boolean).slice(0, 24),
+        taskRefs: (change?.rule?.taskRefs || []).map((item) => clean(item, 160)).filter(Boolean).slice(0, 48)
+      },
       rationale: clean(change?.rationale, 800),
       status: ["pending", "applied", "ignored"].includes(change?.status) ? change.status : "pending"
     };

@@ -86,6 +86,9 @@ function createResultBySchema(schema, workflow, analysis, evidenceRefs) {
   if (schema === "OperationalTaskDraft") {
     return createOperationalTaskDraftResult(analysis);
   }
+  if (schema === "TaskDecompositionDraft") {
+    return createTaskDecompositionDraftResult(analysis);
+  }
   if (schema === "PhaseActionConcept") {
     return createPhaseActionConceptResult(analysis);
   }
@@ -257,6 +260,20 @@ function createForceMissionPlanResult(analysis) {
   };
 }
 
+function createTaskDecompositionDraftResult(analysis = {}) {
+  const tasks = Array.isArray(analysis.tasks) ? analysis.tasks : [];
+  const decompositions = [];
+  for (const side of ["friendly", "hostile"]) {
+    const group = tasks.filter((task) => (task?.side === "hostile" ? "hostile" : "friendly") === side);
+    group.slice(1).forEach((task, index) => decompositions.push({
+      parentTaskRef: group[0]?.id || "",
+      childTaskRef: task?.id || "",
+      rationale: `同一推演方内按任务目标、任务类型和预期效果形成第 ${index + 1} 项支撑关系。`
+    }));
+  }
+  return { summary: "已依据任务生成待复核的父子任务关系。", decompositions };
+}
+
 function createOperationalTaskDraftResult(analysis) {
   const phases = Array.isArray(analysis?.phaseAction?.phases) ? analysis.phaseAction.phases : [];
   const tasks = [];
@@ -426,7 +443,7 @@ function createRuleLibraryDraftResult(analysis) {
 }
 
 function createRuleLibraryChangeSetResult(analysis = {}) {
-  const source = analysis.source === "force-mission" ? "force-mission" : "phase-action";
+  const source = ["phase-action", "operational-task", "force-mission"].includes(analysis.source) ? analysis.source : "phase-action";
   const existing = Array.isArray(analysis?.currentRules?.rules) ? analysis.currentRules.rules : [];
   const changes = [];
   if (source === "phase-action") {
@@ -435,6 +452,11 @@ function createRuleLibraryChangeSetResult(analysis = {}) {
       const scope = `阶段：${name}`;
       if (phase?.entryConditions?.length) changes.push({ id: `phase-entry-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-phase-entry-${index + 1}`, name: `${name}进入门槛`, type: "前置条件", scope, description: `进入该阶段前，应依据已确认的进入条件完成可观察、可复核的就绪判断。` }, rationale: "依据该阶段的进入条件。" });
       if (phase?.exitConditions?.length || phase?.expectedEffects?.length) changes.push({ id: `phase-exit-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-phase-exit-${index + 1}`, name: `${name}转换判据`, type: "转换条件", scope, description: `阶段转换应以已确认的退出条件或预期效果为判据，并保留复核依据。` }, rationale: "依据该阶段的退出条件和预期效果。" });
+    });
+  } else if (source === "operational-task") {
+    (analysis.tasks || []).forEach((task, index) => {
+      const name = String(task?.name || `任务 ${index + 1}`);
+      changes.push({ id: `task-rule-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-task-${index + 1}`, name: `${name}执行规则`, type: "业务规则", scope: `任务：${name}`, description: "任务执行与结束应依据已确认的任务目标和预期效果形成可观察、可复核判据。", phaseRefs: [], taskRefs: [task.id] }, rationale: "依据任务目标、类型与预期效果。" });
     });
   } else {
     (analysis.forces || []).forEach((force, index) => {
@@ -1063,6 +1085,9 @@ function toMarkdown(output) {
 }
 
 function renderResultMarkdown(result, schema) {
+  if (schema === "TaskDecompositionDraft") {
+    return ["## 任务分解 UML 草案", result.summary || "", "### 父子关系", ...(result.decompositions || []).map((item) => `- ${item.parentTaskRef} -> ${item.childTaskRef}：${item.rationale || ""}`)].join("\n");
+  }
   if (schema === "OperationalTaskDraft") {
     return [
       "## 作战任务草案",

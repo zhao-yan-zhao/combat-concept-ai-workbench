@@ -302,6 +302,13 @@ export function createRuleLibraryChatController({
     if (state.ruleLibraryChangeGenerating) return { skipped: true, reason: "busy" };
     const current = ensureOv6aModel(state.ov6a && Array.isArray(state.ov6a.rules) ? state.ov6a : { rules: [] });
     const analysis = buildRuleChangeAnalysis(state, current, source);
+    const existingProposal = current.ruleChangeSet;
+    if (existingProposal?.source === source
+      && existingProposal?.upstreamFingerprint === analysis.upstreamFingerprint
+      && Array.isArray(existingProposal.changes)
+      && existingProposal.changes.length) {
+      return { skipped: true, reason: "already-generated", proposed: existingProposal.changes.length };
+    }
     state.ruleLibraryChangeGenerating = true;
     onBusyChange();
     render();
@@ -311,7 +318,7 @@ export function createRuleLibraryChatController({
       const detail = document.querySelector("#workflowModeOverlayDetail");
       if (overlay) {
         if (title) title.textContent = "正在分析规则变更";
-        if (detail) detail.textContent = source === "phase-action" ? "根据阶段与行动生成待审核建议" : "根据兵力与任务生成待审核建议";
+        if (detail) detail.textContent = source === "phase-action" ? "根据阶段与行动生成待审核建议" : source === "operational-task" ? "根据作战任务生成逐任务待审核规则" : "根据兵力与任务生成待审核建议";
         overlay.hidden = false;
         overlay.classList.add("is-visible");
       }
@@ -352,9 +359,10 @@ export function createRuleLibraryChatController({
       await syncOv6a(state.ov6a, { source: `rule-library:proposal-${source}` });
       const proposed = next.ruleChangeSet?.changes?.length || 0;
       if (!silent) {
+        const subject = source === "operational-task" ? "任务" : source === "phase-action" ? "阶段" : "兵力";
         notify(proposed
-          ? (generatedBy === "ai" ? `已生成 ${proposed} 项阶段规则建议，请到规则库审核` : `AI 暂不可用，已生成 ${proposed} 项本地规则建议，请审核`)
-          : "已完成阶段规则分析，本轮无需补充规则");
+          ? (generatedBy === "ai" ? `已生成 ${proposed} 项${subject}规则建议，请到规则库审核` : `AI 暂不可用，已生成 ${proposed} 项本地${subject}规则建议，请审核`)
+          : `已完成${subject}规则分析，本轮无需补充规则`);
       }
       return { proposed, source: generatedBy };
     } catch (error) {
@@ -395,12 +403,13 @@ export function applyRuleChangeSet(current = {}, changeSet = {}, changeId = "") 
   let rules = [...(base.rules || [])];
   selected.forEach((change) => {
     const phaseBindings = (change.rule?.phaseRefs || []).map((phaseRef) => ({ phaseRef }));
+    const taskBindings = (change.rule?.taskRefs || []).map((taskRef) => ({ taskRef, bindingStatus: "pending", constraintNote: "" }));
     if (change.action === "add") {
       const id = uniqueRuleId(rules, change.rule.id);
-      rules.push({ ...change.rule, id, phaseBindings, activityBindings: [] });
+      rules.push({ ...change.rule, id, phaseBindings, taskBindings, activityBindings: [] });
     } else if (change.action === "revise") {
       const index = rules.findIndex((rule) => rule.id === change.ruleId);
-      if (index >= 0) rules[index] = { ...rules[index], ...change.rule, id: rules[index].id, phaseBindings, activityBindings: rules[index].activityBindings || [] };
+      if (index >= 0) rules[index] = { ...rules[index], ...change.rule, id: rules[index].id, phaseBindings, taskBindings, activityBindings: rules[index].activityBindings || [] };
     } else if (change.action === "retire") {
       rules = rules.filter((rule) => rule.id !== change.ruleId);
     }
@@ -438,7 +447,8 @@ function normalizeRuleChangeSet(draft = {}, source, fingerprint) {
       ruleId: String(change?.ruleId || ""),
       rule: {
         ...(change?.rule || {}),
-        phaseRefs: source === "phase-action" ? (change?.rule?.phaseRefs || []).map(String).filter(Boolean).slice(0, 24) : []
+        phaseRefs: source === "phase-action" ? (change?.rule?.phaseRefs || []).map(String).filter(Boolean).slice(0, 24) : [],
+        taskRefs: source === "operational-task" ? (change?.rule?.taskRefs || []).map(String).filter(Boolean).slice(0, 48) : []
       },
       rationale: String(change?.rationale || "").slice(0, 800),
       status: "pending"
@@ -456,19 +466,20 @@ function buildRuleChangeAnalysis(state, current, source) {
     id: String(force?.id || `force-${index + 1}`), name: String(force?.name || ""), role: String(force?.role || ""), task: String(force?.task || ""), phaseIds: (force?.phaseIds || []).slice(0, 12)
   }));
   const relations = (state.forceMission?.relations || []).slice(0, 48).map((item) => ({ fromForceId: String(item?.fromForceId || ""), toForceId: String(item?.toForceId || ""), type: String(item?.type || ""), note: String(item?.note || "") }));
+  const tasks = (state.forceMission?.tasks || []).slice(0, 80).map((task) => ({ id: String(task?.id || ""), name: String(task?.name || ""), side: task?.side === "hostile" ? "hostile" : "friendly", missionType: String(task?.missionType || ""), objective: String(task?.objective || ""), expectedEffect: String(task?.expectedEffect || "") }));
   const phaseTransitions = (state.phaseAction?.transitions || []).slice(0, 32).map((item) => ({
     fromPhaseId: String(item?.fromPhaseId || ""),
     toPhaseId: String(item?.toPhaseId || ""),
     condition: String(item?.condition || ""),
     note: String(item?.note || "")
   }));
-  const upstream = source === "phase-action" ? { phaseAction, phaseTransitions } : { phaseAction, phaseTransitions, forces, relations };
+  const upstream = source === "phase-action" ? { phaseAction, phaseTransitions } : source === "operational-task" ? { tasks } : { phaseAction, phaseTransitions, forces, relations };
   return {
     source,
     currentRules: compactRules(current),
     ...upstream,
     upstreamFingerprint: JSON.stringify(upstream).slice(0, 240),
-    revisionRequest: source === "phase-action" ? "根据已确认阶段与行动提出规则变更建议" : "根据已确认兵力、任务与协同关系提出规则变更建议"
+    revisionRequest: source === "phase-action" ? "根据已确认阶段与行动提出规则变更建议" : source === "operational-task" ? "仅根据已确认作战任务提出逐任务规则建议，每条使用 taskRefs 绑定任务 ID" : "根据已确认兵力、任务与协同关系提出规则变更建议"
   };
 }
 

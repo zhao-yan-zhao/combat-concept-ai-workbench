@@ -48,12 +48,12 @@ export function renderConceptMap(state) {
   const editTitle = "在独立窗口打开完整绘制工具，调整装备位置与军标；保存后会自动同步回本预览。";
 
   const confirmDisabled = !hasDocument || seeding || pulling;
-  const confirmLabel = confirmed ? "进入高层作战概念图" : "确认并进入高层作战概念图";
+  const confirmLabel = confirmed ? "进入关联流程" : "确认并进入关联流程";
   const confirmTitle = !hasDocument
     ? "请先生成或同步地图内容后再确认"
     : confirmed
-      ? "本步已确认，点击进入高层作战概念图 继续研究"
-      : "确认当前概念图作为研究参考，并进入高层作战概念图";
+      ? "本步已确认，点击进入关联模型继续研究"
+      : "确认当前概念图作为研究参考，并进入关联模型复核";
 
   return `
     <section class="concept-map-workspace is-preview">

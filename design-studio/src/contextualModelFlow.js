@@ -1,7 +1,8 @@
 import { buildModelTopology, getRelatedModelStatuses } from "../../shared/modelTopology.js";
 import { escapeHtml } from "./app/domUtils.js";
+import { workflowPrimaryStepIds } from "./data.js";
 
-const RELATED_VIEWS = Object.freeze({
+export const RELATED_VIEWS = Object.freeze({
   "phase-action": ["ov6a", "ov6b", "ov6c"],
   "operational-task": ["ov1b", "ov6a", "ov6b", "ov6c"],
   "force-mission": ["ov4", "ov2", "ov3", "ov6a", "ov6b", "ov6c"],
@@ -34,6 +35,33 @@ const RELATED_LABELS = Object.freeze({
   "structure-review": "跨模型校核"
 });
 
+export function relatedViewLabel(viewId) {
+  return RELATED_LABELS[viewId] || viewId;
+}
+
+export function contextualFlowViewIds(mainViewId, state = {}) {
+  const targetViewIds = RELATED_VIEWS[mainViewId] || [];
+  if (!targetViewIds.length) return [];
+  const context = resolveModelFocus(mainViewId, state);
+  try {
+    const statuses = getRelatedModelStatuses(buildModelTopology(state), context, targetViewIds);
+    return targetViewIds.filter((viewId) => statuses[viewId]?.status !== "not_applicable" && AVAILABLE_VIEWS.has(viewId));
+  } catch {
+    return [];
+  }
+}
+
+export function inferRelatedMainViewId(relatedViewId, preferredMainViewId = "") {
+  if (preferredMainViewId && RELATED_VIEWS[preferredMainViewId]?.includes(relatedViewId)) return preferredMainViewId;
+  return workflowPrimaryStepIds.find((mainViewId) => RELATED_VIEWS[mainViewId]?.includes(relatedViewId)) || "";
+}
+
+export function resolveRelatedMainViewId(activeViewId, relatedViewId, currentContext = null) {
+  const preferredMainViewId = currentContext?.mainViewId || activeViewId;
+  return inferRelatedMainViewId(relatedViewId, preferredMainViewId)
+    || (workflowPrimaryStepIds.includes(activeViewId) ? activeViewId : "");
+}
+
 const AVAILABLE_VIEWS = new Set(["ov1b", "ov1c", "ov6a", "ov6b", "ov6c", "ov7", "ov4", "ov2", "ov3", "ov5a", "ov5", "structure-review"]);
 
 const STATUS_LABELS = Object.freeze({
@@ -44,6 +72,22 @@ const STATUS_LABELS = Object.freeze({
   stale: "已过期",
   conflict: "有冲突"
 });
+
+const RELATED_RETURN_TOOLBAR_SELECTORS = [
+  ".seq-toolbar",
+  ".sm-toolbar",
+  ".rule-library-toolbar",
+  ".ov4-toolbar",
+  ".mapping-toolbar",
+  ".dodaf-product-actions",
+  ".project-storage-actions"
+];
+
+export function relatedFlowNumber(viewId, index = 0) {
+  const mainlineIndex = workflowPrimaryStepIds.indexOf(viewId);
+  if (mainlineIndex < 0) return "";
+  return `${String(mainlineIndex + 1).padStart(2, "0")}${index + 1}`;
+}
 
 export function renderRailContextualModelFlow(viewId, state = {}) {
   const targetViewIds = RELATED_VIEWS[viewId] || [];
@@ -61,9 +105,11 @@ export function renderRailContextualModelFlow(viewId, state = {}) {
 
   const focusCopy = context.focusLabel ? `当前对象：${context.focusLabel}` : "当前步骤全部对象";
   return statuses.map((item, index) => renderRelatedNode(item, context, {
+    mainViewId: viewId,
     sourceLabel: MAIN_LABELS[viewId] || viewId,
     focusCopy,
-    index
+    index,
+    activeViewId: state.activeView || state.relatedModelReturnContext?.relatedViewId || ""
   })).join("");
 }
 
@@ -75,7 +121,7 @@ export function renderRelatedModelReturn(state = {}) {
   if (!context?.mainViewId || context.relatedViewId !== state.activeView) return "";
   const focusCopy = context.focusLabel ? ` · ${context.focusLabel}` : "";
   return `<div class="related-model-return" data-related-model-return>
-    <button type="button" data-return-mainline title="返回${escapeHtml(context.mainLabel || "主步骤")}">← 返回${escapeHtml(context.mainLabel || "主步骤")}</button>
+    <button type="button" class="quiet-button related-model-return-button" data-return-mainline title="返回${escapeHtml(context.mainLabel || "主步骤")}">← 返回${escapeHtml(context.mainLabel || "主步骤")}</button>
     <span>当前按${escapeHtml(context.mainLabel || "主步骤")}${escapeHtml(focusCopy)}过滤</span>
   </div>`;
 }
@@ -85,6 +131,15 @@ export function mountRelatedModelReturn(root, html) {
   const page = root.firstElementChild;
   if (!page) return;
   const fragment = document.createRange().createContextualFragment(html);
+  const returnBar = fragment.querySelector("[data-related-model-return]");
+  const toolbar = RELATED_RETURN_TOOLBAR_SELECTORS
+    .map((selector) => page.querySelector(selector))
+    .find(Boolean);
+  if (returnBar && toolbar) {
+    returnBar.classList.add("is-toolbar");
+    toolbar.prepend(returnBar);
+    return;
+  }
   const header = page.querySelector(":scope > header");
   if (header) header.after(fragment);
   else page.prepend(fragment);
@@ -110,7 +165,7 @@ export function resolveModelFocus(viewId, state = {}) {
   return {};
 }
 
-function renderRelatedNode(item, context, { sourceLabel = "", focusCopy = "", index = 0 } = {}) {
+function renderRelatedNode(item, context, { mainViewId = "", sourceLabel = "", focusCopy = "", index = 0, activeViewId = "" } = {}) {
   const available = AVAILABLE_VIEWS.has(item.targetViewId);
   const statusLabel = STATUS_LABELS[item.status] || item.status;
   const coverage = item.totalCount > 0 && item.coverageCount < item.totalCount
@@ -119,10 +174,12 @@ function renderRelatedNode(item, context, { sourceLabel = "", focusCopy = "", in
   const diagnosticCount = item.diagnostics?.length || 0;
   const detail = [statusLabel, coverage && `覆盖 ${coverage}`, diagnosticCount && `${diagnosticCount} 项问题`, !available && "待建设"].filter(Boolean).join(" · ");
   const label = RELATED_LABELS[item.targetViewId] || item.targetViewId;
-  const title = `${sourceLabel}关联流程 · ${focusCopy} · ${label}：${detail}`;
-  return `<li class="step-node step-related-node status-${escapeHtml(item.status)}" data-contextual-model-flow style="--related-i:${index}">
-    <button type="button" class="step-related-button" data-related-model="true" data-view="${escapeHtml(item.targetViewId)}" data-focus-type="${escapeHtml(context.focusType || "")}" data-focus-id="${escapeHtml(context.focusId || "")}" ${available ? "" : "disabled"} title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">
-      <span class="step-related-dot contextual-model-status" aria-hidden="true"></span>
+  const sequenceNumber = relatedFlowNumber(mainViewId, index);
+  const current = item.targetViewId === activeViewId;
+  const title = `${sequenceNumber ? `${sequenceNumber} · ` : ""}${sourceLabel}关联流程 · ${focusCopy} · ${label}：${detail}`;
+  return `<li class="step-node step-related-node status-${escapeHtml(item.status)}${current ? " is-current" : ""}" data-contextual-model-flow data-related-number="${escapeHtml(sequenceNumber)}" style="--related-i:${index}">
+    <button type="button" class="step-related-button" data-related-model="true" data-view="${escapeHtml(item.targetViewId)}" data-focus-type="${escapeHtml(context.focusType || "")}" data-focus-id="${escapeHtml(context.focusId || "")}" ${available ? "" : "disabled"} title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}" aria-current="${current ? "step" : "false"}">
+      <span class="step-related-dot contextual-model-status" aria-hidden="true">${escapeHtml(sequenceNumber)}</span>
       <span class="step-related-copy">
         <strong class="step-related-label">${escapeHtml(label)}</strong>
         <span class="step-related-separator" aria-hidden="true">·</span>

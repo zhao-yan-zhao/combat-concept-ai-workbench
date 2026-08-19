@@ -168,7 +168,7 @@ export function getModelContextStatus(topology, { focusType = "", focusId = "", 
     return contextResult("stale", relatedLinks.length, targetRoot.count || 0, relatedDiagnostics);
   }
   if (!targetRoot.count) return contextResult("empty", 0, 0, relatedDiagnostics);
-  if (!relatedLinks.length) return contextResult("partial", 0, targetRoot.count || 0, relatedDiagnostics);
+  if (!relatedLinks.length) return contextResult("empty", 0, 0, relatedDiagnostics);
   const status = targetRoot.status === "confirmed" ? "confirmed" : "pending_review";
   return contextResult(status, relatedLinks.length, targetRoot.count || 0, relatedDiagnostics);
 }

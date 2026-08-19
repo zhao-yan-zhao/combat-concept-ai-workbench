@@ -53,6 +53,7 @@ import {
   toggleForceTaskRef,
   updateForceMissionType,
   updateOperationalTask,
+  removeOperationalTask,
   updateOperationalTaskArea,
   updateOperationalTaskAreaPoint
 } from "./forceMissionStore.js";
@@ -123,6 +124,22 @@ export function createConceptPlanningController({
         if (list) state.operationalTaskListScrollTop = list.scrollTop;
         state.operationalTaskSelectedId = source?.dataset?.taskId || "";
         render();
+        return true;
+      }
+      if (action === "filter-operational-tasks") {
+        const state = getState();
+        const filter = source?.dataset?.taskSideFilter || "all";
+        state.operationalTaskSideFilter = ["all", "friendly", "hostile"].includes(filter) ? filter : "all";
+        state.operationalTaskListScrollTop = 0;
+        render();
+        return true;
+      }
+      if (action === "remove-operational-task") {
+        const state = getState();
+        const taskId = source?.dataset?.taskId || "";
+        const next = removeOperationalTask(state.forceMission, taskId);
+        state.operationalTaskSelectedId = next.tasks.find((task) => task.id !== taskId)?.id || next.tasks[0]?.id || "";
+        void changeOperationalTaskPlan(next, "operational-task:remove");
         return true;
       }
       if (action === "add-operational-task-area-point") {
@@ -423,8 +440,10 @@ export function createConceptPlanningController({
         }
         throw lastError || new Error("Operational task AI batch failed");
       };
-      for (let offset = 0; offset < batches.length; offset += 2) {
-        const wave = batches.slice(offset, offset + 2);
+      // Three concurrent small batches reduce wall-clock time while keeping each
+      // structured request small enough for reliable area/coordinate output.
+      for (let offset = 0; offset < batches.length; offset += 3) {
+        const wave = batches.slice(offset, offset + 3);
         const responses = await Promise.all(wave.map(generateBatch));
         responses.forEach((response) => {
           results.push(response.result);

@@ -45,7 +45,7 @@ export function renderRuleLibrary(state = {}) {
           ${storage ? renderProjectStorageActions(storage, { refreshAction: "refresh-project-ov6a" }) : ""}
           ${hasRules ? `<button type="button" class="quiet-button danger-quiet" data-action="ov6a-clear-all" ${busy ? "disabled" : ""} title="清空全部规则">清空全部</button>` : ""}
           <button type="button" class="primary-btn" data-action="save-dodaf-ov6a" ${busy ? "disabled" : ""}>保存</button>
-          <button type="button" class="quiet-button" data-view="phase-action" ${busy ? "disabled" : ""}>下一步</button>
+          <button type="button" class="quiet-button" data-action="advance-workflow" ${busy ? "disabled" : ""}>下一步</button>
         </div>
       </div>
       ${renderRuleChangeSet(changeSet, { busy, phaseNames })}

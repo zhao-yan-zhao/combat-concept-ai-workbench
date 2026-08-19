@@ -17,10 +17,12 @@ export function createRequestHandler(runtime) {
     aiConfigWriteAuthorizer,
     aiConfigPath,
     themeConfigPath,
+    aiPromptConfigPath,
     cmoDatabase,
     aiSecretStore,
     knowledgeRetrievalMode,
     externalVectorAdapter,
+    openAi,
     listKnowledgeRetrievalModes,
     getPublicAiServiceConfig,
     getAiApiKey,
@@ -29,6 +31,7 @@ export function createRequestHandler(runtime) {
     getThemeConfig,
     setAiServiceConfig,
     setThemeConfig,
+    setAiPromptOverrides,
     setStoredAiApiKey,
     serveStatic
   } = runtime;
@@ -366,6 +369,27 @@ export function createRequestHandler(runtime) {
       }
       if (request.method === "GET" && url.pathname === "/api/ai-config") {
         sendJson(response, 200, getAiConfigResponse());
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/api/ai-prompts") {
+        sendJson(response, 200, {
+          items: openAi.listPromptDefinitions(),
+          configurationWrite: aiConfigWriteAuthorizer.getStatus()
+        });
+        return;
+      }
+      if (request.method === "PUT" && url.pathname === "/api/ai-prompts") {
+        try {
+          await aiConfigWriteAuthorizer.authorize(request);
+          const input = await readJson(request);
+          const knownIds = new Set(openAi.listPromptDefinitions().map((item) => item.id));
+          const requested = Object.fromEntries(Object.entries(input?.overrides || {}).filter(([id]) => knownIds.has(id)));
+          const next = await runtime.saveAiPromptOverrides({ configPath: aiPromptConfigPath, value: { overrides: requested } });
+          setAiPromptOverrides(next);
+          sendJson(response, 200, { items: openAi.listPromptDefinitions(), configurationWrite: aiConfigWriteAuthorizer.getStatus() });
+        } catch (error) {
+          send(response, error.statusCode || 400, error.message, "text/plain;charset=utf-8");
+        }
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/theme-config") {
