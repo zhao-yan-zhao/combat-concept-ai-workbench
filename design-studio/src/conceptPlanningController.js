@@ -126,14 +126,6 @@ export function createConceptPlanningController({
         render();
         return true;
       }
-      if (action === "filter-operational-tasks") {
-        const state = getState();
-        const filter = source?.dataset?.taskSideFilter || "all";
-        state.operationalTaskSideFilter = ["all", "friendly", "hostile"].includes(filter) ? filter : "all";
-        state.operationalTaskListScrollTop = 0;
-        render();
-        return true;
-      }
       if (action === "remove-operational-task") {
         const state = getState();
         const taskId = source?.dataset?.taskId || "";
@@ -424,7 +416,7 @@ export function createConceptPlanningController({
               workflowId: "operational-task",
               workflow: { id: "operational-task", title: "作战任务与任务区域", outputSchema: "OperationalTaskDraft" },
               analysis: {
-                ...briefAnalysis(state.brief),
+                ...operationalTaskBriefAnalysis(state.brief),
                 phaseAction: batch,
                 cmoMissionTypes: listCmoMissionTypes(),
                 taskAreaTypes: ["patrol", "prosecution", "support", "transit", "target", "exclusion", "other"],
@@ -440,10 +432,10 @@ export function createConceptPlanningController({
         }
         throw lastError || new Error("Operational task AI batch failed");
       };
-      // Three concurrent small batches reduce wall-clock time while keeping each
+      // Four concurrent small batches reduce wall-clock time while keeping each
       // structured request small enough for reliable area/coordinate output.
-      for (let offset = 0; offset < batches.length; offset += 3) {
-        const wave = batches.slice(offset, offset + 3);
+      for (let offset = 0; offset < batches.length; offset += 4) {
+        const wave = batches.slice(offset, offset + 4);
         const responses = await Promise.all(wave.map(generateBatch));
         responses.forEach((response) => {
           results.push(response.result);
@@ -1818,6 +1810,17 @@ function briefAnalysis(brief = {}) {
     关键假设: brief.assumptions || "",
     预期效果: brief.expectedEffects || "",
     主要风险: brief.risk || ""
+  };
+}
+
+// Operational-task batches only need the decision-driving brief fields; keeping
+// assumptions, risks, and long effect narratives out of every batch cuts request size.
+function operationalTaskBriefAnalysis(brief = {}) {
+  return {
+    研究意图: brief.researchIntent || "",
+    任务目标: brief.objective || "",
+    核心思路: brief.approach || "",
+    预期效果: brief.expectedEffects || ""
   };
 }
 

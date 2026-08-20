@@ -76,12 +76,12 @@ export function renderStateMachineWorkbench(state = {}) {
 
     ${machines.length
     ? `<div class="sm-workbench ${toolsOpen ? "is-tools-docked" : "is-tools-floating"} ${editorOpen ? "is-editor-open" : ""} ${chatOpen ? "is-chat-open" : ""}" aria-label="状态机研究台">
-        <aside class="sm-list-panel" aria-label="状态机列表">
+        <aside class="sm-list-panel" aria-label="状态机列表" data-grouped-list-panel="ov6b" data-grouped-list-dimensions="建模对象:subject|状态:status" data-grouped-list-default-group="subject">
           <header class="sm-panel-head">
             <strong>状态机</strong>
             <small>${machines.length} 台 · 一任务/对象一机</small>
           </header>
-          <div class="sm-machine-list" role="listbox" aria-label="状态机">
+          <div class="sm-machine-list" role="listbox" aria-label="状态机" data-grouped-list-items>
             ${machines.map((machine) => renderMachineListItem(machine, selectedId)).join("")}
           </div>
           <div class="sm-list-footer">
@@ -143,7 +143,7 @@ function renderMachineListItem(machine, selectedId) {
   const selected = machine.id === selectedId;
   const diag = diagnoseOv6bMachineLocal(machine);
   const typeLabel = SUBJECT_MACHINE_LABELS[machine.subjectType] || SUBJECT_LABELS[machine.subjectType] || machine.subjectType || "其他";
-  return `<button type="button" class="sm-machine-item ${selected ? "is-selected" : ""} ${diag.ok ? "is-ready" : "is-review"}" role="option" aria-selected="${selected ? "true" : "false"}" data-action="ov6b-select-machine" data-machine-id="${escapeHtml(machine.id)}">
+  return `<button type="button" class="sm-machine-item ${selected ? "is-selected" : ""} ${diag.ok ? "is-ready" : "is-review"}" role="option" aria-selected="${selected ? "true" : "false"}" data-action="ov6b-select-machine" data-machine-id="${escapeHtml(machine.id)}" data-grouped-list-item data-group-subject="${escapeHtml(typeLabel)}" data-group-status="${diag.ok ? "结构完整" : "需复核"}" data-search="${escapeHtml([machine.id, machine.name, typeLabel, machine.subjectRef, diag.statusLabel].filter(Boolean).join(" "))}">
     <span class="sm-machine-item-main">
       <strong>${escapeHtml(machine.name || machine.id)}</strong>
       <small>${escapeHtml(typeLabel)}${machine.subjectRef ? ` · ${escapeHtml(machine.subjectRef)}` : ""}</small>

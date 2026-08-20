@@ -223,12 +223,12 @@ function renderPhaseChain({ phases, transitions, focusId, busy, focusConfirmed, 
         : source
           ? `来源 ${source}`
           : "来源 —";
-  return `<aside class="phase-chain-panel planning-card" aria-label="阶段链">
+  return `<aside class="phase-chain-panel planning-card" aria-label="阶段链" data-grouped-list-panel="phase-action" data-grouped-list-dimensions="状态:status|时间窗口:window" data-grouped-list-default-group="status">
         <header>
           <h3>阶段链</h3>
           <small>${phases.length} 段 · ${transitions.length} 转换 · ${escapeHtml(sourceLabel)}</small>
         </header>
-        <div class="phase-chain-list" role="listbox" aria-label="阶段序列">
+        <div class="phase-chain-list" role="listbox" aria-label="阶段序列" data-grouped-list-items>
           ${phases.map((phase, index) => {
             const selected = phase.id === focusId;
             const seq = phase.sequence || index + 1;
@@ -236,7 +236,7 @@ function renderPhaseChain({ phases, transitions, focusId, busy, focusConfirmed, 
             const edge = next
               ? transitions.find((t) => t.fromPhaseId === phase.id && t.toPhaseId === next.id)
               : null;
-            return `<div class="phase-chain-item ${selected ? "is-selected" : ""}">
+            return `<div class="phase-chain-item ${selected ? "is-selected" : ""}" data-grouped-list-item data-group-status="${focusConfirmed ? "已确认" : "待确认"}" data-group-window="${escapeHtml(phase.timeWindow || "未设置")}" data-search="${escapeHtml([phase.id, phase.name, phase.timeWindow, phase.objective].filter(Boolean).join(" "))}">
               <button type="button" class="phase-chain-step" role="option" aria-selected="${selected ? "true" : "false"}" data-action="select-phase-action-focus" data-phase-id="${escapeHtml(phase.id)}">
                 <span class="phase-chain-index">${seq}</span>
                 <span class="phase-chain-body">

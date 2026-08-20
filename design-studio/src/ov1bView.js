@@ -9,31 +9,26 @@ export function renderOv1b(state = {}) {
   const tasks = state.forceMission?.tasks || [];
   const relations = model.decompositions || [];
   const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const phaseNames = new Map((state.phaseAction?.phases || []).map((phase) => [phase.id, phase.name]));
   const parentIds = [...new Set(relations.map((item) => item.parentTaskRef))];
   const parents = parentIds.map((id) => taskById.get(id)).filter(Boolean);
-  const availableSides = ["friendly", "hostile"].filter((side) => parents.some((task) => taskSide(task) === side));
-  const requestedSide = state.ov1bSide === "hostile" ? "hostile" : "friendly";
-  const activeSide = availableSides.includes(requestedSide) ? requestedSide : availableSides[0] || requestedSide;
-  const sideParents = parents.filter((task) => taskSide(task) === activeSide);
   const focusedId = state.relatedModelReturnContext?.focusType === "task" ? state.relatedModelReturnContext.focusId : "";
-  const selectedParent = sideParents.find((task) => task.id === state.ov1bSelectedParentTaskId)
-    || sideParents.find((task) => task.id === focusedId)
-    || sideParents[0]
+  const selectedParent = parents.find((task) => task.id === state.ov1bSelectedParentTaskId)
+    || parents.find((task) => task.id === focusedId)
+    || parents[0]
     || null;
+  const activeSide = selectedParent ? taskSide(selectedParent) : state.ov1bSide === "hostile" ? "hostile" : "friendly";
   const selectedRelations = selectedParent ? relations.filter((item) => item.parentTaskRef === selectedParent.id) : [];
   const sideTasks = tasks.filter((task) => taskSide(task) === activeSide);
   const options = sideTasks.map((task) => `<option value="${escapeHtml(task.id)}">${escapeHtml(task.name || task.id)}</option>`).join("");
 
   return `<section class="surface ov1b-workbench" data-dodaf-product="OV-1b">
-    <header class="ov1b-header"><div><span class="eyebrow">任务分解 · OV1b</span><h2>${sideLabel(activeSide)}任务分解模型</h2><p>一次查看一个推演方的一项母任务及其直接子任务。任务正文仍在“作战任务”步骤维护。</p></div><div class="ov1b-header-meta"><span class="mini-tag">${sideParents.length} 项母任务</span><span class="mini-tag">${selectedRelations.length} 项子任务</span></div></header>
+    <header class="ov1b-header"><div><span class="eyebrow">任务分解 · OV1b</span><h2>任务分解模型</h2><p>一次查看一项母任务及其直接子任务。任务正文仍在“作战任务”步骤维护。</p></div><div class="ov1b-header-meta"><span class="mini-tag">${parents.length} 项母任务</span><span class="mini-tag">${selectedRelations.length} 项子任务</span></div></header>
     ${renderProjectStorageState(state.ov1bStorage, { refreshAction: "refresh-project-ov1b" })}
-    <div class="ov1b-party-tabs" role="tablist" aria-label="选择推演方">
-      ${renderSideTab("friendly", activeSide, parents)}${renderSideTab("hostile", activeSide, parents)}
-    </div>
     <div class="ov1b-layout">
-      <aside class="ov1b-task-panel" aria-label="${sideLabel(activeSide)}母任务列表">
-        <div class="ov1b-pane-title"><div><span>${sideLabel(activeSide)}</span><strong>母任务</strong></div><small>${sideParents.length} 项</small></div>
-        <div class="ov1b-side-tasks">${sideParents.map((task, index) => renderParentItem(task, index, selectedParent?.id, relations)).join("") || `<p class="ov1b-side-empty">当前推演方暂无母任务</p>`}</div>
+      <aside class="ov1b-task-panel" aria-label="母任务列表" data-grouped-list-panel="ov1b" data-grouped-list-dimensions="阵营:side|阶段:phase|任务类型:type|状态:status" data-grouped-list-default-group="side">
+        <div class="ov1b-pane-title"><div><span>任务分解</span><strong>母任务</strong></div><small>${parents.length} 项</small></div>
+        <div class="ov1b-side-tasks" data-grouped-list-items>${parents.map((task, index) => renderParentItem(task, index, selectedParent?.id, relations, phaseNames)).join("") || `<p class="ov1b-side-empty">暂无母任务</p>`}</div>
       </aside>
       <main class="ov1b-canvas-panel">
         <div class="ov1b-canvas-toolbar" data-action-form="ov1b-add-decomposition"><label><span>母任务</span><select name="parentTaskRef" required><option value="">选择任务</option>${options}</select></label><span class="ov1b-arrow">→</span><label><span>子任务</span><select name="childTaskRef" required><option value="">选择任务</option>${options}</select></label><label class="ov1b-rationale"><span>分解依据</span><input name="rationale" placeholder="说明分解依据"></label><button type="button" data-action="ov1b-add-decomposition" ${sideTasks.length < 2 ? "disabled" : ""}>新增关系</button></div>
@@ -44,14 +39,18 @@ export function renderOv1b(state = {}) {
   </section>`;
 }
 
-function renderSideTab(side, activeSide, parents) {
-  const count = parents.filter((task) => taskSide(task) === side).length;
-  return `<button type="button" role="tab" aria-selected="${side === activeSide}" class="ov1b-party-tab is-${side} ${side === activeSide ? "is-active" : ""}" data-action="ov1b-select-side" data-side="${side}"><span>${sideLabel(side)}</span><small>${count} 项母任务</small></button>`;
-}
-
-function renderParentItem(task, index, selectedId, relations) {
-  const count = relations.filter((item) => item.parentTaskRef === task.id).length;
-  return `<button type="button" class="ov1b-task-item ${task.id === selectedId ? "is-focused" : ""}" data-action="ov1b-select-parent" data-task-id="${escapeHtml(task.id)}"><b>${String(index + 1).padStart(2, "0")}</b><span>${escapeHtml(task.name || task.id)}</span><small>${count} 项子任务 · ${escapeHtml(task.missionType || "未分类")}</small></button>`;
+function renderParentItem(task, index, selectedId, relations, phaseNames) {
+  const taskRelations = relations.filter((item) => item.parentTaskRef === task.id);
+  const count = taskRelations.length;
+  const status = taskRelations.some((item) => item.status === "conflict")
+    ? "有冲突"
+    : taskRelations.length && taskRelations.every((item) => item.status === "confirmed")
+      ? "已确认"
+      : "待确认";
+  const side = sideLabel(taskSide(task));
+  const phase = phaseNames.get(task.phaseId) || "未挂接阶段";
+  const type = task.missionType || "未分类";
+  return `<button type="button" class="ov1b-task-item ${task.id === selectedId ? "is-focused" : ""}" data-action="ov1b-select-parent" data-task-id="${escapeHtml(task.id)}" data-grouped-list-item data-group-side="${side}" data-group-phase="${escapeHtml(phase)}" data-group-type="${escapeHtml(type)}" data-group-status="${status}" data-search="${escapeHtml([task.id, task.name, side, phase, type].filter(Boolean).join(" "))}"><b>${String(index + 1).padStart(2, "0")}</b><span>${escapeHtml(task.name || task.id)}</span><small>${count} 项子任务 · ${escapeHtml(type)}</small></button>`;
 }
 
 function renderDecompositionCanvas(parent, relations, taskById, side) {

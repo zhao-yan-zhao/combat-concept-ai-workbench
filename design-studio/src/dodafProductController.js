@@ -112,6 +112,43 @@ const LABELS = {
   ov6a: "规则库", ov6b: "状态机校验", ov6c: "时序校验", ov7: "状态与活动映射 OV7"
 };
 
+const TASK_DECOMPOSITION_FINGERPRINT_PREFIX = "task-input:";
+
+export function buildTaskDecompositionFingerprint(tasks = []) {
+  const input = (Array.isArray(tasks) ? tasks : [])
+    .map((task) => ({
+      id: String(task?.id || ""),
+      name: String(task?.name || ""),
+      side: String(task?.side || ""),
+      missionType: String(task?.missionType || ""),
+      objective: String(task?.objective || ""),
+      expectedEffect: String(task?.expectedEffect || "")
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const text = JSON.stringify(input);
+  let hashA = 2166136261;
+  let hashB = 2246822507;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    hashA = Math.imul(hashA ^ code, 16777619);
+    hashB = Math.imul(hashB ^ code, 3266489917);
+  }
+  return `${TASK_DECOMPOSITION_FINGERPRINT_PREFIX}${(hashA >>> 0).toString(16).padStart(8, "0")}${(hashB >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+export function mergeTaskDecompositionDraft(currentItems = [], generatedItems = []) {
+  const preserved = (Array.isArray(currentItems) ? currentItems : []).filter((item) => (
+    item?.status !== "pending_review" || !String(item?.id || "").startsWith("task-decomposition-ai-")
+  ));
+  const pairs = new Set(preserved.map((item) => `${item.parentTaskRef}|${item.childTaskRef}`));
+  return [...preserved, ...(Array.isArray(generatedItems) ? generatedItems : []).filter((item) => {
+    const pair = `${item.parentTaskRef}|${item.childTaskRef}`;
+    if (pairs.has(pair)) return false;
+    pairs.add(pair);
+    return true;
+  })];
+}
+
 export function buildStateMachineGenerationAnalysis(state = {}) {
   const phases = Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : [];
   const phaseNames = new Map(phases.map((phase, index) => [String(phase?.id || `phase-${index + 1}`), String(phase?.name || `阶段 ${index + 1}`)]));
@@ -1098,12 +1135,13 @@ export function createDodafProductController({
   }
 
   const api = {
-    async pregenerateOv1bFromTasks({ silent = false } = {}) {
+    async pregenerateOv1bFromTasks({ silent = false, force = false } = {}) {
       const state = getState();
       const tasks = (state.forceMission?.tasks || []).map((task) => ({ id: task.id, name: task.name, side: task.side, missionType: task.missionType, objective: task.objective, expectedEffect: task.expectedEffect }));
       const current = normalizeDodafOv1b(state.ov1b || { decompositions: [] });
+      const taskFingerprint = buildTaskDecompositionFingerprint(tasks);
       if (state.taskDecompositionPregenerating) return { skipped: true, reason: "busy" };
-      if (current.decompositions.length) return { skipped: true, reason: "has-decompositions" };
+      if (!force && current.derivedFrom?.note === taskFingerprint) return { skipped: true, reason: "tasks-unchanged" };
       if (tasks.length < 2) return { skipped: true, reason: "insufficient-tasks" };
       state.taskDecompositionPregenerating = true; render();
       try {
@@ -1120,8 +1158,10 @@ export function createDodafProductController({
           draft = { decompositions: grouped }; source = "local-fallback";
         }
         const ids = new Set(tasks.map((task) => task.id)); const pairs = new Set();
-        const decompositions = (draft.decompositions || []).filter((item) => ids.has(item.parentTaskRef) && ids.has(item.childTaskRef) && item.parentTaskRef !== item.childTaskRef).filter((item) => { const key = `${item.parentTaskRef}|${item.childTaskRef}`; if (pairs.has(key)) return false; pairs.add(key); return true; }).map((item, index) => ({ id: `task-decomposition-ai-${index + 1}`, parentTaskRef: item.parentTaskRef, childTaskRef: item.childTaskRef, rationale: String(item.rationale || "").slice(0, 600), status: "pending_review", sourceRefs: [{ resource: "forceMissionPlan", objectId: item.parentTaskRef }, { resource: "forceMissionPlan", objectId: item.childTaskRef }] }));
-        state.ov1b = saveLocalDodafProduct("ov1b", normalizeDodafOv1b({ ...current, decompositions, status: decompositions.length ? "pending_review" : "draft" }), projectId);
+        const generated = (draft.decompositions || []).filter((item) => ids.has(item.parentTaskRef) && ids.has(item.childTaskRef) && item.parentTaskRef !== item.childTaskRef).filter((item) => { const key = `${item.parentTaskRef}|${item.childTaskRef}`; if (pairs.has(key)) return false; pairs.add(key); return true; }).map((item, index) => ({ id: `task-decomposition-ai-${taskFingerprint.slice(-8)}-${index + 1}`, parentTaskRef: item.parentTaskRef, childTaskRef: item.childTaskRef, rationale: String(item.rationale || "").slice(0, 600), status: "pending_review", sourceRefs: [{ resource: "forceMissionPlan", objectId: item.parentTaskRef }, { resource: "forceMissionPlan", objectId: item.childTaskRef }] }));
+        const decompositions = mergeTaskDecompositionDraft(current.decompositions, generated);
+        const derivedFrom = { mode: source, sources: ["forceMissionPlan.tasks"], generatedAt: new Date().toISOString(), note: taskFingerprint };
+        state.ov1b = saveLocalDodafProduct("ov1b", normalizeDodafOv1b({ ...current, decompositions, derivedFrom, status: decompositions.some((item) => item.status !== "confirmed") ? "pending_review" : decompositions.length ? "confirmed" : "draft" }), projectId);
         await syncControllers.ov1b.sync(state.ov1b, { source: "task-decomposition:pregenerate-tasks" });
         await writebackArchitecture("task-decomposition:pregenerate-tasks");
         if (!silent) notify(source === "ai" ? `AI 已生成 ${decompositions.length} 条任务分解关系，请复核 UML` : `AI 暂不可用，已生成 ${decompositions.length} 条本地任务分解草案`);

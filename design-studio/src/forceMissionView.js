@@ -519,40 +519,22 @@ function filterCombatForcesForPhase(combatForces = [], conceptForces = [], phase
  * 概念兵力：左名单 + 右详情边栏（点选不顶开列表）。
  */
 function renderConceptForceRoster(forces = [], options = {}) {
-  const { tasks = [], picker = {}, catalogOpen = false, editable = false, drawerEnter = false } = options;
-  const blue = forces.filter((force) => force.side === "friendly");
-  const red = forces.filter((force) => force.side === "hostile");
-  const other = forces.filter((force) => force.side !== "friendly" && force.side !== "hostile");
+  const { tasks = [], picker = {}, catalogOpen = false, editable = false, confirmed = false, drawerEnter = false } = options;
   const activeId = picker.layer === "concept" ? picker.forceId : "";
   const activeForce = forces.find((force) => force.id === activeId) || null;
 
   return `<div class="force-concept-board ${activeForce ? "is-detail-open" : "is-detail-idle"}">
     <div class="force-concept-main">
-      <div class="force-concept-columns">
+      <div class="force-concept-columns is-grouped">
         ${renderConceptSideColumn({
-          title: "蓝方",
-          className: "is-blue",
-          items: blue,
-          emptyText: "本阶段暂无蓝方概念兵力。",
-          activeId
-        })}
-        ${renderConceptSideColumn({
-          title: "红方",
-          className: "is-red",
-          items: red,
-          emptyText: "本阶段暂无红方概念兵力。",
-          activeId
+          title: "概念兵力",
+          className: "is-grouped",
+          items: forces,
+          emptyText: "本阶段暂无概念兵力。",
+          activeId,
+          confirmed
         })}
       </div>
-      ${other.length ? `<div class="force-concept-other">
-        ${renderConceptSideColumn({
-          title: "其他",
-          className: "is-other",
-          items: other,
-          emptyText: "",
-          activeId
-        })}
-      </div>` : ""}
       ${!activeForce ? `<p class="planning-meta force-roster-hint">点选单元后，右侧滑出详情与装备挂接。</p>` : ""}
     </div>
     <button type="button" class="force-concept-drawer-scrim" data-action="close-force-platform-picker" tabindex="-1" aria-label="关闭详情" ${activeForce ? "" : "hidden"}></button>
@@ -562,14 +544,14 @@ function renderConceptForceRoster(forces = [], options = {}) {
   </div>`;
 }
 
-function renderConceptSideColumn({ title, className, items = [], emptyText = "", activeId = "" }) {
-  return `<section class="force-roster-col ${className}" aria-label="${escapeAttribute(title)}">
+function renderConceptSideColumn({ title, className, items = [], emptyText = "", activeId = "", confirmed = false }) {
+  return `<section class="force-roster-col ${className}" aria-label="${escapeAttribute(title)}" data-grouped-list-panel="force-concept" data-grouped-list-dimensions="阵营:side|职责:role|状态:status" data-grouped-list-default-group="side">
     <header class="force-roster-col-head">
       <h4>${escapeHtml(title)}</h4>
       <small>${items.length}</small>
     </header>
     ${items.length
-      ? `<ul class="force-roster-list">${items.map((force, index) => {
+      ? `<ul class="force-roster-list" data-grouped-list-items>${items.map((force, index) => {
           const equip = formatConceptEquipment(force);
           const active = force.id === activeId;
           const task = clipText(force.task, 56);
@@ -585,7 +567,13 @@ function renderConceptSideColumn({ title, className, items = [], emptyText = "",
             line1: task || "（未写任务）",
             line2: equip ? `装备  ${equip}` : "装备  待挂",
             line2Missing: !equip,
-            title: [force.task, equip].filter(Boolean).join(" | ") || name
+            title: [force.task, equip].filter(Boolean).join(" | ") || name,
+            groups: {
+              side: sideLabel(force.side),
+              role: roleLabel(force.role),
+              status: confirmed ? "已确认" : equip ? "待确认" : "待补全"
+            },
+            search: [force.id, name, force.task, equip, sideLabel(force.side), roleLabel(force.role)].filter(Boolean).join(" ")
           });
         }).join("")}</ul>`
       : `<p class="empty-inspector force-concept-empty">${escapeHtml(emptyText)}</p>`}
@@ -605,9 +593,11 @@ function renderForceRosterItem({
   line1 = "",
   line2 = "",
   line2Missing = false,
-  title = ""
+  title = "",
+  groups = {},
+  search = ""
 }) {
-  return `<li class="force-roster-item ${active ? "is-active" : ""} ${warn ? "is-warn" : ""}">
+  return `<li class="force-roster-item ${active ? "is-active" : ""} ${warn ? "is-warn" : ""}" data-grouped-list-item data-group-side="${escapeAttribute(groups.side || "未分类")}" data-group-role="${escapeAttribute(groups.role || "未分类")}" data-group-type="${escapeAttribute(groups.type || "未分类")}" data-group-status="${escapeAttribute(groups.status || "待确认")}" data-search="${escapeAttribute(search || name)}">
     <div class="force-roster-hit"
       role="button"
       tabindex="0"
@@ -676,44 +666,25 @@ function renderCombatCompositionTables(forces = [], options = {}) {
     picker = {},
     catalogOpen = false,
     editable = false,
+    confirmed = false,
     drawerEnter = false
   } = options;
-  const blue = forces.filter((force) => force.side === "friendly");
-  const red = forces.filter((force) => force.side === "hostile");
-  const other = forces.filter((force) => force.side !== "friendly" && force.side !== "hostile");
   const activeId = picker.layer === "combat" || !picker.layer ? picker.forceId : "";
   const activeForce = forces.find((force) => force.id === activeId) || null;
 
   return `<div class="force-concept-board force-combat-board ${activeForce ? "is-detail-open" : "is-detail-idle"}">
     <div class="force-concept-main">
-      <div class="force-concept-columns">
+      <div class="force-concept-columns is-grouped">
         ${renderCombatSideColumn({
-          title: "蓝方",
-          className: "is-blue",
-          items: blue,
-          emptyText: "本阶段暂无蓝方作战编成。",
+          title: "作战编成",
+          className: "is-grouped",
+          items: forces,
+          emptyText: "本阶段暂无作战编成。",
           activeId,
-          missionTypes
-        })}
-        ${renderCombatSideColumn({
-          title: "红方",
-          className: "is-red",
-          items: red,
-          emptyText: "本阶段暂无红方作战编成。",
-          activeId,
-          missionTypes
+          missionTypes,
+          confirmed
         })}
       </div>
-      ${other.length ? `<div class="force-concept-other">
-        ${renderCombatSideColumn({
-          title: "其他",
-          className: "is-other",
-          items: other,
-          emptyText: "",
-          activeId,
-          missionTypes
-        })}
-      </div>` : ""}
       ${!activeForce ? `<p class="planning-meta force-roster-hint">点选编成行后，右侧滑出详情与平台编辑。</p>` : ""}
     </div>
     <button type="button" class="force-concept-drawer-scrim" data-action="close-force-platform-picker" tabindex="-1" aria-label="关闭详情" ${activeForce ? "" : "hidden"}></button>
@@ -738,15 +709,16 @@ function renderCombatSideColumn({
   items = [],
   emptyText = "",
   activeId = "",
-  missionTypes = []
+  missionTypes = [],
+  confirmed = false
 }) {
-  return `<section class="force-roster-col force-combat-column ${className}" aria-label="${escapeAttribute(title)}">
+  return `<section class="force-roster-col force-combat-column ${className}" aria-label="${escapeAttribute(title)}" data-grouped-list-panel="force-combat" data-grouped-list-dimensions="阵营:side|职责:role|任务类型:type|状态:status" data-grouped-list-default-group="side">
     <header class="force-roster-col-head">
       <h4>${escapeHtml(title)}</h4>
       <small>${items.length}</small>
     </header>
     ${items.length
-      ? `<ul class="force-roster-list">${items.map((force, index) => {
+      ? `<ul class="force-roster-list" data-grouped-list-items>${items.map((force, index) => {
           const platforms = Array.isArray(force.platforms) ? force.platforms : [];
           const missingPlatform = !platforms.length;
           const active = force.id === activeId;
@@ -772,7 +744,14 @@ function renderCombatSideColumn({
             line1: mission || unitType || "（未写任务）",
             line2: missingPlatform ? "平台  待挂" : `平台  ${platformSummary}`,
             line2Missing: missingPlatform,
-            title: [force.task, platformSummary].filter(Boolean).join(" | ") || name
+            title: [force.task, platformSummary].filter(Boolean).join(" | ") || name,
+            groups: {
+              side: sideLabel(force.side),
+              role: roleLabel(force.role),
+              type: mission || "未分类",
+              status: confirmed ? "已确认" : missingPlatform || !force.conceptForceId ? "待补全" : "待确认"
+            },
+            search: [force.id, name, force.task, mission, unitType, platformSummary, sideLabel(force.side), roleLabel(force.role)].filter(Boolean).join(" ")
           });
         }).join("")}</ul>`
       : `<p class="empty-inspector force-concept-empty">${escapeHtml(emptyText)}</p>`}

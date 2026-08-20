@@ -30,6 +30,7 @@ import { renderSequenceToolboxFloatButton } from "./ov6cView.js";
 import { renderStateMachineToolboxFloatButton } from "./stateMachineView.js";
 import { renderOv4ToolboxFloatButton } from "./ov4View.js";
 import { renderSubflowToolboxFloatButton } from "./subflowToolbox.js";
+import { mountGroupedLists } from "./groupedListTemplate.js";
 
 import { deleteModelSnapshot, persistModelSnapshots, saveModelSnapshot, snapshotContextFromState, upsertModelSnapshot } from "./modelSnapshotStore.js";
 import { restoreModelSnapshot } from "./modelSnapshotRestore.js";
@@ -338,6 +339,7 @@ function renderViewRoot(options = {}) {
   viewRoot.innerHTML = renderView(state.activeView, { ...state, oodaDuration: getOodaDuration(state.ooda) });
   mountRelatedModelReturn(viewRoot, renderRelatedModelReturn(state));
   mountConceptMapFrame();
+  mountGroupedLists(viewRoot);
   restoreViewFocus(viewRoot, focusSnapshot);
   restoreViewScroll(viewRoot, scrollSnapshots, {
     resetInnerPhaseScroll: Boolean(options.resetInnerPhaseScroll)
@@ -2174,7 +2176,7 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
     }
   }
   if (viewId === "ov1b") {
-    await dodafProductController.pregenerateOv1bFromTasks({ silent: false });
+    await dodafProductController.pregenerateOv1bFromTasks({ silent: false, force: entrySource === "operational-task" });
   }
   if (viewId === "phase-action") {
     await ensureCombatFocusOnEnterPhaseAction();
@@ -2323,7 +2325,7 @@ async function completeWorkflowStage() {
     }
     if (nextView) goToWorkflowView(nextView);
     await hydrateProjectDirectory({ skipRender: true });
-    if (relatedViewId === "ov1b") await dodafProductController.pregenerateOv1bFromTasks({ silent: false });
+    if (relatedViewId === "ov1b") await dodafProductController.pregenerateOv1bFromTasks({ silent: false, force: true });
     showToast(relatedViewId
       ? `当前阶段已确认，已进入关联流程${relatedViewLabel(relatedViewId)}`
       : nextView ? "当前阶段已确认，已进入下一阶段" : "工作流已确认完成");

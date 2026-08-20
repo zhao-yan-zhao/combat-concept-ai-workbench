@@ -120,7 +120,6 @@ export function createInitialWorkbenchState(activeProjectId = resolveActiveProje
     operationalTaskGenerationProgress: null,
     operationalTaskSelectedId: forceMission.tasks?.[0]?.id || "",
     operationalTaskListScrollTop: 0,
-    operationalTaskSideFilter: "all",
     forceMissionGeneratingLayer: "",
     forceMissionChat,
     forceMissionChatGenerating: false,

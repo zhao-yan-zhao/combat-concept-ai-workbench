@@ -70,12 +70,12 @@ export function renderOv6c(state = {}) {
 
     ${sequences.length
     ? `<div class="seq-workbench ${toolsOpen ? "is-tools-docked" : "is-tools-floating"} ${editorOpen ? "is-editor-open" : ""} ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}" aria-label="时序研究台">
-        <aside class="seq-list-panel" aria-label="时序图列表">
+        <aside class="seq-list-panel" aria-label="时序图列表" data-grouped-list-panel="ov6c" data-grouped-list-dimensions="图类型:type|状态:status" data-grouped-list-default-group="type">
           <header class="seq-panel-head">
             <strong>时序图</strong>
             <small>${sequences.length} 幅 · 甘特时间线</small>
           </header>
-          <div class="seq-sequence-list" role="listbox" aria-label="时序图">
+          <div class="seq-sequence-list" role="listbox" aria-label="时序图" data-grouped-list-items>
             ${sequences.map((sequence) => renderSequenceListItem(sequence, selectedId)).join("")}
           </div>
           <div class="seq-list-footer">
@@ -185,9 +185,11 @@ function renderSequenceListItem(sequence, selectedId) {
   const messages = sequence.messages || [];
   const participants = sequence.participants || [];
   const unlinked = messages.filter((item) => !(item.relatedActivityRefs || []).length).length;
-  return `<button type="button" class="seq-list-item ${selected ? "is-selected" : ""}" role="option" aria-selected="${selected ? "true" : "false"}" data-action="ov6c-select-sequence" data-sequence-id="${escapeHtml(sequence.id)}">
+  const typeLabel = sequenceTypeLabel(sequence.diagramType);
+  const statusLabel = messages.length && !unlinked ? "已回链" : unlinked ? "待回链" : "待补充";
+  return `<button type="button" class="seq-list-item ${selected ? "is-selected" : ""}" role="option" aria-selected="${selected ? "true" : "false"}" data-action="ov6c-select-sequence" data-sequence-id="${escapeHtml(sequence.id)}" data-grouped-list-item data-group-type="${escapeHtml(typeLabel)}" data-group-status="${statusLabel}" data-search="${escapeHtml([sequence.id, sequence.name, typeLabel, ...participants.map((item) => item.name || item.label || item.id)].filter(Boolean).join(" "))}">
     <strong>${escapeHtml(sequence.name || sequence.id)}</strong>
-    <small>${sequenceTypeLabel(sequence.diagramType)} · ${participants.length} 参与方 · ${messages.length} 消息${unlinked ? ` · ${unlinked} 未回链` : ""}</small>
+    <small>${typeLabel} · ${participants.length} 参与方 · ${messages.length} 消息${unlinked ? ` · ${unlinked} 未回链` : ""}</small>
   </button>`;
 }
 

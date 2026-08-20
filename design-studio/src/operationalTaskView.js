@@ -15,8 +15,6 @@ export function renderOperationalTasks(state = {}) {
   const progress = state.operationalTaskGenerationProgress;
   const generationLabel = progress?.total ? `AI 正在生成 ${progress.completed}/${progress.total}` : "AI 正在生成…";
   const source = state.forceMission?.generation?.source || "";
-  const sideFilter = ["all", "friendly", "hostile"].includes(state.operationalTaskSideFilter) ? state.operationalTaskSideFilter : "all";
-  const visibleTasks = tasks.filter((task) => sideFilter === "all" || task.side === sideFilter);
   const completeCount = tasks.filter((task) => task.area?.name && task.area.name !== "待人工明确" && (task.area.points || []).some((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude))).length;
   const incompleteAreaCount = tasks.filter((task) => !task.area?.name || task.area.name === "待人工明确" || !(task.area.points || []).some((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude))).length;
   return `<section class="operational-task-workbench">
@@ -26,7 +24,7 @@ export function renderOperationalTasks(state = {}) {
     </header>
     ${!ready ? `<p class="force-next-banner is-warn">请先确认“阶段行动”，再生成作战任务与区域候选。</p>` : ""}
     <div class="operational-task-layout ${selected ? "has-selection" : "is-empty"}">
-      <aside class="operational-task-list" aria-label="作战任务列表"><div class="operational-pane-head"><div><span>任务清单</span><strong>${visibleTasks.length}/${tasks.length}</strong></div><small>按阶段与阵营</small></div><div class="operational-task-filters" role="group" aria-label="按分方筛选"><button type="button" class="operational-task-filter ${sideFilter === "all" ? "is-active" : ""}" data-action="filter-operational-tasks" data-task-side-filter="all">全部</button><button type="button" class="operational-task-filter ${sideFilter === "friendly" ? "is-active" : ""}" data-action="filter-operational-tasks" data-task-side-filter="friendly">蓝方</button><button type="button" class="operational-task-filter ${sideFilter === "hostile" ? "is-active" : ""}" data-action="filter-operational-tasks" data-task-side-filter="hostile">红方</button></div><div class="operational-task-list-scroll">${visibleTasks.map((task, index) => renderTaskListItem(task, index, selected?.id, phaseNames)).join("") || renderEmpty()}</div><div class="operational-task-completion"><span>区域补全</span><strong>${completeCount}/${tasks.length}</strong></div></aside>
+      <aside class="operational-task-list" aria-label="作战任务列表" data-grouped-list-panel="operational-task" data-grouped-list-dimensions="阶段:phase|阵营:side|任务类型:type|状态:status" data-grouped-list-default-group="phase"><div class="operational-pane-head"><div><span>任务清单</span><strong>${tasks.length}</strong></div><small>按阶段与阵营</small></div><div class="operational-task-list-scroll" data-grouped-list-items>${tasks.map((task, index) => renderTaskListItem(task, index, selected?.id, phaseNames, confirmed)).join("") || renderEmpty()}</div><div class="operational-task-completion"><span>区域补全</span><strong>${completeCount}/${tasks.length}</strong></div></aside>
       <main class="operational-task-editor">${selected ? renderTaskEditor(selected, phaseNames, listCmoMissionTypes()) : renderWorkspaceEmpty(ready)}</main>
       <aside class="operational-area-editor">${selected ? renderAreaEditor(selected) : `<div class="operational-empty-side"><span>区域</span><p>选择任务后编辑区域类型和坐标。</p></div>`}</aside>
     </div>
@@ -40,9 +38,12 @@ function renderStatus(confirmed, generating, source) {
   return `<span class="operational-status">待生成</span>`;
 }
 
-function renderTaskListItem(task, index, selectedId, phaseNames) {
+function renderTaskListItem(task, index, selectedId, phaseNames, confirmed) {
   const coordinateCount = (task.area?.points || []).filter((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude)).length;
-  return `<div class="operational-task-list-item ${task.id === selectedId ? "is-active" : ""}"><button type="button" class="operational-task-select" data-action="select-operational-task" data-task-id="${escapeHtml(task.id)}"><span class="operational-task-index">${String(index + 1).padStart(2, "0")}</span><span class="operational-task-list-copy"><strong>${escapeHtml(task.name)}</strong><small>${escapeHtml(phaseNames.get(task.phaseId) || "未挂接阶段")} · ${task.side === "hostile" ? "红方" : "蓝方"}</small></span></button><button type="button" class="operational-task-delete" data-action="remove-operational-task" data-task-id="${escapeHtml(task.id)}" title="删除任务" aria-label="删除任务">×</button></div>`;
+  const phaseLabel = phaseNames.get(task.phaseId) || "未挂接阶段";
+  const sideLabel = task.side === "hostile" ? "红方" : task.side === "friendly" ? "蓝方" : "其他";
+  const statusLabel = confirmed ? "已确认" : coordinateCount ? "待确认" : "待补全";
+  return `<div class="operational-task-list-item ${task.id === selectedId ? "is-active" : ""}" data-grouped-list-item data-group-phase="${escapeHtml(phaseLabel)}" data-group-side="${sideLabel}" data-group-type="${escapeHtml(task.missionType || "未分类")}" data-group-status="${statusLabel}" data-search="${escapeHtml([task.id, task.name, task.objective, task.expectedEffect, phaseLabel, sideLabel, task.missionType].filter(Boolean).join(" "))}"><button type="button" class="operational-task-select" data-action="select-operational-task" data-task-id="${escapeHtml(task.id)}"><span class="operational-task-index">${String(index + 1).padStart(2, "0")}</span><span class="operational-task-list-copy"><strong>${escapeHtml(task.name)}</strong><small>${escapeHtml(phaseLabel)} · ${sideLabel}</small></span></button><button type="button" class="operational-task-delete" data-action="remove-operational-task" data-task-id="${escapeHtml(task.id)}" title="删除任务" aria-label="删除任务">×</button></div>`;
 }
 
 function renderTaskEditor(task, phaseNames, missionTypes) {

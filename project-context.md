@@ -1,5 +1,19 @@
 # project-context.md
 
+## Latest completed change (2026-08-19, shared grouped lists for workflow data columns)
+
+- Applied the approved narrow-column list pattern to phase actions, operational tasks, concept/combat forces, OV1b, OV2, OV4, OV6b, and OV6c. Search uses one row; grouping plus a compact filter entry use the next row; the filter popover stays inside the left data column and closes after value selection.
+- Added `design-studio/src/groupedListTemplate.js` as a DOM-level enhancement that preserves each page's existing item markup, selection actions, editors, canvases, and persistence. Page-specific data attributes provide dimensions such as phase, side, task type, role, model subject, completeness, and status.
+- Operational tasks no longer prefilter by fixed red/blue buttons. OV1b exposes all parent tasks in one list while preserving same-side decomposition editing for the selected parent. Force lists expose one complete concept/combat collection and use side as the default grouping instead of hard-coded side columns.
+- Verification: production grouped-list acceptance, operational-task step, task AI chain, OV1b bindings, OV6 workbench, contextual flow, subflow toolboxes, design-studio workflow, syntax, diff, and live `8792` health passed. A temporary same-origin fixture using the real production module/styles verified a 280px column, contained filter popover, automatic close, search, filtering, grouping/collapse, preserved item events, no horizontal overflow, and no browser warnings/errors; the fixture was removed. Authenticated live-project click-through remains blocked by the login gate.
+
+## Latest completed change (2026-08-19, restore task-to-decomposition AI generation)
+
+- Fixed task -> task-decomposition entry incorrectly skipping AI whenever OV1b already contained any relationship. Ordinary page revisits skip when normalized task inputs match the last generation, while completing or advancing from the operational-task step now always runs the visible AI generation process.
+- The AI request still receives tasks only (`id/name/side/missionType/objective/expectedEffect`). When task input changes, the generation overlay and AI request run again; confirmed and manual relationships are preserved, while prior pending AI drafts are replaced and deduplicated.
+- The input fingerprint is persisted in the existing OV1b `derivedFrom.note` contract and survives product normalization. Manual OV1b edits clear provenance as before, so they do not falsely mark the generated model current.
+- Verification: task AI chain, phase chain, contextual model flow, workflow test mode, syntax, and targeted diff checks passed.
+
 ## Latest completed change (2026-08-19, OV1b pan and connector correction)
 
 - Fixed OV1b decomposition canvas panning with pointer capture and scroll-based horizontal/vertical movement from blank canvas areas; form controls and nodes retain normal interaction.
@@ -122,7 +136,7 @@
 - Entry behavior: entering `operational-task` from the confirmed `phase-action` step now auto-runs AI generation when existing tasks lack required area coordinates; revisiting the task page from other entry points does not regenerate automatically.
 - Model: Task area is structured as `name/type/geometryType/coordinateSystem/points/radiusNm/description/basis/needsReview`; legacy strings migrate safely. Area types cover patrol/prosecution/support/transit/target/exclusion/other; geometry supports point/circle/polygon/corridor.
 - AI: Added `OperationalTaskDraft`. AI receives brief, confirmed phase actions and the existing CMO mission taxonomy, and returns task names/types plus evidence-bounded area candidates. Without geographic grounding it must return no points and flag review instead of inventing coordinates. Human confirmation is blocked until every task has a named area and at least one valid WGS84 point.
-- Large-generation reliability: The single `AI 一键生成` action splits confirmed actions into batches of three, runs three batches per wave, retries each incomplete/failed batch once, shows batch progress, rejects incomplete batch counts, and rewrites per-batch IDs before merging. The prompt explicitly forbids `web_search`/tool-call placeholders. This fixes the 33-action `fkfd` project silently falling back to local tasks with empty areas.
+- Large-generation reliability: The single `AI 一键生成` action splits confirmed actions into batches of three, runs four batches per wave, sends only task-relevant brief fields, retries each incomplete/failed batch once, shows batch progress, rejects incomplete batch counts, and rewrites per-batch IDs before merging. The prompt explicitly forbids `web_search`/tool-call placeholders. This fixes the 33-action `fkfd` project silently falling back to local tasks with empty areas.
 - Naming: Generated names use concise professional `作战功能 + 任务` form; T+ timestamps, full action sentences and conditions stay in objective/source fields. Duplicate base names receive side plus phase/area qualifiers and a final deterministic ordinal fallback.
 - Verification: syntax, operational-task model/UI/AI fallback, batching/progress, unique-name/area-completion rules, model-topology, seven-step workflow, concept-planning, phase-chain, served-resource, live health and diff checks passed. A real no-write generation against the current `fkfd` project's first three actions returned exactly three tasks with complete named areas and WGS84 points. A same-origin visual fixture verified the desktop master/detail structure; authenticated click-through and reliable 390px browser screenshot remain outstanding.
 
