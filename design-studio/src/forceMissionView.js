@@ -138,106 +138,96 @@ export function renderForceMission(state) {
   const canRecommendCombat = !busy && catalogOpen && combatForces.length > 0;
 
   const mainBody = `
-    ${renderForceWorkflowStrip(workflow)}
-    ${renderNextStepBanner({
+    ${renderForceMissionChrome({
       workflow,
-      canGenerateConcept,
-      canGenerateCombat,
       canConfirm,
       incomplete,
       conceptMissingEquip,
       combatMissingPlatform,
       combatUnlinked,
       catalogOpen,
-      confirmed
-    })}
-
-    ${renderForcePhaseSwitcher({
-      phases,
-      focusId,
-      status,
+      confirmed,
       generating,
-      recommendRunning: recommend.running,
-      conceptForces: forces,
-      combatForces
+      generatingLayer,
+      recommendRunning: recommend.running
     })}
-
-    <div class="planning-actions force-mission-actions">
-      <button type="button"
-        class="${workflow.primaryAction === "concept" ? "" : "quiet-button"}"
-        data-action="generate-concept-forces"
-        ${canGenerateConcept ? "" : "disabled"}>${escapeHtml(conceptBtnLabel)}</button>
-      <button type="button"
-        class="${workflow.primaryAction === "combat" ? "" : "quiet-button"}"
-        data-action="generate-combat-forces"
-        ${canGenerateCombat ? "" : "disabled"}>${escapeHtml(combatBtnLabel)}</button>
-      ${canRecommendCombat ? `<button type="button" class="quiet-button" data-action="recommend-platforms-from-phases"
-        ${recommend.running ? "disabled" : ""}>${recommend.running ? "正在挂接平台…" : "为作战兵力补挂平台"}</button>` : ""}
-      <button type="button"
-        class="${workflow.primaryAction === "confirm" ? "" : "quiet-button"}"
-        data-action="confirm-force-mission"
-        ${canConfirm ? "" : "disabled"}>${escapeHtml(confirmBtnLabel)}</button>
-    </div>
-
-    <div class="force-mission-body" data-force-phase-panel="${escapeAttribute(focusId || "all")}">
-      <article class="planning-card force-layer-pager" aria-label="兵力分页">
-        <div class="force-layer-toolbar">
-          <div class="force-layer-seg" role="tablist" aria-label="概念与作战">
-            <button type="button"
-              class="force-layer-seg-btn ${layerTab === "concept" ? "is-selected" : ""} ${workflow.step === "concept" && !confirmed ? "is-current-step" : ""}"
-              role="tab"
-              aria-selected="${layerTab === "concept" ? "true" : "false"}"
-              data-action="select-force-mission-layer"
-              data-layer="concept">
-              <span class="force-layer-seg-index">1</span>
-              <span class="force-layer-seg-copy">
-                <strong>概念兵力</strong>
-                <small>${escapeHtml(conceptCountLabel)}${forces.length ? ` · 共 ${forces.length}` : ""}</small>
-              </span>
-              ${conceptMissingEquip ? `<span class="force-layer-seg-badge is-warn">${conceptMissingEquip}</span>` : forces.length ? `<span class="force-layer-seg-badge is-ok">✓</span>` : ""}
-            </button>
-            <button type="button"
-              class="force-layer-seg-btn ${layerTab === "combat" ? "is-selected" : ""} ${workflow.step === "combat" && !confirmed ? "is-current-step" : ""}"
-              role="tab"
-              aria-selected="${layerTab === "combat" ? "true" : "false"}"
-              data-action="select-force-mission-layer"
-              data-layer="combat"
-              ${forces.length ? "" : "disabled"}>
-              <span class="force-layer-seg-index">2</span>
-              <span class="force-layer-seg-copy">
-                <strong>作战编成</strong>
-                <small>${escapeHtml(combatCountLabel)}${combatForces.length ? ` · 共 ${combatForces.length}` : ""}</small>
-              </span>
-              ${!forces.length
-                ? ""
-                : combatMissingPlatform
-                  ? `<span class="force-layer-seg-badge is-warn">${combatMissingPlatform}</span>`
-                  : combatForces.length
-                    ? `<span class="force-layer-seg-badge is-ok">✓</span>`
-                    : ""}
-            </button>
-          </div>
-          <div class="force-layer-toolbar-meta">
-            <div class="force-layer-phase-label">
-              <strong>${layerTab === "combat" ? "作战编成" : "概念兵力"}</strong>
-              <span>${escapeHtml(phaseLabel)}</span>
+    <div class="force-mission-workbench">
+      <div class="force-mission-left">
+        ${renderForceMissionRail({
+          phases,
+          focusId,
+          conceptForces: forces,
+          combatForces
+        })}
+        ${renderForceMissionRailActions({
+          workflow,
+          canGenerateConcept,
+          canGenerateCombat,
+          canConfirm,
+          canRecommendCombat,
+          conceptBtnLabel,
+          combatBtnLabel,
+          confirmBtnLabel,
+          recommendRunning: recommend.running
+        })}
+      </div>
+      <div class="force-mission-body" data-force-phase-panel="${escapeAttribute(focusId || "all")}">
+        <article class="planning-card force-layer-pager" aria-label="兵力名单">
+          <div class="force-layer-toolbar">
+            <div class="force-layer-seg" role="tablist" aria-label="概念与作战">
+              <button type="button"
+                class="force-layer-seg-btn ${layerTab === "concept" ? "is-selected" : ""} ${workflow.step === "concept" && !confirmed ? "is-current-step" : ""}"
+                role="tab"
+                aria-selected="${layerTab === "concept" ? "true" : "false"}"
+                data-action="select-force-mission-layer"
+                data-layer="concept">
+                <span class="force-layer-seg-index">1</span>
+                <span class="force-layer-seg-copy">
+                  <strong>概念兵力</strong>
+                  <small>${escapeHtml(conceptCountLabel)}${forces.length ? ` · 共 ${forces.length}` : ""}</small>
+                </span>
+                ${conceptMissingEquip ? `<span class="force-layer-seg-badge is-warn">${conceptMissingEquip}</span>` : forces.length ? `<span class="force-layer-seg-badge is-ok">✓</span>` : ""}
+              </button>
+              <button type="button"
+                class="force-layer-seg-btn ${layerTab === "combat" ? "is-selected" : ""} ${workflow.step === "combat" && !confirmed ? "is-current-step" : ""}"
+                role="tab"
+                aria-selected="${layerTab === "combat" ? "true" : "false"}"
+                data-action="select-force-mission-layer"
+                data-layer="combat"
+                ${forces.length ? "" : "disabled"}>
+                <span class="force-layer-seg-index">2</span>
+                <span class="force-layer-seg-copy">
+                  <strong>作战编成</strong>
+                  <small>${escapeHtml(combatCountLabel)}${combatForces.length ? ` · 共 ${combatForces.length}` : ""}</small>
+                </span>
+                ${!forces.length
+                  ? ""
+                  : combatMissingPlatform
+                    ? `<span class="force-layer-seg-badge is-warn">${combatMissingPlatform}</span>`
+                    : combatForces.length
+                      ? `<span class="force-layer-seg-badge is-ok">✓</span>`
+                      : ""}
+              </button>
             </div>
-            ${layerTab === "combat" && combatUnlinked > 0
-              ? `<span class="mini-tag review">${combatUnlinked} 未挂概念</span>`
-              : layerTab === "concept" && conceptMissingEquip > 0
-                ? `<span class="mini-tag review">${conceptMissingEquip} 待挂装备</span>`
-                : confirmed
-                  ? `<span class="mini-tag ready">已确认</span>`
-                  : `<span class="mini-tag">${escapeHtml(status)}</span>`}
+            <div class="force-layer-toolbar-meta">
+              <span class="force-layer-phase-label">${escapeHtml(phaseLabel)}</span>
+              ${layerTab === "combat" && combatUnlinked > 0
+                ? `<span class="mini-tag review">${combatUnlinked} 未挂概念</span>`
+                : layerTab === "concept" && conceptMissingEquip > 0
+                  ? `<span class="mini-tag review">${conceptMissingEquip} 待挂装备</span>`
+                  : confirmed
+                    ? `<span class="mini-tag ready">已确认</span>`
+                    : `<span class="mini-tag">${escapeHtml(status)}</span>`}
+            </div>
           </div>
-        </div>
-        <div class="force-layer-panel" role="tabpanel">
-          ${!catalogOpen && hasDraft
-            ? `<p class="planning-meta force-catalog-hint">CMO 装备目录未连接：可继续审阅职责与任务；挂接真实平台请到系统管理配置 DB3。</p>`
-            : ""}
-          ${layerTab === "combat" ? combatBody : conceptBody}
-        </div>
-      </article>
+          <div class="force-layer-panel" role="tabpanel">
+            ${!catalogOpen && hasDraft
+              ? `<p class="planning-meta force-catalog-hint">CMO 装备目录未连接：可继续审阅职责与任务；挂接真实平台请到系统管理配置 DB3。</p>`
+              : ""}
+            ${layerTab === "combat" ? combatBody : conceptBody}
+          </div>
+        </article>
+      </div>
     </div>`;
 
   return `<section class="planning-page force-mission-page force-mission-page--bench ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}">
@@ -352,7 +342,19 @@ function resolveWorkflowProgress({
   };
 }
 
-function renderForceWorkflowStrip(workflow = {}) {
+function renderForceMissionChrome({
+  workflow = {},
+  canConfirm,
+  incomplete = [],
+  conceptMissingEquip = 0,
+  combatMissingPlatform = 0,
+  combatUnlinked = 0,
+  catalogOpen = false,
+  confirmed = false,
+  generating = false,
+  generatingLayer = "",
+  recommendRunning = false
+}) {
   const steps = [
     {
       id: "concept",
@@ -378,70 +380,123 @@ function renderForceWorkflowStrip(workflow = {}) {
       locked: !workflow.hasConcept || !workflow.hasCombat
     }
   ];
-  return `<nav class="force-workflow-strip planning-card" aria-label="兵力与任务步骤">
-    <ol class="force-workflow-steps">
-      ${steps.map((step, index) => `
-        <li class="force-workflow-step ${step.done ? "is-done" : ""} ${step.active ? "is-active" : ""} ${step.locked ? "is-locked" : ""}">
-          <span class="force-workflow-index">${step.done ? "✓" : step.index}</span>
-          <span class="force-workflow-title">${escapeHtml(step.title)}</span>
-          ${index < steps.length - 1 ? `<span class="force-workflow-arrow" aria-hidden="true">→</span>` : ""}
-        </li>`).join("")}
-    </ol>
-  </nav>`;
-}
-
-function renderNextStepBanner({
-  workflow,
-  canGenerateConcept,
-  canGenerateCombat,
-  canConfirm,
-  incomplete = [],
-  conceptMissingEquip = 0,
-  combatMissingPlatform = 0,
-  combatUnlinked = 0,
-  catalogOpen = false,
-  confirmed = false
-}) {
-  if (!workflow || workflow.step === "upstream") return "";
-  if (confirmed && !workflow.stale) {
-    return `<p class="force-next-banner is-ready">兵力与任务已确认，下游作战概念图可消费本步语义。若再改动将回到草案。</p>`;
-  }
-  if (workflow.stale) {
-    return `<p class="force-next-banner is-warn">上游变更导致本步已过期。请重新生成概念/作战兵力并确认。</p>`;
-  }
-  if (workflow.step === "concept") {
-    return `<div class="force-next-banner">
-      <p><b>下一步：</b>生成概念兵力（红蓝职责名单，按阶段归属）。</p>
-      <button type="button" data-action="generate-concept-forces" ${canGenerateConcept ? "" : "disabled"}>生成概念兵力</button>
-    </div>`;
-  }
-  if (workflow.step === "combat") {
-    return `<div class="force-next-banner">
-      <p><b>概念兵力已就绪。</b>下一步生成作战编成（可挂 CMO 平台与任务类型）。${conceptMissingEquip ? ` 另有 ${conceptMissingEquip} 个概念单元尚未挂装备类型，可点单元补挂。` : ""}</p>
-      <button type="button" data-action="generate-combat-forces" ${canGenerateCombat ? "" : "disabled"}>生成作战兵力</button>
-      <button type="button" class="quiet-button" data-action="select-force-mission-layer" data-layer="concept">回看概念兵力</button>
-    </div>`;
-  }
-  if (workflow.step === "confirm") {
+  let tone = "";
+  let message = "";
+  const actions = [];
+  if (!workflow || workflow.step === "upstream") {
+    tone = "is-warn";
+    message = "请先完成简报与阶段，再生成概念兵力。";
+  } else if (generating) {
+    message = generatingLayer === "combat"
+      ? "正在生成作战兵力…"
+      : (generatingLayer === "concept" || generatingLayer === "both")
+        ? "正在生成概念兵力…"
+        : "正在生成…";
+  } else if (recommendRunning) {
+    message = "正在挂接平台…";
+  } else if (confirmed && !workflow.stale) {
+    tone = "is-ready";
+    message = "兵力与任务已确认。若再改动将回到草案。";
+  } else if (workflow.stale) {
+    tone = "is-warn";
+    message = "上游变更导致本步已过期。请重新生成概念/作战兵力并确认。";
+  } else if (workflow.step === "concept") {
+    message = "下一步：生成概念兵力（红蓝职责名单，按阶段归属）。";
+  } else if (workflow.step === "combat") {
+    message = `概念兵力已就绪。下一步生成作战编成。${conceptMissingEquip ? ` ${conceptMissingEquip} 个概念单元尚未挂装备。` : ""}`;
+    actions.push(`<button type="button" class="quiet-button" data-action="select-force-mission-layer" data-layer="concept">回看概念兵力</button>`);
+  } else if (workflow.step === "confirm") {
     const hints = [];
     if (incomplete.length) hints.push(...incomplete);
-    if (combatUnlinked > 0) hints.push(`${combatUnlinked} 行作战编成未挂概念（建议补挂）`);
-    if (combatMissingPlatform > 0) hints.push(`${combatMissingPlatform} 行尚无平台（软提示，不阻确认）`);
+    if (combatUnlinked > 0) hints.push(`${combatUnlinked} 行作战编成未挂概念`);
+    if (combatMissingPlatform > 0) hints.push(`${combatMissingPlatform} 行尚无平台`);
     if (!catalogOpen && combatMissingPlatform > 0) hints.push("装备目录未连接，平台可稍后补");
-    return `<div class="force-next-banner ${canConfirm ? "is-ready" : "is-warn"}">
-      <p><b>两层草案已齐。</b>${canConfirm
-        ? "复核后确认，将自动进入作战概念图。"
-        : `尚不能确认：${escapeHtml(hints.join("；") || "请检查草案完整性")}`}</p>
-      ${canConfirm
-        ? `<button type="button" data-action="confirm-force-mission">确认并进入作战概念图</button>`
-        : ""}
-      ${combatMissingPlatform > 0 && catalogOpen
-        ? `<button type="button" class="quiet-button" data-action="recommend-platforms-from-phases">补挂平台</button>`
-        : ""}
-      <button type="button" class="quiet-button" data-action="select-force-mission-layer" data-layer="combat">检查作战编成</button>
-    </div>`;
+    if (canConfirm) {
+      tone = "is-ready";
+      message = "两层草案已齐。复核后确认，将自动进入作战概念图。";
+    } else {
+      tone = "is-warn";
+      message = `两层草案已齐。尚不能确认：${hints.join("；") || "请检查草案完整性"}`;
+    }
+    actions.push(`<button type="button" class="quiet-button" data-action="select-force-mission-layer" data-layer="combat">检查作战编成</button>`);
   }
-  return "";
+  return `<header class="force-mission-chrome ${tone}" aria-label="兵力步骤与状态">
+    <ol class="force-mission-steps">
+      ${steps.map((step) => `
+        <li class="force-mission-step ${step.done ? "is-done" : ""} ${step.active ? "is-active" : ""} ${step.locked ? "is-locked" : ""}">
+          <span class="force-mission-step-index">${step.done ? "✓" : step.index}</span>
+          <span class="force-mission-step-title">${escapeHtml(step.title)}</span>
+        </li>`).join("")}
+    </ol>
+    <p class="force-mission-chrome-msg">${escapeHtml(message)}</p>
+    ${actions.length ? `<div class="force-mission-chrome-actions">${actions.join("")}</div>` : ""}
+  </header>`;
+}
+
+function renderForceMissionRail({
+  phases = [],
+  focusId = "",
+  conceptForces = [],
+  combatForces = []
+}) {
+  const phaseItems = phases.length
+    ? phases.map((phase, index) => {
+      const selected = phase.id === focusId;
+      const seq = phase.sequence || index + 1;
+      const conceptCount = filterConceptForcesForPhase(conceptForces, phase.id, true).length;
+      const combatCount = filterCombatForcesForPhase(combatForces, conceptForces, phase.id, true).length;
+      return `<button type="button"
+        class="force-mission-phase ${selected ? "is-selected" : ""}"
+        role="option"
+        aria-selected="${selected ? "true" : "false"}"
+        data-action="select-phase-action-focus"
+        data-phase-id="${escapeAttribute(phase.id)}">
+        <span class="force-mission-phase-index">${seq}</span>
+        <span class="force-mission-phase-copy">
+          <strong>${escapeHtml(phase.name || phase.id)}</strong>
+          <small>概念 ${conceptCount} · 作战 ${combatCount}</small>
+        </span>
+      </button>`;
+    }).join("")
+    : `<p class="empty-inspector force-mission-phase-empty">暂无阶段。请先生成并确认「阶段与行动」。</p>`;
+  return `<aside class="force-mission-rail planning-card" aria-label="阶段">
+    <header class="force-mission-rail-head" title="跨阶段单元会在其所属阶段重复出现。">
+      <h2>阶段</h2>
+      <small>${phases.length ? `${phases.length} 段` : "未就绪"}</small>
+    </header>
+    <div class="force-mission-phase-list" role="listbox" aria-label="作战阶段">
+      ${phaseItems}
+    </div>
+  </aside>`;
+}
+
+function renderForceMissionRailActions({
+  workflow = {},
+  canGenerateConcept = false,
+  canGenerateCombat = false,
+  canConfirm = false,
+  canRecommendCombat = false,
+  conceptBtnLabel = "生成概念兵力",
+  combatBtnLabel = "生成作战兵力",
+  confirmBtnLabel = "确认并进入作战概念图",
+  recommendRunning = false
+}) {
+  return `<div class="force-mission-rail-actions planning-actions" aria-label="兵力动作">
+    <button type="button"
+      class="${workflow.primaryAction === "concept" ? "" : "quiet-button"}"
+      data-action="generate-concept-forces"
+      ${canGenerateConcept ? "" : "disabled"}>${escapeHtml(conceptBtnLabel)}</button>
+    <button type="button"
+      class="${workflow.primaryAction === "combat" ? "" : "quiet-button"}"
+      data-action="generate-combat-forces"
+      ${canGenerateCombat ? "" : "disabled"}>${escapeHtml(combatBtnLabel)}</button>
+    ${canRecommendCombat ? `<button type="button" class="quiet-button" data-action="recommend-platforms-from-phases"
+      ${recommendRunning ? "disabled" : ""}>${recommendRunning ? "正在挂接平台…" : "为作战兵力补挂平台"}</button>` : ""}
+    <button type="button"
+      class="${workflow.primaryAction === "confirm" ? "" : "quiet-button"}"
+      data-action="confirm-force-mission"
+      ${canConfirm ? "" : "disabled"}>${escapeHtml(confirmBtnLabel)}</button>
+  </div>`;
 }
 
 function renderLayerEmpty({
@@ -535,7 +590,6 @@ function renderConceptForceRoster(forces = [], options = {}) {
           confirmed
         })}
       </div>
-      ${!activeForce ? `<p class="planning-meta force-roster-hint">点选单元后，右侧滑出详情与装备挂接。</p>` : ""}
     </div>
     <button type="button" class="force-concept-drawer-scrim" data-action="close-force-platform-picker" tabindex="-1" aria-label="关闭详情" ${activeForce ? "" : "hidden"}></button>
     <aside class="force-concept-sidebar ${activeForce ? "is-open" : ""} ${activeForce && drawerEnter ? "is-entering" : ""}" aria-label="概念兵力详情" aria-hidden="${activeForce ? "false" : "true"}">
@@ -546,10 +600,6 @@ function renderConceptForceRoster(forces = [], options = {}) {
 
 function renderConceptSideColumn({ title, className, items = [], emptyText = "", activeId = "", confirmed = false }) {
   return `<section class="force-roster-col ${className}" aria-label="${escapeAttribute(title)}" data-grouped-list-panel="force-concept" data-grouped-list-dimensions="阵营:side|职责:role|状态:status" data-grouped-list-default-group="side">
-    <header class="force-roster-col-head">
-      <h4>${escapeHtml(title)}</h4>
-      <small>${items.length}</small>
-    </header>
     ${items.length
       ? `<ul class="force-roster-list" data-grouped-list-items>${items.map((force, index) => {
           const equip = formatConceptEquipment(force);
@@ -685,7 +735,6 @@ function renderCombatCompositionTables(forces = [], options = {}) {
           confirmed
         })}
       </div>
-      ${!activeForce ? `<p class="planning-meta force-roster-hint">点选编成行后，右侧滑出详情与平台编辑。</p>` : ""}
     </div>
     <button type="button" class="force-concept-drawer-scrim" data-action="close-force-platform-picker" tabindex="-1" aria-label="关闭详情" ${activeForce ? "" : "hidden"}></button>
     <aside class="force-concept-sidebar force-combat-sidebar ${activeForce ? "is-open" : ""} ${activeForce && drawerEnter ? "is-entering" : ""}" aria-label="作战编成详情" aria-hidden="${activeForce ? "false" : "true"}">
@@ -713,10 +762,6 @@ function renderCombatSideColumn({
   confirmed = false
 }) {
   return `<section class="force-roster-col force-combat-column ${className}" aria-label="${escapeAttribute(title)}" data-grouped-list-panel="force-combat" data-grouped-list-dimensions="阵营:side|职责:role|任务类型:type|状态:status" data-grouped-list-default-group="side">
-    <header class="force-roster-col-head">
-      <h4>${escapeHtml(title)}</h4>
-      <small>${items.length}</small>
-    </header>
     ${items.length
       ? `<ul class="force-roster-list" data-grouped-list-items>${items.map((force, index) => {
           const platforms = Array.isArray(force.platforms) ? force.platforms : [];
@@ -978,60 +1023,6 @@ function renderInlinePlatformPicker(force, picker, catalogOpen, editable, layer 
   </div>`;
 }
 
-function renderForcePhaseSwitcher({
-  phases = [],
-  focusId = "",
-  status = "",
-  generating = false,
-  recommendRunning = false,
-  conceptForces = [],
-  combatForces = []
-}) {
-  const statusExtra = generating ? " · 生成中" : recommendRunning ? " · 挂接平台中" : "";
-  if (!phases.length) {
-    return `<nav class="force-phase-switcher planning-card" aria-label="阶段展示">
-      <header class="force-phase-switcher-head">
-        <div>
-          <h2>按阶段查看</h2>
-          <p>完成阶段与行动后，可在此切换查看各阶段概念/作战兵力。</p>
-        </div>
-        <span class="mini-tag ${status === "已确认" ? "ready" : generating || recommendRunning ? "review" : ""}">${escapeHtml(status)}${escapeHtml(statusExtra)}</span>
-      </header>
-      <p class="empty-inspector">暂无阶段。请先生成并确认「阶段与行动」。</p>
-    </nav>`;
-  }
-
-  return `<nav class="force-phase-switcher planning-card" aria-label="阶段展示">
-    <header class="force-phase-switcher-head">
-      <div>
-        <h2>按阶段查看</h2>
-        <p>切换阶段过滤名单与编成；跨阶段单元会在其所属阶段重复出现。</p>
-      </div>
-      <span class="mini-tag ${status === "已确认" ? "ready" : generating || recommendRunning ? "review" : ""}">${escapeHtml(status)}${escapeHtml(statusExtra)}</span>
-    </header>
-    <div class="force-phase-tab-list" role="tablist" aria-label="作战阶段">
-      ${phases.map((phase, index) => {
-        const selected = phase.id === focusId;
-        const seq = phase.sequence || index + 1;
-        const conceptCount = filterConceptForcesForPhase(conceptForces, phase.id, true).length;
-        const combatCount = filterCombatForcesForPhase(combatForces, conceptForces, phase.id, true).length;
-        return `<button type="button"
-          class="force-phase-tab ${selected ? "is-selected" : ""}"
-          role="tab"
-          aria-selected="${selected ? "true" : "false"}"
-          data-action="select-phase-action-focus"
-          data-phase-id="${escapeAttribute(phase.id)}">
-          <span class="force-phase-tab-index">${seq}</span>
-          <span class="force-phase-tab-body">
-            <strong>${escapeHtml(phase.name || phase.id)}</strong>
-            <small>概念 ${conceptCount} · 作战 ${combatCount}</small>
-          </span>
-        </button>`;
-      }).join("")}
-    </div>
-  </nav>`;
-}
-
 function clipText(value, max = 40) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   if (!text) return "";
@@ -1095,7 +1086,7 @@ function renderUpstreamBanners(upstream) {
 }
 
 function sideLabel(side) {
-  return ({ friendly: "己方", hostile: "对方", neutral: "中立", unknown: "未知" })[side] || side || "—";
+  return ({ friendly: "蓝方", hostile: "红方", neutral: "中立", unknown: "未知" })[side] || side || "—";
 }
 
 function roleLabel(role) {

@@ -54,6 +54,16 @@ export function updateOv4DiagramPositions(model, diagramId, positions = []) {
   return updateOv4Diagram(model, diagramId, { positions });
 }
 
+export function updateOv4RoleClassification(model, roleId, patch = {}) {
+  const normalized = normalizeDodafOv4(model);
+  return normalizeDodafOv4({ ...normalized, roles: (normalized.roles || []).map((role) => role.id === roleId ? { ...role, ...patch, id: role.id } : role) });
+}
+
+export function updateOv4RelationClassification(model, relationId, patch = {}) {
+  const normalized = normalizeDodafOv4(model);
+  return normalizeDodafOv4({ ...normalized, relations: (normalized.relations || []).map((relation) => relation.id === relationId ? { ...relation, ...patch, id: relation.id } : relation) });
+}
+
 function uniqueId(diagrams) {
   const used = new Set(diagrams.map((diagram) => diagram.id));
   const base = `ov4-diagram-${Date.now().toString(36)}`;

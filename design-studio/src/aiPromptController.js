@@ -44,7 +44,14 @@ export function createAiPromptController({ getState, render, notify }) {
       const state = getState();
       if (action === "open-ai-prompts") { state.aiPromptOpen = true; render(); void load(); return true; }
       if (action === "close-ai-prompts") { state.aiPromptOpen = false; render(); return true; }
-      if (action === "select-ai-prompt") { state.aiPromptSelectedId = element?.dataset.promptId || ""; render(); return true; }
+      if (action === "select-ai-prompt") {
+        const promptId = element?.dataset.promptId || "";
+        if (state.aiPromptSelectedId === promptId) return true;
+        state.aiPromptSelectedId = promptId;
+        render();
+        requestAnimationFrame(() => document.querySelector(`.ai-prompt-item.is-active[data-prompt-id="${CSS.escape(promptId)}"]`)?.scrollIntoView?.({ block: "nearest", inline: "nearest" }));
+        return true;
+      }
       if (action === "reset-ai-prompt") {
         const overrides = Object.fromEntries((state.aiPromptCatalog?.items || []).filter((item) => item.customized && item.id !== state.aiPromptSelectedId).map((item) => [item.id, item.content]));
         void persist(overrides); return true;

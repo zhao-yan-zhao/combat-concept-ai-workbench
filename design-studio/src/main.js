@@ -173,6 +173,7 @@ function render(options = {}) {
     return;
   }
   const appFocusSnapshot = captureViewFocus(document);
+  const appScrollSnapshots = captureViewScroll(document);
   const meta = getViewMeta(state.activeView);
   $("#conceptTree").innerHTML = renderTree(state.activeView, currentWorkflow(), state);
   $("#viewEyebrow").textContent = meta.subtitle;
@@ -232,6 +233,7 @@ function render(options = {}) {
     bindDynamicEvents();
   }
   restoreViewFocus(document, appFocusSnapshot);
+  restoreViewScroll(document, appScrollSnapshots);
 }
 
 /**
@@ -239,7 +241,11 @@ function render(options = {}) {
  * (phase switch, select force unit, chat open/close, etc.).
  */
 const VIEW_SCROLL_PRESERVE_SELECTORS = [
+  ".ai-prompt-list",
+  ".grouped-list-items",
+  ".ov1b-decomposition-scroll",
   ".force-mission-main-stage",
+  ".force-mission-phase-list",
   ".force-roster-list",
   ".force-concept-detail-body",
   ".force-composition-table-wrap",
@@ -1168,8 +1174,31 @@ function handleAction(action, source = null) {
     render();
     return;
   }
+  if (action === "toggle-ov1b-add") {
+    state.ov1bAddOpen = state.ov1bAddOpen !== true;
+    if (state.ov1bAddOpen) {
+      state.subflowToolboxOpen = { ...(state.subflowToolboxOpen || {}), ov1b: true };
+    }
+    render();
+    return;
+  }
+  if (action === "close-ov1b-dock") {
+    state.ov1bAddOpen = false;
+    render();
+    return;
+  }
   if (action === "open-subflow-ai") {
     showToast(`${getViewMeta(state.activeView)?.label || "当前子流程"}的 AI 工具已就绪；请先确认上游内容，再让 AI 生成或检查本页草案。`);
+    return;
+  }
+  if (action === "toggle-ov1b-edit") {
+    state.ov1bEditOpen = state.ov1bEditOpen !== true;
+    render();
+    return;
+  }
+  if (action === "generate-task-decomposition") {
+    if (state.activeView !== "ov1b") return;
+    void dodafProductController.pregenerateOv1bFromTasks({ silent: false, force: true });
     return;
   }
   if (action === "advance-related-workflow") {
@@ -2175,9 +2204,7 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
       await ruleLibraryChatController.proposeChanges("phase-action", { silent: false });
     }
   }
-  if (viewId === "ov1b") {
-    await dodafProductController.pregenerateOv1bFromTasks({ silent: false, force: entrySource === "operational-task" });
-  }
+  // Task decomposition is generated from its toolbox action, after the canvas is visible.
   if (viewId === "phase-action") {
     await ensureCombatFocusOnEnterPhaseAction();
   }
@@ -2325,7 +2352,6 @@ async function completeWorkflowStage() {
     }
     if (nextView) goToWorkflowView(nextView);
     await hydrateProjectDirectory({ skipRender: true });
-    if (relatedViewId === "ov1b") await dodafProductController.pregenerateOv1bFromTasks({ silent: false, force: true });
     showToast(relatedViewId
       ? `当前阶段已确认，已进入关联流程${relatedViewLabel(relatedViewId)}`
       : nextView ? "当前阶段已确认，已进入下一阶段" : "工作流已确认完成");
@@ -2371,7 +2397,7 @@ async function setWorkflowMode(mode) {
 
 function getBusyOverlayState() {
   if (state.taskDecompositionPregenerating) {
-    return { key: "task-decomposition-pregenerate", title: "正在进入任务分解", detail: "AI 正在仅依据已确认任务生成父子任务 UML…", expectedMs: 90000, timeoutMs: 180000 };
+    return { key: "task-organization-pregenerate", title: "正在整理任务", detail: "AI 正在仅依据已确认任务进行分组、排序与协同梳理…", expectedMs: 90000, timeoutMs: 180000 };
   }
   if (state.operationalTaskGenerating) {
     const progress = state.operationalTaskGenerationProgress;

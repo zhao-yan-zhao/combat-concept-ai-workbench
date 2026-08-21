@@ -150,9 +150,9 @@ export function createEmptyDodafStorageState() {
 export function updateProductField(model, resourceKey, path, value) {
   const clone = structuredClone(model);
   const segments = String(path || "").split(".");
-  if (segments[0] === "decomposition" && resourceKey === "ov1b") {
-    const item = (clone.decompositions || []).find((entry) => entry.id === segments[1]);
-    if (item && segments[2] === "rationale") item.rationale = value;
+  if (segments[0] === "taskGroup" && resourceKey === "ov1b") {
+    const item = (clone.taskGroups || []).find((entry) => entry.id === segments[1]);
+    if (item && ["name", "dimension", "rationale", "coordination"].includes(segments[2])) item[segments[2]] = value;
   } else if (segments[0] === "mapping" && ["ov1c", "ov7"].includes(resourceKey)) {
     const mapping = (clone.mappings || []).find((item) => item.id === segments[1]);
     if (mapping && segments[2] === "note") mapping.note = value;

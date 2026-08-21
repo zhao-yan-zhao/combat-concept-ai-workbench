@@ -9,6 +9,7 @@
 - `../INTERFACE_GUIDE.md`：当前 HTTP 契约与权限边界。
 - `WORKFLOW_MAINLINE_MODEL_TOPOLOGY.md`：七步主线、关联模型和完整数据拓扑的下一版开发规范（目标架构，尚未实现）。
 - `FORCE_MISSION_CMO.md`：兵力与任务双层编组、CMO DB3 与平台推荐（已实现 + backlog）。
+- `AI_RESEARCH_CHAT.md`：AI 研究对话通用壳、已挂接步骤、以及仍是一次生成的 AI 入口。
 - `PROJECT_STORAGE_MIGRATION.md`：生产存储迁移准备方案。
 - `OIDC_DEPLOYMENT.md`：OIDC 部署边界与启用前置条件。
 

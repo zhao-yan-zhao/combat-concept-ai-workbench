@@ -51,7 +51,7 @@ assert(resolveRelatedMainViewId("ov5a", "ov5", { mainViewId: "concept-map", rela
 const taskFlow = renderContextualModelFlow("operational-task", state);
 const taskWithoutRelatedContentFlow = renderContextualModelFlow("operational-task", {
   ...state,
-  ov1b: { decompositions: [{ id: "decomposition-unrelated", label: "Unrelated decomposition" }] },
+  ov1b: { taskGroups: [{ id: "group-unrelated", name: "Unrelated group", taskRefs: ["task-other"] }] },
   ov6a: { rules: [{ id: "rule-unrelated", name: "Unrelated rule", phaseBindings: [{ phaseRef: "phase-2" }] }] },
   ov6b: {
     stateMachines: [{
@@ -75,7 +75,7 @@ const taskWithoutRelatedContentFlow = renderContextualModelFlow("operational-tas
 assert((taskWithoutRelatedContentFlow.match(/step-related-node status-empty/g) || []).length === 4, "All task child flows must stay gray when only unrelated global model content exists");
 assert(!taskWithoutRelatedContentFlow.includes("status-partial"), "Unrelated global content must not show task child flows as partially covered");
 assert(!taskWithoutRelatedContentFlow.includes("0/1"), "An empty task child flow must not display global content as task coverage");
-assert(taskFlow.includes("任务分解 OV1b") && taskFlow.includes('data-view="ov1b"') && !taskFlow.includes('data-view="ov1b" disabled') && taskFlow.includes("规则库 OV6a"), "Task flow must include the available decomposition entry and shared dynamic models");
+assert(taskFlow.includes("任务整理 OV1b") && taskFlow.includes('data-view="ov1b"') && !taskFlow.includes('data-view="ov1b" disabled') && taskFlow.includes("规则库 OV6a"), "Task flow must include the available organization entry and shared dynamic models");
 assert(taskFlow.includes('data-focus-type="task"') && taskFlow.includes('data-focus-id="task-1"'), "Task flow must carry selected task context");
 
 const forceFlow = renderContextualModelFlow("force-mission", { ...state, forcePlatformPicker: { forceId: "force-1" } });
@@ -114,6 +114,7 @@ assert(returnBar.includes("quiet-button related-model-return-button"), "The retu
 
 const mainSource = await readFile(new URL("../design-studio/src/main.js", import.meta.url), "utf8");
 const contextualSource = await readFile(new URL("../design-studio/src/contextualModelFlow.js", import.meta.url), "utf8");
+assert(contextualSource.includes('".project-storage-actions"') && contextualSource.includes("toolbar.prepend(returnBar)"), "Related-model return must share the refresh/load action row");
 assert(mainSource.includes("renderTree(state.activeView, currentWorkflow(), state)") && !mainSource.includes("renderContextualModelFlow(state.activeView"), "Main shell must render contextual topology in the rail, not the page body");
 assert(mainSource.includes("scrollSnapshots: captureViewScroll") && mainSource.includes("restoreViewScroll"), "Main shell must restore the originating main-step position");
 assert(mainSource.includes('ctx.mainViewId === "phase-action"')

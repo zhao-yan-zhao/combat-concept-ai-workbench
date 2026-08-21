@@ -104,7 +104,7 @@ export const views = workflowOrder.map((id) => {
     ov6c: { subtitle: "跨对象时序 · 回改阶段", status: "ready" },
     ov7: { subtitle: "状态 · 转换 · 活动语义", status: "ready" },
     "operational-task": { subtitle: "阶段 · 阵营 · 任务 · 效果", status: "ready" },
-    ov1b: { subtitle: "父任务 · 子任务 · 分解依据", status: "ready" },
+    ov1b: { subtitle: "任务分组 · 组内排序 · 协同梳理", status: "ready" },
     ov1c: { subtitle: "任务 · 活动 · 覆盖判定", status: "ready" },
     "force-mission": { subtitle: "兵力编成 · 任务承接 · 平台", status: "ready" },
     ov4: { subtitle: "组织 · 责任 · 协同", status: "ready" },

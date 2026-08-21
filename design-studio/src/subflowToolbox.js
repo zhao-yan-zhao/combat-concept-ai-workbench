@@ -7,8 +7,8 @@ import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js"
  */
 const SUBFLOW_TOOLS = Object.freeze({
   "operational-task": { label: "作战任务工具箱", ai: ["generate-operational-tasks", "AI 生成任务"], items: [["confirm-operational-tasks", "确认任务", "check"], ["open-context-panel", "查看上游依据", "doc"]] },
-  "phase-action": { label: "阶段行动工具箱", ai: ["generate-phase-action", "AI 生成阶段"], items: [["open-phase-action-chat", "AI 对话复核", "chat"], ["toggle-phase-action-chat", "阶段行动对话", "chat"], ["confirm-phase-action", "确认阶段行动", "check"]] },
-  ov1b: { label: "任务分解工具箱", ai: ["open-subflow-ai", "AI 分析分解"], items: [["ov1b-add-decomposition", "新增分解关系", "plus"], ["seed-dodaf-ov1b", "刷新来源", "refresh"]] },
+  "phase-action": { label: "阶段行动工具箱", ai: ["generate-phase-action", "AI 生成阶段"], items: [["toggle-phase-action-chat", "阶段行动对话", "chat"], ["confirm-phase-action", "确认阶段行动", "check"]] },
+  ov1b: { label: "任务分解工具箱", ai: ["generate-task-decomposition", "AI 生成任务分解"], items: [["toggle-ov1b-edit", "编辑任务分解", "relations"], ["ov1b-review-current", "确认/撤回当前任务组", "check"], ["ov1b-add-group", "新增任务组", "plus"], ["seed-dodaf-ov1b", "刷新任务来源", "refresh"]] },
   ov1c: { label: "任务活动映射工具箱", ai: ["open-subflow-ai", "AI 检查映射"], items: [["seed-dodaf-ov1c", "刷新来源", "refresh"], ["save-dodaf-ov1c", "保存映射", "check"]] },
   "force-mission": { label: "作战兵力工具箱", ai: ["generate-force-mission", "AI 生成兵力"], items: [["open-force-mission-chat", "AI 对话复核", "chat"], ["recommend-platforms-from-phases", "推荐平台", "concept"]] },
   ov1: { label: "总体图工具箱", ai: ["generate-ov1", "AI 生成总体图"], items: [["toggle-ov1-tools", "图面编辑工具", "layout"], ["generate-ov5-from-ov1", "生成活动模型", "relations"]] },
@@ -24,7 +24,7 @@ const SUBFLOW_TOOLS = Object.freeze({
   ov7: { label: "状态活动映射工具箱", ai: ["open-subflow-ai", "AI 检查映射"], items: [["seed-dodaf-ov7", "刷新来源", "refresh"], ["save-dodaf-ov7", "保存映射", "check"]] },
   ooda: { label: "研究循环工具箱", ai: ["generate-ooda", "AI 完善循环"], items: [["derive-ooda", "从活动重派生", "refresh"], ["recalculate", "重新估算", "layout"]] },
   scenario: { label: "仿真演示工具箱", ai: ["generate-scenario", "AI 生成想定"], items: [["recommend-deployment", "优化部署", "concept"], ["open-deployment", "打开部署图", "layout"]] },
-  "structure-review": { label: "结构核对工具箱", ai: ["run-validation", "AI 运行校核"], items: [["run-validation", "运行设计验证", "check"], ["open-context-panel", "查看上下文", "doc"]] },
+  "structure-review": { label: "结构核对工具箱", ai: ["run-validation", "AI 运行校核"], items: [["open-context-panel", "查看上下文", "doc"]] },
   validate: { label: "设计验证工具箱", ai: ["run-validation", "AI 运行验证"], items: [["run-red-team", "生成红方质询", "relations"], ["open-structure-review", "结构核对", "check"]] }
 });
 
@@ -66,7 +66,15 @@ export function renderSubflowToolboxRail(viewId, state = {}) {
   const items = [
     { action: aiAction, title: aiLabel, label: aiLabel, icon: "sparkle", attention: true, disabled: busy },
     { type: "sep" },
-    ...config.items.map(([action, label, icon]) => ({ action, title: label, label, icon, disabled: busy && action !== "open-context-panel" }))
+    ...config.items.map(([action, label, icon]) => ({
+      action,
+      title: label,
+      label,
+      icon,
+      active: action === "ov1b-review-current" && currentOv1bGroup(state)?.status === "confirmed",
+      pressed: action === "ov1b-review-current" ? currentOv1bGroup(state)?.status === "confirmed" : undefined,
+      disabled: busy && action !== "open-context-panel"
+    }))
   ];
   return renderToolboxRail({
     scope: `subflow-${viewId}`,
@@ -77,6 +85,11 @@ export function renderSubflowToolboxRail(viewId, state = {}) {
     toggleAction: "toggle-subflow-toolbox",
     items
   });
+}
+
+function currentOv1bGroup(state) {
+  const groups = state.ov1b?.taskGroups || [];
+  return groups.find((item) => item.id === state.ov1bSelectedGroupId) || groups[0] || null;
 }
 
 export function renderSubflowPage(viewId, pageHtml, state = {}) {

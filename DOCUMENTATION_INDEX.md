@@ -19,6 +19,7 @@
 | `plans/PROJECT_STORAGE_MIGRATION.md` | 参考方案 | PostgreSQL/PostGIS 迁移准备；不是当前运行必需条件。 |
 | `plans/OIDC_DEPLOYMENT.md` | 参考方案 | OIDC 验证器与部署边界；浏览器令牌流尚未启用。 |
 | `plans/FORCE_MISSION_CMO.md` | 功能说明 + backlog | 兵力与任务（概念/作战）、CMO DB3、平台推荐与改善清单。 |
+| `plans/AI_RESEARCH_CHAT.md` | 功能说明 | 已抽成通用壳的 AI 研究对话、已挂接步骤、以及仍是一次生成的 AI 入口。 |
 
 ## 历史规划资料
 

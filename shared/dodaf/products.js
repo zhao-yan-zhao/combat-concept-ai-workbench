@@ -11,6 +11,14 @@ import {
   normalizeRelationList
 } from "./entities.js";
 import { clean, clampNumber, normalizeStringList, nowIso, stableId, uniqueIds } from "./util.js";
+import {
+  inferOv4EchelonCategory,
+  inferOv4OrganizationCategory,
+  inferOv4RelationCategory,
+  OV4_ECHELON_CATEGORIES,
+  OV4_ORGANIZATION_CATEGORIES,
+  OV4_RELATION_CATEGORIES
+} from "./ov4Taxonomy.js";
 
 const OV1_KINDS = ["equipment", "command", "action", "external", "environment", "effect", "participant"];
 
@@ -143,47 +151,44 @@ export function normalizeDodafOv1(value) {
 
 export function normalizeDodafOv1b(value) {
   const seenIds = new Set();
-  const seenPairs = new Set();
-  const decompositions = (Array.isArray(value?.decompositions) ? value.decompositions : [])
-    .slice(0, 320)
-    .flatMap((item, index) => {
-      const parentTaskRef = clean(item?.parentTaskRef || item?.parentTaskId, 160);
-      const childTaskRef = clean(item?.childTaskRef || item?.childTaskId || item?.taskRef || item?.taskId, 160);
-      if (!parentTaskRef || !childTaskRef || parentTaskRef === childTaskRef) return [];
-      const pair = `${parentTaskRef}::${childTaskRef}`;
-      if (seenPairs.has(pair)) return [];
-      seenPairs.add(pair);
-      let id = clean(item?.id, 180) || `task-decomposition-${index + 1}`;
-      if (seenIds.has(id)) id = stableId("task-decomposition", pair, index + 1);
+  const legacyGroups = new Map();
+  (Array.isArray(value?.decompositions) ? value.decompositions : []).forEach((item) => {
+    const anchor = clean(item?.parentTaskRef || item?.parentTaskId, 160);
+    const related = clean(item?.childTaskRef || item?.childTaskId || item?.taskRef || item?.taskId, 160);
+    if (!anchor || !related) return;
+    if (!legacyGroups.has(anchor)) legacyGroups.set(anchor, []);
+    legacyGroups.get(anchor).push(related);
+  });
+  const inputGroups = Array.isArray(value?.taskGroups) ? value.taskGroups : [...legacyGroups].map(([anchor, refs], index) => ({
+    id: `legacy-task-group-${index + 1}`,
+    name: `任务组 ${index + 1}`,
+    dimension: "legacy",
+    taskRefs: [anchor, ...refs],
+    rationale: "由旧版父子任务记录迁移，仅保留任务集合，不保留分解语义。",
+    status: "pending_review"
+  }));
+  const taskGroups = inputGroups.slice(0, 120).flatMap((item, index) => {
+      const taskRefs = [...new Set((Array.isArray(item?.taskRefs) ? item.taskRefs : []).map((ref) => clean(ref, 160)).filter(Boolean))];
+      if (!taskRefs.length) return [];
+      let id = clean(item?.id, 180) || `task-group-${index + 1}`;
+      if (seenIds.has(id)) id = stableId("task-group", taskRefs.join("::"), index + 1);
       seenIds.add(id);
       const status = ["pending_review", "confirmed", "stale", "conflict"].includes(clean(item?.status, 40))
         ? clean(item.status, 40)
         : item?.confirmedAt
           ? "confirmed"
           : "pending_review";
-      return [{
-        id,
-        parentTaskRef,
-        childTaskRef,
-        relationType: "decomposes",
-        rationale: clean(item?.rationale || item?.note, 1200),
+      const rawName = clean(item?.name || item?.label, 240);
+      const name = /^兼容(?:整理)?组(?:\s*\d+)?$/u.test(rawName) ? `任务组 ${index + 1}` : rawName || `任务组 ${index + 1}`;
+      return [{ id, name,
+        dimension: clean(item?.dimension || item?.groupBy, 80) || "custom", taskRefs,
+        rationale: clean(item?.rationale || item?.basis || item?.note, 1200), coordination: clean(item?.coordination, 1200),
         status,
         confirmedAt: clean(item?.confirmedAt, 80),
-        sourceRefs: normalizeSourceRefs(item?.sourceRefs, [
-          { resource: "forceMissionPlan", objectId: parentTaskRef },
-          { resource: "forceMissionPlan", objectId: childTaskRef }
-        ])
+        sourceRefs: normalizeSourceRefs(item?.sourceRefs, taskRefs.map((objectId) => ({ resource: "forceMissionPlan", objectId })))
       }];
     });
-
-  const relations = decompositions.map((item) => ({
-    id: item.id,
-    dm2Type: "wholePart",
-    sourceId: item.parentTaskRef,
-    targetId: item.childTaskRef,
-    name: "task decomposes into task",
-    properties: { status: item.status, rationale: item.rationale }
-  }));
+  const relations = taskGroups.flatMap((group) => group.taskRefs.map((taskRef, order) => ({ id: `${group.id}-${order + 1}`, dm2Type: "association", sourceId: group.id, targetId: taskRef, name: "task organized in group", properties: { order, status: group.status } })));
 
   return createProductEnvelope({
     product: "OV-1b",
@@ -194,17 +199,17 @@ export function normalizeDodafOv1b(value) {
     provenance: normalizeProvenanceObject(value?.provenance),
     derivedFrom: value?.derivedFrom,
     extra: {
-      version: 1,
-      kind: "persisted-ov1b-task-decomposition",
+      version: 2,
+      kind: "persisted-ov1b-task-organization",
       generatedAt: nowIso(value?.generatedAt),
       status: ["draft", "pending_review", "confirmed", "stale", "conflict"].includes(clean(value?.status, 40))
         ? clean(value.status, 40)
-        : decompositions.some((item) => item.status !== "confirmed")
+        : taskGroups.some((item) => item.status !== "confirmed")
           ? "pending_review"
-          : decompositions.length
+          : taskGroups.length
             ? "confirmed"
             : "draft",
-      decompositions,
+      taskGroups,
       diagnostics: normalizeDiagnostics(value?.diagnostics)
     }
   });
@@ -667,6 +672,8 @@ export function normalizeDodafOv4(value) {
     id: clean(role?.id, 160) || `ov4-role-${index + 1}`,
     label: clean(role?.label || role?.name, 160) || `Role ${index + 1}`,
     detail: clean(role?.detail || role?.description, 800),
+    organizationCategory: OV4_ORGANIZATION_CATEGORIES.includes(clean(role?.organizationCategory, 80)) ? clean(role.organizationCategory, 80) : inferOv4OrganizationCategory(role),
+    echelonCategory: OV4_ECHELON_CATEGORIES.includes(clean(role?.echelonCategory, 80)) ? clean(role.echelonCategory, 80) : inferOv4EchelonCategory(role),
     forceRefs: uniqueIds(role?.forceRefs, 24),
     taskRefs: uniqueIds(role?.taskRefs, 60),
     layer: clean(role?.layer, 40),
@@ -685,6 +692,7 @@ export function normalizeDodafOv4(value) {
     targetRoleId: clean(relation?.targetRoleId || relation?.targetId, 160),
     targetRoleLabel: clean(relation?.targetRoleLabel, 160),
     relationshipType: clean(relation?.relationshipType || relation?.name || relation?.type, 120) || "coordination",
+    relationshipCategory: OV4_RELATION_CATEGORIES.includes(clean(relation?.relationshipCategory, 80)) ? clean(relation.relationshipCategory, 80) : inferOv4RelationCategory(relation?.relationshipType || relation?.name || relation?.type),
     sourceForceRef: clean(relation?.sourceForceRef, 160),
     targetForceRef: clean(relation?.targetForceRef, 160),
     sourceActivityId: clean(relation?.sourceActivityId, 160),

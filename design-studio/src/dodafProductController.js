@@ -84,13 +84,15 @@ import {
   removeOv4Diagram,
   toggleOv4DiagramRelation,
   toggleOv4DiagramRole,
-  updateOv4Diagram
+  updateOv4Diagram,
+  updateOv4RelationClassification,
+  updateOv4RoleClassification
 } from "./ov4DiagramStore.js";
 import { generateWithAiStream, isAiOutput } from "../../shared/aiClient.js";
 import { generateMockOutput } from "../../shared/generator.js";
 import { normalizeDodafOv1b, normalizeDodafOv6b, normalizeDodafOv6c } from "../../shared/dodaf/products.js";
 import { applySequenceDraft } from "./sequenceChatController.js";
-import { addOv1bDecomposition, removeOv1bDecomposition, updateOv1bDecomposition } from "./ov1bStore.js";
+import { addOv1bTaskGroup, removeOv1bTaskGroup, updateOv1bTaskGroup } from "./ov1bStore.js";
 import { buildOv1cModel, buildOv7Model, updateMappingProduct } from "./mappingProductStore.js";
 
 const LOADERS = {
@@ -106,7 +108,7 @@ const SAVERS = {
   ov6a: saveProjectOv6a, ov6b: saveProjectOv6b, ov6c: saveProjectOv6c, ov7: saveProjectOv7
 };
 const LABELS = {
-  ov1b: "任务分解 OV1b",
+  ov1b: "任务整理 OV1b",
   ov1c: "任务与作战活动映射 OV1c",
   ov2: "作战资源流描述", ov3: "作战资源流矩阵", ov4: "作战组织关系图", ov5a: "作战活动分解",
   ov6a: "规则库", ov6b: "状态机校验", ov6c: "时序校验", ov7: "状态与活动映射 OV7"
@@ -138,13 +140,13 @@ export function buildTaskDecompositionFingerprint(tasks = []) {
 
 export function mergeTaskDecompositionDraft(currentItems = [], generatedItems = []) {
   const preserved = (Array.isArray(currentItems) ? currentItems : []).filter((item) => (
-    item?.status !== "pending_review" || !String(item?.id || "").startsWith("task-decomposition-ai-")
+    item?.status !== "pending_review" || !String(item?.id || "").startsWith("task-organization-ai-")
   ));
-  const pairs = new Set(preserved.map((item) => `${item.parentTaskRef}|${item.childTaskRef}`));
+  const signatures = new Set(preserved.map((item) => [...(item.taskRefs || [])].sort().join("|")));
   return [...preserved, ...(Array.isArray(generatedItems) ? generatedItems : []).filter((item) => {
-    const pair = `${item.parentTaskRef}|${item.childTaskRef}`;
-    if (pairs.has(pair)) return false;
-    pairs.add(pair);
+    const signature = [...(item.taskRefs || [])].sort().join("|");
+    if (!signature || signatures.has(signature)) return false;
+    signatures.add(signature);
     return true;
   })];
 }
@@ -459,47 +461,66 @@ export function createDodafProductController({
     const state = getState();
     const ds = el?.dataset || {};
 
-    if (action === "ov1b-select-side") {
-      state.ov1bSide = ds.side === "hostile" ? "hostile" : "friendly";
-      state.ov1bSelectedParentTaskId = "";
-      render();
-      return true;
-    }
-    if (action === "ov1b-select-parent") {
-      state.ov1bSelectedParentTaskId = ds.taskId || "";
+    if (action === "ov1b-select-group") {
+      const groupId = ds.groupId || "";
+      if (state.ov1bSelectedGroupId === groupId) return true;
+      state.ov1bSelectedGroupId = groupId;
       render();
       return true;
     }
 
-    if (action === "ov1b-add-decomposition") {
-      const scope = el?.closest?.("[data-action-form='ov1b-add-decomposition']");
-      const parentTaskRef = scope?.querySelector?.('[name="parentTaskRef"]')?.value || "";
-      const childTaskRef = scope?.querySelector?.('[name="childTaskRef"]')?.value || "";
-      const rationale = scope?.querySelector?.('[name="rationale"]')?.value || "";
-      if (!parentTaskRef || !childTaskRef) {
-        notify("请选择父任务和子任务");
-        return true;
-      }
-      if (parentTaskRef === childTaskRef) {
-        notify("父任务与子任务不能相同");
-        return true;
-      }
+    if (action === "ov1b-add-group") {
       const model = resolveDodafProduct(state, "ov1b").model;
-      persistOv6("ov1b", addOv1bDecomposition(model, { parentTaskRef, childTaskRef, rationale }), "已新增任务分解关系");
+      const next = addOv1bTaskGroup(model);
+      state.ov1bSelectedGroupId = next.taskGroups.at(-1)?.id || "";
+      persistOv6("ov1b", next, "已新增任务组");
       return true;
     }
-    if (action === "ov1b-toggle-confirm") {
+    if (action === "ov1b-toggle-group-confirm") {
       const model = resolveDodafProduct(state, "ov1b").model;
-      const item = (model.decompositions || []).find((entry) => entry.id === ds.decompositionId);
+      const item = (model.taskGroups || []).find((entry) => entry.id === ds.groupId);
       if (!item) return true;
       const status = item.status === "confirmed" ? "pending_review" : "confirmed";
-      persistOv6("ov1b", updateOv1bDecomposition(model, item.id, { status }), status === "confirmed" ? "已确认任务分解" : "已撤回确认");
+      persistOv6("ov1b", updateOv1bTaskGroup(model, item.id, { status }), status === "confirmed" ? "已确认任务组" : "已撤回确认");
       return true;
     }
-    if (action === "ov1b-remove-decomposition") {
-      if (!ds.decompositionId || !window.confirm("删除该任务分解关系？")) return true;
+    if (action === "ov1b-review-current") {
       const model = resolveDodafProduct(state, "ov1b").model;
-      persistOv6("ov1b", removeOv1bDecomposition(model, ds.decompositionId), "已删除任务分解关系");
+      const item = (model.taskGroups || []).find((entry) => entry.id === state.ov1bSelectedGroupId) || model.taskGroups?.[0];
+      if (!item) { notify("请先选择任务组"); return true; }
+      const status = item.status === "confirmed" ? "pending_review" : "confirmed";
+      persistOv6("ov1b", updateOv1bTaskGroup(model, item.id, { status }), status === "confirmed" ? "已确认当前任务组" : "已撤回当前任务组确认");
+      return true;
+    }
+    if (action === "ov1b-remove-group") {
+      if (!ds.groupId || !window.confirm("删除该任务组？现有任务不会被删除。")) return true;
+      const model = resolveDodafProduct(state, "ov1b").model;
+      const next = removeOv1bTaskGroup(model, ds.groupId);
+      state.ov1bSelectedGroupId = next.taskGroups[0]?.id || "";
+      persistOv6("ov1b", next, "已删除任务组");
+      return true;
+    }
+    if (action === "ov1b-toggle-task") {
+      const model = resolveDodafProduct(state, "ov1b").model;
+      const item = (model.taskGroups || []).find((entry) => entry.id === ds.groupId);
+      if (!item) return true;
+      const taskRefs = [...(item.taskRefs || [])];
+      const index = taskRefs.indexOf(el.value);
+      if (el.checked && index < 0) taskRefs.push(el.value);
+      if (!el.checked && index >= 0) taskRefs.splice(index, 1);
+      persistOv6("ov1b", updateOv1bTaskGroup(model, item.id, { taskRefs }));
+      return true;
+    }
+    if (action === "ov1b-move-task") {
+      const model = resolveDodafProduct(state, "ov1b").model;
+      const item = (model.taskGroups || []).find((entry) => entry.id === ds.groupId);
+      if (!item) return true;
+      const taskRefs = [...(item.taskRefs || [])];
+      const from = taskRefs.indexOf(ds.taskId);
+      const to = Math.max(0, Math.min(taskRefs.length - 1, from + Number(ds.delta || 0)));
+      if (from < 0 || from === to) return true;
+      taskRefs.splice(to, 0, taskRefs.splice(from, 1)[0]);
+      persistOv6("ov1b", updateOv1bTaskGroup(model, item.id, { taskRefs }));
       return true;
     }
 
@@ -542,7 +563,9 @@ export function createDodafProductController({
       return true;
     }
     if (action === "ov4-select-diagram") {
-      state.ov4SelectedDiagramId = ds.diagramId || "";
+      const diagramId = ds.diagramId || "";
+      if (state.ov4SelectedDiagramId === diagramId) return true;
+      state.ov4SelectedDiagramId = diagramId;
       render();
       return true;
     }
@@ -572,6 +595,16 @@ export function createDodafProductController({
     }
     if (action === "ov4-toggle-diagram-relation") {
       persistOv6("ov4", toggleOv4DiagramRelation(resolveDodafProduct(state, "ov4").model, ds.diagramId, ds.relationId, Boolean(el?.checked)));
+      return true;
+    }
+    if (action === "ov4-role-classification") {
+      if (!ds.roleId || !["organizationCategory", "echelonCategory"].includes(ds.field)) return true;
+      persistOv6("ov4", updateOv4RoleClassification(resolveDodafProduct(state, "ov4").model, ds.roleId, { [ds.field]: el?.value || "" }));
+      return true;
+    }
+    if (action === "ov4-relation-classification") {
+      if (!ds.relationId || ds.field !== "relationshipCategory") return true;
+      persistOv6("ov4", updateOv4RelationClassification(resolveDodafProduct(state, "ov4").model, ds.relationId, { relationshipCategory: el?.value || "" }));
       return true;
     }
 
@@ -845,6 +878,7 @@ export function createDodafProductController({
 
     if (action === "ov6c-select-sequence") {
       if (!ds.sequenceId) return true;
+      if (state.ov6cSelectedSequenceId === ds.sequenceId) return true;
       state.ov6cSelectedSequenceId = ds.sequenceId;
       state.ov6cSelectedMessageId = "";
       state.ov6cConnectFromId = "";
@@ -1138,7 +1172,7 @@ export function createDodafProductController({
     async pregenerateOv1bFromTasks({ silent = false, force = false } = {}) {
       const state = getState();
       const tasks = (state.forceMission?.tasks || []).map((task) => ({ id: task.id, name: task.name, side: task.side, missionType: task.missionType, objective: task.objective, expectedEffect: task.expectedEffect }));
-      const current = normalizeDodafOv1b(state.ov1b || { decompositions: [] });
+      const current = normalizeDodafOv1b(state.ov1b || { taskGroups: [] });
       const taskFingerprint = buildTaskDecompositionFingerprint(tasks);
       if (state.taskDecompositionPregenerating) return { skipped: true, reason: "busy" };
       if (!force && current.derivedFrom?.note === taskFingerprint) return { skipped: true, reason: "tasks-unchanged" };
@@ -1147,25 +1181,25 @@ export function createDodafProductController({
       try {
         let draft; let source = "ai";
         try {
-          const response = await generateWithAiStream({ workflowId: "task-decomposition", workflow: { id: "task-decomposition", title: "任务分解 UML", outputSchema: "TaskDecompositionDraft" }, analysis: { tasks }, evidence: [] });
-          if (!isAiOutput(response) || !Array.isArray(response.result?.decompositions)) throw new Error("task decomposition empty");
+          const response = await generateWithAiStream({ workflowId: "task-organization", workflow: { id: "task-organization", title: "任务整理", outputSchema: "TaskOrganizationDraft" }, analysis: { tasks }, evidence: [] });
+          if (!isAiOutput(response) || !Array.isArray(response.result?.taskGroups)) throw new Error("task organization empty");
           draft = response.result;
         } catch {
           const grouped = ["friendly", "hostile"].flatMap((side) => {
             const items = tasks.filter((task) => (task.side === "hostile" ? "hostile" : "friendly") === side);
-            return items.slice(1).map((task) => ({ parentTaskRef: items[0].id, childTaskRef: task.id, rationale: "按同一推演方任务目标与预期效果形成待复核的支撑关系。" }));
+            return items.length ? [{ name: side === "hostile" ? "红方任务" : "蓝方任务", dimension: "side", taskRefs: items.map((task) => task.id), rationale: "按阵营整理现有任务。", coordination: "组内顺序沿用任务清单。" }] : [];
           });
-          draft = { decompositions: grouped }; source = "local-fallback";
+          draft = { taskGroups: grouped }; source = "local-fallback";
         }
-        const ids = new Set(tasks.map((task) => task.id)); const pairs = new Set();
-        const generated = (draft.decompositions || []).filter((item) => ids.has(item.parentTaskRef) && ids.has(item.childTaskRef) && item.parentTaskRef !== item.childTaskRef).filter((item) => { const key = `${item.parentTaskRef}|${item.childTaskRef}`; if (pairs.has(key)) return false; pairs.add(key); return true; }).map((item, index) => ({ id: `task-decomposition-ai-${taskFingerprint.slice(-8)}-${index + 1}`, parentTaskRef: item.parentTaskRef, childTaskRef: item.childTaskRef, rationale: String(item.rationale || "").slice(0, 600), status: "pending_review", sourceRefs: [{ resource: "forceMissionPlan", objectId: item.parentTaskRef }, { resource: "forceMissionPlan", objectId: item.childTaskRef }] }));
-        const decompositions = mergeTaskDecompositionDraft(current.decompositions, generated);
+        const ids = new Set(tasks.map((task) => task.id));
+        const generated = (draft.taskGroups || []).map((item, index) => ({ id: `task-organization-ai-${taskFingerprint.slice(-8)}-${index + 1}`, name: String(item.name || `任务组 ${index + 1}`).slice(0, 240), dimension: String(item.dimension || "custom").slice(0, 80), taskRefs: [...new Set((item.taskRefs || []).filter((id) => ids.has(id)))], rationale: String(item.rationale || "").slice(0, 600), coordination: String(item.coordination || "").slice(0, 600), status: "pending_review" })).filter((item) => item.taskRefs.length);
+        const taskGroups = mergeTaskDecompositionDraft(current.taskGroups, generated);
         const derivedFrom = { mode: source, sources: ["forceMissionPlan.tasks"], generatedAt: new Date().toISOString(), note: taskFingerprint };
-        state.ov1b = saveLocalDodafProduct("ov1b", normalizeDodafOv1b({ ...current, decompositions, derivedFrom, status: decompositions.some((item) => item.status !== "confirmed") ? "pending_review" : decompositions.length ? "confirmed" : "draft" }), projectId);
-        await syncControllers.ov1b.sync(state.ov1b, { source: "task-decomposition:pregenerate-tasks" });
-        await writebackArchitecture("task-decomposition:pregenerate-tasks");
-        if (!silent) notify(source === "ai" ? `AI 已生成 ${decompositions.length} 条任务分解关系，请复核 UML` : `AI 暂不可用，已生成 ${decompositions.length} 条本地任务分解草案`);
-        return { applied: decompositions.length, source };
+        state.ov1b = saveLocalDodafProduct("ov1b", normalizeDodafOv1b({ ...current, taskGroups, derivedFrom, status: taskGroups.some((item) => item.status !== "confirmed") ? "pending_review" : taskGroups.length ? "confirmed" : "draft" }), projectId);
+        await syncControllers.ov1b.sync(state.ov1b, { source: "task-organization:pregenerate-tasks" });
+        await writebackArchitecture("task-organization:pregenerate-tasks");
+        if (!silent) notify(source === "ai" ? `AI 已整理为 ${taskGroups.length} 个任务组，请复核` : `AI 暂不可用，已形成 ${taskGroups.length} 个本地任务整理组`);
+        return { applied: taskGroups.length, source };
       } finally { state.taskDecompositionPregenerating = false; render(); }
     },
 

@@ -14,6 +14,8 @@ function mountGroupedList(panel) {
   const scope = panel.dataset.groupedListPanel || "default";
   const dimensions = parseDimensions(panel.dataset.groupedListDimensions);
   if (!dimensions.length) return;
+  panel.classList.add("grouped-list-panel");
+  list.classList.add("grouped-list-items");
   const defaults = {
     query: "",
     groupBy: panel.dataset.groupedListDefaultGroup || dimensions[0].key,
@@ -151,6 +153,10 @@ function mountGroupedList(panel) {
   });
 
   render();
+  requestAnimationFrame(() => {
+    list.querySelector(".is-selected, .is-active, .is-focused, [aria-selected='true']")
+      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  });
 }
 
 function renderControls(dimensions) {

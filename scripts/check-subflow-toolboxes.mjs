@@ -24,6 +24,8 @@ for (const viewId of expected) {
   }
   const signature = JSON.stringify(config.items);
   signatures.add(signature);
+  const actions = [config.ai, ...config.items].map((item) => item?.[0]).filter(Boolean);
+  assert.equal(new Set(actions).size, actions.length, `${viewId} toolbox must not repeat the same action`);
 }
 assert.equal(signatures.size, expected.length, "subflow tool sets must be content-specific");
 assert.equal(hasSubflowToolbox("brief"), false, "brief is a mainline page, not an auxiliary subflow");
@@ -39,4 +41,10 @@ assert.match(styles, /\.subflow-workbench-shell\.is-tools-open:has\(> \.subflow-
 assert.match(styles, /\.ov4-workbench\.is-editor-open\s*\{[^}]*320px\) 0;/s, "OV4 editor without tools must release the rail column");
 assert.match(styles, /\.sm-workbench\.is-tools-docked:has\(> \.sm-edit-rail\)/, "state-machine rail space must require a rendered rail");
 assert.match(styles, /\.seq-workbench\.is-tools-docked:has\(> \.seq-edit-rail\)/, "sequence rail space must require a rendered rail");
+assert.match(styles, /\.ov1-edit-rail\s*\{[^}]*align-items:\s*flex-end/s, "shared toolbox icons must align to the page-right edge");
+assert.match(styles, /\.ov1-edit-rail-nav\s*\{[^}]*justify-items:\s*end[^}]*padding:\s*0;/s, "toolbox entries must share the rail's right inner edge without overflowing it");
+assert.match(styles, /\.sm-edit-rail\s*\{[^}]*align-items:\s*flex-end/s, "native toolbox icons must align to the page-right edge");
+assert.match(styles, /\.sm-edit-rail\.subflow-edit-rail\s*\{[^}]*align-self:\s*stretch[^}]*height:\s*100%[^}]*min-height:\s*100%/s, "generic toolbox rail must fill the page height and retain blank space");
+assert.equal(subflowToolboxConfig("phase-action").items.filter(([action]) => action.includes("phase-action-chat")).length, 1, "phase action must expose one chat entry");
+assert.equal([subflowToolboxConfig("structure-review").ai, ...subflowToolboxConfig("structure-review").items].filter(([action]) => action === "run-validation").length, 1, "structure review must expose one validation entry");
 console.log(`Subflow toolbox acceptance passed: ${expected.length} content-specific toolboxes, top-right floats, right-side rails, mandatory AI, and native toolbox reuse.`);

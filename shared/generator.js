@@ -86,8 +86,8 @@ function createResultBySchema(schema, workflow, analysis, evidenceRefs) {
   if (schema === "OperationalTaskDraft") {
     return createOperationalTaskDraftResult(analysis);
   }
-  if (schema === "TaskDecompositionDraft") {
-    return createTaskDecompositionDraftResult(analysis);
+  if (schema === "TaskOrganizationDraft") {
+    return createTaskOrganizationDraftResult(analysis);
   }
   if (schema === "PhaseActionConcept") {
     return createPhaseActionConceptResult(analysis);
@@ -260,18 +260,12 @@ function createForceMissionPlanResult(analysis) {
   };
 }
 
-function createTaskDecompositionDraftResult(analysis = {}) {
+function createTaskOrganizationDraftResult(analysis = {}) {
   const tasks = Array.isArray(analysis.tasks) ? analysis.tasks : [];
-  const decompositions = [];
-  for (const side of ["friendly", "hostile"]) {
-    const group = tasks.filter((task) => (task?.side === "hostile" ? "hostile" : "friendly") === side);
-    group.slice(1).forEach((task, index) => decompositions.push({
-      parentTaskRef: group[0]?.id || "",
-      childTaskRef: task?.id || "",
-      rationale: `同一推演方内按任务目标、任务类型和预期效果形成第 ${index + 1} 项支撑关系。`
-    }));
-  }
-  return { summary: "已依据任务生成待复核的父子任务关系。", decompositions };
+  const buckets = new Map();
+  tasks.forEach((task) => { const key = `${task?.side === "hostile" ? "hostile" : "friendly"}|${task?.missionType || "综合"}`; if (!buckets.has(key)) buckets.set(key, []); buckets.get(key).push(task); });
+  const taskGroups = [...buckets].map(([key, items]) => { const [side, missionType] = key.split("|"); return { name: `${side === "hostile" ? "红方" : "蓝方"}${missionType === "综合" ? "" : missionType}任务`, dimension: "missionType", taskRefs: items.map((item) => item.id), rationale: "按阵营和任务类型整理现有任务。", coordination: "组内顺序沿用任务清单顺序。" }; });
+  return { summary: "已将现有任务整理为待复核分组，未新增或拆分任务。", taskGroups };
 }
 
 function createOperationalTaskDraftResult(analysis) {
@@ -1085,8 +1079,8 @@ function toMarkdown(output) {
 }
 
 function renderResultMarkdown(result, schema) {
-  if (schema === "TaskDecompositionDraft") {
-    return ["## 任务分解 UML 草案", result.summary || "", "### 父子关系", ...(result.decompositions || []).map((item) => `- ${item.parentTaskRef} -> ${item.childTaskRef}：${item.rationale || ""}`)].join("\n");
+  if (schema === "TaskOrganizationDraft") {
+    return ["## 任务整理草案", result.summary || "", "### 任务组", ...(result.taskGroups || []).map((item) => `- ${item.name}：${(item.taskRefs || []).join("、")}；${item.rationale || ""}`)].join("\n");
   }
   if (schema === "OperationalTaskDraft") {
     return [

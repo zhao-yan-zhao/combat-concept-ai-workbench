@@ -87,6 +87,10 @@ const forceHtml = renderForceMission({
   cmoCatalogStatus: { open: false }
 });
 assert(forceHtml.includes("承接作战任务") && forceHtml.includes('data-task-ref="task-command"') && forceHtml.includes("失效引用：task-missing"), "Force detail must expose compact human task-binding review");
+assert(forceHtml.includes("force-mission-workbench") && forceHtml.includes("force-mission-rail") && forceHtml.includes("force-mission-chrome"), "Force-mission page must use compact chrome, phase rail, and list workbench");
+assert(forceHtml.includes("蓝方") && !forceHtml.includes("己方") && !forceHtml.includes("对方"), "Force-mission sides must be labeled 蓝方/红方");
+assert(!forceHtml.includes("按阶段查看") && !forceHtml.includes("force-phase-switcher"), "Force-mission must not keep the large phase-switcher card");
+assert(forceHtml.includes('data-action="select-phase-action-focus"') && forceHtml.includes('data-action="generate-concept-forces"'), "Phase filter and generation actions must remain in the rail");
 const planningControllerSource = await readFile(new URL("../design-studio/src/conceptPlanningController.js", import.meta.url), "utf8");
 assert(planningControllerSource.includes('querySelectorAll("[data-force-task-ref]")') && planningControllerSource.includes("changeForceTaskRef("), "Force task checkboxes must be wired to the planning controller");
 assert(planningControllerSource.includes('source: "force-mission:edit-task-ref"') && planningControllerSource.includes("任务承接已修改，兵力计划回到草案"), "Task-binding edits must sync and expose confirmation invalidation");

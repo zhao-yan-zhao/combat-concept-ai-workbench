@@ -44,7 +44,7 @@ const PRODUCT_DEFINITIONS = Object.freeze([
   { key: "ov6a", resource: "ov6a", objectId: ROOT, viewId: "ov6a", label: "规则库 OV6a" },
   { key: "ov6b", resource: "ov6b", objectId: ROOT, viewId: "ov6b", label: "状态机 OV6b" },
   { key: "ov6c", resource: "ov6c", objectId: ROOT, viewId: "ov6c", label: "时序图" },
-  { key: "ov1b", resource: "ov1b", objectId: ROOT, viewId: "ov1b", label: "任务分解 OV1b" },
+  { key: "ov1b", resource: "ov1b", objectId: ROOT, viewId: "ov1b", label: "任务整理 OV1b" },
   { key: "ov4", resource: "ov4", objectId: ROOT, viewId: "ov4", label: "组织关系 OV4" },
   { key: "ov2", resource: "ov2", objectId: ROOT, viewId: "ov2", label: "资源流 OV2" },
   { key: "ov3", resource: "ov3", objectId: ROOT, viewId: "ov3", label: "资源流矩阵 OV3" },
@@ -66,7 +66,7 @@ export function buildModelTopology(input = {}) {
   const phaseAction = normalizePhaseActionConcept(state.phaseAction || state.phaseActionConcept);
   const forceMission = normalizeForceMissionPlan(state.forceMission || state.forceMissionPlan);
   const ov1 = safeNormalize(normalizeDodafOv1, state.ov1, { nodes: [], edges: [] });
-  const ov1b = safeNormalize(normalizeDodafOv1b, state.ov1b, { decompositions: [] });
+  const ov1b = safeNormalize(normalizeDodafOv1b, state.ov1b, { taskGroups: [] });
   const ov1c = safeNormalize(normalizeDodafOv1c, state.ov1c, { mappings: [] });
   const ov2 = safeNormalize(normalizeDodafOv2, state.ov2, { nodes: [], exchanges: [] });
   const ov3 = safeNormalize(normalizeDodafOv3, state.ov3, { exchanges: [] });
@@ -91,7 +91,7 @@ export function buildModelTopology(input = {}) {
     ov6a: ov6a.rules?.length || 0,
     ov6b: ov6b.stateMachines?.length || 0,
     ov6c: ov6c.sequences?.length || 0,
-    ov1b: ov1b.decompositions?.length || 0,
+    ov1b: ov1b.taskGroups?.length || 0,
     ov4: (ov4.roles?.length || 0) + (ov4.relations?.length || 0),
     ov2: ov2.exchanges?.length || 0,
     ov3: ov3.exchanges?.length || 0,
@@ -196,7 +196,7 @@ function addRootTopology(graph, roots) {
     [roots.force, roots.ov6a, binds, "兵力规则绑定"],
     [roots.ov6a, roots.ov6b, derived, "规则约束状态转换"],
     [roots.ov6b, roots.ov6c, derived, "状态转换形成时序"],
-    [roots.task, roots.ov1b, derived, "任务分解"],
+    [roots.task, roots.ov1b, derived, "任务整理"],
     [roots.task, roots.ov4, derived, "任务责任"],
     [roots.force, roots.ov4, derived, "组织编成"],
     [roots.ov4, roots.ov2, derived, "组织间资源交换"],
@@ -399,15 +399,12 @@ function addResourceFlowNodes(graph, indexes, ov2, ov3, roots) {
 }
 
 function addOptionalMappingNodes(graph, indexes, state, roots) {
-  for (const item of optionalItems(state.ov1b, ["nodes", "decompositions", "tasks"])) {
+  for (const item of optionalItems(state.ov1b, ["taskGroups"])) {
     const id = clean(item?.id) || `ov1b-${indexes.ov1b.size + 1}`;
-    const nodeId = graph.addNode({ resource: "ov1b", objectId: id, kind: "task-decomposition", viewId: "ov1b", label: clean(item?.label || item?.title || item?.name) || id, status: statusFromItem(item) });
+    const nodeId = graph.addNode({ resource: "ov1b", objectId: id, kind: "task-organization-group", viewId: "ov1b", label: clean(item?.name) || id, status: statusFromItem(item) });
     indexes.ov1b.set(id, nodeId);
-    graph.addLink({ sourceNodeId: roots.ov1b, targetNodeId: nodeId, relationType: MODEL_RELATION_TYPES.DERIVED_FROM, semantic: "任务分解项" });
-    const parentTaskRef = clean(item?.parentTaskRef || item?.parentTaskId);
-    const childTaskRef = clean(item?.childTaskRef || item?.childTaskId || item?.taskRef || item?.taskId);
-    if (parentTaskRef) indexes.pendingRefs.push({ sourceKind: "task", sourceRef: parentTaskRef, targetNodeId: nodeId, relationType: MODEL_RELATION_TYPES.DERIVED_FROM, semantic: "父任务分解来源", required: true });
-    if (childTaskRef) indexes.pendingRefs.push({ sourceKind: "task", sourceRef: childTaskRef, targetNodeId: nodeId, relationType: MODEL_RELATION_TYPES.BINDS_TO, semantic: "子任务分解引用", required: true });
+    graph.addLink({ sourceNodeId: roots.ov1b, targetNodeId: nodeId, relationType: MODEL_RELATION_TYPES.DERIVED_FROM, semantic: "任务整理组" });
+    for (const taskRef of uniqueStrings(item?.taskRefs)) indexes.pendingRefs.push({ sourceKind: "task", sourceRef: taskRef, targetNodeId: nodeId, relationType: MODEL_RELATION_TYPES.BINDS_TO, semantic: "任务组引用", required: true });
   }
   for (const item of optionalItems(state.ov1c, ["mappings", "relations"])) {
     const id = clean(item?.id) || `ov1c-${indexes.ov1c.size + 1}`;

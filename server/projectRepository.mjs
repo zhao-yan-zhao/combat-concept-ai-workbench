@@ -1433,7 +1433,7 @@ function reviewContextCounts(resource, model) {
   if (resource === "conceptMap") return { primaryCount: Number(model.summary?.itemCount || 0), secondaryCount: String(model.context || "").length ? 1 : 0 };
   if (resource === "conceptGraphicPlan") return { primaryCount: Array.isArray(model.nodes) ? model.nodes.length : 0, secondaryCount: Array.isArray(model.edges) ? model.edges.length : 0 };
   if (resource === "ov1") return { primaryCount: Array.isArray(model.nodes) ? model.nodes.length : 0, secondaryCount: Array.isArray(model.edges) ? model.edges.length : 0 };
-  if (resource === "ov1b") return { primaryCount: Array.isArray(model.decompositions) ? model.decompositions.length : 0, secondaryCount: 0 };
+  if (resource === "ov1b") return { primaryCount: Array.isArray(model.taskGroups) ? model.taskGroups.length : 0, secondaryCount: 0 };
   if (resource === "ov1c" || resource === "ov7") return {
     primaryCount: Array.isArray(model.mappings) ? model.mappings.length : 0,
     secondaryCount: Array.isArray(model.mappings) ? model.mappings.filter((item) => item.status === "conflict").length : 0
@@ -1588,7 +1588,7 @@ function getResourceDefinition(resourceKey) {
       }),
       isStale: (resource, record) => Number(resource?.forceMissionPlanRevision || 0) !== Number(record?.forceMissionPlan?.resourceRevision || 0)
         || Number(resource?.phaseActionConceptRevision || 0) !== Number(record?.phaseActionConcept?.resourceRevision || 0),
-      summarize: (model) => `${model.decompositions?.length || 0} task decompositions`
+      summarize: (model) => `${model.taskGroups?.length || 0} task organization groups`
     },
     ov1c: {
       normalize: normalizeProjectOv1c,

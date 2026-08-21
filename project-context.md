@@ -1,5 +1,34 @@
 # project-context.md
 
+## Latest completed change (2026-08-20, toolbox rail layout and duplicate audit)
+
+- Expanded generic and native toolboxes now align their brand and tool entries to the page-right inner edge, fill the containing workbench height, and leave the unused lower rail blank instead of imposing a fixed `70vh`/`720px` height.
+- Audited configured toolbox actions. Removed the duplicate phase-action chat entry and the duplicate structure-review validation entry. OV-6b intentionally retains two `ov6b-add-state` entries because their `normal` and `decision` kinds create different node types; OV-1, OV-4, and OV-6c native rails contain no duplicate actions.
+- Changed files: `design-studio/src/subflowToolbox.js`, `design-studio/styles.css`, and `scripts/check-subflow-toolboxes.mjs`.
+- Verification: toolbox acceptance, OV-6 workbench, OV-4 responsibility, and task AI-chain checks passed. A served fixture using the production renderer/CSS measured rail height equal to its containing shell, right-edge alignment with no button overflow, blank space below the final tool, and zero horizontal page overflow for both generic and native state-machine rails. The temporary fixture was removed after verification.
+
+## Latest completed change (2026-08-20, OV-4 organization taxonomy)
+
+- Goal: Enrich OV-4 classifications without mixing organization type and relationship semantics.
+- Completed: Added stable organization categories, echelon categories, and relationship categories. Defaults derive from confirmed force layer/role/name and original relationship type; the OV-4 toolbox allows manual classification edits while preserving upstream force relations. Canvas nodes show echelon and organization category; subordinate/command/control/administrative/attached relations drive hierarchy, while coordination/support/information remain non-hierarchical and use distinct line styles. Markdown/XML reports include the classifications.
+- Changed files: `shared/dodaf/ov4Taxonomy.js`, `shared/dodaf/products.js`, `design-studio/src/ov4Builder.js`, `design-studio/src/ov4DiagramStore.js`, `design-studio/src/dodafProductController.js`, `design-studio/src/ov4View.js`, `design-studio/src/ov4CanvasController.js`, `design-studio/styles.css`, `design-studio/src/reportBuilder.js`, `scripts/check-ov4-responsibility.mjs`.
+- Decision: “战区作战部队” is an organization category; “上下级隶属/作战指挥”等 are relationship categories. Only structural relationships affect top-down layout.
+- Verification: OV-4 focused acceptance, input-focus preservation, syntax checks, scoped diff check, and live `8792` health passed. The broader organization/resource-topology script is currently blocked by an unrelated existing `forceMissionView.js` `renderForceMissionRailActions is not defined` error.
+
+## Latest completed change (2026-08-20, force-mission workbench layout)
+
+- Rebuilt the 作战兵力 page from stacked cards into a compact workbench: one 36px chrome (3-step indicator + status + current secondary action), a 220px left rail for phase filter and generate/confirm actions, and a right column where the concept/combat grouped list fills remaining height and scrolls by itself.
+- Removed the large “按阶段查看” card, duplicate action row, roster column heading, and page-level vertical scroll of the main stage. Workflow, confirmation gates, AI prompts, and the detail drawer are unchanged.
+- Verification: syntax; production grouped lists (including workbench CSS); organization/resource topology HTML structure; CMO force-mission; concept-planning workflow; workflow test-mode; subflow toolboxes; live `8792` health (SQLite, CMO catalog open). Headless 1440×900 same-origin fixture using the real renderer/styles measured chrome 42px, rail/pager 701px, list 530px with internal overflow (`listScroll` 2483px for 24 units); fixture removed. Authenticated live-project click-through remains blocked by the login gate.
+
+## Latest completed change (2026-08-20, OV1b task organization redesign)
+
+- Replaced OV1b parent-child task decomposition with reference-only task organization. The product now persists ordered `taskGroups[]`; AI and local fallback may only group and order existing task IDs and cannot add, split, rewrite, or copy task bodies. Legacy `decompositions[]` migrate into compatibility groups without retaining hierarchy semantics. Parent-child activity decomposition remains owned by OV5a.
+- Rebuilt the OV1b page on the compact state-machine workbench frame: one top toolbar containing storage actions and the injected return action, a scrollable grouped left list, a pannable central organization canvas, an existing-task picker, and a toolbox-controlled right review dock. The canvas renders one task-group node linked to ordered existing-task nodes; it supports adding/removing existing task refs and moving them up/down without exposing task creation or text editing.
+- Updated prompt catalog ID `ai.generate.task-organization`, topology nodes/links, repository summaries, contextual labels, toolbox wording, busy overlay, and focused acceptance scripts.
+- Follow-up: removed the separate OV1b review dock; the toolbox now confirms or withdraws the currently selected task group directly. Added wheel/button/fit zoom to the pannable canvas. Legacy names no longer expose `兼容整理组`; deterministic groups use semantic names such as `红方任务` or `蓝方打击任务`. Ordinary OV1b entry uses the persisted task fingerprint and does not force AI regeneration when task inputs are unchanged.
+- Verification: syntax checks; task AI chain; OV1b dynamic bindings including legacy migration, file/SQLite reopen and export; prompt management; model topology; contextual flow; production grouped lists; subflow toolboxes; design-studio workflow; live `8792` health with SQLite mode. Browser visual automation timed out while opening the page, so authenticated screenshot proof remains open.
+
 ## Latest completed change (2026-08-19, shared grouped lists for workflow data columns)
 
 - Applied the approved narrow-column list pattern to phase actions, operational tasks, concept/combat forces, OV1b, OV2, OV4, OV6b, and OV6c. Search uses one row; grouping plus a compact filter entry use the next row; the filter popover stays inside the left data column and closes after value selection.

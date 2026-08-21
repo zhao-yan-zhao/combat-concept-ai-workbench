@@ -50,6 +50,7 @@ Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8792/api/health
 | [project-context.md](project-context.md) | 当前交接、暂停点、变更史与阻塞项。 |
 | [plans/PROJECT_STORAGE_MIGRATION.md](plans/PROJECT_STORAGE_MIGRATION.md) | 文件/SQLite 到生产存储的迁移准备方案。 |
 | [plans/OIDC_DEPLOYMENT.md](plans/OIDC_DEPLOYMENT.md) | OIDC 部署边界；当前未启用浏览器令牌流。 |
+| [plans/AI_RESEARCH_CHAT.md](plans/AI_RESEARCH_CHAT.md) | AI 研究对话通用壳、已挂接步骤与复用方式。 |
 
 ## 试用限制
 
@@ -57,32 +58,4 @@ Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8792/api/health
 - 浏览器自动化运行脚本缺失，当前使用静态 HTTP 检查和 Node 验收脚本。
 - Office 自动化端点在缺少交互式桌面会话时可能返回 `503`。
 - 默认本地试用不强制项目写入登录；部署可选择启用认证写入。
-
-通用壳 design-studio/src/researchChat/
-文件	职责
-researchChatStore.js	消息模型、pending 打字泡、begin/complete、持久化
-researchChatView.js	对话面板 + 右上悬浮钮 + 滚动
-researchChatController.js	submit / 编辑 / 重试 / 乐观更新
-index.js	统一导出与复用说明
-已挂接步骤
-步骤	适配方式
-简报	inspirationView / inspirationAdviceController → 壳；业务仍在 inspiration + brief 更新
-阶段与行动	phaseActionView / phaseActionChatController → 同一壳；runTurn 改 PhaseActionConcept
-
-以后新步骤怎么复用
-不用再改气泡/样式，只加适配器：
-
-createResearchChatController({
-  scope: "force-mission",
-  getSession / setSession,
-  isGenerating / setGenerating,
-  runTurn: async ({ question, state }) => {
-    // 调 AI + 改业务模型
-    return { advice, source: "ai", notifyMessage: "…" };
-  }
-});
-界面：
-
-renderResearchChatPanel({ scope: "force-mission", session, generating, ... })
-// 需要悬浮时：
-renderResearchChatFloatButton({ scope: "force-mission", action: 
+ 

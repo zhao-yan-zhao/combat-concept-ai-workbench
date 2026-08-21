@@ -1,6 +1,8 @@
 /**
  * Shared research-chat shell.
  *
+ * Inventory and reuse notes: plans/AI_RESEARCH_CHAT.md
+ *
  * New planning steps should:
  * 1. createResearchChatStepStore({ storagePrefix, topic, defaultWelcome, buildWelcome })
  * 2. createResearchChatSessionApplier({ key, projectId, store }) for setSession

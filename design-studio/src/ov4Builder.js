@@ -1,4 +1,5 @@
 import { normalizeForceMissionPlan } from "../../shared/conceptPlanning.js";
+import { inferOv4EchelonCategory, inferOv4OrganizationCategory, inferOv4RelationCategory } from "../../shared/dodaf/ov4Taxonomy.js";
 
 const MAX_ROLES = 48;
 const MAX_RELATIONSHIPS = 160;
@@ -33,6 +34,8 @@ export function buildOv4Model({ forceMission, ov1, ov5, ooda, scenario } = {}) {
       id,
       label: clean(node.label, 160) || id,
       detail: clean(node.detail || node.description, 500),
+      organizationCategory: inferOv4OrganizationCategory({ label: node.label, role: node.kind }),
+      echelonCategory: inferOv4EchelonCategory({ label: node.label }),
       activityIds,
       activityCount: activityIds.length,
       oodaCount: oodaNodes.filter((node) => activityIds.includes(String(node.sourceActivityId))).length,
@@ -67,6 +70,7 @@ export function buildOv4Model({ forceMission, ov1, ov5, ooda, scenario } = {}) {
         targetRoleId,
         targetRoleLabel: roleById.get(targetRoleId)?.label || targetRoleId,
         relationshipType: clean(edge.type, 120) || "coordination",
+        relationshipCategory: inferOv4RelationCategory(edge.type),
         sourceActivityId: String(source.id),
         sourceActivityTitle: clean(source.title, 240),
         targetActivityId: String(target.id),
@@ -107,6 +111,8 @@ function buildForceLinkedOv4(plan) {
       id: force.id,
       label: clean(force.name, 160) || force.id,
       detail: clean(force.task, 500),
+      organizationCategory: inferOv4OrganizationCategory({ label: force.name, role: force.role, layer: force.layer }),
+      echelonCategory: inferOv4EchelonCategory({ label: force.name, layer: force.layer }),
       forceRefs: [force.id],
       taskRefs,
       layer: force.layer,
@@ -129,6 +135,7 @@ function buildForceLinkedOv4(plan) {
       targetRoleId: target.id,
       targetRoleLabel: target.name,
       relationshipType: relation.type || "coordination",
+      relationshipCategory: inferOv4RelationCategory(relation.type),
       sourceForceRef: source.id,
       targetForceRef: target.id,
       sourceActivityId: "",

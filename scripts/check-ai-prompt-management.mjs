@@ -27,7 +27,7 @@ try {
     assert.equal(items.length, 18);
     assert.equal(items.find((item) => item.id === "ai.generate.generic")?.customized, true);
     assert.equal(items.find((item) => item.id === "ai.generate.phase-action")?.variables.includes("analysis"), true);
-    assert.equal(items.find((item) => item.id === "ai.generate.task-decomposition")?.variables.includes("analysis"), true);
+    assert.equal(items.find((item) => item.id === "ai.generate.task-organization")?.variables.includes("analysis"), true);
     await client.callOpenAi({ workflow: { title: "测试", outputSchema: "UnknownDraft" }, analysis: {}, evidence: [] }, { workflowTitle: "测试", outputSchema: "UnknownDraft" });
     assert.match(requestBody.input, /^自定义通用提示词\n当前工作流：/);
   } finally {

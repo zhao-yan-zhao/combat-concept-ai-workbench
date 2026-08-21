@@ -33,7 +33,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     const longSchemas = new Set([
       "PhaseActionConcept",
       "OperationalTaskDraft",
-      "TaskDecompositionDraft",
+      "TaskOrganizationDraft",
       "ForceMissionPlan",
       "ConceptGraphicPlan",
       "ConceptMapInitialPlan",
@@ -67,7 +67,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     const isConceptMapInitialPlan = input.workflow?.outputSchema === "ConceptMapInitialPlan";
     const isForceMissionPlan = input.workflow?.outputSchema === "ForceMissionPlan";
     const isOperationalTaskDraft = input.workflow?.outputSchema === "OperationalTaskDraft";
-    const isTaskDecompositionDraft = input.workflow?.outputSchema === "TaskDecompositionDraft";
+    const isTaskOrganizationDraft = input.workflow?.outputSchema === "TaskOrganizationDraft";
     const isPhaseActionConcept = input.workflow?.outputSchema === "PhaseActionConcept";
     const isCombatFocusOptions = input.workflow?.outputSchema === "CombatFocusOptions";
     const isConceptGraphicPlan = input.workflow?.outputSchema === "ConceptGraphicPlan";
@@ -261,10 +261,10 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         "7. objective 与 expectedEffect 必须可观察、可复核，不写武器操作步骤、目标选择或真实作战指令。",
         "8. 直接完成 JSON 草案；禁止输出工具调用、web_search、搜索请求、搜索占位、过程说明或把这些内容伪装成任务。"
       ] : []),
-      ...(isTaskDecompositionDraft ? [
-        "任务分解要求：输入仅使用 analysis.tasks。输出 decompositions[]，每项只保存 parentTaskRef、childTaskRef 和 rationale。",
-        "parentTaskRef 与 childTaskRef 必须原样引用 analysis.tasks[].id；不得虚构、改写或复制任务正文，不得自关联或输出重复关系。",
-        "依据任务目标、预期效果、任务类型与同一推演方内的支撑关系识别父子任务；不同推演方之间不得建立父子关系。没有充分依据时返回空数组。"
+      ...(isTaskOrganizationDraft ? [
+        "任务整理要求：输入仅使用 analysis.tasks。输出 taskGroups[]；只整理现有任务，不得新增、拆分、改写或复制任务。",
+        "每组输出 name、dimension、taskRefs、rationale、coordination；taskRefs 必须原样引用 analysis.tasks[].id，并按建议执行顺序排列。",
+        "优先按阵营、阶段、任务类型、作用区域整理；组名必须直接概括内容，例如‘红方任务’‘蓝方打击任务’，禁止使用‘兼容组’‘整理组 1’等无业务含义名称；指出协同、重复或冲突，但不得建立父子任务关系。"
       ] : []),
       ...(isPhaseActionConcept ? [
         "阶段与行动要求（专业 CONOPS 草案，供专家复核，不是科普叙述，也不是研究流程）：",
@@ -362,8 +362,8 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
                   ? phaseActionConceptSchema()
                   : isRuleLibraryChangeSet
                   ? ruleLibraryChangeSetSchema()
-                  : isTaskDecompositionDraft
-                    ? taskDecompositionDraftSchema()
+                  : isTaskOrganizationDraft
+                    ? taskOrganizationDraftSchema()
                   : isRuleLibraryDraft
                   ? ruleLibraryDraftSchema()
                   : isSequenceDraft
@@ -635,7 +635,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
           };
     }
 
-    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "OperationalTaskDraft" || base.outputSchema === "TaskDecompositionDraft" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft") && draft && typeof draft === "object") {
+    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "OperationalTaskDraft" || base.outputSchema === "TaskOrganizationDraft" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft") && draft && typeof draft === "object") {
       base.result = draft;
     }
   
@@ -815,12 +815,12 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     };
   }
 
-  function taskDecompositionDraftSchema() {
+  function taskOrganizationDraftSchema() {
     return {
-      type: "object", additionalProperties: false, required: ["summary", "decompositions"],
+      type: "object", additionalProperties: false, required: ["summary", "taskGroups"],
       properties: {
         summary: { type: "string", maxLength: 600 },
-        decompositions: { type: "array", maxItems: 120, items: { type: "object", additionalProperties: false, required: ["parentTaskRef", "childTaskRef", "rationale"], properties: { parentTaskRef: { type: "string", maxLength: 180 }, childTaskRef: { type: "string", maxLength: 180 }, rationale: { type: "string", maxLength: 600 } } } }
+        taskGroups: { type: "array", maxItems: 120, items: { type: "object", additionalProperties: false, required: ["name", "dimension", "taskRefs", "rationale", "coordination"], properties: { name: { type: "string", maxLength: 240 }, dimension: { type: "string", maxLength: 80 }, taskRefs: { type: "array", maxItems: 120, items: { type: "string", maxLength: 180 } }, rationale: { type: "string", maxLength: 600 }, coordination: { type: "string", maxLength: 600 } } } }
       }
     };
   }
@@ -1188,7 +1188,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       ["OperationalConceptGraphic", "OV-1 总体图", "五节点总体作战概念图"],
       ["CombatFocusOptions", "作战聚焦", "作战聚焦候选方案"],
       ["OperationalTaskDraft", "作战任务", "阶段行动到规范任务的转换"],
-      ["TaskDecompositionDraft", "任务分解", "依据任务生成父子任务 UML 关系"],
+      ["TaskOrganizationDraft", "任务整理", "对现有任务进行分组、排序与协同梳理"],
       ["ForceMissionPlan", "兵力任务", "概念兵力与作战兵力规划"],
       ["PhaseActionConcept", "阶段行动", "阶段、蓝红行动与转换条件"],
       ["RuleLibraryChangeSet", "规则变更集", "上游变化形成待审规则建议"],
@@ -1231,7 +1231,7 @@ function generationPromptId(schema, researchChat = false) {
   if (researchChat) return "ai.generate.research-chat";
   const ids = {
     ConceptBrief: "concept-brief", OperationalConceptGraphic: "ov1-graphic", CombatFocusOptions: "combat-focus",
-    OperationalTaskDraft: "operational-task", TaskDecompositionDraft: "task-decomposition", ForceMissionPlan: "force-mission", PhaseActionConcept: "phase-action",
+    OperationalTaskDraft: "operational-task", TaskOrganizationDraft: "task-organization", ForceMissionPlan: "force-mission", PhaseActionConcept: "phase-action",
     RuleLibraryChangeSet: "rule-change-set", RuleLibraryDraft: "rule-library", SequenceDraft: "sequence",
     StateMachineDraft: "state-machine", ConceptGraphicPlan: "concept-graphic-plan", ConceptMapInitialPlan: "concept-map-initial"
   };
