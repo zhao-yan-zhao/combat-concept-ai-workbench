@@ -76,6 +76,10 @@ assert(generated.result.forces.some((force) => force.taskRefs?.includes("task-se
 
 const openAiSource = await readFile(new URL("../server/openaiClient.mjs", import.meta.url), "utf8");
 assert(openAiSource.includes('"taskRefs": ["task-1"]') && openAiSource.includes("taskRefs 必须引用 analysis.operationalTasks"), "Real AI force contract must require stable task refs");
+assert(openAiSource.includes("fromForceId/toForceId 必须是本轮已输出的兵力 id") && openAiSource.includes("command=同侧授权/指挥") && openAiSource.includes("最低覆盖"), "Real AI force contract must specify organization-relation rules");
+assert(openAiSource.includes("OrganizationRelationshipDraft") && openAiSource.includes("组织角色只能使用 analysis.forces"), "Real AI OV-4 contract must generate organization relations from existing forces");
+const ov4ControllerSource = await readFile(new URL("../design-studio/src/dodafProductController.js", import.meta.url), "utf8");
+assert(ov4ControllerSource.includes("pregenerateOv4FromForceMission") && ov4ControllerSource.includes("OrganizationRelationshipDraft") && ov4ControllerSource.includes("buildOv4ForceFingerprint") && ov4ControllerSource.includes("兵力已变化"), "OV-4 first entry must AI-generate organization relations and refresh when forces change");
 const ov3ViewSource = await readFile(new URL("../design-studio/src/ov3View.js", import.meta.url), "utf8");
 assert(ov3ViewSource.includes("交换事实由 OV-2 拥有") && !ov3ViewSource.includes('data-dodaf-field="ov3.exchange.'), "OV-3 view must remain a controlled OV-2 projection");
 const forceHtml = renderForceMission({

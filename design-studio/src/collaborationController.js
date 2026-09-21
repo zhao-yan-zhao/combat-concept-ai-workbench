@@ -1,6 +1,13 @@
 export function createCollaborationController({ projectId = "default", getState, render, notify, load, loadAudit, loadSession, loadAccounts, loadSecurityEvents, setup, login, register, logout, createAccount, updateAccount, createReview, resolveReview, onSessionChanged, onWorkflowChanged, exportAudit, exportSecurityEvents }) {
   let watchTimer = null;
   let lastNotifiedRevision = 0;
+  const boundAuthElements = new WeakSet();
+  const focusedAuthForms = new WeakSet();
+  function bindAuthElement(element) {
+    if (!element || boundAuthElements.has(element)) return null;
+    boundAuthElements.add(element);
+    return element;
+  }
   return {
     async hydrate() {
       const state = getState();
@@ -11,7 +18,11 @@ export function createCollaborationController({ projectId = "default", getState,
         detail: "正在读取服务端协同审阅记录。"
       };
       try {
-        const [result, session, audit] = await Promise.all([load(projectId), loadSession(), loadAudit(projectId, 16).catch(() => ({ entries: [] }))]);
+        // Identity is independent of project data and must settle before project hydration.
+        const session = await loadSession();
+        state.collaboration = { ...state.collaboration, session };
+        render();
+        const [result, audit] = await Promise.all([load(projectId), loadAudit(projectId, 16).catch(() => ({ entries: [] }))]);
         const accounts = session?.actor?.roles?.includes("lead") ? (await loadAccounts()).accounts : [];
         const securityEvents = session?.actor?.roles?.includes("lead") ? (await loadSecurityEvents()).events : [];
         state.collaboration = {
@@ -27,7 +38,7 @@ export function createCollaborationController({ projectId = "default", getState,
         await onSessionChanged?.();
       } catch {
         state.collaboration = {
-          ...previous,
+          ...state.collaboration,
           status: "unavailable",
           detail: "协同审阅服务暂不可用。",
           authBusy: false,
@@ -78,7 +89,7 @@ export function createCollaborationController({ projectId = "default", getState,
     },
 
     bind(root) {
-      (root.querySelector("#loginGate #collaborationSetupForm") || root.querySelector("#collaborationSetupForm"))?.addEventListener("submit", async (event) => {
+      bindAuthElement(root.querySelector("#loginGate #collaborationSetupForm") || root.querySelector("#collaborationSetupForm"))?.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (getState().collaboration?.authBusy) return;
         restorePasswordInputs(event.currentTarget);
@@ -101,7 +112,7 @@ export function createCollaborationController({ projectId = "default", getState,
         }, "账号初始化失败，请检查用户名和密码长度");
       });
 
-      (root.querySelector("#loginGate #collaborationLoginForm") || root.querySelector("#collaborationLoginForm"))?.addEventListener("submit", async (event) => {
+      bindAuthElement(root.querySelector("#loginGate #collaborationLoginForm") || root.querySelector("#collaborationLoginForm"))?.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (getState().collaboration?.authBusy) return;
         restorePasswordInputs(event.currentTarget);
@@ -120,7 +131,7 @@ export function createCollaborationController({ projectId = "default", getState,
         }, "用户名或密码无效");
       });
 
-      (root.querySelector("#loginGate #collaborationRegisterForm") || root.querySelector("#collaborationRegisterForm"))?.addEventListener("submit", async (event) => {
+      bindAuthElement(root.querySelector("#loginGate #collaborationRegisterForm") || root.querySelector("#collaborationRegisterForm"))?.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (getState().collaboration?.authBusy) return;
         restorePasswordInputs(event.currentTarget);
@@ -144,6 +155,7 @@ export function createCollaborationController({ projectId = "default", getState,
       });
 
       root.querySelectorAll("[data-auth-mode]").forEach((button) => {
+        if (!bindAuthElement(button)) return;
         button.addEventListener("click", () => {
           if (getState().collaboration?.authBusy) return;
           const mode = button.dataset.authMode === "register" ? "register" : "login";
@@ -152,6 +164,7 @@ export function createCollaborationController({ projectId = "default", getState,
       });
 
       root.querySelectorAll("[data-action='toggle-password-visibility']").forEach((button) => {
+        if (!bindAuthElement(button)) return;
         button.addEventListener("click", () => {
           const targetId = button.dataset.passwordTarget || "";
           const input = targetId ? root.querySelector(`#${CSS.escape(targetId)}`) : null;
@@ -286,7 +299,8 @@ export function createCollaborationController({ projectId = "default", getState,
 
       // Prefer focusing the first empty field; after failed login keep username and jump to password.
       const activeForm = root.querySelector("#loginGate form.login-auth-form:not([hidden]), form.login-auth-form:not([hidden])");
-      if (activeForm && !getState().collaboration?.authBusy) {
+      if (activeForm && !focusedAuthForms.has(activeForm) && !getState().collaboration?.authBusy) {
+        focusedAuthForms.add(activeForm);
         const hasError = Boolean(getState().collaboration?.authError);
         const passwordInput = activeForm.querySelector('input[name="password"]');
         const usernameInput = activeForm.querySelector('input[name="username"]');

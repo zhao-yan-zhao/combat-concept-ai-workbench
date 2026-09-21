@@ -753,7 +753,7 @@ export function normalizeDodafOv4(value) {
     relations: dm2Relations,
     view: value?.view,
     provenance: normalizeProvenanceObject(value?.provenance),
-    derivedFrom: value?.derivedFrom || value?.kind ? { mode: "seeded", sources: String(value?.kind || "").includes("force") ? ["forceMissionPlan"] : ["ov1", "ov5"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null,
+    derivedFrom: value?.derivedFrom || (value?.kind ? { mode: "seeded", sources: String(value?.kind || "").includes("force") ? ["forceMissionPlan"] : ["ov1", "ov5"], generatedAt: value?.generatedAt, note: value?.kind || "" } : null),
     extra: {
       version: 1,
       kind: "persisted-ov4-abstract-responsibility",

@@ -1,5 +1,6 @@
 ﻿import { promptTemplates } from "./data.js";
-import { createPhaseActionConceptFromBrief } from "./conceptPlanning.js";
+import { buildDefaultForceRelations, createPhaseActionConceptFromBrief } from "./conceptPlanning.js";
+import { inferOv4RelationCategory } from "./dodaf/ov4Taxonomy.js";
 
 const nextSteps = [
   "由专家修订关键假设。",
@@ -83,6 +84,9 @@ function createResultBySchema(schema, workflow, analysis, evidenceRefs) {
   if (schema === "ForceMissionPlan") {
     return createForceMissionPlanResult(analysis);
   }
+  if (schema === "OrganizationRelationshipDraft") {
+    return createOrganizationRelationshipDraftResult(analysis);
+  }
   if (schema === "OperationalTaskDraft") {
     return createOperationalTaskDraftResult(analysis);
   }
@@ -148,6 +152,41 @@ function createCombatFocusOptionsResult(analysis) {
         text: `围绕“${objective}”，在有利窗口集中力量实施主方向突击，并尽快巩固阶段效果以达成：${effects}。`
       }
     ]
+  };
+}
+
+function createOrganizationRelationshipDraftResult(analysis) {
+  const forces = Array.isArray(analysis?.forces) ? analysis.forces : [];
+  const combatForces = Array.isArray(analysis?.combatForces) ? analysis.combatForces : [];
+  const skeleton = buildDefaultForceRelations(forces, combatForces);
+  const chained = [];
+  const units = [...forces, ...combatForces].filter((force) => force?.id);
+  ["friendly", "hostile"].forEach((side) => {
+    const group = units.filter((force) => force.side === side);
+    group.slice(0, -1).forEach((force, index) => {
+      chained.push({
+        fromForceId: force.id,
+        toForceId: group[index + 1].id,
+        type: index === 0 ? "command" : "coordination",
+        note: index === 0 ? "同侧指挥链路" : "同侧协同"
+      });
+    });
+  });
+  const blue = units.find((force) => force.side === "friendly");
+  const red = units.find((force) => force.side === "hostile");
+  if (blue && red) chained.push({ fromForceId: red.id, toForceId: blue.id, type: "coordination", note: "红蓝对抗作用轴" });
+  const relations = (skeleton.length ? skeleton : chained).map((item) => ({
+    fromForceId: item.fromForceId,
+    toForceId: item.toForceId,
+    type: item.type || "coordination",
+    relationshipCategory: inferOv4RelationCategory(item.type),
+    note: item.note || ""
+  }));
+  const roleIds = units.map((force) => String(force.id));
+  return {
+    summary: "已根据作战兵力生成组织指挥、保障与信息关系草案。",
+    relations,
+    diagrams: [{ name: "总体组织关系图", description: "覆盖当前兵力组织与协同关系。", roleIds }]
   };
 }
 

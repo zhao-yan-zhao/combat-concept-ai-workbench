@@ -1,4 +1,13 @@
 /** Top-menubar project switcher (dropdown panel under trigger). */
+export function renderProjectEntry({ directory = {}, createOpen = false } = {}) {
+  const ready = directory.status === "ready";
+  const unavailable = directory.status === "unavailable";
+  const projects = (directory.projects || []).filter((item) => !item.archived);
+  return `<div class="project-entry"><header><h1>选择研究项目</h1><p>选择已有项目继续研究，或新建一个项目。</p></header>${ready
+    ? renderProjectManager({ directory: { ...directory, projects }, activeProjectId: "", open: true, createOpen })
+    : `<p role="status">${unavailable ? "项目列表暂时无法加载，请重试。" : "正在读取项目列表…"}</p>${unavailable ? '<button type="button" data-action="retry-project-entry">重新加载</button>' : ""}`}</div>`;
+}
+
 export function renderProjectManager({ directory = {}, activeProjectId = "default", open = false, createOpen = false, isLead = false } = {}) {
   const projects = directory.projects || [];
   const active = projects.find((item) => item.id === activeProjectId);

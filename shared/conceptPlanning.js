@@ -1059,7 +1059,7 @@ function clipTask(value, max = 90) {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
-function buildDefaultForceRelations(forces = [], combatForces = []) {
+export function buildDefaultForceRelations(forces = [], combatForces = []) {
   const relations = [];
   const bySideRole = (list, side, roles) => list.find((item) => (
     item.side === side && roles.includes(item.role)

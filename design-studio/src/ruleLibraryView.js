@@ -39,7 +39,7 @@ export function renderRuleLibrary(state = {}) {
           <span class="mini-tag">${rules.length} 条</span>
           ${pregenerating ? `<span class="mini-tag review">预生成中</span>` : ""}
           ${chatGenerating ? `<span class="mini-tag review">对话中</span>` : ""}
-          <small class="rule-library-hint">表单维护规则本体 · 从任务/兵力入口进入时可复核对象绑定 · 对话从右上角入口打开</small>
+          <small class="rule-library-hint">维护可观察、可复核的规则本体；每条规则可展开绑定任务与兵力，变更建议统一在此审核。</small>
         </div>
         <div class="rule-library-toolbar">
           ${storage ? renderProjectStorageActions(storage, { refreshAction: "refresh-project-ov6a" }) : ""}

@@ -63,6 +63,9 @@ export function renderAccountManagement(state) {
 export function renderCollaborationLoginGate(collaboration = {}) {
   const session = collaboration.session || {};
   if (session.authenticated) return "";
+  if (!collaboration.session && ["checking", "loading"].includes(collaboration.status)) {
+    return `<div class="login-gate-panel" role="status"><div class="login-gate-brand"><h1>正在打开工作台</h1><p>正在确认账号状态…</p></div></div>`;
+  }
   const busy = Boolean(collaboration.authBusy);
   const error = String(collaboration.authError || "").trim();
   const notice = String(collaboration.authNotice || "").trim();

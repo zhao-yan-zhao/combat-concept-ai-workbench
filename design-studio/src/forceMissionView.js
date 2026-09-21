@@ -67,12 +67,8 @@ export function renderForceMission(state) {
     ? `阶段${focusPhase.sequence || ""} ${focusPhase.name || focusPhase.id}`
     : (phases.length ? "未选阶段" : "全部");
   const layerTab = state.forceMissionLayerTab === "combat" ? "combat" : "concept";
-  const conceptBlue = phaseConceptForces.filter((force) => force.side === "friendly").length;
-  const conceptRed = phaseConceptForces.filter((force) => force.side === "hostile").length;
-  const combatBlue = phaseCombatForces.filter((force) => force.side === "friendly").length;
-  const combatRed = phaseCombatForces.filter((force) => force.side === "hostile").length;
-  const conceptCountLabel = `蓝 ${conceptBlue} · 红 ${conceptRed}`;
-  const combatCountLabel = `蓝 ${combatBlue} · 红 ${combatRed}`;
+  const conceptCountLabel = formatPhaseSideCounts(phaseConceptForces);
+  const combatCountLabel = formatPhaseSideCounts(phaseCombatForces);
   const conceptMissingEquip = forces.filter((force) => !formatConceptEquipment(force)).length;
   const combatMissingPlatform = combatForces.filter((force) => !(force.platforms || []).length).length;
   const combatUnlinked = combatForces.filter((force) => !force.conceptForceId).length;
@@ -184,7 +180,7 @@ export function renderForceMission(state) {
                 <span class="force-layer-seg-index">1</span>
                 <span class="force-layer-seg-copy">
                   <strong>概念兵力</strong>
-                  <small>${escapeHtml(conceptCountLabel)}${forces.length ? ` · 共 ${forces.length}` : ""}</small>
+                  <small title="当前阶段">${escapeHtml(conceptCountLabel)}</small>
                 </span>
                 ${conceptMissingEquip ? `<span class="force-layer-seg-badge is-warn">${conceptMissingEquip}</span>` : forces.length ? `<span class="force-layer-seg-badge is-ok">✓</span>` : ""}
               </button>
@@ -198,7 +194,7 @@ export function renderForceMission(state) {
                 <span class="force-layer-seg-index">2</span>
                 <span class="force-layer-seg-copy">
                   <strong>作战编成</strong>
-                  <small>${escapeHtml(combatCountLabel)}${combatForces.length ? ` · 共 ${combatForces.length}` : ""}</small>
+                  <small title="当前阶段">${escapeHtml(combatCountLabel)}</small>
                 </span>
                 ${!forces.length
                   ? ""
@@ -216,7 +212,7 @@ export function renderForceMission(state) {
                 : layerTab === "concept" && conceptMissingEquip > 0
                   ? `<span class="mini-tag review">${conceptMissingEquip} 待挂装备</span>`
                   : confirmed
-                    ? `<span class="mini-tag ready">已确认</span>`
+                    ? ""
                     : `<span class="mini-tag">${escapeHtml(status)}</span>`}
             </div>
           </div>
@@ -481,8 +477,7 @@ function renderForceMissionRailActions({
   confirmBtnLabel = "确认并进入作战概念图",
   recommendRunning = false
 }) {
-  return `<div class="force-mission-rail-actions planning-actions" aria-label="兵力动作">
-    <button type="button"
+  const generateButtons = `<button type="button"
       class="${workflow.primaryAction === "concept" ? "" : "quiet-button"}"
       data-action="generate-concept-forces"
       ${canGenerateConcept ? "" : "disabled"}>${escapeHtml(conceptBtnLabel)}</button>
@@ -491,7 +486,18 @@ function renderForceMissionRailActions({
       data-action="generate-combat-forces"
       ${canGenerateCombat ? "" : "disabled"}>${escapeHtml(combatBtnLabel)}</button>
     ${canRecommendCombat ? `<button type="button" class="quiet-button" data-action="recommend-platforms-from-phases"
-      ${recommendRunning ? "disabled" : ""}>${recommendRunning ? "正在挂接平台…" : "为作战兵力补挂平台"}</button>` : ""}
+      ${recommendRunning ? "disabled" : ""}>${recommendRunning ? "正在挂接平台…" : "为作战兵力补挂平台"}</button>` : ""}`;
+  const confirmedIdle = Boolean(workflow.confirmed) && !workflow.busy;
+  if (confirmedIdle) {
+    return `<div class="force-mission-rail-actions planning-actions is-collapsed" aria-label="兵力动作">
+      <details class="force-mission-rail-regen">
+        <summary>重新生成</summary>
+        ${generateButtons}
+      </details>
+    </div>`;
+  }
+  return `<div class="force-mission-rail-actions planning-actions" aria-label="兵力动作">
+    ${generateButtons}
     <button type="button"
       class="${workflow.primaryAction === "confirm" ? "" : "quiet-button"}"
       data-action="confirm-force-mission"
@@ -604,7 +610,6 @@ function renderConceptSideColumn({ title, className, items = [], emptyText = "",
       ? `<ul class="force-roster-list" data-grouped-list-items>${items.map((force, index) => {
           const equip = formatConceptEquipment(force);
           const active = force.id === activeId;
-          const task = clipText(force.task, 56);
           const name = displayConceptName(force);
           return renderForceRosterItem({
             index: index + 1,
@@ -614,7 +619,6 @@ function renderConceptSideColumn({ title, className, items = [], emptyText = "",
             warn: !equip,
             name,
             role: roleLabel(force.role),
-            line1: task || "（未写任务）",
             line2: equip ? `装备  ${equip}` : "装备  待挂",
             line2Missing: !equip,
             title: [force.task, equip].filter(Boolean).join(" | ") || name,
@@ -640,7 +644,6 @@ function renderForceRosterItem({
   name = "",
   role = "",
   badge = "",
-  line1 = "",
   line2 = "",
   line2Missing = false,
   title = "",
@@ -662,8 +665,7 @@ function renderForceRosterItem({
           ${role ? `<span class="force-roster-tag">${escapeHtml(role)}</span>` : ""}
           ${badge ? `<span class="force-roster-tag is-warn">${escapeHtml(badge)}</span>` : ""}
         </span>
-        <span class="force-roster-line force-roster-line1">${escapeHtml(line1)}</span>
-        <span class="force-roster-line force-roster-line2 ${line2Missing ? "is-missing" : ""}">${escapeHtml(line2)}</span>
+        ${line2 ? `<span class="force-roster-line force-roster-line2 ${line2Missing ? "is-missing" : ""}">${escapeHtml(line2)}</span>` : ""}
       </span>
     </div>
   </li>`;
@@ -774,7 +776,7 @@ function renderCombatSideColumn({
               const label = String(item.name || "平台").trim();
               return qty > 1 ? `${label} x${qty}` : label;
             }).join(" / ") + (platforms.length > 2 ? ` 等${platforms.length}` : "");
-          const mission = formatCombatMission(force, missionTypes);
+          const missionType = formatCombatMissionType(force, missionTypes);
           const unitType = formatCombatUnitType(force);
           const name = displayCombatName(force);
           return renderForceRosterItem({
@@ -786,17 +788,16 @@ function renderCombatSideColumn({
             name,
             role: roleLabel(force.role),
             badge: force.conceptForceId ? "" : "未挂概念",
-            line1: mission || unitType || "（未写任务）",
             line2: missingPlatform ? "平台  待挂" : `平台  ${platformSummary}`,
             line2Missing: missingPlatform,
             title: [force.task, platformSummary].filter(Boolean).join(" | ") || name,
             groups: {
               side: sideLabel(force.side),
               role: roleLabel(force.role),
-              type: mission || "未分类",
+              type: missionType || "未分类",
               status: confirmed ? "已确认" : missingPlatform || !force.conceptForceId ? "待补全" : "待确认"
             },
-            search: [force.id, name, force.task, mission, unitType, platformSummary, sideLabel(force.side), roleLabel(force.role)].filter(Boolean).join(" ")
+            search: [force.id, name, force.task, missionType, unitType, platformSummary, sideLabel(force.side), roleLabel(force.role)].filter(Boolean).join(" ")
           });
         }).join("")}</ul>`
       : `<p class="empty-inspector force-concept-empty">${escapeHtml(emptyText)}</p>`}
@@ -931,11 +932,15 @@ function formatCombatUnitType(force = {}) {
   return roleLabel(force.role);
 }
 
-function formatCombatMission(force = {}, missionTypes = []) {
-  const task = clipText(force.task, 56);
-  if (task) return task;
+function formatCombatMissionType(force = {}, missionTypes = []) {
   const hit = (missionTypes || []).find((item) => item.id === force.missionType);
-  return hit?.label || cmoMissionTypeFallback(force.missionType) || "—";
+  return hit?.label || cmoMissionTypeFallback(force.missionType) || "";
+}
+
+function formatPhaseSideCounts(forces = []) {
+  const blue = forces.filter((force) => force.side === "friendly").length;
+  const red = forces.filter((force) => force.side === "hostile").length;
+  return `蓝 ${blue} · 红 ${red}`;
 }
 
 function cmoMissionTypeFallback(id = "") {
@@ -1021,12 +1026,6 @@ function renderInlinePlatformPicker(force, picker, catalogOpen, editable, layer 
         : "")}
     ` : `<p class="planning-meta">装备目录未连接，无法检索。请到系统管理配置 DB3。</p>`}
   </div>`;
-}
-
-function clipText(value, max = 40) {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
-  if (!text) return "";
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
 function renderBatchAttachBar(forceId, layer, picker, editable) {

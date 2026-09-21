@@ -48,3 +48,17 @@ export function inferOv4RelationCategory(value = "") {
 export function ov4RelationStyleKey(category = "") {
   return ({ "上下级隶属": "subordinate", "作战指挥": "command", "作战控制": "control", "行政控制": "admin", "配属": "attached", "协同": "coordination", "支援保障": "support", "信息报送": "information" })[category] || "other";
 }
+
+export function ov4RelationShortLabel(category = "", type = "") {
+  return ({
+    "上下级隶属": "隶属",
+    "作战指挥": "指挥",
+    "作战控制": "控制",
+    "行政控制": "行政",
+    "配属": "配属",
+    "协同": "协同",
+    "支援保障": "保障",
+    "信息报送": "上报",
+    "其他": "关系"
+  })[category] || ({ command: "指挥", support: "保障", information: "上报", coordination: "协同" })[type] || "关系";
+}

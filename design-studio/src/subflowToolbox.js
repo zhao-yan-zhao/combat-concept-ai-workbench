@@ -13,7 +13,7 @@ const SUBFLOW_TOOLS = Object.freeze({
   "force-mission": { label: "作战兵力工具箱", ai: ["generate-force-mission", "AI 生成兵力"], items: [["open-force-mission-chat", "AI 对话复核", "chat"], ["recommend-platforms-from-phases", "推荐平台", "concept"]] },
   ov1: { label: "总体图工具箱", ai: ["generate-ov1", "AI 生成总体图"], items: [["toggle-ov1-tools", "图面编辑工具", "layout"], ["generate-ov5-from-ov1", "生成活动模型", "relations"]] },
   "concept-map": { label: "概念图工具箱", ai: ["generate-concept-graphic", "AI 汇总概念"], items: [["seed-concept-map-from-planning", "从规划刷新", "refresh"], ["open-concept-map-external", "打开绘图工具", "layout"]] },
-  ov4: { label: "组织关系工具箱", ai: ["open-subflow-ai", "AI 检查组织"], items: [["toggle-ov4-tools", "编辑组织关系", "relations"], ["seed-dodaf-ov4", "刷新来源", "refresh"]] },
+  ov4: { label: "组织关系工具箱", ai: ["open-subflow-ai", "AI 生成组织"], items: [["toggle-ov4-tools", "编辑组织关系", "relations"], ["seed-dodaf-ov4", "刷新来源", "refresh"]] },
   ov2: { label: "资源流工具箱", ai: ["open-subflow-ai", "AI 检查资源流"], items: [["seed-dodaf-ov2", "刷新来源", "refresh"], ["save-dodaf-ov2", "保存资源流", "check"]] },
   ov3: { label: "资源流矩阵工具箱", ai: ["open-subflow-ai", "AI 检查矩阵"], items: [["seed-dodaf-ov3", "刷新来源", "refresh"], ["save-dodaf-ov3", "保存矩阵", "check"]] },
   ov5a: { label: "活动分解工具箱", ai: ["open-subflow-ai", "AI 检查分解"], items: [["sync-ov5a-from-ov5b", "从活动同步", "refresh"], ["sync-ov5b-from-ov5a", "应用父子关系", "relations"]] },

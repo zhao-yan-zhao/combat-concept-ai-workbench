@@ -2,21 +2,25 @@ import { resolveDodafProduct } from "./dodafProductStore.js";
 import { renderProjectStorageActions } from "./projectStorageView.js";
 import { resolveOv4SelectedDiagramId } from "./ov4DiagramStore.js";
 import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
-import { OV4_ECHELON_CATEGORIES, OV4_ORGANIZATION_CATEGORIES, OV4_RELATION_CATEGORIES, ov4RelationStyleKey } from "../../shared/dodaf/ov4Taxonomy.js";
+import { buildOv4ForceFingerprint } from "./ov4Builder.js";
+import { OV4_ECHELON_CATEGORIES, OV4_ORGANIZATION_CATEGORIES, OV4_RELATION_CATEGORIES, ov4RelationShortLabel, ov4RelationStyleKey } from "../../shared/dodaf/ov4Taxonomy.js";
 
 export function renderOv4(state) {
   const { model, source } = resolveDodafProduct(state, "ov4");
-  const diagrams = model.diagrams || [];
+  const diagrams = diagramsForDisplay(model);
   const selectedId = resolveOv4SelectedDiagramId(state, diagrams);
   const diagram = diagrams.find((item) => item.id === selectedId) || null;
   const scoped = scopeModel(model, diagram);
   const toolsOpen = state.ov4ToolsOpen === true;
   const editorOpen = state.ov4EditorOpen === true;
+  const fingerprint = buildOv4ForceFingerprint(state.forceMission);
+  const stale = String(model.derivedFrom?.note || "").startsWith("ov4-force:") && model.derivedFrom.note !== fingerprint;
+  const statusLabel = stale ? "兵力已更新，待重生成" : source === "persisted" ? "已持久化" : "本地/种子";
   return `<section class="ov4-page" data-view-page="organization-relationship" data-dodaf-product="OV-4">
-    <header class="ov4-top"><div class="ov4-bar"><div class="ov4-identity"><h2>作战组织关系图</h2><small class="ov4-summary">${source === "persisted" ? "已持久化" : "本地/种子"} · ${diagrams.length} 张关系图 · ${model.roles?.length || 0} 个共享角色 · ${model.relations?.length || 0} 条共享关系</small></div><div class="ov4-toolbar">${state.ov4Storage ? renderProjectStorageActions(state.ov4Storage, { refreshAction: "refresh-project-ov4" }) : ""}<button type="button" class="quiet-button" data-action="seed-dodaf-ov4">重新生成</button><button type="button" class="primary-btn" data-action="save-dodaf-ov4">保存</button></div></div></header>
+    <header class="ov4-top"><div class="ov4-bar"><div class="ov4-identity"><h2>作战组织关系图</h2><small class="ov4-summary ${stale ? "is-review" : ""}">${statusLabel} · ${diagrams.length} 张关系图 · ${model.roles?.length || 0} 个共享角色 · ${model.relations?.length || 0} 条共享关系</small></div><div class="ov4-toolbar">${state.ov4Storage ? renderProjectStorageActions(state.ov4Storage, { refreshAction: "refresh-project-ov4" }) : ""}<button type="button" class="quiet-button" data-action="seed-dodaf-ov4">重新生成</button><button type="button" class="primary-btn" data-action="save-dodaf-ov4">保存</button></div></div></header>
     <div class="ov4-workbench ${toolsOpen ? "is-tools-docked" : ""} ${editorOpen ? "is-editor-open" : ""}">
       ${renderDiagramPanel(diagrams, selectedId)}
-      <main class="ov4-main-panel"><header class="ov4-canvas-head"><div><strong>${escapeHtml(diagram?.name || "组织关系图")}</strong><small>拖动组织框 · 空白平移 · 滚轮缩放</small></div><span>${scoped.roles.length} 角色 · ${scoped.relations.length} 关系</span><button type="button" class="sm-canvas-fit" data-ov4-canvas-fit title="适配全部组织" aria-label="适配全部组织">⌖</button></header>${renderOrganizationCanvas(scoped, diagram)}</main>
+      <main class="ov4-main-panel"><header class="ov4-canvas-head"><div><strong>${escapeHtml(diagram?.name || "组织关系图")}</strong><small>拖动组织框 · 空白平移 · 滚轮缩放</small></div><span class="ov4-relation-legend" aria-label="关系图例">指挥 · 保障 · 上报 · 协同</span><span>${scoped.roles.length} 角色 · ${scoped.relations.length} 关系</span><button type="button" class="sm-canvas-fit" data-ov4-canvas-fit title="适配全部组织" aria-label="适配全部组织">⌖</button></header>${renderOrganizationCanvas(scoped, diagram)}</main>
       ${renderPropertyDock(model, diagram, editorOpen)}
       ${toolsOpen ? renderOv4ToolboxRail(editorOpen) : ""}
     </div></section>`;
@@ -27,7 +31,7 @@ export function renderOv4ToolboxFloatButton({ toolsOpen = false } = {}) {
 }
 
 function renderOv4ToolboxRail(editorOpen) {
-  return renderToolboxRail({ scope: "ov4", open: true, label: "组织关系工具箱", navLabel: "组织关系工具", className: "sm-edit-rail ov4-edit-rail", navClassName: "ov4-edit-rail-nav", toggleAction: "toggle-ov4-tools", items: [{ action: "open-subflow-ai", title: "AI 检查组织关系", icon: "sparkle", attention: true }, "sep", { action: "ov4-toggle-editor", title: "组织关系信息", icon: "relations", active: editorOpen, pressed: editorOpen }] });
+  return renderToolboxRail({ scope: "ov4", open: true, label: "组织关系工具箱", navLabel: "组织关系工具", className: "sm-edit-rail ov4-edit-rail", navClassName: "ov4-edit-rail-nav", toggleAction: "toggle-ov4-tools", items: [{ action: "open-subflow-ai", title: "AI 生成组织关系", icon: "sparkle", attention: true }, "sep", { action: "ov4-toggle-editor", title: "组织关系信息", icon: "relations", active: editorOpen, pressed: editorOpen }] });
 }
 
 function renderDiagramPanel(diagrams, selectedId) {
@@ -46,16 +50,43 @@ function renderPropertyDock(model, diagram, open) {
     ${renderReviewInformation(model)}</div></aside>`;
 }
 
+function diagramsForDisplay(model) {
+  const diagrams = Array.isArray(model.diagrams) ? model.diagrams : [];
+  if (diagrams.some((item) => (item.roleIds || []).length)) return diagrams;
+  const roles = model.roles || [];
+  if (!roles.length) return diagrams;
+  const fallback = diagrams[0] || {};
+  return [{
+    id: fallback.id || "ov4-diagram-overall",
+    name: fallback.name || "总体组织关系图",
+    description: fallback.description || "",
+    roleIds: roles.map((role) => role.id),
+    relationIds: (model.relations || []).map((relation) => relation.id),
+    positions: fallback.positions || []
+  }];
+}
+
 function scopeModel(model, diagram) {
-  if (!diagram) return { roles: [], relations: [] };
+  if (!diagram) return { roles: model.roles || [], relations: model.relations || [] };
   const roleIds = new Set(diagram.roleIds || []);
   const relationIds = new Set(diagram.relationIds || []);
-  return { roles: (model.roles || []).filter((role) => roleIds.has(role.id)), relations: (model.relations || []).filter((relation) => relationIds.has(relation.id) && roleIds.has(relation.sourceRoleId) && roleIds.has(relation.targetRoleId)) };
+  const roles = (model.roles || []).filter((role) => roleIds.has(role.id));
+  const relations = (model.relations || []).filter((relation) => relationIds.has(relation.id) && roleIds.has(relation.sourceRoleId) && roleIds.has(relation.targetRoleId));
+  if (roles.length) return { roles, relations };
+  return { roles: model.roles || [], relations: model.relations || [] };
 }
 
 function renderOrganizationCanvas(model, diagram) {
   const layout = createRoleLayout(model.roles, model.relations, diagram?.positions || []);
-  const lines = model.relations.map((relation) => { const source = layout.positions.get(relation.sourceRoleId); const target = layout.positions.get(relation.targetRoleId); const style = ov4RelationStyleKey(relation.relationshipCategory); return source && target ? `<path class="ov4-org-relation relation-${style}" data-ov4-edge data-source-id="${escapeHtml(relation.sourceRoleId)}" data-target-id="${escapeHtml(relation.targetRoleId)}" d="${relationPath(source, target)}" marker-end="url(#ov4-arrow-${style})"/>` : ""; }).join("");
+  const lines = model.relations.map((relation) => {
+    const source = layout.positions.get(relation.sourceRoleId);
+    const target = layout.positions.get(relation.targetRoleId);
+    const style = ov4RelationStyleKey(relation.relationshipCategory);
+    if (!source || !target) return "";
+    const label = ov4RelationShortLabel(relation.relationshipCategory, relation.relationshipType);
+    const point = relationLabelPoint(source, target);
+    return `<path class="ov4-org-relation relation-${style}" data-ov4-edge data-source-id="${escapeHtml(relation.sourceRoleId)}" data-target-id="${escapeHtml(relation.targetRoleId)}" d="${relationPath(source, target)}" marker-end="url(#ov4-arrow-${style})"/><text class="ov4-org-relation-label relation-${style}" data-ov4-edge-label data-source-id="${escapeHtml(relation.sourceRoleId)}" data-target-id="${escapeHtml(relation.targetRoleId)}" x="${point.x}" y="${point.y}">${escapeHtml(label)}</text>`;
+  }).join("");
   const nodes = model.roles.map((role) => { const position = layout.positions.get(role.id); return `<div class="ov4-org-node-wrap" data-ov4-node="${escapeHtml(role.id)}" data-logical-x="${position.x}" data-logical-y="${position.y}" style="left:${position.x / 10}%;top:${position.y / 10}%"><button type="button" class="ov4-org-role ${role.state === "ready" ? "is-ready" : "is-review"}" data-ov4-role="${escapeHtml(role.id)}"><small>${escapeHtml(role.echelonCategory || "未明确")}</small><strong>${escapeHtml(role.label)}</strong><span>${escapeHtml(role.organizationCategory || "其他")}</span></button></div>`; }).join("");
   const empty = !diagram ? `<div class="ov4-org-empty"><strong>尚无组织关系图</strong><span>从左侧新建一张关系图。</span></div>` : !model.roles.length ? `<div class="ov4-org-empty"><strong>当前关系图为空</strong><span>从右侧工具箱选择需要展示的角色和关系。</span></div>` : "";
   const markers = ["subordinate", "command", "control", "admin", "attached", "coordination", "support", "information", "other"].map((key) => `<marker id="ov4-arrow-${key}" class="relation-${key}" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8z"/></marker>`).join("");
@@ -84,6 +115,7 @@ function createRoleLayout(roles, relations, savedPositions) {
   return { worldWidth: Math.max(1400, widestLevel * 200), worldHeight: Math.max(900, levelCount * 240 + 160), positions: new Map(roles.map((role) => [role.id, saved.has(role.id) ? { id: role.id, x: saved.get(role.id).x, y: saved.get(role.id).y } : automatic.get(role.id)])) };
 }
 function relationPath(source, target) { if (Math.abs(target.y - source.y) < 100) { const direction = target.x >= source.x ? 1 : -1; return `M ${source.x + 92 * direction} ${source.y} L ${target.x - 92 * direction} ${target.y}`; } const direction = target.y >= source.y ? 1 : -1; const startY = source.y + 38 * direction; const endY = target.y - 38 * direction; const railY = (startY + endY) / 2; return `M ${source.x} ${startY} L ${source.x} ${railY} L ${target.x} ${railY} L ${target.x} ${endY}`; }
+function relationLabelPoint(source, target) { return { x: (source.x + target.x) / 2, y: Math.abs(target.y - source.y) < 100 ? source.y - 12 : (source.y + target.y) / 2 - 4 }; }
 function renderOptions(options, selected) { return options.map((option) => `<option value="${escapeHtml(option)}" ${option === selected ? "selected" : ""}>${escapeHtml(option)}</option>`).join(""); }
 export function selectionForOv4Role(roleId, models) { const { model } = resolveDodafProduct(models, "ov4"); const role = (model.roles || []).find((item) => item.id === roleId); return role ? { id: role.id, kind: "ov4-role", title: role.label, status: "OV-4 Organization", text: "DoDAF 2.02 组织角色。", facts: [["来源兵力", (role.forceRefs || []).join("、") || "未关联"], ["承接任务", (role.taskRefs || []).join("、") || "未关联"], ["关联活动", String(role.activityCount || 0)]], refs: [...(role.forceRefs || []), ...(role.taskRefs || []), ...(role.activityIds || [])] } : null; }
 export function selectionForOv4Relation(relationId, models) { const { model } = resolveDodafProduct(models, "ov4"); const relation = (model.relations || []).find((item) => item.id === relationId); return relation ? { id: relation.id, kind: "ov4-relation", title: `${relation.sourceRoleLabel} -> ${relation.targetRoleLabel}`, status: "OV-4 relationship", text: "DoDAF 2.02 组织关系。", facts: [["关系类型", relation.relationshipType]], refs: [relation.sourceForceRef, relation.targetForceRef, relation.sourceActivityId, relation.targetActivityId].filter(Boolean) } : null; }

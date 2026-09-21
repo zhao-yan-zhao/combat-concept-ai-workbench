@@ -72,6 +72,8 @@ assert(mainJs.includes("ensureCombatFocusOnEnterPhaseAction") && mainJs.includes
 assert(mainJs.includes("根据简报生成 3 个作战聚焦方向"), "Phase-action enter overlay must describe focus generation");
 assert(mainJs.includes("combatFocusGenerating"), "Busy overlay must cover combat focus generation");
 assert(mainJs.includes('viewId === "ov6c"') && mainJs.includes("pregenerateOv6cFromPhase"), "Direct sequence entry must auto-generate an empty sequence model before review");
+assert(mainJs.includes('viewId === "ov4"') && mainJs.includes("pregenerateOv4FromForceMission"), "Next-step entry into organization relationships must auto-generate from combat forces");
+assert(mainJs.includes("ov4Pregenerating") && mainJs.includes("AI 正在根据作战兵力生成指挥、保障与信息关系"), "Force-mission next step must show organization-relationship generation overlay");
 assert(mainJs.includes("sequencePregenerating") && mainJs.includes("AI 正在生成各推演方及每个阶段的时序图"), "State-machine next must show credible sequence generation progress");
 assert(mainJs.includes("updateBusyOverlayProgress") && mainJs.includes("expectedMs") && mainJs.includes("timeoutMs"), "Busy overlay must expose elapsed and estimated progress timing");
 assert(indexHtml.includes('role="progressbar"') && indexHtml.includes("workflowModeElapsed") && indexHtml.includes("workflowModeEstimate"), "Busy overlay must render progress, elapsed time, and estimate");

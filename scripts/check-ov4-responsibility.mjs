@@ -1,4 +1,4 @@
-import { buildOv4Model } from "../design-studio/src/ov4Builder.js";
+import { applyOrganizationRelationshipDraft, buildOv4ForceFingerprint, buildOv4Model } from "../design-studio/src/ov4Builder.js";
 import { renderOv4, selectionForOv4Relation, selectionForOv4Role } from "../design-studio/src/ov4View.js";
 import { normalizeDodafOv4 } from "../shared/dodaf/products.js";
 import { addOv4Diagram, removeOv4Diagram, toggleOv4DiagramRelation, toggleOv4DiagramRole, updateOv4Diagram, updateOv4RelationClassification, updateOv4RoleClassification } from "../design-studio/src/ov4DiagramStore.js";
@@ -14,6 +14,32 @@ const ooda = { lanes: [{ id: "observe", title: "Observe", subtitle: "Observe", n
 const scenario = { entities: [{ id: "entity-1", sourceActivityId: "a1" }] };
 const model = buildOv4Model({ ov1, ov5, ooda, scenario });
 assert(model.kind === "derived-ov4-abstract-responsibility" && model.roles.length === 2 && model.relations.length === 1, "OV-4 did not derive roles and a cross-role relation");
+const forceLinked = applyOrganizationRelationshipDraft({
+  forceMission: {
+    forces: [
+      { id: "force-sense", name: "感知单元", side: "friendly", role: "sense", task: "态势保障", taskRefs: ["task-sense"] },
+      { id: "force-command", name: "指挥单元", side: "friendly", role: "command", task: "指挥控制", taskRefs: ["task-command"] }
+    ],
+    combatForces: [],
+    relations: []
+  }
+}, {
+  relations: [{ fromForceId: "force-sense", toForceId: "force-command", type: "information", relationshipCategory: "信息报送", note: "态势上报" }],
+  diagrams: [{ name: "情报协同关系图", description: "感知向指挥报送", roleIds: ["force-sense", "force-command"] }]
+}, { source: "ai" });
+assert(forceLinked.derivedFrom?.mode === "ai" && forceLinked.relations[0]?.relationshipCategory === "信息报送" && forceLinked.diagrams[0]?.name === "概念组织关系图" && forceLinked.diagrams[0]?.roleIds.includes("force-sense"), "OV-4 AI draft did not apply force-linked organization relations");
+const bothLayers = applyOrganizationRelationshipDraft({
+  forceMission: {
+    forces: [{ id: "force-sense", name: "感知单元", side: "friendly", role: "sense" }],
+    combatForces: [{ id: "combat-sense", name: "预警分队", side: "friendly", role: "sense", conceptForceId: "force-sense" }],
+    relations: []
+  }
+}, { relations: [{ fromForceId: "combat-sense", toForceId: "force-sense", type: "information", relationshipCategory: "信息报送", note: "上报" }] }, { source: "ai" });
+assert(bothLayers.diagrams[0]?.name === "作战组织关系图" && bothLayers.diagrams[1]?.name === "概念组织关系图", "OV-4 must default the first diagram to the combat layer when both layers exist");
+const fingerprint = buildOv4ForceFingerprint({ forces: [{ id: "force-sense", name: "感知单元", side: "friendly", role: "sense" }], combatForces: [], relations: [] });
+assert(fingerprint.startsWith("ov4-force:") && fingerprint === buildOv4ForceFingerprint({ forces: [{ id: "force-sense", name: "感知单元", side: "friendly", role: "sense" }], combatForces: [], relations: [] }), "OV-4 force fingerprint must be stable for the same force set");
+assert(fingerprint !== buildOv4ForceFingerprint({ forces: [{ id: "force-sense", name: "感知单元改名", side: "friendly", role: "sense" }], combatForces: [], relations: [] }), "OV-4 force fingerprint must change when forces change");
+assert(normalizeDodafOv4(forceLinked).derivedFrom?.mode === "ai", "OV-4 normalize must keep AI provenance");
 assert(model.roles.find((role) => role.id === "sense")?.oodaCount === 1 && model.roles.find((role) => role.id === "sense")?.entityCount === 1 && model.unresolved.unmappedActivityIds.includes("orphan"), "OV-4 lost activity, OODA, scenario, or unresolved provenance");
 assert(model.coverage.activity.percent === 67 && model.coverage.role.percent === 100, "OV-4 did not derive responsibility coverage percentages");
 assert(inferOv4OrganizationCategory({ label: "战区联合指挥所", role: "command" }) === "战区指挥机关" && inferOv4OrganizationCategory({ label: "突击编队", layer: "combat" }) === "战区作战部队", "OV-4 organization taxonomy inference is incomplete");
@@ -35,13 +61,20 @@ edited = updateOv4RelationClassification(edited, model.relations[0].id, { relati
 assert(edited.roles.find((role) => role.id === "sense")?.organizationCategory === "信息支援力量" && edited.relations[0].relationshipCategory === "信息报送", "OV-4 classification edits did not persist");
 assert(generateValidation(ov5, ooda, scenario, ov1).issues.some((issue) => issue.title === "OV-4 活动责任待复核"), "OV-4 unresolved activity did not enter low-priority validation review");
 assert(selectionForOv4Role("sense", { ov1, ov5, ooda, scenario })?.kind === "ov4-role" && selectionForOv4Relation(model.relations[0].id, { ov1, ov5, ooda, scenario })?.kind === "ov4-relation", "OV-4 inspector selections lost traceability");
+const emptyScopeCanvas = renderOv4({
+  forceMission: { forces: [{ id: "force-sense", name: "感知单元", role: "sense" }], combatForces: [], relations: [] },
+  ov4: { roles: forceLinked.roles, relations: forceLinked.relations, diagrams: [{ id: "empty", name: "空图", roleIds: [], relationIds: [] }] },
+  ov4ToolsOpen: true,
+  ov4EditorOpen: true
+});
+assert(emptyScopeCanvas.includes("感知单元") && emptyScopeCanvas.includes("data-ov4-role=\"force-sense\""), "Empty OV-4 diagram scope must still display generated organizations");
 const canvas = renderOv4({ ov1, ov5, ooda, scenario, ov4ToolsOpen: true, ov4EditorOpen: true });
 assert(canvas.includes("作战组织关系图") && canvas.includes("ov4-workbench") && canvas.includes("ov4-diagram-panel") && canvas.includes("ov4-main-panel") && canvas.includes("ov4-editor-dock"), "OV-4 did not render the state-machine-style workbench layout");
 assert(canvas.includes("组织关系图列表") && canvas.includes("总体组织关系图") && canvas.includes("组织关系工具箱") && canvas.includes("组织分类") && canvas.includes("关系分类"), "OV-4 did not render a diagram list and classified property toolbox");
 assert(canvas.includes("ov4-org-canvas") && canvas.includes('data-ov4-role="sense"') && !canvas.includes('aria-label="组织角色列表"'), "OV-4 canvas or diagram list semantics are incorrect");
 assert(canvas.includes("data-ov4-stage") && canvas.includes("data-ov4-world") && canvas.includes("data-ov4-canvas-fit") && canvas.includes("data-ov4-node") && canvas.includes("data-ov4-edge"), "OV-4 did not adopt the state-machine camera canvas hooks");
 assert(canvas.includes("组织分类") && canvas.includes("关系分类") && canvas.includes("战区作战部队") && canvas.includes("上下级隶属") && canvas.includes("relation-information"), "OV-4 taxonomy controls or relation styles are missing");
-assert(canvas.includes("<path class=\"ov4-org-relation") && canvas.includes('marker-end="url(#ov4-arrow-information)"'), "OV-4 did not render classified organization connectors");
+assert(canvas.includes("<path class=\"ov4-org-relation") && canvas.includes('marker-end="url(#ov4-arrow-information)"') && canvas.includes("data-ov4-edge-label") && canvas.includes("上报") && canvas.includes("ov4-relation-legend"), "OV-4 did not render classified organization connectors or relation labels");
 assert(!canvas.includes("dodaf-standard-legend") && !canvas.includes("derived-view-provenance") && !canvas.includes("project-storage-state"), "OV-4 retained redundant legend, provenance, or storage sections");
 const payload = buildReportPayload({ project: { title: "OV-4 acceptance", brief: { objective: "Review", approach: "Derived role", assumptions: "Abstract", risk: "Unmapped" }, citations: [] }, direction: "Review", ov1, ov5, ooda, scenario: null, validationResult: null, knowledge: null, deployment: { settings: {}, status: "not-configured" } });
 assert(payload.ov4.roles.length === 2 && buildMarkdownReport(payload).includes("OV-4 作战组织关系图") && buildMarkdownReport(payload).includes("信息支援力量") && buildXmlReport(payload).includes('organizationCategory="信息支援力量"') && buildXmlReport(payload).includes('relationshipCategory="信息报送"'), "OV-4 classified report output is incomplete");

@@ -9,6 +9,9 @@ import { createProjectModelSyncController } from "./projectModelSyncController.j
 import { mergeProductsIntoArchitecture } from "../../shared/dodaf/architectureWriteback.js";
 import { applyOv5aToOv5b, applyOv5bToOv5a, setOv5aParent, syncOv5ActivityPair } from "../../shared/dodaf/ov5ActivitySync.js";
 import { persistOv5Model } from "./ov5Store.js";
+import { compactForceMissionForAnalysis } from "../../shared/conceptPlanning.js";
+import { applyOrganizationRelationshipDraft, buildOv4ForceFingerprint } from "./ov4Builder.js";
+import { OV4_ECHELON_CATEGORIES, OV4_ORGANIZATION_CATEGORIES, OV4_RELATION_CATEGORIES } from "../../shared/dodaf/ov4Taxonomy.js";
 import {
   exportProjectArchitecture,
   importProjectArchitecture,
@@ -90,7 +93,7 @@ import {
 } from "./ov4DiagramStore.js";
 import { generateWithAiStream, isAiOutput } from "../../shared/aiClient.js";
 import { generateMockOutput } from "../../shared/generator.js";
-import { normalizeDodafOv1b, normalizeDodafOv6b, normalizeDodafOv6c } from "../../shared/dodaf/products.js";
+import { normalizeDodafOv1b, normalizeDodafOv4, normalizeDodafOv6b, normalizeDodafOv6c } from "../../shared/dodaf/products.js";
 import { applySequenceDraft } from "./sequenceChatController.js";
 import { addOv1bTaskGroup, removeOv1bTaskGroup, updateOv1bTaskGroup } from "./ov1bStore.js";
 import { buildOv1cModel, buildOv7Model, updateMappingProduct } from "./mappingProductStore.js";
@@ -149,6 +152,37 @@ export function mergeTaskDecompositionDraft(currentItems = [], generatedItems = 
     signatures.add(signature);
     return true;
   })];
+}
+
+export function buildOrganizationRelationshipAnalysis(state = {}) {
+  const forceMission = compactForceMissionForAnalysis(state.forceMission);
+  const brief = state.brief || {};
+  return {
+    brief: {
+      研究意图: brief.researchIntent || "",
+      任务目标: brief.objective || "",
+      核心思路: brief.approach || "",
+      预期效果: brief.expectedEffects || "",
+      主要风险: brief.risk || ""
+    },
+    phaseAction: {
+      status: state.phaseAction?.status || "empty",
+      phases: (Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : []).slice(0, 12).map((phase) => ({
+        id: phase?.id || "",
+        name: phase?.name || "",
+        objective: phase?.objective || "",
+        blueActions: (phase?.blueActions || phase?.primaryActions || []).slice(0, 6),
+        redActions: (phase?.redActions || phase?.secondaryActions || []).slice(0, 6)
+      }))
+    },
+    forces: forceMission.forces,
+    combatForces: forceMission.combatForces,
+    existingRelations: forceMission.relations,
+    organizationCategories: OV4_ORGANIZATION_CATEGORIES,
+    echelonCategories: OV4_ECHELON_CATEGORIES,
+    relationCategories: OV4_RELATION_CATEGORIES,
+    relationTypes: ["command", "support", "coordination", "information"]
+  };
 }
 
 export function buildStateMachineGenerationAnalysis(state = {}) {
@@ -1169,6 +1203,88 @@ export function createDodafProductController({
   }
 
   const api = {
+    /**
+     * First entry from 作战兵力 → 组织关系: AI generates command/support/information links
+     * among existing forces. Does not invent organizations or overwrite AI/human-owned models.
+     */
+    async pregenerateOv4FromForceMission({ silent = false, force = false } = {}) {
+      const state = getState();
+      if (state.ov4Pregenerating) return { skipped: true, reason: "busy" };
+      const current = state.ov4 && typeof state.ov4 === "object"
+        ? normalizeDodafOv4(state.ov4)
+        : normalizeDodafOv4({ roles: [], relations: [], diagrams: [] });
+      const fingerprint = buildOv4ForceFingerprint(state.forceMission);
+      const visible = (current.diagrams || []).some((item) => (item.roleIds || []).length) && (current.roles || []).length;
+      const sameSource = String(current.derivedFrom?.note || "") === fingerprint;
+      const stale = Boolean(current.derivedFrom?.note) && String(current.derivedFrom.note).startsWith("ov4-force:") && !sameSource;
+      if (!force && visible && sameSource) {
+        return { skipped: true, reason: "has-organization", count: current.relations.length };
+      }
+      const analysis = buildOrganizationRelationshipAnalysis(state);
+      if (!(analysis.forces.length || analysis.combatForces.length)) {
+        if (!silent) notify("未能生成组织关系：请先确认作战兵力");
+        return { skipped: true, reason: "no-source" };
+      }
+
+      state.ov4Pregenerating = true;
+      render();
+      await new Promise((resolve) => {
+        if (typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        } else {
+          setTimeout(resolve, 32);
+        }
+      });
+      const startedAt = Date.now();
+      try {
+        let draft = null;
+        let source = "ai";
+        try {
+          const response = await generateWithAiStream({
+            workflowId: "ov4",
+            workflow: { id: "ov4", title: "组织关系", outputSchema: "OrganizationRelationshipDraft" },
+            analysis,
+            evidence: []
+          });
+          if (!Array.isArray(response?.result?.relations) || !response.result.relations.length) {
+            throw new Error("organization relationship draft empty");
+          }
+          draft = response.result;
+        } catch {
+          draft = generateMockOutput({
+            workflow: { id: "ov4", title: "组织关系", outputSchema: "OrganizationRelationshipDraft" },
+            analysis,
+            evidence: []
+          }).result;
+          source = "local-fallback";
+        }
+
+        const next = normalizeDodafOv4(applyOrganizationRelationshipDraft(state, draft, { source, fingerprint }));
+        if (!(next.roles || []).length) throw new Error("organization relationship draft produced no roles");
+        state.ov4 = saveLocalDodafProduct("ov4", next, projectId);
+        state.ov4SelectedDiagramId = next.diagrams?.[0]?.id || "";
+        state.ov4EditorOpen = true;
+        state.ov4ToolsOpen = true;
+        await syncControllers.ov4.sync(state.ov4, { source: "ov4:pregenerate-ai" });
+        await writebackArchitecture("ov4:pregenerate-ai");
+
+        const elapsed = Date.now() - startedAt;
+        if (elapsed < 600) await new Promise((resolve) => setTimeout(resolve, 600 - elapsed));
+        if (!silent) {
+          if (stale) notify(`兵力已变化，已按最新兵力重生成 ${next.roles.length} 个组织、${(next.relations || []).length} 条关系`);
+          else if (source === "ai") notify(`AI 已根据作战兵力生成 ${next.roles.length} 个组织、${(next.relations || []).length} 条关系，请复核`);
+          else notify(`AI 暂不可用，已生成 ${next.roles.length} 个组织、${(next.relations || []).length} 条本地关系草案，请复核`);
+        }
+        return { applied: (next.relations || []).length, source, skipped: false };
+      } catch (error) {
+        if (!silent) notify("组织关系自动生成失败，请在本页点击重新生成");
+        return { skipped: true, reason: "error", error: error instanceof Error ? error.message : String(error || "") };
+      } finally {
+        state.ov4Pregenerating = false;
+        render();
+      }
+    },
+
     async pregenerateOv1bFromTasks({ silent = false, force = false } = {}) {
       const state = getState();
       const tasks = (state.forceMission?.tasks || []).map((task) => ({ id: task.id, name: task.name, side: task.side, missionType: task.missionType, objective: task.objective, expectedEffect: task.expectedEffect }));
@@ -1512,6 +1628,10 @@ export function createDodafProductController({
   async function seedAndSave(resource) {
     const state = getState();
     if (state[resource] && !window.confirm(`重新种子将覆盖当前 ${LABELS[resource]} 手改内容。是否继续？`)) return;
+    if (resource === "ov4") {
+      await api.pregenerateOv4FromForceMission({ silent: false, force: true });
+      return;
+    }
     if (resource === "ov5a") {
       const pair = syncOv5ActivityPair({ ov5: state.ov5, ov5a: null, source: "ov5" });
       state.ov5a = saveLocalDodafProduct("ov5a", pair.ov5a, projectId);

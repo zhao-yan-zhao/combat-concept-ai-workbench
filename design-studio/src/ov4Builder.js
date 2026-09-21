@@ -1,8 +1,9 @@
 import { normalizeForceMissionPlan } from "../../shared/conceptPlanning.js";
-import { inferOv4EchelonCategory, inferOv4OrganizationCategory, inferOv4RelationCategory } from "../../shared/dodaf/ov4Taxonomy.js";
+import { inferOv4EchelonCategory, inferOv4OrganizationCategory, inferOv4RelationCategory, OV4_RELATION_CATEGORIES } from "../../shared/dodaf/ov4Taxonomy.js";
 
 const MAX_ROLES = 48;
 const MAX_RELATIONSHIPS = 160;
+const RELATION_TYPES = new Set(["command", "support", "coordination", "information"]);
 
 export function buildOv4Model({ forceMission, ov1, ov5, ooda, scenario } = {}) {
   const formalPlan = normalizeForceMissionPlan(forceMission);
@@ -95,6 +96,140 @@ export function buildOv4Model({ forceMission, ov1, ov5, ooda, scenario } = {}) {
   return { version: 1, kind: "derived-ov4-abstract-responsibility", generatedAt: new Date().toISOString(), source: { ov1NodeCount: sourceRoles.length, ov5ActivityCount: activities.length, ov5EdgeCount: edges.length, oodaNodeCount: oodaNodes.length, scenarioEntityCount: entities.length }, roles, relations, diagrams, coverage, diagnostics, unresolved: { unmappedActivityIds, brokenEdgeIds, unassignedRoleIds } };
 }
 
+export function buildOv4ForceFingerprint(forceMission = {}) {
+  const plan = normalizeForceMissionPlan(forceMission);
+  const compactForce = (force) => ({
+    id: force.id,
+    name: force.name,
+    side: force.side,
+    role: force.role,
+    taskRefs: [...(force.taskRefs || [])].sort()
+  });
+  const text = JSON.stringify({
+    forces: plan.forces.map(compactForce),
+    combatForces: plan.combatForces.map(compactForce),
+    relations: plan.relations.map((item) => ({
+      from: item.fromForceId,
+      to: item.toForceId,
+      type: item.type
+    }))
+  });
+  let hashA = 2166136261;
+  let hashB = 2246822507;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    hashA = Math.imul(hashA ^ code, 16777619);
+    hashB = Math.imul(hashB ^ code, 3266489917);
+  }
+  return `ov4-force:${(hashA >>> 0).toString(16).padStart(8, "0")}${(hashB >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+export function applyOrganizationRelationshipDraft(state = {}, draft = {}, { source = "ai", fingerprint = "" } = {}) {
+  const seeded = buildOv4Model(state);
+  const roleById = new Map((seeded.roles || []).map((role) => [role.id, role]));
+  const seen = new Set();
+  const relations = (Array.isArray(draft?.relations) ? draft.relations : []).flatMap((item, index) => {
+    const sourceRoleId = String(item?.fromForceId || item?.sourceRoleId || "").trim();
+    const targetRoleId = String(item?.toForceId || item?.targetRoleId || "").trim();
+    if (!roleById.has(sourceRoleId) || !roleById.has(targetRoleId) || sourceRoleId === targetRoleId) return [];
+    const type = RELATION_TYPES.has(String(item?.type || "").trim()) ? String(item.type).trim() : "coordination";
+    const key = `${sourceRoleId}:${targetRoleId}:${type}`;
+    if (seen.has(key) || seen.size >= MAX_RELATIONSHIPS) return [];
+    seen.add(key);
+    const category = OV4_RELATION_CATEGORIES.includes(String(item?.relationshipCategory || "").trim())
+      ? String(item.relationshipCategory).trim()
+      : inferOv4RelationCategory(type);
+    const sourceRole = roleById.get(sourceRoleId);
+    const targetRole = roleById.get(targetRoleId);
+    return [{
+      id: `ov4-${stableId(key) || index + 1}`,
+      sourceRoleId,
+      sourceRoleLabel: sourceRole.label,
+      targetRoleId,
+      targetRoleLabel: targetRole.label,
+      relationshipType: type,
+      relationshipCategory: category,
+      sourceForceRef: sourceRoleId,
+      targetForceRef: targetRoleId,
+      sourceActivityId: "",
+      sourceActivityTitle: "",
+      targetActivityId: "",
+      targetActivityTitle: "",
+      state: "ready"
+    }];
+  });
+  const appliedRelations = relations.length ? relations : seeded.relations || [];
+  const diagrams = diagramsFromDraft(seeded.roles || [], appliedRelations, draft);
+  const relationCount = appliedRelations.length;
+  const diagnostics = (seeded.diagnostics || []).map((item) => (
+    item.id === "force-relationships" || item.id === "role-relationships"
+      ? check(item.id, item.label, relationCount ? "ready" : "pending", relationCount ? `已生成 ${relationCount} 条组织关系` : item.detail)
+      : item
+  ));
+  return {
+    ...seeded,
+    relations: appliedRelations,
+    diagrams,
+    diagnostics,
+    derivedFrom: {
+      mode: source === "ai" ? "ai" : "local-fallback",
+      sources: ["forceMissionPlan"],
+      generatedAt: new Date().toISOString(),
+      note: fingerprint || buildOv4ForceFingerprint(state.forceMission)
+    }
+  };
+}
+
+function layerDiagrams(roles, relations) {
+  const scoped = (id, name, description, ids) => {
+    if (!ids.length) return null;
+    const included = new Set(ids);
+    return {
+      id,
+      name,
+      description,
+      roleIds: ids,
+      relationIds: relations.filter((relation) => included.has(relation.sourceRoleId) && included.has(relation.targetRoleId)).map((relation) => relation.id)
+    };
+  };
+  const conceptIds = roles.filter((role) => role.layer === "concept").map((role) => role.id);
+  const combatIds = roles.filter((role) => role.layer === "combat").map((role) => role.id);
+  if (combatIds.length && conceptIds.length) {
+    return [
+      scoped("ov4-diagram-combat", "作战组织关系图", "按作战兵力展示指挥、保障与信息关系。", combatIds),
+      scoped("ov4-diagram-concept", "概念组织关系图", "按概念兵力展示职责与协同关系。", conceptIds)
+    ].filter(Boolean);
+  }
+  if (combatIds.length) {
+    return [scoped("ov4-diagram-combat", "作战组织关系图", "按作战兵力展示指挥、保障与信息关系。", combatIds)];
+  }
+  if (conceptIds.length) {
+    return [scoped("ov4-diagram-concept", "概念组织关系图", "按概念兵力展示职责与协同关系。", conceptIds)];
+  }
+  return [scoped("ov4-diagram-overall", "总体组织关系图", "覆盖当前组织角色与协同关系。", roles.map((role) => role.id))].filter(Boolean);
+}
+
+function diagramsFromDraft(roles, relations, draft) {
+  const layers = layerDiagrams(roles, relations);
+  const layerIdSets = layers.map((diagram) => [...diagram.roleIds].sort().join("|"));
+  const knownIds = new Set(roles.map((role) => role.id));
+  const slices = (Array.isArray(draft?.diagrams) ? draft.diagrams : []).slice(0, 8).map((diagram, index) => {
+    const ids = unique(diagram?.roleIds).filter((id) => knownIds.has(id));
+    if (!ids.length) return null;
+    const signature = [...ids].sort().join("|");
+    if (layerIdSets.includes(signature)) return null;
+    const included = new Set(ids);
+    return {
+      id: `ov4-diagram-${index + 1}`,
+      name: clean(diagram?.name, 160) || `组织关系图 ${index + 1}`,
+      description: clean(diagram?.description, 800),
+      roleIds: ids,
+      relationIds: relations.filter((relation) => included.has(relation.sourceRoleId) && included.has(relation.targetRoleId)).map((relation) => relation.id)
+    };
+  }).filter(Boolean);
+  return [...layers, ...slices];
+}
+
 function buildForceLinkedOv4(plan) {
   const tasks = plan.tasks || [];
   const taskIds = new Set(tasks.map((task) => task.id));
@@ -157,7 +292,7 @@ function buildForceLinkedOv4(plan) {
     check("task-responsibility", "任务责任归属", unassignedTaskIds.length || brokenTaskRefs.length ? "review" : tasks.length ? "ready" : "pending", brokenTaskRefs.length ? `${brokenTaskRefs.length} 个任务引用失效` : unassignedTaskIds.length ? `${unassignedTaskIds.length} 个任务尚无兵力承接` : tasks.length ? "全部正式任务均有兵力承接" : "尚无正式任务"),
     check("force-relationships", "兵力组织关系", relations.length ? "ready" : "pending", relations.length ? `已从兵力关系建立 ${relations.length} 条组织关系` : "尚无兵力指挥、协同或保障关系")
   ];
-  const diagrams = [{ id: "ov4-diagram-overall", name: "总体组织关系图", description: "按正式作战兵力及其关系生成。", roleIds: roles.map((role) => role.id), relationIds: relations.map((relation) => relation.id) }];
+  const diagrams = layerDiagrams(roles, relations);
   return {
     version: 2,
     kind: "derived-ov4-force-responsibility",

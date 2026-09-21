@@ -41,7 +41,7 @@ import { getCmoCatalogStatus } from "./cmoCatalogClient.js";
 import { applyTheme, getThemeConfig } from "./themeConfigClient.js";
 import { renderProjectStorageFooter } from "./projectStorageView.js";
 import { createProject, deleteProject, loadProjects, updateProject } from "./projectBriefClient.js";
-import { renderProjectManager } from "./projectManagerView.js";
+import { renderProjectManager, renderProjectEntry } from "./projectManagerView.js";
 import { normalizeConceptMap, persistConceptMap } from "./conceptMapStore.js";
 import { normalizeForceMissionPlan, persistForceMission } from "./forceMissionStore.js";
 import { normalizePhaseActionConcept, persistPhaseAction } from "./phaseActionStore.js";
@@ -208,7 +208,9 @@ function render(options = {}) {
   }
   updateBusyOverlay(busyOverlay);
   const authenticated = Boolean(state.collaboration?.session?.authenticated);
-  $("#studioShell").classList.toggle("is-login-locked", !authenticated);
+  const projectEntry = authenticated && state.projectEntryRequired;
+  $("#studioShell").classList.toggle("is-login-locked", !authenticated || projectEntry);
+  if (projectEntry) $("#projectManagerRoot").innerHTML = "";
   $("#studioShell").classList.toggle("is-mode-switching", Boolean(busyOverlay));
   $("#studioShell").classList.toggle("brief-view", state.activeView === "brief");
   $("#studioShell").classList.toggle("ov1-view", state.activeView === "ov1");
@@ -218,16 +220,22 @@ function render(options = {}) {
   const ov1Toggle = document.querySelector(".ov1-sidebar-toggle");
   if (ov1Toggle) ov1Toggle.hidden = true;
   const loginGate = $("#loginGate");
-  loginGate.hidden = authenticated;
-  loginGate.innerHTML = authenticated ? "" : renderCollaborationLoginGate(state.collaboration);
+  loginGate.hidden = authenticated && !projectEntry;
+  const loginMarkup = projectEntry ? renderProjectEntry({ directory: state.projectDirectory, createOpen: state.projectCreateOpen }) : authenticated ? "" : renderCollaborationLoginGate(state.collaboration);
+  if (projectEntry || loginGate.dataset.renderedMarkup !== loginMarkup) {
+    loginGate.innerHTML = loginMarkup;
+    loginGate.dataset.renderedMarkup = loginMarkup;
+  }
   $("#aiConfigRoot").innerHTML = renderAiConfigPanel({ open: state.aiConfigOpen, service: state.aiConfig, saving: state.aiConfigSaving });
   $("#aiPromptRoot").innerHTML = renderAiPromptPanel({ open: state.aiPromptOpen, catalog: state.aiPromptCatalog, selectedId: state.aiPromptSelectedId, saving: state.aiPromptSaving });
   $("#workflowGateRoot").innerHTML = renderWorkflowGate();
   renderOv1ToolboxFloatHost();
   // Project picker / menubar chrome toggles must not rebuild the concept-map iframe.
   if (!options.skipViewRoot) {
-    renderViewRoot(options);
-    renderInspectorPanel();
+    if (!state.projectEntryRequired) {
+      renderViewRoot(options);
+      renderInspectorPanel();
+    }
     resizeBriefTextareas();
     closeOv1ModalIfOpen();
     bindDynamicEvents();
@@ -1161,6 +1169,14 @@ function handleAction(action, source = null) {
     void advanceWorkflowStep();
     return;
   }
+  if (action === "advance-workflow-step-ai") {
+    void advanceWorkflowStep({ generate: true });
+    return;
+  }
+  if (action === "advance-workflow-step-direct") {
+    void advanceWorkflowStep({ generate: false });
+    return;
+  }
   if (action === "advance-workflow") {
     const context = resolveWorkflowGateContext(state);
     void (context.mode === "related-next-step" ? advanceRelatedWorkflow() : advanceWorkflowStep());
@@ -1188,6 +1204,12 @@ function handleAction(action, source = null) {
     return;
   }
   if (action === "open-subflow-ai") {
+    if (state.activeView === "ov4") {
+      const hasOrganization = Boolean((state.ov4?.relations || []).length);
+      if (hasOrganization && !window.confirm("将用 AI 重新生成组织关系，覆盖当前内容。是否继续？")) return;
+      void dodafProductController.pregenerateOv4FromForceMission({ silent: false, force: true });
+      return;
+    }
     showToast(`${getViewMeta(state.activeView)?.label || "当前子流程"}的 AI 工具已就绪；请先确认上游内容，再让 AI 生成或检查本页草案。`);
     return;
   }
@@ -1222,8 +1244,15 @@ function handleAction(action, source = null) {
   if (action === "toggle-project-create") {
     state.projectManagerOpen = true;
     state.projectCreateOpen = !state.projectCreateOpen;
+    if (state.projectEntryRequired) { render(); return; }
     refreshProjectManagerUi();
     queueMicrotask(() => focusOpenMenubarChrome());
+    return;
+  }
+  if (action === "retry-project-entry") {
+    state.projectDirectory = { status: "checking", projects: [] };
+    render();
+    void hydrateProjectDirectory();
     return;
   }
   if (action === "open-collaboration") {
@@ -2081,6 +2110,9 @@ async function loadCmoCatalogStatus() {
 }
 
 async function hydrateProjectModels() {
+  await collaborationController.hydrate();
+  if (state.projectEntryRequired) return;
+  collaborationController.startWatch();
   await projectBriefSyncController.hydrate();
   await projectForceMissionSyncController.hydrate();
   await projectPhaseActionSyncController.hydrate();
@@ -2096,8 +2128,6 @@ async function hydrateProjectModels() {
   await projectKnowledgeSyncController.hydrate();
   await projectReportArchiveSyncController.hydrate();
   await projectModelSnapshotSyncController.hydrate();
-  await collaborationController.hydrate();
-  collaborationController.startWatch();
 }
 
 async function hydrateProjectDirectory({ skipRender = false } = {}) {
@@ -2182,6 +2212,7 @@ function goToWorkflowView(viewId) {
  * - 阶段与行动: no combat-focus options yet → AI generate 3 directions + transition overlay
  * - 状态机校验: empty → AI derives editable task machines from phase actions
  * - 时序校验: empty → AI generates separate side and per-phase timelines
+ * - 组织关系: empty → AI generates command/support/information links among confirmed forces
  * Used by: top gate capsule, gate panel buttons, left floating step rail, menus.
  */
 async function navigateToResearchView(viewId, { toast = "", force = false, entrySource = "default", completeOperationalTasks = false } = {}) {
@@ -2214,11 +2245,20 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
   if (viewId === "ov6c") {
     await dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType: entrySource === "operational-task" ? "task" : "phase" });
   }
+  if (viewId === "ov4") {
+    await dodafProductController.pregenerateOv4FromForceMission({ silent: false });
+  }
   if (viewId === "operational-task" && (
     !(state.forceMission?.tasks || []).length
     || ((entrySource === "phase-action" || completeOperationalTasks) && operationalTasksNeedAiCompletion(state.forceMission?.tasks))
   )) {
     await conceptPlanningController.generateOperationalTasks({ silent: false });
+  }
+  // Entering OV-1b from the confirmed operational-task step must immediately
+  // produce a reviewable task organization. The page remains visible while
+  // generation runs so the user can see the busy state and resulting groups.
+  if (viewId === "ov1b" && entrySource === "operational-task") {
+    await dodafProductController.pregenerateOv1bFromTasks({ silent: false });
   }
 }
 
@@ -2256,7 +2296,7 @@ async function ensureCombatFocusOnEnterPhaseAction() {
 }
 
 /** Revisit an already-confirmed mainline product and continue to its successor. */
-async function advanceWorkflowStep() {
+async function advanceWorkflowStep({ generate = true } = {}) {
   const ctx = resolveWorkflowGateContext(state);
   if (ctx.mode !== "next-step" || !ctx.nextStep?.id) {
     showToast("当前没有可进入的下一步");
@@ -2273,7 +2313,7 @@ async function advanceWorkflowStep() {
   await navigateToResearchView(ctx.nextStep.id, {
     toast: `已进入${ctx.nextStep.label}`,
     force: true,
-    entrySource: ctx.nextStep.mainViewId || ctx.current?.id || "default"
+    entrySource: generate ? (ctx.nextStep.mainViewId || ctx.current?.id || "default") : "default"
   });
 }
 
@@ -2365,6 +2405,9 @@ async function completeWorkflowStage() {
     if (stage === 4 && nextMainView === "concept-map" && typeof conceptMapController.seedFromPlanning === "function") {
       await conceptMapController.seedFromPlanning({ silent: false });
     }
+    if (nextView === "ov4") {
+      await dodafProductController.pregenerateOv4FromForceMission({ silent: false });
+    }
   } catch {
     showToast("\u9636\u6bb5\u72b6\u6001\u4fdd\u5b58\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5");
   } finally {
@@ -2455,6 +2498,15 @@ function getBusyOverlayState() {
       key: "sequence-pregenerate",
       title: "正在进入时序图",
       detail: state.ov6GenerationContext === "task" ? "AI 正在根据任务状态机生成逐任务时序图…" : "AI 正在生成各推演方及每个阶段的时序图…",
+      expectedMs: 90000,
+      timeoutMs: 180000
+    };
+  }
+  if (state.ov4Pregenerating) {
+    return {
+      key: "ov4-pregenerate",
+      title: "正在进入组织关系",
+      detail: "AI 正在根据作战兵力生成指挥、保障与信息关系…",
       expectedMs: 90000,
       timeoutMs: 180000
     };
@@ -2567,7 +2619,7 @@ function waitForPaint() {
 }
 
 function switchProject(projectId) {
-  if (!projectId || projectId === state.activeProjectId) return;
+  if (!projectId || (projectId === state.activeProjectId && !state.projectEntryRequired)) return;
   const url = new URL(window.location.href);
   url.searchParams.set("project", projectId);
   window.location.assign(url);

@@ -35,6 +35,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       "OperationalTaskDraft",
       "TaskOrganizationDraft",
       "ForceMissionPlan",
+      "OrganizationRelationshipDraft",
       "ConceptGraphicPlan",
       "ConceptMapInitialPlan",
       "OperationalConceptGraphic",
@@ -66,6 +67,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     const isOperationalConceptGraphic = input.workflow?.outputSchema === "OperationalConceptGraphic";
     const isConceptMapInitialPlan = input.workflow?.outputSchema === "ConceptMapInitialPlan";
     const isForceMissionPlan = input.workflow?.outputSchema === "ForceMissionPlan";
+    const isOrganizationRelationshipDraft = input.workflow?.outputSchema === "OrganizationRelationshipDraft";
     const isOperationalTaskDraft = input.workflow?.outputSchema === "OperationalTaskDraft";
     const isTaskOrganizationDraft = input.workflow?.outputSchema === "TaskOrganizationDraft";
     const isPhaseActionConcept = input.workflow?.outputSchema === "PhaseActionConcept";
@@ -102,6 +104,10 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         '  "combatForces": [{ "id": "combat-1", "name": "作战编组名", "side": "friendly", "role": "airDefense", "conceptForceId": "p1-fusion", "group": "作战编组", "missionType": "patrol_aaw", "task": "可执行任务", "taskRefs": ["task-1"], "phaseIds": ["phase-1"], "platforms": [], "notes": "" }],',
         '  "relations": [{ "fromForceId": "兵力标识", "toForceId": "兵力标识", "type": "command|support|coordination|information", "note": "说明" }],',
         '  "openQuestions": ["待确认项"], "reviewChecklist": ["复核提示"] }'
+      ] : isOrganizationRelationshipDraft ? [
+        '{ "summary": "1-3 句中文说明",',
+        '  "relations": [{ "fromForceId": "已有兵力 id", "toForceId": "已有兵力 id", "type": "command|support|coordination|information", "relationshipCategory": "作战指挥|支援保障|信息报送|协同|上下级隶属|作战控制|行政控制|配属|其他", "note": "链路含义" }],',
+        '  "diagrams": [{ "name": "总体组织关系图", "description": "观察范围", "roleIds": ["兵力 id"] }] }'
       ] : isPhaseActionConcept ? [
         '{ "phases": [{ "id": "phase-1", "name": "编队展开", "sequence": 1, "timeWindow": "T+00:00至T+00:40", "objective": "阶段目标一句话", "blueActions": ["蓝方概念级行动叙述"], "redActions": ["红方概念级行动叙述"], "primaryActions": ["与 blueActions 相同"], "secondaryActions": ["与 redActions 相同"], "entryConditions": ["进入门槛"], "exitConditions": ["退出/转换门槛"], "expectedEffects": ["阶段效果"], "forceIds": [] }],',
         '  "transitions": [{ "fromPhaseId": "phase-1", "toPhaseId": "phase-2", "condition": "可观察的转换条件", "note": "T+时点" }],',
@@ -246,9 +252,24 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         "   - forceLayer=concept：combatForces 给最少占位，客户端会丢弃并保留既有作战兵力。",
         "5. missionType 只能使用 analysis.cmoMissionTypes 的 id。",
         "6. 平台引用为研究级 CMO 类型参考（可进仿真编成表），不是射表/精确编制，但型号与数量应像可部署单元。",
-        "7. relations：按需要给出作战层指挥/保障/信息链路。",
+        "7. relations：组织关系草案，供 OV-4 投影，不是编制表。",
+        "   - 端点：fromForceId/toForceId 必须是本轮已输出的兵力 id；禁止自环、禁止虚构组织。",
+        "   - 分层：forceLayer=concept 只连 forces；forceLayer=combat 只连 combatForces，同侧优先挂在同一 conceptForceId 包内。both 时两层都写，不要把概念兵力与作战兵力交叉连边。",
+        "   - type 语义：command=同侧授权/指挥；information=态势/情报上报；support=同侧保障；coordination=同侧协同或红蓝对抗作用轴。禁止使用这四类以外的类型。",
+        "   - 最低覆盖：同一侧同时存在 sense 与 command 时，至少 1 条 information（感知→指挥）；同时存在 command 与行动类（maneuver/air/airDefense/surface）时，至少 1 条 command（指挥→行动）。红蓝双方分别满足。",
+        "   - note 用一句话写清该链路的作战含义；禁止空泛套话（组织协同/保持优势）。",
         "8. 每个兵力的 taskRefs 必须引用 analysis.operationalTasks 中已有的稳定任务 id；不得根据任务名称另造 id。无法可靠承接任务时返回空数组并留待人工复核。",
         "9. 若 analysis.reviewNotes 非空，优先按批注调整当前分层。"
+      ] : isOrganizationRelationshipDraft ? [
+        "组织关系要求：根据已确认作战兵力生成 OV-4 组织关系草案，不是编制表，也不新增组织。",
+        "1. 组织角色只能使用 analysis.forces 与 analysis.combatForces 的 id；fromForceId/toForceId 必须是这些 id；禁止自环、禁止虚构组织。",
+        "2. 分层：概念兵力之间、作战兵力之间分别连边；同侧作战单元优先挂在同一 conceptForceId 包内。不要把概念兵力与作战兵力交叉连边。",
+        "3. type 语义：command=同侧授权/指挥；information=态势/情报上报；support=同侧保障；coordination=同侧协同或红蓝对抗作用轴。",
+        "4. relationshipCategory 使用 analysis.relationCategories：command→作战指挥，support→支援保障，information→信息报送，coordination→协同；确有依据时可用上下级隶属、作战控制、配属。",
+        "5. 最低覆盖：同一侧同时存在 sense 与 command 时，至少 1 条 information（感知→指挥）；同时存在 command 与行动类（maneuver/air/airDefense/surface）时，至少 1 条 command（指挥→行动）。红蓝双方分别满足。",
+        "6. diagrams 按层切分：有作战兵力时第一张只含 combatForces，第二张只含 forces；只有一层时出一张。roleIds 必须是已有兵力 id。不要把两层混在一张默认图里。",
+        "7. note 用一句话写清该链路的作战含义；禁止空泛套话（组织协同/保持优势）。",
+        "8. 可参考 analysis.existingRelations，但必须补齐最低覆盖，不得只原样复制空或残缺关系。"
       ] : isOperationalTaskDraft ? [
         "作战任务要求：把已确认的阶段行动转换为独立、可复核的任务成果。",
         "1. 蓝红双方行动都要形成任务，side 与 phaseId 必须沿用 analysis.phaseAction，不得合并丢失。",
@@ -358,6 +379,8 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
                 ? operationalTaskDraftSchema()
               : isForceMissionPlan
                 ? forceMissionPlanSchema()
+                : isOrganizationRelationshipDraft
+                  ? organizationRelationshipDraftSchema()
                 : isPhaseActionConcept
                   ? phaseActionConceptSchema()
                   : isRuleLibraryChangeSet
@@ -635,7 +658,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
           };
     }
 
-    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "OperationalTaskDraft" || base.outputSchema === "TaskOrganizationDraft" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft") && draft && typeof draft === "object") {
+    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "OperationalTaskDraft" || base.outputSchema === "TaskOrganizationDraft" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "OrganizationRelationshipDraft" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft") && draft && typeof draft === "object") {
       base.result = draft;
     }
   
@@ -811,6 +834,49 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         relations: { type: "array", maxItems: 64, items: { type: "object", additionalProperties: false, required: ["fromForceId", "toForceId", "type", "note"], properties: { fromForceId: { type: "string", maxLength: 60 }, toForceId: { type: "string", maxLength: 60 }, type: { type: "string", enum: ["command", "support", "coordination", "information"] }, note: { type: "string", maxLength: 240 } } } },
         openQuestions: { type: "array", maxItems: 8, items: { type: "string", maxLength: 240 } },
         reviewChecklist: { type: "array", maxItems: 8, items: { type: "string", maxLength: 240 } }
+      }
+    };
+  }
+
+  function organizationRelationshipDraftSchema() {
+    return {
+      type: "object",
+      additionalProperties: false,
+      required: ["summary", "relations", "diagrams"],
+      properties: {
+        summary: { type: "string", maxLength: 600 },
+        relations: {
+          type: "array",
+          minItems: 1,
+          maxItems: 64,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["fromForceId", "toForceId", "type", "relationshipCategory", "note"],
+            properties: {
+              fromForceId: { type: "string", maxLength: 60 },
+              toForceId: { type: "string", maxLength: 60 },
+              type: { type: "string", enum: ["command", "support", "coordination", "information"] },
+              relationshipCategory: { type: "string", enum: ["上下级隶属", "作战指挥", "作战控制", "行政控制", "配属", "协同", "支援保障", "信息报送", "其他"] },
+              note: { type: "string", maxLength: 240 }
+            }
+          }
+        },
+        diagrams: {
+          type: "array",
+          minItems: 1,
+          maxItems: 8,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["name", "description", "roleIds"],
+            properties: {
+              name: { type: "string", maxLength: 160 },
+              description: { type: "string", maxLength: 400 },
+              roleIds: { type: "array", maxItems: 48, items: { type: "string", maxLength: 60 } }
+            }
+          }
+        }
       }
     };
   }
@@ -1190,6 +1256,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       ["OperationalTaskDraft", "作战任务", "阶段行动到规范任务的转换"],
       ["TaskOrganizationDraft", "任务整理", "对现有任务进行分组、排序与协同梳理"],
       ["ForceMissionPlan", "兵力任务", "概念兵力与作战兵力规划"],
+      ["OrganizationRelationshipDraft", "组织关系", "从已确认作战兵力生成 OV-4 组织指挥、保障与信息关系"],
       ["PhaseActionConcept", "阶段行动", "阶段、蓝红行动与转换条件"],
       ["RuleLibraryChangeSet", "规则变更集", "上游变化形成待审规则建议"],
       ["RuleLibraryDraft", "规则库", "规则生成、修订与咨询"],
@@ -1231,7 +1298,7 @@ function generationPromptId(schema, researchChat = false) {
   if (researchChat) return "ai.generate.research-chat";
   const ids = {
     ConceptBrief: "concept-brief", OperationalConceptGraphic: "ov1-graphic", CombatFocusOptions: "combat-focus",
-    OperationalTaskDraft: "operational-task", TaskOrganizationDraft: "task-organization", ForceMissionPlan: "force-mission", PhaseActionConcept: "phase-action",
+    OperationalTaskDraft: "operational-task", TaskOrganizationDraft: "task-organization", ForceMissionPlan: "force-mission", OrganizationRelationshipDraft: "ov4", PhaseActionConcept: "phase-action",
     RuleLibraryChangeSet: "rule-change-set", RuleLibraryDraft: "rule-library", SequenceDraft: "sequence",
     StateMachineDraft: "state-machine", ConceptGraphicPlan: "concept-graphic-plan", ConceptMapInitialPlan: "concept-map-initial"
   };

@@ -19,6 +19,14 @@ export function createOv4CanvasController({ projectId, getState, render, syncOv4
       cameras.set(diagramId, camera);
       applyCamera(world, camera);
       refreshEdges(world);
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(() => {
+          const next = fitCamera(stage, world);
+          cameras.set(diagramId, next);
+          applyCamera(world, next);
+          refreshEdges(world);
+        });
+      }
       root.querySelector("[data-ov4-canvas-fit]")?.addEventListener("click", () => {
         const next = fitCamera(stage, world);
         cameras.set(diagramId, next);
@@ -106,9 +114,22 @@ export function createOv4CanvasController({ projectId, getState, render, syncOv4
 
 function refreshEdges(world) {
   const positions = new Map([...world.querySelectorAll("[data-ov4-node]")].map((node) => [node.dataset.ov4Node, { x: Number(node.dataset.logicalX), y: Number(node.dataset.logicalY) }]));
-  world.querySelectorAll("[data-ov4-edge]").forEach((edge) => { const source = positions.get(edge.dataset.sourceId); const target = positions.get(edge.dataset.targetId); if (source && target) edge.setAttribute("d", orthogonalPath(source, target)); });
+  world.querySelectorAll("[data-ov4-edge]").forEach((edge) => {
+    const source = positions.get(edge.dataset.sourceId);
+    const target = positions.get(edge.dataset.targetId);
+    if (source && target) edge.setAttribute("d", orthogonalPath(source, target));
+  });
+  world.querySelectorAll("[data-ov4-edge-label]").forEach((label) => {
+    const source = positions.get(label.dataset.sourceId);
+    const target = positions.get(label.dataset.targetId);
+    if (!source || !target) return;
+    const point = labelPoint(source, target);
+    label.setAttribute("x", String(point.x));
+    label.setAttribute("y", String(point.y));
+  });
 }
 function orthogonalPath(source, target) { if (Math.abs(target.y - source.y) < 100) { const direction = target.x >= source.x ? 1 : -1; return `M ${source.x + 92 * direction} ${source.y} L ${target.x - 92 * direction} ${target.y}`; } const direction = target.y >= source.y ? 1 : -1; const startY = source.y + 42 * direction; const endY = target.y - 42 * direction; const railY = (startY + endY) / 2; return `M ${source.x} ${startY} L ${source.x} ${railY} L ${target.x} ${railY} L ${target.x} ${endY}`; }
+function labelPoint(source, target) { return { x: (source.x + target.x) / 2, y: Math.abs(target.y - source.y) < 100 ? source.y - 12 : (source.y + target.y) / 2 - 4 }; }
 function fitCamera(stage, world) { const zoom = clamp(Math.min(stage.clientWidth / Math.max(world.offsetWidth, 1), stage.clientHeight / Math.max(world.offsetHeight, 1)) * .92, MIN_ZOOM, 1); return { zoom, x: (stage.clientWidth - world.offsetWidth * zoom) / 2, y: (stage.clientHeight - world.offsetHeight * zoom) / 2 }; }
 function applyCamera(world, camera) { world.style.transform = `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})`; }
 function clamp(value, min, max) { return Math.max(min, Math.min(max, Number(value) || 0)); }

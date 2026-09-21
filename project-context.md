@@ -1,5 +1,19 @@
 # project-context.md
 
+## Project entry after login (2026-09-14)
+
+- Root visits without a project parameter show a project selection page after authentication. Active projects, explicit default-project entry, existing create-and-enter form, loading and retry states reuse project manager actions. Explicit project links keep direct navigation.
+- Skip default model hydration/rendering while choosing a project; preserve the session-first login fix.
+- Changed `projectManagerView.js`, `app/createInitialState.js`, `main.js`, `styles.css`; added `check-project-entry.mjs`.
+- Entry rendering, session regression, workflow regression and syntax passed. Authenticated browser walkthrough remains unverified.
+
+## Project switch login flicker (2026-09-07)
+
+- Check identity before project model hydration; publish the session before collaboration data arrives and preserve it if project requests fail. Unknown identity shows a loading state without login inputs.
+- Keep unchanged login markup mounted; bind authentication controls and initial focus once per element. Project switching still reloads the project-scoped application.
+- Changed: `main.js`, `collaborationController.js`, `collaborationView.js`, and `scripts/check-project-switch-session.mjs`.
+- Verified delayed/failed project requests, confirmed signed-out behavior, revision watch, workflow regression, syntax, scoped diff and HTTP 200. Authenticated browser switching has not been visually verified.
+
 ## Latest completed change (2026-08-20, toolbox rail layout and duplicate audit)
 
 - Expanded generic and native toolboxes now align their brand and tool entries to the page-right inner edge, fill the containing workbench height, and leave the unused lower rail blank instead of imposing a fixed `70vh`/`720px` height.

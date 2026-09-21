@@ -2366,11 +2366,17 @@ input:focus, textarea:focus, select:focus {
   min-height: 0;
   height: 100%;
 }
-.studio-workspace:has(.force-mission-page--bench) > .view-root,
-.studio-workspace:has(.force-mission-page--bench) > .view-root > .force-mission-page {
+/* 兵力页：view-root 吃掉顶栏下方剩余高度（不能用 height:100%，会把顶栏再算一遍导致底栏被裁切） */
+.studio-workspace:has(.force-mission-page--bench) > .view-root {
   height: auto;
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
+  overflow: hidden;
+}
+.studio-workspace:has(.force-mission-page--bench) > .view-root > .force-mission-page {
+  flex: 1 1 0%;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -4175,6 +4181,17 @@ h3 { margin-bottom: 8px; font-size: 15px; color: #d9f3e8; }
 .ov4-org-relation.relation-coordination { stroke: #0284c7; stroke-dasharray: 5 4; }
 .ov4-org-relation.relation-support { stroke: #15803d; stroke-dasharray: 9 4 2 4; }
 .ov4-org-relation.relation-information { stroke: #0891b2; stroke-dasharray: 2 4; }
+.ov4-org-relation-label { font-size: 11px; font-weight: 700; paint-order: stroke fill; stroke: #fff; stroke-width: 3px; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.ov4-org-relation-label.relation-subordinate { fill: #172033; }
+.ov4-org-relation-label.relation-command { fill: #dc2626; }
+.ov4-org-relation-label.relation-control { fill: #7c3aed; }
+.ov4-org-relation-label.relation-admin { fill: #64748b; }
+.ov4-org-relation-label.relation-attached { fill: #d97706; }
+.ov4-org-relation-label.relation-coordination { fill: #0284c7; }
+.ov4-org-relation-label.relation-support { fill: #15803d; }
+.ov4-org-relation-label.relation-information { fill: #0891b2; }
+.ov4-org-relation-label.relation-other { fill: #2563eb; }
+.ov4-relation-legend { color: var(--muted); font-size: 10px; letter-spacing: .02em; }
 .ov4-org-links marker.relation-subordinate path { fill: #172033; }
 .ov4-org-links marker.relation-command path { fill: #dc2626; }
 .ov4-org-links marker.relation-control path { fill: #7c3aed; }
@@ -4443,6 +4460,12 @@ h3 { margin-bottom: 8px; font-size: 15px; color: #d9f3e8; }
     #070d0c;
 }
 .login-gate[hidden] { display: none; }
+.project-entry { width: min(760px, 100%); margin: auto; padding: 24px; }
+.project-entry h1 { font-size: 22px; margin: 0 0 8px; }
+.project-entry > header p { color: var(--muted); margin: 0 0 22px; }
+.project-entry .project-manager-trigger { display: none; }
+.project-entry .project-manager-panel { position: static; width: 100%; min-width: 0; max-width: none; box-sizing: border-box; }
+.project-entry .project-manager-list { max-height: 48vh; overflow-y: auto; }
 .login-gate-panel {
   display: grid; gap: 18px; width: min(440px, 100%); padding: 26px 24px 22px;
   border: 1px solid rgba(61, 255, 197, .22); border-top: 3px solid var(--cyan); border-radius: 10px;
@@ -5759,7 +5782,7 @@ a { color: var(--cyan); }
   filter: none;
 }
 .force-mission-workbench {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
   display: flex;
   flex-direction: row;
@@ -5773,6 +5796,7 @@ a { color: var(--cyan); }
   min-width: 220px;
   max-width: 220px;
   min-height: 0;
+  align-self: stretch;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -5884,6 +5908,7 @@ a { color: var(--cyan); }
 }
 .force-mission-rail-actions {
   flex: 0 0 auto;
+  flex-shrink: 0;
   z-index: 2;
   display: grid;
   gap: 6px;
@@ -5891,15 +5916,50 @@ a { color: var(--cyan); }
   padding: 8px 10px 10px;
   border: 1px solid var(--line);
   border-top: 1px solid rgba(120, 150, 150, 0.18);
+  border-radius: 0 0 6px 6px;
   background: rgba(8, 20, 20, 0.96);
+}
+.force-mission-rail-actions.planning-actions {
+  display: grid;
+  flex-wrap: nowrap;
+  align-items: stretch;
 }
 .force-mission-rail-actions button {
   width: 100%;
   justify-content: center;
-  padding: 8px 10px;
+  padding: 6px 10px;
+  min-height: 32px;
   font-size: 12px;
   line-height: 1.3;
   white-space: normal;
+}
+.force-mission-rail-actions.is-collapsed {
+  padding: 6px 8px 8px;
+}
+.force-mission-rail-regen {
+  display: grid;
+  gap: 6px;
+}
+.force-mission-rail-regen > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 6px;
+  background: rgba(8, 20, 20, 0.6);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.force-mission-rail-regen > summary::-webkit-details-marker { display: none; }
+.force-mission-rail-regen > summary::marker { content: ""; }
+.force-mission-rail-regen[open] > summary {
+  color: inherit;
+  border-color: rgba(90, 160, 255, 0.35);
 }
 .force-next-banner {
   display: flex;
@@ -6124,6 +6184,7 @@ a { color: var(--cyan); }
   min-height: 0;
   height: auto;
   width: 100%;
+  overflow: hidden;
 }
 .force-roster-hint {
   margin: 0;
@@ -6252,9 +6313,9 @@ a { color: var(--cyan); }
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  gap: 8px;
+  gap: 4px;
   margin: 0;
-  padding: 8px 10px 12px;
+  padding: 6px 8px 10px;
   list-style: none;
   max-height: none;
   min-height: 0;
@@ -6266,7 +6327,7 @@ a { color: var(--cyan); }
   margin: 0;
   list-style: none;
   border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 10px;
+  border-radius: 6px;
   background: rgba(2, 6, 23, 0.55);
 }
 .force-roster-item.is-warn {
@@ -6282,13 +6343,13 @@ a { color: var(--cyan); }
 .force-roster-hit {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   margin: 0;
-  padding: 12px;
+  padding: 8px 10px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 6px;
   background: transparent;
   color: #e2e8f0;
   text-align: left;
@@ -6317,7 +6378,7 @@ a { color: var(--cyan); }
   justify-content: center;
   width: 22px;
   height: 22px;
-  margin-top: 1px;
+  margin-top: 0;
   border-radius: 6px;
   background: rgba(148, 163, 184, 0.12);
   color: #94a3b8;
@@ -6330,7 +6391,7 @@ a { color: var(--cyan); }
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 2px;
   /* 不用 min-width:0 + width:0，避免文字列被压成 0 宽叠字 */
   overflow: hidden;
   max-width: 100%;
@@ -6611,7 +6672,6 @@ a { color: var(--cyan); }
 .force-qty-label input {
   width: 52px;
 }
-.force-combat-board,
 .force-combat-board--stack {
   display: grid;
   gap: 12px;
@@ -7269,6 +7329,7 @@ a { color: var(--cyan); }
   flex-direction: column;
   gap: 12px;
   min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 .phase-action-page--bench > .planning-banner,
@@ -7278,14 +7339,17 @@ a { color: var(--cyan); }
   flex: 0 0 auto;
 }
 .force-mission-page--bench > .phase-workbench {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
   overflow: hidden;
   grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
 }
 .force-mission-main-stage {
   min-width: 0;
   min-height: 0;
+  height: 100%;
+  max-height: 100%;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -7295,7 +7359,7 @@ a { color: var(--cyan); }
   flex: 0 0 auto;
 }
 .force-mission-main-stage > .force-mission-workbench {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
 }
 
@@ -10603,6 +10667,14 @@ button.primary-btn.compact {
 .operational-task-filter:hover, .operational-task-filter.is-active { border-color: rgba(34, 211, 238, .45); background: rgba(8, 145, 178, .14); color: #a5f3fc; }
 
 /* Shared narrow-column search, grouping and filtering for workflow data lists. */
+.force-mission-page--bench .force-concept-board,
+.force-mission-page--bench .force-combat-board {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+}
 .force-mission-page--bench .grouped-list-panel {
   flex: 1 1 0%;
   min-height: 0;
@@ -10617,6 +10689,7 @@ button.primary-btn.compact {
   overflow-y: auto;
 }
 .grouped-list-panel { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.grouped-list-panel [data-grouped-list-item][hidden] { display: none !important; }
 .grouped-list-panel > .grouped-list-tools { flex: 0 0 auto; }
 .grouped-list-panel > .grouped-list-items { flex: 1 1 auto; min-height: 0; padding-bottom: 10px; overflow-x: hidden; overflow-y: auto; scroll-padding-block: 8px; scrollbar-width: thin; }
 .grouped-list-tools { position: relative; z-index: 5; display: grid; gap: 7px; padding: 8px 10px; border-bottom: 1px solid rgba(148, 163, 184, .16); background: rgba(7, 16, 27, .72); }
@@ -11243,3 +11316,18 @@ button.primary-btn.compact {
   .ov1b-layout:not(.is-review-open) { grid-template-columns: 220px minmax(650px, 1fr); }
   .ov1b-group-editor { grid-template-columns: minmax(160px, 1fr) 140px; }
 }
+/* 2026 rule library refresh */
+.rule-library-page{gap:16px;background:linear-gradient(135deg,rgba(8,20,38,.96),rgba(10,30,52,.82));padding:18px;border-radius:16px}
+.rule-library-top{padding:18px 22px;border:1px solid rgba(99,185,255,.24);border-radius:14px;background:linear-gradient(120deg,rgba(15,38,65,.96),rgba(12,25,45,.92));box-shadow:0 12px 35px rgba(0,0,0,.18)}
+.rule-library-identity{gap:10px}.rule-library-identity h2{font-size:24px;letter-spacing:.04em}.rule-library-identity h2:before{content:'OV-6a  /  ';font-size:11px;color:#60a5fa;letter-spacing:.12em}.rule-library-hint{display:block;flex-basis:100%;font-size:12px;color:#91a7bf}
+.rule-library-toolbar{gap:8px}.rule-library-toolbar button{border-radius:8px!important}.rule-library-workbench{gap:18px}.rule-library-workbench.is-chat-open{gap:18px}.rule-form-board{padding:2px 4px 24px}.rule-form-list{gap:12px}
+.rule-form-card{border:1px solid rgba(118,173,220,.2);border-radius:12px;background:rgba(16,35,59,.78);transition:border-color .18s,transform .18s;box-shadow:0 5px 16px rgba(0,0,0,.12)}.rule-form-card:hover{border-color:rgba(96,165,250,.62);transform:translateY(-1px)}
+.rule-form-row{grid-template-columns:38px minmax(180px,1fr) 150px 180px auto;grid-template-areas:'num name type scope del' 'num desc desc desc del';gap:10px 12px;padding:14px 16px}.rule-form-ordinal{grid-area:num;width:30px;height:30px;border-radius:9px;background:#1d4ed8;color:#dbeafe;font-size:13px;font-weight:700}.rule-form-name{grid-area:name}.rule-form-type{grid-area:type}.rule-form-scope{grid-area:scope}.rule-form-description{grid-area:desc}.rule-form-row>.danger-quiet{grid-area:del;align-self:start;border-radius:7px!important}
+.rule-form-field input,.rule-form-field select{min-height:38px!important;padding:8px 11px!important;border-radius:8px!important;background:rgba(5,15,29,.72)!important;border:1px solid rgba(148,163,184,.25)!important;color:#e2e8f0!important}.rule-form-field input:focus,.rule-form-field select:focus{border-color:#38bdf8!important;box-shadow:0 0 0 3px rgba(56,189,248,.12)}
+.rule-library-add{width:100%;padding:13px;border:1px dashed rgba(96,165,250,.5);border-radius:10px;background:rgba(30,64,175,.12);color:#93c5fd;font-weight:700;cursor:pointer}.rule-library-add:hover{background:rgba(30,64,175,.24)}
+@media(max-width:900px){.rule-form-row{grid-template-columns:34px 1fr auto;grid-template-areas:'num name del' 'num type scope' 'num desc desc'}.rule-form-type,.rule-form-scope{width:auto}}
+/* scrolling fix: the page owns vertical overflow so long rule sets remain reachable */
+.rule-library-page{overflow-y:auto!important;overflow-x:hidden!important}
+.rule-library-workbench{min-height:max-content!important;flex:0 0 auto!important}
+.rule-form-board{height:auto!important;overflow:visible!important}
+.workflow-gate-actions{display:flex;gap:8px;align-items:center}.workflow-gate-actions .quiet-button{min-height:34px;padding:6px 12px}

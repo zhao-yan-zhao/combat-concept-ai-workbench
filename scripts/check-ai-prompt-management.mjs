@@ -24,10 +24,19 @@ try {
       getAiPromptOverrides: () => overrides
     });
     const items = client.listPromptDefinitions();
-    assert.equal(items.length, 18);
+    assert.equal(items.length, 19);
     assert.equal(items.find((item) => item.id === "ai.generate.generic")?.customized, true);
     assert.equal(items.find((item) => item.id === "ai.generate.phase-action")?.variables.includes("analysis"), true);
     assert.equal(items.find((item) => item.id === "ai.generate.task-organization")?.variables.includes("analysis"), true);
+    const forceMissionPrompt = items.find((item) => item.id === "ai.generate.force-mission");
+    assert.equal(forceMissionPrompt?.customized, false);
+    assert.match(forceMissionPrompt?.defaultContent || "", /fromForceId\/toForceId 必须是本轮已输出的兵力 id/);
+    assert.match(forceMissionPrompt?.content || "", /command=同侧授权\/指挥/);
+    assert.match(forceMissionPrompt?.content || "", /最低覆盖/);
+    const ov4Prompt = items.find((item) => item.id === "ai.generate.ov4");
+    assert.equal(ov4Prompt?.name, "组织关系");
+    assert.match(ov4Prompt?.content || "", /组织角色只能使用 analysis\.forces/);
+    assert.match(ov4Prompt?.content || "", /最低覆盖/);
     await client.callOpenAi({ workflow: { title: "测试", outputSchema: "UnknownDraft" }, analysis: {}, evidence: [] }, { workflowTitle: "测试", outputSchema: "UnknownDraft" });
     assert.match(requestBody.input, /^自定义通用提示词\n当前工作流：/);
   } finally {
