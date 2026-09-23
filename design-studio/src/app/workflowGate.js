@@ -261,6 +261,7 @@ function buildAdvanceContext({ freeMode, current, nextStep, phaseIndex, complete
     followingPhase,
     completing,
     open,
+    related: Boolean(related),
     action: "advance-workflow-step",
     capsuleTitle: "下一步",
     capsuleAction: related ? relatedViewLabel(nextStep.id) : stepShortLabel(nextStep),
@@ -351,7 +352,7 @@ export function renderWorkflowGate(state) {
       </div>
       ${ctx.detailHtml || ""}
       <div class="workflow-actions">
-        ${ctx.mode === "next-step" ? `<div class="workflow-gate-actions"><button type="button" data-action="advance-workflow-step-ai" ${completing ? "disabled" : ""}>AI生成并进入</button><button type="button" class="quiet-button" data-action="advance-workflow-step-direct" ${completing ? "disabled" : ""}>直接进入</button></div>` : `<button type="button" data-action="${escapeHtml(ctx.action)}" ${completing ? "disabled" : ""}>${completing ? "正在确认…" : escapeHtml(ctx.actionLabel || "继续")}</button>`}
+        ${ctx.mode === "next-step" && !ctx.related ? `<div class="workflow-gate-actions"><button type="button" data-action="advance-workflow-step-ai" ${completing ? "disabled" : ""}>AI生成并进入</button><button type="button" class="quiet-button" data-action="advance-workflow-step-direct" ${completing ? "disabled" : ""}>直接进入</button></div>` : `<button type="button" data-action="${escapeHtml(ctx.action)}" ${completing ? "disabled" : ""}>${completing ? "正在确认…" : escapeHtml(ctx.actionLabel || "继续")}</button>`}
       </div>
     </div>
     <button type="button" class="workflow-gate-capsule" data-action="toggle-workflow-gate" aria-expanded="${open ? "true" : "false"}" aria-controls="workflowGatePanel" title="${escapeHtml(title)}">

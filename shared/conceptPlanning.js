@@ -715,6 +715,99 @@ export function createForceMissionPlanFromBrief(brief = {}, plan = null, {
 }
 
 /**
+ * Derive combat forces from existing concept forces (for legacy drafts or one-click expansion).
+ */
+export function deriveCombatForcesFromConcept(plan = {}, brief = {}, phaseAction = null) {
+  const normalized = normalizeForceMissionPlan(plan);
+  if (!normalized.forces.length) {
+    return normalized;
+  }
+  const derived = buildCombatForcesFromConcept(normalized.forces, brief, phaseAction);
+  const relations = buildDefaultForceRelations(normalized.forces, derived);
+  return normalizeForceMissionPlan({
+    ...normalized,
+    status: "draft",
+    confirmedAt: "",
+    combatForces: derived,
+    relations: relations.length ? relations : normalized.relations
+  });
+}
+
+/**
+ * Add a manual combat force unit to a plan.
+ */
+export function addCombatForce(plan = {}, forceData = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  const index = (normalized.combatForces || []).length + 1;
+  const id = clean(forceData.id, 60) || `combat-custom-${Date.now()}-${index}`;
+  const side = forceData.side === "hostile" ? "hostile" : "friendly";
+  const name = clean(forceData.name, 120) || (side === "hostile" ? `红方·作战编组${index}` : `蓝方·作战编组${index}`);
+  const conceptForceId = clean(forceData.conceptForceId, 60)
+    || (normalized.forces.find((f) => f.side === side)?.id || "");
+  const newForce = {
+    id,
+    name,
+    side,
+    role: FORCE_ROLES.has(forceData.role) ? forceData.role : "maneuver",
+    conceptForceId,
+    group: clean(forceData.group, 120) || (side === "hostile" ? "红方作战编组" : "蓝方作战编组"),
+    missionType: normalizeCmoMissionType(forceData.missionType, "strike"),
+    task: clean(forceData.task, 400) || "执行阶段作战任务与协同",
+    taskRefs: normalizeStringList(forceData.taskRefs, 24, 60),
+    phaseIds: normalizeStringList(forceData.phaseIds, 12, 60),
+    platforms: normalizePlatformRefs(forceData.platforms, 8),
+    notes: clean(forceData.notes, 600) || "手工添加作战单元"
+  };
+  return normalizeForceMissionPlan({
+    ...normalized,
+    status: "draft",
+    confirmedAt: "",
+    combatForces: [...normalized.combatForces, newForce]
+  });
+}
+
+/**
+ * Remove a manual/AI combat force unit from a plan.
+ */
+export function removeCombatForce(plan = {}, forceId = "") {
+  const normalized = normalizeForceMissionPlan(plan);
+  const id = String(forceId || "").trim();
+  if (!id) return normalized;
+  const combatForces = (normalized.combatForces || []).filter((item) => item.id !== id);
+  const relations = (normalized.relations || []).filter((rel) => rel.fromForceId !== id && rel.toForceId !== id);
+  return normalizeForceMissionPlan({
+    ...normalized,
+    status: "draft",
+    confirmedAt: "",
+    combatForces,
+    relations
+  });
+}
+
+/**
+ * Update a combat force unit's properties.
+ */
+export function updateCombatForce(plan = {}, forceId = "", patch = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  const id = String(forceId || "").trim();
+  if (!id) return normalized;
+  const combatForces = (normalized.combatForces || []).map((item) => {
+    if (item.id !== id) return item;
+    return {
+      ...item,
+      ...patch,
+      platforms: patch.platforms ? normalizePlatformRefs(patch.platforms, 8) : item.platforms
+    };
+  });
+  return normalizeForceMissionPlan({
+    ...normalized,
+    status: "draft",
+    confirmedAt: "",
+    combatForces
+  });
+}
+
+/**
  * Build phase-differentiated concept forces (blue + red).
  * Duties are selected from blueActions/redActions keywords — not a fixed 4+3 template every phase.
  */

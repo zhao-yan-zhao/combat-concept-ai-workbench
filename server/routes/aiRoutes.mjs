@@ -216,21 +216,30 @@ export function createAiHandlers(runtime) {
   return { handleGenerate, handleGenerateStream, handleCreateGenerateJob, handleGenerateJobStream, handleRedTeam };
 }
 
-/** Best-effort preview of summary/coreIdea while JSON is still streaming. */
-function extractAdvicePreview(buffer) {
-  const text = String(buffer || "");
-  const complete = text.match(/"(?:answer|summary|coreIdea)"\s*:\s*"((?:\\.|[^"\\])*)"/);
+/** Best-effort preview of answer/summary/coreIdea while JSON is still streaming. */
+export function extractAdvicePreview(buffer) {
+  const text = String(buffer || "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<think>[\s\S]*$/gi, "")
+    .trim();
+  const candidateKeys = "answer|summary|coreIdea|explanation|notice|directive|message|conclusion|text|content|advice";
+  const completeRegex = new RegExp(`"(?:${candidateKeys})"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`);
+  const complete = text.match(completeRegex);
   if (complete) return unescapeJsonString(complete[1]);
-  const partial = text.match(/"(?:answer|summary|coreIdea)"\s*:\s*"((?:\\.|[^"\\])*)$/);
+
+  const partialRegex = new RegExp(`"(?:${candidateKeys})"\\s*:\\s*"((?:\\\\.|[^"\\\\])*?)(\\\\?)$`);
+  const partial = text.match(partialRegex);
   if (partial) return unescapeJsonString(partial[1]);
+
   return "";
 }
 
-function unescapeJsonString(value) {
+export function unescapeJsonString(value) {
+  const safe = String(value || "").replace(/\\+$/, "");
   try {
-    return JSON.parse(`"${value}"`);
+    return JSON.parse(`"${safe}"`);
   } catch {
-    return String(value || "")
+    return safe
       .replace(/\\n/g, "\n")
       .replace(/\\"/g, "\"")
       .replace(/\\\\/g, "\\");

@@ -177,11 +177,18 @@ export function createResearchChatController({
         onJob: ({ jobId }) => setSession(getState(), { type: "job", jobId }),
         onDelta: (payload) => {
           if (signal.aborted) return;
-          const preview = String(payload?.preview || payload?.assembled || "").trim();
-          if (!preview) return;
-          setSession(getState(), { type: "delta", text: preview });
-          // Prefer in-place DOM patch to avoid full re-render flicker while streaming.
-          patchResearchChatStream(scope, preview);
+          const preview = String(payload?.preview || "").trim();
+          if (preview) {
+            setSession(getState(), { type: "delta", text: preview });
+            // Prefer in-place DOM patch to avoid full re-render flicker while streaming.
+            patchResearchChatStream(scope, preview);
+            return;
+          }
+          const assembled = String(payload?.assembled || "").trim();
+          if (assembled && !looksLikeRawJsonOrThinking(assembled)) {
+            setSession(getState(), { type: "delta", text: assembled });
+            patchResearchChatStream(scope, assembled);
+          }
         }
       });
 
@@ -256,3 +263,15 @@ function isAbortError(error) {
   return error?.name === "AbortError"
     || /aborted|AbortError/i.test(String(error?.message || error || ""));
 }
+
+function looksLikeRawJsonOrThinking(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return true;
+  if (/^<think>/i.test(trimmed)) return true;
+  if (/^```/i.test(trimmed)) return true;
+  if (/^\{/.test(trimmed)) return true;
+  if (/^\[/.test(trimmed)) return true;
+  if (/"(?:answer|summary|briefUpdate|status|phaseAction|forces|directive|notice)":/.test(trimmed)) return true;
+  return false;
+}
+

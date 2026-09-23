@@ -3,6 +3,7 @@
  * 一任务/对象一机；界面不使用 OV-1 文本框样式，不强调 OV 品牌。
  */
 import { resolveDodafProduct } from "./dodafProductStore.js";
+import { renderDerivedViewProvenance } from "./derivedViewProvenance.js";
 import { renderProjectStorageActions } from "./projectStorageView.js";
 import {
   computeOv1WorldBounds,
@@ -16,7 +17,7 @@ import {
   resolveOv6bSelectedMachineId
 } from "./ov6Workbench.js";
 import { routeSmFlowEdges } from "./stateMachineFlowRouting.js";
-import { renderResearchChatPanel } from "./researchChat/index.js";
+import { renderResearchChatDock, renderResearchChatPanel } from "./researchChat/index.js";
 import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
 
 const SUBJECT_LABELS = Object.freeze({
@@ -72,6 +73,7 @@ export function renderStateMachineWorkbench(state = {}) {
           <button type="button" class="quiet-button" data-action="advance-workflow">下一步</button>
         </div>
       </div>
+      ${renderDerivedViewProvenance("ov6b")}
     </header>
 
     ${machines.length
@@ -519,13 +521,17 @@ function renderSmEdgeLabel(edge, geometry, selectedEdgeId = "") {
 }
 
 function renderStateMachineChatDock(state, { chatOpen = false, chatGenerating = false, model } = {}) {
-  return `<aside class="sm-chat-dock ${chatOpen ? "is-open" : "is-collapsed"}" id="stateMachineChatDock" aria-hidden="${chatOpen ? "false" : "true"}" aria-label="状态机对话侧栏">
-    ${chatOpen ? renderStateMachineChatPanel({
+  return renderResearchChatDock({
+    scope: "sm",
+    open: chatOpen,
+    dockId: "stateMachineChatDock",
+    label: "状态机对话侧栏",
+    contentHtml: renderStateMachineChatPanel({
       chat: state.stateMachineChat,
       chatGenerating,
       model
-    }) : ""}
-  </aside>`;
+    })
+  });
 }
 
 function renderStateMachineChatPanel({ chat, chatGenerating, model }) {

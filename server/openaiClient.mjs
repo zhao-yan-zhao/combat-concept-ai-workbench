@@ -9,16 +9,11 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
   async function callOpenAi(input, base) {
     const body = makeGenerationRequest(input, base, false);
     const timeoutMs = generationTimeoutMs(input);
+    const primaryUrl = resolveApiUrl(getConfig().baseUrl, "chat/completions");
     let apiResponse;
     try {
-      apiResponse = await fetchWithRetry(`${getConfig().baseUrl}/responses`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getAiApiKey()}`
-        },
-        body: JSON.stringify(body)
-      }, { timeoutMs });
+      const result = await postOpenAi(primaryUrl, body, { timeoutMs });
+      apiResponse = result.response;
     } catch (error) {
       throw normalizeUpstreamError(error, timeoutMs);
     }
@@ -43,7 +38,8 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       "RuleLibraryDraft",
       "RuleLibraryChangeSet",
       "StateMachineDraft",
-      "SequenceDraft"
+      "SequenceDraft",
+      "ScenarioDraft"
     ]);
     if (longSchemas.has(schema)) return 180000;
     return 90000;
@@ -77,6 +73,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     const isRuleLibraryChangeSet = input.workflow?.outputSchema === "RuleLibraryChangeSet";
     const isSequenceDraft = input.workflow?.outputSchema === "SequenceDraft";
     const isStateMachineDraft = input.workflow?.outputSchema === "StateMachineDraft";
+    const isScenarioDraft = input.workflow?.outputSchema === "ScenarioDraft";
     const promptId = generationPromptId(input.workflow?.outputSchema, isResearchChat);
     const promptParts = [
       "你是作战概念研究工作台的专业研究助理。",
@@ -100,7 +97,8 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         '  "area": { "name": "任务区域名称", "type": "patrol|prosecution|support|transit|target|exclusion|other", "geometryType": "point|circle|polygon|corridor", "coordinateSystem": "WGS84", "points": [{ "id": "point-1", "label": "参考点 1", "latitude": 0, "longitude": 0 }], "radiusNm": 0, "description": "区域用途", "basis": "坐标依据", "needsReview": true },',
         '  "objective": "任务目的", "expectedEffect": "预期效果", "sourceAction": "对应的阶段行动", "notes": "复核说明" }], "openQuestions": ["待确认项"] }'
       ] : isForceMissionPlan ? [
-        '{ "forces": [{ "id": "p1-fusion", "name": "航迹融合与分批节点", "side": "friendly", "role": "sense", "group": "阶段名", "missionType": "recon", "task": "阶段语境+职责+可观察判据（40-120字）", "taskRefs": ["task-1"], "phaseIds": ["phase-1"], "notes": "" }],',
+        '{ "summary": "1-3 句中文说明，概述本轮兵力编成或修订要点",',
+        '  "forces": [{ "id": "p1-fusion", "name": "航迹融合与分批节点", "side": "friendly", "role": "sense", "group": "阶段名", "missionType": "recon", "task": "阶段语境+职责+可观察判据（40-120字）", "taskRefs": ["task-1"], "phaseIds": ["phase-1"], "notes": "" }],',
         '  "combatForces": [{ "id": "combat-1", "name": "作战编组名", "side": "friendly", "role": "airDefense", "conceptForceId": "p1-fusion", "group": "作战编组", "missionType": "patrol_aaw", "task": "可执行任务", "taskRefs": ["task-1"], "phaseIds": ["phase-1"], "platforms": [], "notes": "" }],',
         '  "relations": [{ "fromForceId": "兵力标识", "toForceId": "兵力标识", "type": "command|support|coordination|information", "note": "说明" }],',
         '  "openQuestions": ["待确认项"], "reviewChecklist": ["复核提示"] }'
@@ -109,7 +107,8 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         '  "relations": [{ "fromForceId": "已有兵力 id", "toForceId": "已有兵力 id", "type": "command|support|coordination|information", "relationshipCategory": "作战指挥|支援保障|信息报送|协同|上下级隶属|作战控制|行政控制|配属|其他", "note": "链路含义" }],',
         '  "diagrams": [{ "name": "总体组织关系图", "description": "观察范围", "roleIds": ["兵力 id"] }] }'
       ] : isPhaseActionConcept ? [
-        '{ "phases": [{ "id": "phase-1", "name": "编队展开", "sequence": 1, "timeWindow": "T+00:00至T+00:40", "objective": "阶段目标一句话", "blueActions": ["蓝方概念级行动叙述"], "redActions": ["红方概念级行动叙述"], "primaryActions": ["与 blueActions 相同"], "secondaryActions": ["与 redActions 相同"], "entryConditions": ["进入门槛"], "exitConditions": ["退出/转换门槛"], "expectedEffects": ["阶段效果"], "forceIds": [] }],',
+        '{ "summary": "1-3 句中文说明，概述本轮阶段划分或修订要点",',
+        '  "phases": [{ "id": "phase-1", "name": "编队展开", "sequence": 1, "timeWindow": "T+00:00至T+00:40", "objective": "阶段目标一句话", "blueActions": ["蓝方概念级行动叙述"], "redActions": ["红方概念级行动叙述"], "primaryActions": ["与 blueActions 相同"], "secondaryActions": ["与 redActions 相同"], "entryConditions": ["进入门槛"], "exitConditions": ["退出/转换门槛"], "expectedEffects": ["阶段效果"], "forceIds": [] }],',
         '  "transitions": [{ "fromPhaseId": "phase-1", "toPhaseId": "phase-2", "condition": "可观察的转换条件", "note": "T+时点" }],',
         '  "openQuestions": ["待确认的作战判断"], "reviewChecklist": ["复核提示"] }'
       ] : isRuleLibraryChangeSet ? [
@@ -137,6 +136,12 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         '  "forces": [{ "id": "英文标识", "name": "概念兵力名称", "side": "friendly|hostile|neutral|unknown", "role": "sense|command|maneuver|air|airDefense|surface|support|external", "group": "概念编组", "task": "研究级任务", "phaseIds": ["recon"], "slot": "northwest|north|northeast|west|center|east|southwest|south|southeast" }],',
         '  "areas": [{ "id": "英文标识", "name": "概念区域", "phaseId": "recon|deployment|assault|support", "slot": "center", "note": "研究级说明" }],',
         '  "relations": [{ "fromForceId": "兵力标识", "toForceId": "兵力标识", "type": "information|coordination|effect", "phaseId": "recon|deployment|assault|support" }], "questions": ["待确认项"] }'
+      ] : isScenarioDraft ? [
+        '{ "title": "仿真想定标题", "summary": "想定概述（40-160字）",',
+        '  "entities": [{ "id": "entity-1", "label": "实体名", "role": "sensor|command|action|support|opponent", "side": "friendly|hostile", "position": [30, 45], "platform": "挂接装备平台型号", "task": "承接任务" }],',
+        '  "areas": [{ "id": "area-1", "label": "区域名", "type": "patrol|prosecution|support|target|exclusion", "position": [40, 50], "size": 160, "geometryType": "circle|polygon|corridor", "points": [{ "latitude": 0, "longitude": 0, "label": "点1" }] }],',
+        '  "timeline": [{ "time": "T+00:10", "phase": "阶段名", "title": "事件标题", "description": "事件详细描述", "impact": "对抗或态势影响" }],',
+        '  "narrative": "仿真推演总体叙述（100-300字）" }'
       ] : [
         "{",
         '  "summary": "一句话概括",',
@@ -148,10 +153,16 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       ...(isOperationalConceptGraphic ? [
         "OV-1 要求：必须恰好给出 sense、decide、control、opponent、assess 五个节点。",
         "只展示研究主体（蓝方/friendly）概念兵力的 OV-1；禁止生成红方完整 OV-1。",
-        "上游骨架：sense/decide/control 必须来自 analysis.概念兵力骨架中的研究主体概念兵力；红方/external 仅汇总为 opponent 外部压力。",
-        "禁止用作战兵力或平台型号当节点。角色映射（仅研究主体）：sense→sense；command→decide；行动类角色→control；assess 用预期效果。",
-        "节点标签优先写研究主体概念兵力名；detail 优先写其 task。阶段与概念图仅作补充，不得把阶段名写成节点。",
-        "只描述高层概念关系，不给出具体行动步骤、目标选择、武器用法、坐标或性能参数。"
+        "上游骨架：sense/decide/control 优先来自 analysis.概念兵力骨架中的研究主体概念兵力；红方/external 仅汇总为 opponent 外部压力。",
+        "节点名称保持研究主体概念兵力职责名；节点 detail 必须结合已确认的作战编成（combatForces）与已挂接平台型号（如预警机、战机主队、地空导弹单元等），阐明高层作战机制与能力落地闭环。",
+        "重点生成 edges 高层交互关系（信息流、控制流、态势变化、反馈），体现装备平台协同运作逻辑。",
+        "只描述高层概念关系，不给出微观战术细节、具体武器用法或伪精确坐标。"
+      ] : []),
+      ...(isScenarioDraft ? [
+        "仿真想定要求：基于给定的阶段行动（时序与转换）、任务区域几何与作战兵力编成（combatForces 平台型号、数量与载荷），生成红蓝对抗仿真想定草案。",
+        "实体 entities 必须完整覆盖研究主体与红方作战兵力（combatForces），准确填入平台型号 platform（如 F-35、KJ-500、HQ-9 等）与承接任务 task；",
+        "区域 areas 必须结合 analysis.tasks 中的真实任务区域几何（patrol/target/exclusion 等）；",
+        "时间线 timeline 必须结合各阶段 timeWindow 与蓝红对抗因果链，生成结构化推演事件流。"
       ] : []),
       ...(isResearchChat ? [
         "研究对话要求：answer 必须直接回答“研究人员问题”，使用 1 至 3 句连贯中文，控制在 120 至 220 字。",
@@ -333,7 +344,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         "13. previousPhaseNames 非空时为重生成：阶段名集合与划分不得雷同；diversitySeed 仅作差异化提示，禁止写入输出。"
       ] : []),
       ...(isConceptGraphicPlan ? [
-        "总体作战概念图要求：汇总 forceMission、phaseAction 与 conceptMapReference，形成可直接支撑 OV-1 的总体节点与关系。优先给出 sense/decide/control/opponent/assess 五类节点语义（可用 role 映射）。consistencyReport 必须说明与上游一致性。不得生成真实坐标、武器用法或仿真级细节。"
+        "总体作战概念图要求：汇总 forceMission、phaseAction 与 conceptMapReference，形成可直接支撑 OV-1 的总体节点与关系。优先给出 sense/decide/control/opponent/assess 五类节点语义（可用 role 映射）。节点 note 和 activityCandidates 必须提炼已确认的作战编成（combatForces）与装备平台支撑。consistencyReport 必须说明与上游一致性。不得生成真实坐标、武器用法或仿真级细节。"
       ] : []),
       ...(isConceptMapInitialPlan ? [
         "初始概念图要求：只生成研究级、可人工复核的概念兵力部署和阶段关系。",
@@ -361,9 +372,54 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       ...promptParts.slice(contextStart + 1)
     ].join("\n");
 
+    const instructions = useOverrides ? resolvePrompt("ai.generate.instructions", "你是专业、克制、可追溯的作战概念研究助手。只返回合法 JSON，不输出 Markdown 代码块。") : "你是专业、克制、可追溯的作战概念研究助手。只返回合法 JSON，不输出 Markdown 代码块。";
+    const schema = isOperationalConceptGraphic
+      ? operationalConceptGraphicSchema()
+      : isCombatFocusOptions
+        ? combatFocusOptionsSchema()
+        : isOperationalTaskDraft
+          ? operationalTaskDraftSchema()
+        : isForceMissionPlan
+          ? forceMissionPlanSchema()
+          : isOrganizationRelationshipDraft
+            ? organizationRelationshipDraftSchema()
+          : isPhaseActionConcept
+            ? phaseActionConceptSchema()
+            : isRuleLibraryChangeSet
+            ? ruleLibraryChangeSetSchema()
+            : isTaskOrganizationDraft
+              ? taskOrganizationDraftSchema()
+            : isRuleLibraryDraft
+              ? ruleLibraryDraftSchema()
+            : isSequenceDraft
+              ? sequenceDraftSchema()
+              : isStateMachineDraft
+                ? stateMachineDraftSchema()
+              : isConceptGraphicPlan
+                ? conceptGraphicPlanSchema()
+                : isConceptMapInitialPlan
+                  ? conceptMapInitialPlanSchema()
+                  : isResearchChat
+                    ? researchChatAnswerSchema()
+                    : isConceptBrief
+                      ? conceptBriefSchema()
+                      : genericAiDraftSchema();
+
     return {
       model: getConfig().model,
-      instructions: useOverrides ? resolvePrompt("ai.generate.instructions", "你是专业、克制、可追溯的作战概念研究助手。只返回合法 JSON，不输出 Markdown 代码块。") : "你是专业、克制、可追溯的作战概念研究助手。只返回合法 JSON，不输出 Markdown 代码块。",
+      messages: [
+        { role: "system", content: instructions },
+        { role: "user", content: prompt }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "workbench_ai_draft",
+          strict: true,
+          schema
+        }
+      },
+      instructions,
       input: prompt,
       stream: Boolean(stream),
       text: {
@@ -371,37 +427,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
           type: "json_schema",
           name: "workbench_ai_draft",
           strict: true,
-          schema: isOperationalConceptGraphic
-            ? operationalConceptGraphicSchema()
-            : isCombatFocusOptions
-              ? combatFocusOptionsSchema()
-              : isOperationalTaskDraft
-                ? operationalTaskDraftSchema()
-              : isForceMissionPlan
-                ? forceMissionPlanSchema()
-                : isOrganizationRelationshipDraft
-                  ? organizationRelationshipDraftSchema()
-                : isPhaseActionConcept
-                  ? phaseActionConceptSchema()
-                  : isRuleLibraryChangeSet
-                  ? ruleLibraryChangeSetSchema()
-                  : isTaskOrganizationDraft
-                    ? taskOrganizationDraftSchema()
-                  : isRuleLibraryDraft
-                  ? ruleLibraryDraftSchema()
-                  : isSequenceDraft
-                    ? sequenceDraftSchema()
-                    : isStateMachineDraft
-                      ? stateMachineDraftSchema()
-                    : isConceptGraphicPlan
-                      ? conceptGraphicPlanSchema()
-                      : isConceptMapInitialPlan
-                        ? conceptMapInitialPlanSchema()
-                        : isResearchChat
-                          ? researchChatAnswerSchema()
-                          : isConceptBrief
-                            ? conceptBriefSchema()
-                            : genericAiDraftSchema()
+          schema
         }
       },
       store: false
@@ -415,17 +441,11 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
   async function* streamOpenAi(input, base) {
     const payload = makeGenerationRequest(input, base, true);
     const timeoutMs = Math.max(generationTimeoutMs(input), 180000);
+    const primaryUrl = resolveApiUrl(getConfig().baseUrl, "chat/completions");
     let apiResponse;
     try {
-      apiResponse = await fetchWithRetry(`${getConfig().baseUrl}/responses`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getAiApiKey()}`,
-          Accept: "text/event-stream"
-        },
-        body: JSON.stringify(payload)
-      }, { timeoutMs });
+      const result = await postOpenAi(primaryUrl, payload, { timeoutMs, stream: true });
+      apiResponse = result.response;
     } catch (error) {
       throw normalizeUpstreamError(error, timeoutMs);
     }
@@ -553,6 +573,81 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
   function wait(milliseconds) {
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
+
+  function resolveApiUrl(baseUrl, defaultEndpoint = "chat/completions") {
+    const trimmed = String(baseUrl || "").trim().replace(/\/+$/, "");
+    if (trimmed.endsWith("/chat/completions") || trimmed.endsWith("/responses")) {
+      return trimmed;
+    }
+    return `${trimmed}/${defaultEndpoint}`;
+  }
+
+  function alternateApiUrl(url) {
+    if (url.endsWith("/chat/completions")) {
+      return url.replace(/\/chat\/completions$/, "/responses");
+    }
+    if (url.endsWith("/responses")) {
+      return url.replace(/\/responses$/, "/chat/completions");
+    }
+    return null;
+  }
+
+  async function postOpenAi(url, body, { timeoutMs, stream = false } = {}) {
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getAiApiKey()}`
+    };
+    if (stream) headers.Accept = "text/event-stream";
+
+    // 1. Primary attempt
+    let res = await fetchWithRetry(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body)
+    }, { timeoutMs });
+
+    // 2. Fall back to alternate endpoint on 404
+    if (res.status === 404) {
+      const altUrl = alternateApiUrl(url);
+      if (altUrl) {
+        try {
+          const altRes = await fetchWithRetry(altUrl, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(body)
+          }, { timeoutMs });
+          if (altRes.ok || altRes.status !== 404) {
+            return { response: altRes, effectiveUrl: altUrl };
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    // 3. Fall back to json_object if gateway rejects json_schema (400)
+    if (res.status === 400 && body.response_format?.type === "json_schema") {
+      try {
+        const errorText = await res.clone().text();
+        if (/schema|response_format|strict/i.test(errorText)) {
+          const fallbackBody = {
+            ...body,
+            response_format: { type: "json_object" }
+          };
+          const fallbackRes = await fetchWithRetry(url, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(fallbackBody)
+          }, { timeoutMs });
+          return { response: fallbackRes, effectiveUrl: url };
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return { response: res, effectiveUrl: url };
+  }
   
   async function callOpenAiRedTeam(input) {
     const knownEvidence = (input.evidence || []).map((item) => String(item.title || "")).filter(Boolean);
@@ -571,51 +666,66 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       "可用知识依据：",
       JSON.stringify((input.evidence || []).map((item) => ({ title: item.title, source: item.filePath, summary: item.summary })), null, 2)
     ].join("\n");
-  
-    const apiResponse = await fetchWithRetry(`${getConfig().baseUrl}/responses`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getAiApiKey()}`
-      },
-      body: JSON.stringify({
-        model: getConfig().model,
-        instructions: resolvePrompt("ai.red-team.instructions", "返回严格符合 schema 的 JSON。输出保持研究层面、审慎和可追溯。"),
-        input: prompt,
-        text: {
-          format: {
-            type: "json_schema",
-            name: "red_team_review",
-            strict: true,
-            schema: {
-              type: "object",
-              additionalProperties: false,
-              required: ["summary", "findings"],
-              properties: {
-                summary: { type: "string" },
-                findings: {
-                  type: "array",
-                  maxItems: 5,
-                  items: {
-                    type: "object",
-                    additionalProperties: false,
-                    required: ["title", "severity", "analysis", "recommendation", "evidenceRefs"],
-                    properties: {
-                      title: { type: "string" },
-                      severity: { type: "string", enum: ["high", "medium", "low"] },
-                      analysis: { type: "string" },
-                      recommendation: { type: "string" },
-                      evidenceRefs: { type: "array", items: { type: "string" }, maxItems: 4 }
-                    }
-                  }
-                }
-              }
+    const instructions = resolvePrompt("ai.red-team.instructions", "返回严格符合 schema 的 JSON。输出保持研究层面、审慎和可追溯。");
+    const redTeamSchema = {
+      type: "object",
+      additionalProperties: false,
+      required: ["summary", "findings"],
+      properties: {
+        summary: { type: "string" },
+        findings: {
+          type: "array",
+          maxItems: 5,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["title", "severity", "analysis", "recommendation", "evidenceRefs"],
+            properties: {
+              title: { type: "string" },
+              severity: { type: "string", enum: ["high", "medium", "low"] },
+              analysis: { type: "string" },
+              recommendation: { type: "string" },
+              evidenceRefs: { type: "array", items: { type: "string" }, maxItems: 4 }
             }
           }
-        },
-        store: false
-      })
-    });
+        }
+      }
+    };
+    const body = {
+      model: getConfig().model,
+      messages: [
+        { role: "system", content: instructions },
+        { role: "user", content: prompt }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "red_team_review",
+          strict: true,
+          schema: redTeamSchema
+        }
+      },
+      instructions,
+      input: prompt,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "red_team_review",
+          strict: true,
+          schema: redTeamSchema
+        }
+      },
+      store: false
+    };
+
+    const primaryUrl = resolveApiUrl(getConfig().baseUrl, "chat/completions");
+    let apiResponse;
+    try {
+      const result = await postOpenAi(primaryUrl, body, { timeoutMs: 90000 });
+      apiResponse = result.response;
+    } catch (error) {
+      throw normalizeUpstreamError(error, 90000);
+    }
   
     if (!apiResponse.ok) {
       throw new Error(await apiResponse.text());
@@ -648,17 +758,27 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     }
   
     if (base.outputSchema === "ConceptPlan") {
+      const extractedAnswer = String(
+        draft?.answer ||
+        draft?.summary ||
+        draft?.coreIdea ||
+        draft?.explanation ||
+        draft?.notice ||
+        draft?.directive ||
+        draft?.message ||
+        ""
+      ).trim();
       base.result = draft?.briefUpdate
-        ? { ...base.result, coreIdea: String(draft.answer || ""), briefUpdate: draft.briefUpdate }
+        ? { ...base.result, coreIdea: extractedAnswer || String(draft.answer || ""), briefUpdate: draft.briefUpdate }
         : {
             ...base.result,
-            coreIdea: draft.summary || base.result.coreIdea,
+            coreIdea: extractedAnswer || draft.summary || base.result.coreIdea,
             phases: bullets.length ? bullets : base.result.phases,
             risks: risks.length ? risks : base.result.risks
           };
     }
 
-    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "OperationalTaskDraft" || base.outputSchema === "TaskOrganizationDraft" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "OrganizationRelationshipDraft" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft") && draft && typeof draft === "object") {
+    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "OperationalTaskDraft" || base.outputSchema === "TaskOrganizationDraft" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "OrganizationRelationshipDraft" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft" || base.outputSchema === "ScenarioDraft") && draft && typeof draft === "object") {
       base.result = draft;
     }
   
@@ -827,8 +947,9 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       }
     };
     return {
-      type: "object", additionalProperties: false, required: ["forces", "combatForces", "relations", "openQuestions", "reviewChecklist"],
+      type: "object", additionalProperties: false, required: ["summary", "forces", "combatForces", "relations", "openQuestions", "reviewChecklist"],
       properties: {
+        summary: { type: "string", maxLength: 600 },
         forces: { type: "array", minItems: 4, maxItems: 120, items: conceptForce },
         combatForces: { type: "array", minItems: 4, maxItems: 240, items: combatForce },
         relations: { type: "array", maxItems: 64, items: { type: "object", additionalProperties: false, required: ["fromForceId", "toForceId", "type", "note"], properties: { fromForceId: { type: "string", maxLength: 60 }, toForceId: { type: "string", maxLength: 60 }, type: { type: "string", enum: ["command", "support", "coordination", "information"] }, note: { type: "string", maxLength: 240 } } } },
@@ -993,8 +1114,9 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
   function phaseActionConceptSchema() {
     const actionList = { type: "array", maxItems: 8, items: { type: "string", maxLength: 400 } };
     return {
-      type: "object", additionalProperties: false, required: ["phases", "transitions", "openQuestions", "reviewChecklist"],
+      type: "object", additionalProperties: false, required: ["summary", "phases", "transitions", "openQuestions", "reviewChecklist"],
       properties: {
+        summary: { type: "string", maxLength: 600 },
         phases: {
           type: "array", minItems: 2, maxItems: 12,
           items: {
@@ -1219,8 +1341,16 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
   }
   
   function extractOutputText(data) {
+    if (!data || typeof data !== "object") return "";
     if (typeof data.output_text === "string") {
       return data.output_text;
+    }
+    const choice = data.choices?.[0];
+    if (typeof choice?.message?.content === "string") {
+      return choice.message.content;
+    }
+    if (typeof choice?.text === "string") {
+      return choice.text;
     }
     return (data.output || [])
       .flatMap((item) => item.content || [])
@@ -1230,11 +1360,20 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
   }
   
   function parseJsonObject(text) {
-    const cleaned = String(text || "")
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```$/i, "")
+    let cleaned = String(text || "")
+      .replace(/<think>[\s\S]*?<\/think>/gi, "")
+      .replace(/<think>[\s\S]*$/gi, "")
       .trim();
+    const jsonBlock = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (jsonBlock) {
+      cleaned = jsonBlock[1].trim();
+    } else {
+      cleaned = cleaned
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/```$/i, "")
+        .trim();
+    }
     try {
       return JSON.parse(cleaned);
     } catch {
@@ -1264,6 +1403,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       ["StateMachineDraft", "状态机", "OV-6b 状态机生成与修订"],
       ["ConceptGraphicPlan", "概念图设计", "总体概念图结构计划"],
       ["ConceptMapInitialPlan", "初始概念图", "研究级兵力部署与阶段关系"],
+      ["ScenarioDraft", "仿真想定", "基于阶段时序、任务区域与兵力编成生成仿真推演想定脚本"],
       ["GenericAiDraft", "通用生成", "未设专用分支的通用结构化生成"]
     ];
     const definitions = variants.map(([schema, name, description, researchChat]) => {
@@ -1300,7 +1440,8 @@ function generationPromptId(schema, researchChat = false) {
     ConceptBrief: "concept-brief", OperationalConceptGraphic: "ov1-graphic", CombatFocusOptions: "combat-focus",
     OperationalTaskDraft: "operational-task", TaskOrganizationDraft: "task-organization", ForceMissionPlan: "force-mission", OrganizationRelationshipDraft: "ov4", PhaseActionConcept: "phase-action",
     RuleLibraryChangeSet: "rule-change-set", RuleLibraryDraft: "rule-library", SequenceDraft: "sequence",
-    StateMachineDraft: "state-machine", ConceptGraphicPlan: "concept-graphic-plan", ConceptMapInitialPlan: "concept-map-initial"
+    StateMachineDraft: "state-machine", ConceptGraphicPlan: "concept-graphic-plan", ConceptMapInitialPlan: "concept-map-initial",
+    ScenarioDraft: "scenario"
   };
   return `ai.generate.${ids[schema] || "generic"}`;
 }

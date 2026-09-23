@@ -24,10 +24,11 @@ try {
       getAiPromptOverrides: () => overrides
     });
     const items = client.listPromptDefinitions();
-    assert.equal(items.length, 19);
+    assert.equal(items.length, 20);
     assert.equal(items.find((item) => item.id === "ai.generate.generic")?.customized, true);
     assert.equal(items.find((item) => item.id === "ai.generate.phase-action")?.variables.includes("analysis"), true);
     assert.equal(items.find((item) => item.id === "ai.generate.task-organization")?.variables.includes("analysis"), true);
+    assert.equal(items.find((item) => item.id === "ai.generate.scenario")?.name, "仿真想定");
     const forceMissionPrompt = items.find((item) => item.id === "ai.generate.force-mission");
     assert.equal(forceMissionPrompt?.customized, false);
     assert.match(forceMissionPrompt?.defaultContent || "", /fromForceId\/toForceId 必须是本轮已输出的兵力 id/);

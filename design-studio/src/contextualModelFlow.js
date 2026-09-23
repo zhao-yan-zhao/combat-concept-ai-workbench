@@ -24,7 +24,7 @@ const RELATED_LABELS = Object.freeze({
   ov6a: "规则库 OV6a",
   ov6b: "状态机 OV6b",
   ov6c: "时序图",
-  ov1b: "任务分解 OV1b",
+  ov1b: "任务整理 OV1b",
   ov4: "组织关系 OV4",
   ov2: "资源流 OV2",
   ov3: "资源流矩阵 OV3",

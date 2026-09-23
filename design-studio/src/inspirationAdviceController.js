@@ -115,9 +115,23 @@ export function createInspirationAdviceController({
   });
 }
 
+function extractAdviceText(response) {
+  const res = response?.result || {};
+  return String(
+    res.coreIdea ||
+    res.summary ||
+    res.answer ||
+    res.explanation ||
+    res.notice ||
+    res.directive ||
+    res.message ||
+    ""
+  ).trim();
+}
+
 function formatAdvice(response) {
-  const coreIdea = String(response.result?.coreIdea || response.result?.summary || "").trim();
-  return (coreIdea || "请先明确研究对象、判断边界和可验证依据，再形成可复核的概念表述。").slice(0, 360);
+  const text = extractAdviceText(response);
+  return (text || "请先明确研究对象、判断边界和可验证依据，再形成可复核的概念表述。").slice(0, 360);
 }
 
 function createFallbackAdvice(question, conversationContext = "") {
@@ -127,5 +141,5 @@ function createFallbackAdvice(question, conversationContext = "") {
 }
 
 function hasConversationalAdvice(response) {
-  return Boolean(String(response?.result?.coreIdea || response?.result?.summary || "").trim());
+  return Boolean(extractAdviceText(response));
 }

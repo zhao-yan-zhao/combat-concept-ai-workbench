@@ -55,7 +55,11 @@ import {
   updateOperationalTask,
   removeOperationalTask,
   updateOperationalTaskArea,
-  updateOperationalTaskAreaPoint
+  updateOperationalTaskAreaPoint,
+  deriveCombatForcesFromConcept,
+  addCombatForce,
+  removeCombatForce,
+  updateCombatForce
 } from "./forceMissionStore.js";
 import {
   applyPhaseActionReviewNotes,
@@ -152,6 +156,32 @@ export function createConceptPlanningController({
       }
       if (action === "generate-combat-forces") {
         void generateForceMission({ withNotes: false, layer: "combat" });
+        return true;
+      }
+      if (action === "derive-combat-forces") {
+        void deriveCombatForces();
+        return true;
+      }
+      if (action === "add-combat-force") {
+        const state = getState();
+        const focusPhaseId = state.phaseActionFocusId || "";
+        const side = source?.dataset?.side || "friendly";
+        const next = addCombatForce(state.forceMission, {
+          side,
+          phaseIds: focusPhaseId ? [focusPhaseId] : []
+        });
+        const created = next.combatForces[next.combatForces.length - 1];
+        state.forcePlatformPicker = { forceId: created.id, layer: "combat" };
+        void changeForceMissionPlan(next, "force-mission:add-combat");
+        return true;
+      }
+      if (action === "remove-combat-force") {
+        const forceId = source?.dataset?.forceId || getState().forcePlatformPicker?.forceId || "";
+        if (!forceId) return true;
+        const state = getState();
+        const next = removeCombatForce(state.forceMission, forceId);
+        closeForcePlatformPicker();
+        void changeForceMissionPlan(next, "force-mission:remove-combat");
         return true;
       }
       if (action === "regenerate-force-mission-with-notes") {
@@ -325,6 +355,26 @@ export function createConceptPlanningController({
       root.querySelectorAll("[data-combat-concept-link]").forEach((control) => {
         control.addEventListener("change", () => {
           void changeCombatConceptLink(control.dataset.combatConceptLink, control.value);
+        });
+      });
+      root.querySelectorAll("[data-combat-force-name]").forEach((control) => {
+        control.addEventListener("change", () => {
+          void changeCombatForceField(control.dataset.combatForceName, "name", control.value);
+        });
+      });
+      root.querySelectorAll("[data-combat-force-task]").forEach((control) => {
+        control.addEventListener("change", () => {
+          void changeCombatForceField(control.dataset.combatForceTask, "task", control.value);
+        });
+      });
+      root.querySelectorAll("[data-combat-force-role]").forEach((control) => {
+        control.addEventListener("change", () => {
+          void changeCombatForceField(control.dataset.combatForceRole, "role", control.value);
+        });
+      });
+      root.querySelectorAll("[data-combat-force-group]").forEach((control) => {
+        control.addEventListener("change", () => {
+          void changeCombatForceField(control.dataset.combatForceGroup, "group", control.value);
         });
       });
       root.querySelectorAll("[data-force-task-ref]").forEach((control) => {
@@ -1559,6 +1609,37 @@ export function createConceptPlanningController({
         render();
       }
     }
+  }
+
+  async function deriveCombatForces() {
+    const state = getState();
+    if (!Array.isArray(state.forceMission?.forces) || !state.forceMission.forces.length) {
+      notify("请先生成概念兵力，再派生作战编成");
+      return;
+    }
+    const next = deriveCombatForcesFromConcept(state.forceMission, state.brief, state.phaseAction);
+    state.forceMissionLayerTab = "combat";
+    state.forcePlatformPicker = {
+      forceId: next.combatForces[0]?.id || "",
+      layer: "combat",
+      query: "",
+      domain: "",
+      country: state.forcePlatformPicker?.country || "",
+      results: [],
+      selectedIndexes: [],
+      searching: false,
+      error: ""
+    };
+    await changeForceMissionPlan(next, "force-mission:derive-combat");
+    notify(`已从概念兵力派生 ${next.combatForces.length} 个作战编组草案`);
+    await maybeAutoRecommendAfterGenerate({ silent: true, target: "combat" });
+  }
+
+  async function changeCombatForceField(forceId, field, value) {
+    const state = getState();
+    const patch = { [field]: value };
+    const next = updateCombatForce(state.forceMission, forceId, patch);
+    await changeForceMissionPlan(next, `force-mission:update-${field}`);
   }
 
   async function maybeAutoRecommendAfterGenerate({

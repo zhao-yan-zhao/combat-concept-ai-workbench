@@ -117,7 +117,7 @@ export function buildForceRecommendKeywords(force = {}, phaseAction = {}, { max 
  * Pick up to `limit` platforms for a force from multi-query search hits.
  * @param {object[]} hits flat list of CMO platform hits
  */
-export function selectRecommendedPlatforms(force = {}, hits = [], { limit = 2 } = {}) {
+export function selectRecommendedPlatforms(force = {}, hits = [], { limit = 2, globalUsedKeys = null } = {}) {
   const domains = preferredDomainsForForce(force);
   const existing = new Set(
     (force.platforms || []).map((item) => `${item.domain}:${item.cmoId}`).filter((key) => !key.endsWith(":0"))
@@ -127,12 +127,14 @@ export function selectRecommendedPlatforms(force = {}, hits = [], { limit = 2 } 
     .map((hit) => {
       const key = `${hit.domain}:${hit.cmoId || 0}`;
       const domainScore = domains.indexOf(hit.domain);
+      const isGloballyUsed = globalUsedKeys && globalUsedKeys.has(key);
       return {
         hit,
         key,
         score:
           (domainScore >= 0 ? (domains.length - domainScore) * 10 : 0)
           + (Number(hit.cmoId) > 0 ? 2 : 0)
+          + (isGloballyUsed ? -5 : 0) // slight penalty for already allocated platforms to promote diversity
           + Math.min(String(hit.name).length, 40) / 40
       };
     })
@@ -144,10 +146,12 @@ export function selectRecommendedPlatforms(force = {}, hits = [], { limit = 2 } 
   for (const item of scored) {
     if (seen.has(item.key)) continue;
     seen.add(item.key);
+    if (globalUsedKeys) globalUsedKeys.add(item.key);
     const domain = item.hit.domain;
     const cmoId = Number(item.hit.cmoId) || 0;
     const country = item.hit.country || "";
     const category = item.hit.category || "";
+    const missionLabel = cmoMissionTypeLabel(force.missionType);
     picked.push({
       domain,
       cmoId,
@@ -156,7 +160,7 @@ export function selectRecommendedPlatforms(force = {}, hits = [], { limit = 2 } 
       category,
       quantity: 1,
       basis: cmoId > 0
-        ? ["CMO DB3K 目录", `域=${domain}`, `ID=${cmoId}`, country ? `国别=${country}` : "", category ? `类别=${category}` : ""]
+        ? ["CMO DB3K 目录", `域=${domain}`, `ID=${cmoId}`, country ? `国别=${country}` : "", category ? `类别=${category}` : "", missionLabel ? `匹配任务=${missionLabel}` : ""]
           .filter(Boolean)
           .join(" · ")
         : "无 CMO 目录编号，仅作概念关键词，不得当作定型装备"

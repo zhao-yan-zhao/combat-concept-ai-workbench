@@ -24,10 +24,14 @@ export function createProjectModelSyncController({
   };
 
   return {
-    async hydrate({ interactive = false, forceRemote = false } = {}) {
+    async hydrate({ interactive = false, forceRemote = false, silent = false } = {}) {
       const state = getState();
-      setStorage(state, { ...state[storageKey], status: "checking" });
-      render();
+      if (!silent) {
+        setStorage(state, { ...state[storageKey], status: "checking" });
+        render();
+      } else {
+        setStorage(state, { ...state[storageKey], status: "checking" });
+      }
       try {
         repositoryEnabled = await getProjectRepositoryCapability(resource);
         if (!repositoryEnabled) {
@@ -48,7 +52,7 @@ export function createProjectModelSyncController({
         setStorage(state, createOfflineState(resourceLabel));
         if (interactive) notify(`${resourceLabel} project storage is unavailable; local work remains available.`);
       } finally {
-        render();
+        if (!silent) render();
       }
     },
 

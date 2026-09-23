@@ -6,6 +6,7 @@ import {
 } from "./forceMissionStore.js";
 import { renderPlanningMigrationBanner } from "./planningContext.js";
 import {
+  renderResearchChatDock,
   renderResearchChatFloatButton,
   renderResearchChatPanel
 } from "./researchChat/researchChatView.js";
@@ -233,16 +234,20 @@ export function renderForceMission(state) {
       <div class="force-mission-main-stage">
         ${mainBody}
       </div>
-      <aside class="phase-chat-dock ${chatOpen ? "is-open" : "is-collapsed"}" id="forceMissionChatDock" aria-hidden="${chatOpen ? "false" : "true"}" aria-label="兵力修订对话侧栏">
-        ${chatOpen ? renderForceMissionChatPanel({
+      ${renderResearchChatDock({
+        scope: "phase",
+        open: chatOpen,
+        dockId: "forceMissionChatDock",
+        label: "兵力修订对话侧栏",
+        contentHtml: renderForceMissionChatPanel({
           chat: state.forceMissionChat,
           chatGenerating,
           busy,
           confirmed,
           hasDraft,
           plan
-        }) : ""}
-      </aside>
+        })
+      })}
     </div>
   </section>`;
 }
@@ -485,6 +490,8 @@ function renderForceMissionRailActions({
       class="${workflow.primaryAction === "combat" ? "" : "quiet-button"}"
       data-action="generate-combat-forces"
       ${canGenerateCombat ? "" : "disabled"}>${escapeHtml(combatBtnLabel)}</button>
+    <button type="button" class="quiet-button" data-action="derive-combat-forces" title="直接从概念兵力快速派生作战编成草案"
+      ${canGenerateCombat ? "" : "disabled"}>从概念派生作战</button>
     ${canRecommendCombat ? `<button type="button" class="quiet-button" data-action="recommend-platforms-from-phases"
       ${recommendRunning ? "disabled" : ""}>${recommendRunning ? "正在挂接平台…" : "为作战兵力补挂平台"}</button>` : ""}`;
   const confirmedIdle = Boolean(workflow.confirmed) && !workflow.busy;
@@ -531,7 +538,10 @@ function renderLayerEmpty({
   if (hasGlobal) {
     return `<div class="force-layer-empty">
       <p class="empty-inspector">「${escapeHtml(phaseLabel)}」暂无关联作战兵力（按概念挂接 / 阶段过滤）。可切换阶段，或检查作战行的概念挂接。</p>
-      <button type="button" class="quiet-button" data-action="select-force-mission-layer" data-layer="concept">查看概念兵力</button>
+      <div class="planning-actions secondary">
+        <button type="button" class="quiet-button" data-action="select-force-mission-layer" data-layer="concept">查看概念兵力</button>
+        <button type="button" data-action="add-combat-force" data-side="friendly">+ 添加作战单元</button>
+      </div>
     </div>`;
   }
   if (!hasConcept) {
@@ -544,7 +554,13 @@ function renderLayerEmpty({
     <p class="empty-inspector">概念兵力已就绪，尚未生成作战编成。将按概念扩展主队与保障等编组。</p>
     <div class="planning-actions">
       <button type="button" data-action="generate-combat-forces" ${canGenerate && !generating ? "" : "disabled"}>
-        ${generating ? "正在生成作战兵力…" : "生成作战兵力"}
+        ${generating ? "正在生成作战兵力…" : "AI 生成作战兵力"}
+      </button>
+      <button type="button" class="quiet-button" data-action="derive-combat-forces" ${canGenerate && !generating ? "" : "disabled"}>
+        从概念兵力派生
+      </button>
+      <button type="button" class="quiet-button" data-action="add-combat-force" data-side="friendly">
+        + 手工添加
       </button>
     </div>
   </div>`;
@@ -764,6 +780,10 @@ function renderCombatSideColumn({
   confirmed = false
 }) {
   return `<section class="force-roster-col force-combat-column ${className}" aria-label="${escapeAttribute(title)}" data-grouped-list-panel="force-combat" data-grouped-list-dimensions="阵营:side|职责:role|任务类型:type|状态:status" data-grouped-list-default-group="side">
+    <div class="force-roster-col-toolbar">
+      <button type="button" class="quiet-button" data-action="add-combat-force" data-side="friendly" title="添加蓝方作战编组">+ 蓝方编组</button>
+      <button type="button" class="quiet-button" data-action="add-combat-force" data-side="hostile" title="添加红方作战编组">+ 红方编组</button>
+    </div>
     ${items.length
       ? `<ul class="force-roster-list" data-grouped-list-items>${items.map((force, index) => {
           const platforms = Array.isArray(force.platforms) ? force.platforms : [];
@@ -822,7 +842,9 @@ function renderCombatForceDetail(force, {
     <header class="force-concept-detail-head">
       <div class="force-concept-detail-title">
         <span class="force-role-tag">${escapeHtml(roleLabel(force.role))}</span>
-        <b>${escapeHtml(displayCombatName(force))}</b>
+        ${editable
+          ? `<input type="text" class="force-sidebar-control" data-combat-force-name="${escapeAttribute(force.id)}" value="${escapeAttribute(force.name || "")}" placeholder="作战编组名称" style="font-weight:bold;max-width:200px;">`
+          : `<b>${escapeHtml(displayCombatName(force))}</b>`}
         <span class="force-concept-detail-sub">${escapeHtml(sideLabel(force.side))}${force.group ? ` · ${escapeHtml(force.group)}` : ""} · ${escapeHtml(unitType)}</span>
       </div>
       <button type="button" class="quiet-button force-concept-close" data-action="close-force-platform-picker" title="关闭详情" aria-label="关闭详情">×</button>
@@ -830,10 +852,27 @@ function renderCombatForceDetail(force, {
     <div class="force-concept-detail-body">
       <section class="force-concept-detail-block">
         <strong>主要任务</strong>
-        <p>${escapeHtml(force.task || "（未写任务）")}</p>
+        ${editable
+          ? `<textarea class="force-sidebar-control" rows="3" data-combat-force-task="${escapeAttribute(force.id)}" placeholder="填写该编组承担的具体作战任务与可观察要求">${escapeHtml(force.task || "")}</textarea>`
+          : `<p>${escapeHtml(force.task || "（未写任务）")}</p>`}
         ${force.notes ? `<small>${escapeHtml(force.notes)}</small>` : ""}
       </section>
       ${renderForceTaskRefs(force, tasks, { editable, layer: "combat" })}
+      <section class="force-concept-detail-block">
+        <strong>作战角色</strong>
+        ${editable
+          ? `<select class="force-sidebar-control" data-combat-force-role="${escapeAttribute(force.id)}">
+              <option value="maneuver" ${force.role === "maneuver" ? "selected" : ""}>行动 (maneuver)</option>
+              <option value="sense" ${force.role === "sense" ? "selected" : ""}>感知 (sense)</option>
+              <option value="command" ${force.role === "command" ? "selected" : ""}>指挥 (command)</option>
+              <option value="air" ${force.role === "air" ? "selected" : ""}>空中 (air)</option>
+              <option value="airDefense" ${force.role === "airDefense" ? "selected" : ""}>防空 (airDefense)</option>
+              <option value="surface" ${force.role === "surface" ? "selected" : ""}>水面 (surface)</option>
+              <option value="support" ${force.role === "support" ? "selected" : ""}>保障 (support)</option>
+              <option value="external" ${force.role === "external" ? "selected" : ""}>外部 (external)</option>
+            </select>`
+          : `<span>${escapeHtml(roleLabel(force.role))}</span>`}
+      </section>
       <section class="force-concept-detail-block">
         <strong>编成摘要</strong>
         <p class="force-combat-composition-text">${escapeHtml(composition)}</p>
@@ -864,6 +903,11 @@ function renderCombatForceDetail(force, {
           ? renderInlinePlatformPicker(force, picker, catalogOpen, editable, "combat")
           : `<p class="planning-meta">${(force.platforms || []).length ? escapeHtml(composition) : "尚未挂接平台。"}</p>`}
       </section>
+      ${editable
+        ? `<section class="force-concept-detail-block force-danger-block" style="border-top:1px dashed var(--color-border-subtle);padding-top:12px;margin-top:16px;">
+            <button type="button" class="quiet-button is-danger" data-action="remove-combat-force" data-force-id="${escapeAttribute(force.id)}" style="color:var(--color-danger, #d9534f);">删除此作战单元</button>
+          </section>`
+        : ""}
     </div>
   </article>`;
 }

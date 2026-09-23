@@ -1,4 +1,4 @@
-﻿import { directions, project, views, workflowPhases } from "./data.js";
+import { directions, project, views, workflowPhases } from "./data.js";
 import { createInitialWorkbenchState } from "./app/createInitialState.js";
 import { workflowPrimaryStepIds } from "./data.js";
 import { $, downloadArtifact as downloadArtifactHelper, downloadBlob, escapeHtml, showToast, writePrintableReport as writePrintableReportHelper } from "./app/domUtils.js";
@@ -175,7 +175,12 @@ function render(options = {}) {
   const appFocusSnapshot = captureViewFocus(document);
   const appScrollSnapshots = captureViewScroll(document);
   const meta = getViewMeta(state.activeView);
-  $("#conceptTree").innerHTML = renderTree(state.activeView, currentWorkflow(), state);
+  const conceptTreeMarkup = renderTree(state.activeView, currentWorkflow(), state);
+  const conceptTreeElem = $("#conceptTree");
+  if (conceptTreeElem && conceptTreeElem.dataset.renderedMarkup !== conceptTreeMarkup) {
+    conceptTreeElem.innerHTML = conceptTreeMarkup;
+    conceptTreeElem.dataset.renderedMarkup = conceptTreeMarkup;
+  }
   $("#viewEyebrow").textContent = meta.subtitle;
   $("#viewTitle").textContent = meta.label;
   $("#viewContext").title = `${currentProjectTitle()} / ${meta.label}`;
@@ -2113,21 +2118,24 @@ async function hydrateProjectModels() {
   await collaborationController.hydrate();
   if (state.projectEntryRequired) return;
   collaborationController.startWatch();
-  await projectBriefSyncController.hydrate();
-  await projectForceMissionSyncController.hydrate();
-  await projectPhaseActionSyncController.hydrate();
-  await researchChatProjectSync.hydrate();
-  await projectConceptMapSyncController.hydrate();
-  await projectConceptGraphicSyncController.hydrate();
-  await projectOv1SyncController.hydrate();
-  await projectOv5SyncController.hydrate();
-  await dodafProductController.hydrateAll();
-  await projectOodaSyncController.hydrate();
-  await projectScenarioSyncController.hydrate();
-  await projectValidationSyncController.hydrate();
-  await projectKnowledgeSyncController.hydrate();
-  await projectReportArchiveSyncController.hydrate();
-  await projectModelSnapshotSyncController.hydrate();
+  await Promise.all([
+    projectBriefSyncController.hydrate({ silent: true }),
+    projectForceMissionSyncController.hydrate({ silent: true }),
+    projectPhaseActionSyncController.hydrate({ silent: true }),
+    researchChatProjectSync.hydrate({ silent: true }),
+    projectConceptMapSyncController.hydrate({ silent: true }),
+    projectConceptGraphicSyncController.hydrate({ silent: true }),
+    projectOv1SyncController.hydrate({ silent: true }),
+    projectOv5SyncController.hydrate({ silent: true }),
+    dodafProductController.hydrateAll({ silent: true }),
+    projectOodaSyncController.hydrate({ silent: true }),
+    projectScenarioSyncController.hydrate({ silent: true }),
+    projectValidationSyncController.hydrate({ silent: true }),
+    projectKnowledgeSyncController.hydrate({ silent: true }),
+    projectReportArchiveSyncController.hydrate({ silent: true }),
+    projectModelSnapshotSyncController.hydrate({ silent: true })
+  ]);
+  render();
 }
 
 async function hydrateProjectDirectory({ skipRender = false } = {}) {
@@ -2213,6 +2221,9 @@ function goToWorkflowView(viewId) {
  * - 状态机校验: empty → AI derives editable task machines from phase actions
  * - 时序校验: empty → AI generates separate side and per-phase timelines
  * - 组织关系: empty → AI generates command/support/information links among confirmed forces
+ * - 作战兵力: empty → AI derives force-mission plan from tasks
+ * - 总体图: empty → AI derives concept nodes and high-level interaction relations
+ * - 仿真想定: empty → AI/full-element compiler generates scenario entities, areas, and phases
  * Used by: top gate capsule, gate panel buttons, left floating step rail, menus.
  */
 async function navigateToResearchView(viewId, { toast = "", force = false, entrySource = "default", completeOperationalTasks = false } = {}) {
@@ -2247,6 +2258,15 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
   }
   if (viewId === "ov4") {
     await dodafProductController.pregenerateOv4FromForceMission({ silent: false });
+  }
+  if (viewId === "force-mission" && !(state.forceMission?.forces || []).length && (state.forceMission?.tasksConfirmedAt || (state.forceMission?.tasks || []).length)) {
+    await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
+  }
+  if (viewId === "ov1" && (!state.conceptGraphic?.nodes?.length && !state.ov1Candidate)) {
+    await ov1AiController.generateOv1();
+  }
+  if (viewId === "scenario" && (!state.scenario || !state.scenario.entities?.length)) {
+    await scenarioController.compileOrGenerateScenario({ silent: false, forceAi: true });
   }
   if (viewId === "operational-task" && (
     !(state.forceMission?.tasks || []).length
@@ -2361,7 +2381,7 @@ async function completeWorkflowStage() {
   const incompleteReasons = getWorkflowStageIncompleteReasons(state, stage);
   if (incompleteReasons.length) {
     setWorkflowGateOpen(true);
-    showToast(`\u5c1a\u4e0d\u80fd\u8fdb\u5165${workflowPhases[stage + 1] || "\u4ea4\u4ed8\u5b8c\u6210"}\uff1a\u8bf7\u5148\u5b8c\u6210${incompleteReasons.join("\u3001")}`);
+    showToast(`尚不能进入${workflowPhases[stage + 1] || "交付完成"}：请先完成${incompleteReasons.join("、")}`);
     return;
   }
   if (completedWorkflowStage(workflow) >= stage) {
@@ -2395,21 +2415,30 @@ async function completeWorkflowStage() {
     showToast(relatedViewId
       ? `当前阶段已确认，已进入关联流程${relatedViewLabel(relatedViewId)}`
       : nextView ? "当前阶段已确认，已进入下一阶段" : "工作流已确认完成");
-    // Completing 阶段行动 forms an independent task product.
     if (stage === 1 && nextMainView === "operational-task") {
       await conceptPlanningController.generateOperationalTasks({ silent: false });
     }
     if (stage === 2 && nextMainView === "force-mission") {
       await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
     }
+    if (stage === 3 && nextMainView === "ov1") {
+      if (!state.conceptGraphic?.nodes?.length && !state.ov1Candidate) {
+        await ov1AiController.generateOv1();
+      }
+    }
     if (stage === 4 && nextMainView === "concept-map" && typeof conceptMapController.seedFromPlanning === "function") {
       await conceptMapController.seedFromPlanning({ silent: false });
+    }
+    if (stage === 5 && nextMainView === "scenario") {
+      if (!state.scenario || !state.scenario.entities?.length) {
+        await scenarioController.compileOrGenerateScenario({ silent: false, forceAi: true });
+      }
     }
     if (nextView === "ov4") {
       await dodafProductController.pregenerateOv4FromForceMission({ silent: false });
     }
   } catch {
-    showToast("\u9636\u6bb5\u72b6\u6001\u4fdd\u5b58\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5");
+    showToast("阶段状态保存失败，请重试");
   } finally {
     state.workflowCompleting = false;
     render();
@@ -2431,7 +2460,7 @@ async function setWorkflowMode(mode) {
     await settleBusyTransition();
   } catch {
     if (projectEntry) projectEntry.workflow = { ...workflow, mode: previousMode };
-    showToast("\u5de5\u4f5c\u6d41\u6a21\u5f0f\u4fdd\u5b58\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5");
+    showToast("工作模式保存失败，请重试");
   } finally {
     state.workflowModeSwitching = false;
     render();

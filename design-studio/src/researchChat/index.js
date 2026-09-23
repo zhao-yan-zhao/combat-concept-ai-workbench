@@ -38,6 +38,7 @@ export {
 
 export {
   patchResearchChatStream,
+  renderResearchChatDock,
   renderResearchChatFloatButton,
   renderResearchChatMessage,
   renderResearchChatPanel,

@@ -123,7 +123,7 @@ export function createPhaseActionChatController({
           signal,
           onDelta: (payload) => {
             const preview = String(payload?.preview || "").trim()
-              || (payload?.assembled ? `正在生成阶段草案… ${Math.min(100, Math.round(String(payload.assembled).length / 40))}%` : "");
+              || (payload?.assembled ? "正在分析并生成阶段草案…" : "");
             if (preview) onDelta?.({ preview, assembled: payload.assembled || "" });
           }
         });
@@ -144,8 +144,12 @@ export function createPhaseActionChatController({
         state.phaseActionFocusId = resolveFocusId(next.phases, previousFocusId, previousFocusName);
         await syncPhaseAction(state.phaseAction, { source: "phase-action:chat-revise" });
 
+        const advice = response.result?.summary
+          ? String(response.result.summary).trim()
+          : formatRevisionAdvice(question, state.phaseAction);
+
         return {
-          advice: formatRevisionAdvice(question, state.phaseAction),
+          advice,
           source: "ai",
           notifyMessage: `已按对话修订阶段草案（${state.phaseAction.phases.length} 段），请在中间栏复核`
         };

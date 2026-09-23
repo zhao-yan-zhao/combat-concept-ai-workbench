@@ -12,36 +12,17 @@ export function createOv1AiController({ getState, render, notify, invalidateVali
       if (state.ov1Generating) return true;
       void generateOv1(state);
       return true;
+    },
+    generateOv1() {
+      const state = getState();
+      if (state.ov1Generating) return;
+      return generateOv1(state);
     }
   };
 
   async function generateOv1(state) {
     state.ov1Generating = true;
     render();
-    const hasSubjectForces = Array.isArray(state.forceMission?.forces)
-      && state.forceMission.forces.some((force) => force.side === "friendly");
-
-    // Research-subject concept forces already define OV-1. Do not let free-form AI rename nodes.
-    if (hasSubjectForces) {
-      try {
-        state.ov1Candidate = normalizeOv1Model(createLocalOv1Draft({
-          brief: state.brief,
-          direction: state.direction,
-          forceMission: state.forceMission
-        }));
-        notify("已按研究主体概念兵力装备展开高层概念图候选（一兵力一节点）");
-      } catch {
-        state.ov1Candidate = normalizeOv1Model(createLocalOv1Draft({
-          brief: state.brief,
-          direction: state.direction
-        }));
-        notify("概念兵力归纳失败，已回退简报草案");
-      } finally {
-        state.ov1Generating = false;
-        render();
-      }
-      return;
-    }
 
     const evidenceSelection = await selectEvidenceForAi({
       query: `${state.brief?.objective || ""} ${state.brief?.approach || ""} ${state.brief?.expectedEffects || ""}`,
@@ -52,6 +33,13 @@ export function createOv1AiController({ getState, render, notify, invalidateVali
     const evidence = evidenceSelection.items;
     try {
       const planning = planningAnalysisForDownstream(state);
+      const subjectForces = Array.isArray(state.forceMission?.forces)
+        ? state.forceMission.forces.filter((force) => force.side === "friendly")
+        : [];
+      const forcesHint = subjectForces.length
+        ? `已确认研究主体概念兵力（${subjectForces.map((f) => `${f.name}(角色:${f.role},任务:${f.task || "通用"})`).join("；")}）。请严格以此为主体骨架推导各节点高层交互关系、控制流、态势变化与反馈回路。`
+        : "当前缺少已确认研究主体概念兵力，请按简报生成研究级五节点高层概念图草案。";
+
       const response = await generateWithAi({
         workflowId: "concept",
         workflow: { id: "concept", title: "高层作战概念图生成", outputSchema: "OperationalConceptGraphic" },
@@ -62,12 +50,13 @@ export function createOv1AiController({ getState, render, notify, invalidateVali
           "主要风险": state.brief?.risk || "待识别风险",
           ...planning,
           "概念方向": state.direction,
+          "概念兵力骨架": forcesHint,
           "生成要求": [
-            "当前缺少已确认研究主体概念兵力，仅可按简报生成研究级高层概念图草案。",
+            forcesHint,
             "必须恰好给出 sense、decide、control、opponent、assess 五类节点及其高层关系。",
-            "节点名只能是实体、能力或关键动作；不得把阶段名、研究步骤写成节点。",
-            "内容保持研究级、可审阅；不提供具体行动步骤、目标选择、武器用法、坐标或性能参数。"
-          ].join("")
+            "重点生成节点间的高层交互关系（信息流、控制流、态势变化、反馈），以及 concept 总体作战概念闭环叙述。",
+            "内容保持研究级、可审阅；不提供微观战术细节、具体武器用法或伪精确坐标。"
+          ].join(" ")
         },
         evidence
       });
@@ -78,7 +67,9 @@ export function createOv1AiController({ getState, render, notify, invalidateVali
         draft: response.result,
         forceMission: state.forceMission
       }));
-      notify("AI 候选已生成；请比较后决定是否应用");
+      notify(subjectForces.length
+        ? "AI 已根据概念兵力与简报生成高层概念图交互关系与闭环候选；请比较后决定是否应用"
+        : "AI 候选已生成；请比较后决定是否应用");
     } catch {
       state.ov1Candidate = normalizeOv1Model(createLocalOv1Draft({
         brief: state.brief,

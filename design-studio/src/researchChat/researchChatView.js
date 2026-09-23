@@ -215,3 +215,27 @@ function resolveSourceMeta(source) {
   }
   return { label: "本地建议", sourceClass: "is-local", articleClass: "" };
 }
+
+/**
+ * Shared collapsible dock shell for research chat across workflow steps.
+ */
+export function renderResearchChatDock({
+  scope = "phase-action",
+  open = false,
+  dockId = "",
+  className = "",
+  contentHtml = "",
+  label = "研究对话侧栏"
+} = {}) {
+  const resolvedDockId = dockId || `${scope}ChatDock`;
+  const classes = [
+    "research-chat-dock",
+    `${scope}-chat-dock`,
+    open ? "is-open" : "is-collapsed",
+    className
+  ].filter(Boolean).join(" ");
+
+  return `<aside class="${classes}" id="${escapeHtml(resolvedDockId)}" aria-hidden="${open ? "false" : "true"}" aria-label="${escapeHtml(label)}">
+    ${open ? contentHtml : ""}
+  </aside>`;
+}

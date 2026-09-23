@@ -32,7 +32,11 @@ import {
   platformFitsConceptForce,
   preferredCountryForForceSide,
   resolveSideCountries,
-  seedConceptEquipmentType
+  seedConceptEquipmentType,
+  deriveCombatForcesFromConcept,
+  addCombatForce,
+  removeCombatForce,
+  updateCombatForce
 } from "../../shared/conceptPlanning.js";
 
 const STORAGE_PREFIX = "combat-concept-project-force-mission-v1";
@@ -92,7 +96,11 @@ export {
   platformFitsConceptForce,
   preferredCountryForForceSide,
   resolveSideCountries,
-  seedConceptEquipmentType
+  seedConceptEquipmentType,
+  deriveCombatForcesFromConcept,
+  addCombatForce,
+  removeCombatForce,
+  updateCombatForce
 };
 
 export function applyForceMissionReviewNotes(plan, reviewNotes) {

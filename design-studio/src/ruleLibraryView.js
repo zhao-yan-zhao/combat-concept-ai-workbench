@@ -5,6 +5,7 @@
 import { resolveDodafProduct } from "./dodafProductStore.js";
 import { renderProjectStorageActions } from "./projectStorageView.js";
 import {
+  renderResearchChatDock,
   renderResearchChatFloatButton,
   renderResearchChatPanel
 } from "./researchChat/index.js";
@@ -60,14 +61,18 @@ export function renderRuleLibrary(state = {}) {
         </div>`
     : renderEmptyBoard({ busy, pregenerating })}
       </div>
-      <aside class="rule-chat-dock ${chatOpen ? "is-open" : "is-collapsed"}" id="ruleLibraryChatDock" aria-hidden="${chatOpen ? "false" : "true"}" aria-label="规则库对话侧栏">
-        ${chatOpen ? renderRuleLibraryChatPanel({
+      ${renderResearchChatDock({
+        scope: "rule",
+        open: chatOpen,
+        dockId: "ruleLibraryChatDock",
+        label: "规则库对话侧栏",
+        contentHtml: renderRuleLibraryChatPanel({
           chat: state.ruleLibraryChat,
           chatGenerating,
           rules,
           model
-        }) : ""}
-      </aside>
+        })
+      })}
     </div>
   </section>`;
 }

@@ -103,9 +103,7 @@ export function createForceMissionChatController({
           signal,
           onDelta: (payload) => {
             const preview = String(payload?.preview || "").trim()
-              || (payload?.assembled
-                ? `正在修订兵力草案… ${Math.min(100, Math.round(String(payload.assembled).length / 50))}%`
-                : "");
+              || (payload?.assembled ? "正在分析并生成兵力草案…" : "");
             if (preview) onDelta?.({ preview, assembled: payload.assembled || "" });
           }
         });
@@ -122,8 +120,12 @@ export function createForceMissionChatController({
         state.forceMission = persistForceMission(next, projectId);
         await syncForceMission(state.forceMission, { source: "force-mission:chat-revise" });
 
+        const advice = response.result?.summary
+          ? String(response.result.summary).trim()
+          : formatRevisionAdvice(question, state.forceMission);
+
         return {
-          advice: formatRevisionAdvice(question, state.forceMission),
+          advice,
           source: "ai",
           notifyMessage: `已按对话修订兵力草案（概念 ${state.forceMission.forces?.length || 0} / 作战 ${state.forceMission.combatForces?.length || 0}），请复核`
         };

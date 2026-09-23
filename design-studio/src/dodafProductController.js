@@ -1467,10 +1467,8 @@ export function createDodafProductController({
       }
     },
 
-    async hydrateAll() {
-      for (const resource of DODAF_PRODUCT_KEYS) {
-        await syncControllers[resource].hydrate();
-      }
+    async hydrateAll({ silent = false } = {}) {
+      await Promise.all(DODAF_PRODUCT_KEYS.map((resource) => syncControllers[resource].hydrate({ silent })));
       try {
         const remote = await loadProjectArchitecture(projectId);
         const state = getState();

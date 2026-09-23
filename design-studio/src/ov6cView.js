@@ -19,7 +19,7 @@ import {
   sequenceToJsSequence,
   sequenceToPlantUml
 } from "./sequenceDiagramDsl.js";
-import { renderResearchChatPanel } from "./researchChat/index.js";
+import { renderResearchChatDock, renderResearchChatPanel } from "./researchChat/index.js";
 import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
 
 const MESSAGE_TYPES = ["message", "response", "status", "exception", "timeout"];
@@ -101,13 +101,17 @@ export function renderOv6c(state = {}) {
           editorOpen
         })}
 
-        <aside class="seq-chat-dock ${chatOpen ? "is-open" : "is-collapsed"}" id="sequenceChatDock" aria-hidden="${chatOpen ? "false" : "true"}" aria-label="时序对话侧栏">
-          ${chatOpen ? renderSequenceChatPanel({
+        ${renderResearchChatDock({
+          scope: "seq",
+          open: chatOpen,
+          dockId: "sequenceChatDock",
+          label: "时序对话侧栏",
+          contentHtml: renderSequenceChatPanel({
             chat: state.sequenceChat,
             chatGenerating,
             model
-          }) : ""}
-        </aside>
+          })
+        })}
         ${toolsOpen ? renderSequenceToolboxRail({ editorOpen, chatOpen, chatGenerating, sequenceId: selectedId }) : ""}
       </div>`
     : renderEmptyWorkbench({ toolsOpen, chatOpen, chatGenerating, chat: state.sequenceChat, model })}
@@ -173,9 +177,13 @@ function renderEmptyWorkbench({ toolsOpen, chatOpen, chatGenerating, chat, model
         <button type="button" class="quiet-button" data-action="open-sequence-chat">打开时序对话</button>
       </div>
     </div>
-    <aside class="seq-chat-dock ${chatOpen ? "is-open" : "is-collapsed"}" id="sequenceChatDock" aria-hidden="${chatOpen ? "false" : "true"}">
-      ${chatOpen ? renderSequenceChatPanel({ chat, chatGenerating, model }) : ""}
-    </aside>
+    ${renderResearchChatDock({
+      scope: "seq",
+      open: chatOpen,
+      dockId: "sequenceChatDock",
+      label: "时序对话侧栏",
+      contentHtml: renderSequenceChatPanel({ chat, chatGenerating, model })
+    })}
     ${toolsOpen ? renderSequenceToolboxRail({ chatOpen, chatGenerating }) : ""}
   </div>`;
 }

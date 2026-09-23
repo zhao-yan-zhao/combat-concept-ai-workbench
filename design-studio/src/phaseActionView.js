@@ -7,6 +7,7 @@ import {
 import { isPhaseActionConceptConfirmed } from "./phaseActionStore.js";
 import { renderPlanningMigrationBanner } from "./planningContext.js";
 import {
+  renderResearchChatDock,
   renderResearchChatFloatButton,
   renderResearchChatPanel
 } from "./researchChat/researchChatView.js";
@@ -88,8 +89,12 @@ export function renderPhaseAction(state) {
           phaseName
         })}
       </div>
-      <aside class="phase-chat-dock ${chatOpen ? "is-open" : "is-collapsed"}" id="phaseActionChatDock" aria-hidden="${chatOpen ? "false" : "true"}" aria-label="核验对话侧栏">
-        ${chatOpen ? renderPhaseActionChatPanel({
+      ${renderResearchChatDock({
+        scope: "phase",
+        open: chatOpen,
+        dockId: "phaseActionChatDock",
+        label: "核验对话侧栏",
+        contentHtml: renderPhaseActionChatPanel({
           chat: state.phaseActionChat,
           chatGenerating,
           busy,
@@ -97,8 +102,8 @@ export function renderPhaseAction(state) {
           phases,
           plan,
           selectedLabels
-        }) : ""}
-      </aside>
+        })
+      })}
     </div>
     ` : `
     <div class="phase-empty-state">
