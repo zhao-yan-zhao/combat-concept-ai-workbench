@@ -2380,6 +2380,27 @@ async function completeWorkflowStage() {
     : nextWorkflowStage(workflow);
   const incompleteReasons = getWorkflowStageIncompleteReasons(state, stage);
   if (incompleteReasons.length) {
+    if (stage === 1 && state.phaseAction?.status !== "confirmed") {
+      const blockers = getWorkflowStageIncompleteReasons(state, 1, { forAdvancement: true });
+      if (!blockers.length) {
+        await conceptPlanningController.confirmPhaseAction();
+        return;
+      }
+    }
+    if (stage === 2 && !state.forceMission?.tasksConfirmedAt) {
+      const blockers = getWorkflowStageIncompleteReasons(state, 2, { forAdvancement: true });
+      if (!blockers.length) {
+        await conceptPlanningController.confirmOperationalTasks();
+        return;
+      }
+    }
+    if (stage === 3 && state.forceMission?.status !== "confirmed") {
+      const blockers = getWorkflowStageIncompleteReasons(state, 3, { forAdvancement: true });
+      if (!blockers.length) {
+        await conceptPlanningController.confirmForceMission();
+        return;
+      }
+    }
     setWorkflowGateOpen(true);
     showToast(`尚不能进入${workflowPhases[stage + 1] || "交付完成"}：请先完成${incompleteReasons.join("、")}`);
     return;

@@ -4010,6 +4010,8 @@ h3 { margin-bottom: 8px; font-size: 15px; color: #d9f3e8; }
 .ai-config-key-state b { color: var(--ink); font-size: 12px; }
 .ai-config-form .editor-actions { align-self: stretch; }
 .ai-config-refresh { margin-top: 10px; }
+.ai-config-form .ai-config-full-width { grid-column: 1 / -1; }
+.ai-config-hint { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .edge-editor { display: grid; gap: 8px; }
 .trace-source-field { display: grid; gap: 7px; margin: 0; padding: 9px; border: 1px solid var(--line); border-radius: 6px; }

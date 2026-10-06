@@ -49,7 +49,7 @@ function isCompletedValue(value) {
  * Hard stage gates only check 主写 requirements (plans/RESEARCH_WORKFLOW_18.md).
  * Check pages (rules/state/events, OV-2/3/4, activity decomposition, structure review) do not block stage confirm.
  */
-export function getWorkflowStageIncompleteReasons(state, stage) {
+export function getWorkflowStageIncompleteReasons(state, stage, { forAdvancement = false } = {}) {
   if (stage === 0) {
     return [
       ["研究意图", state.brief?.researchIntent],
@@ -62,19 +62,22 @@ export function getWorkflowStageIncompleteReasons(state, stage) {
   }
   // 关联模型只提供提示与诊断，不参与七步主线强门禁。
   if (stage === 1) {
-    return [
+    const reasons = [
       ...phaseActionConceptIncompleteReasons(state.phaseAction, state.phaseActionStorage)
     ].filter(Boolean);
+    return forAdvancement ? reasons.filter((r) => r !== "确认阶段与行动") : reasons;
   }
   if (stage === 2) {
-    return [
+    const reasons = [
       ...operationalTaskPlanIncompleteReasons(state.forceMission, state.forceMissionStorage)
     ].filter(Boolean);
+    return forAdvancement ? reasons.filter((r) => r !== "确认作战任务") : reasons;
   }
   if (stage === 3) {
-    return [
+    const reasons = [
       ...combatForcePlanIncompleteReasons(state.forceMission, state.forceMissionStorage)
     ].filter(Boolean);
+    return forAdvancement ? reasons.filter((r) => r !== "确认作战兵力") : reasons;
   }
   if (stage === 4) {
     return [
@@ -103,7 +106,7 @@ export function getWorkflowStageIncompleteReasons(state, stage) {
 }
 
 export function canCompleteWorkflowStage(state, stage) {
-  return getWorkflowStageIncompleteReasons(state, stage).length === 0;
+  return getWorkflowStageIncompleteReasons(state, stage, { forAdvancement: true }).length === 0;
 }
 
 function stepShortLabel(view) {
@@ -130,7 +133,7 @@ export function resolveWorkflowGateContext(state) {
   const phaseIndex = index;
   const isLastInPhase = true;
   const phaseDone = phaseIndex >= 0 && phaseIndex <= completedThrough;
-  const incompleteReasons = phaseIndex >= 0 ? getWorkflowStageIncompleteReasons(state, phaseIndex) : [];
+  const incompleteReasons = phaseIndex >= 0 ? getWorkflowStageIncompleteReasons(state, phaseIndex, { forAdvancement: true }) : [];
   const ready = incompleteReasons.length === 0;
   const followingPhase = phaseIndex >= 0 && phaseIndex < workflowPhases.length - 1
     ? workflowPhases[phaseIndex + 1]

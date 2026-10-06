@@ -434,7 +434,9 @@ export function createConceptPlanningController({
           country: event.currentTarget.value || ""
         };
       });
-    },
+    confirmPhaseAction,
+    confirmOperationalTasks: confirmTasks,
+    confirmForceMission,
     generateCombatFocus,
     generateOperationalTasks,
     generateForceMission,

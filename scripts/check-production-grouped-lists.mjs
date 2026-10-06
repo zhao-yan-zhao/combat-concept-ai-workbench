@@ -38,7 +38,6 @@ assert.match(css, /\.ov1b-page\s*\{[^}]*min-height:\s*0;[^}]*height:\s*100%/s);
 assert.match(css, /\.ov1b-layout\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0/);
 
 const integrations = [
-  ["design-studio/src/phaseActionView.js", "phase-action"],
   ["design-studio/src/operationalTaskView.js", "operational-task"],
   ["design-studio/src/forceMissionView.js", "force-concept"],
   ["design-studio/src/forceMissionView.js", "force-combat"],
@@ -55,6 +54,9 @@ for (const [path, scope] of integrations) {
   assert.ok(source.includes("data-grouped-list-items"), `${scope} must declare a list container`);
   assert.ok(source.includes("data-grouped-list-item"), `${scope} must expose item metadata`);
 }
+
+const phaseSource = await read("design-studio/src/phaseActionView.js");
+assert.ok(!phaseSource.includes("data-grouped-list-panel"), "Phase-action must not include grouped-list panel or search/group controls");
 
 const taskSource = await read("design-studio/src/operationalTaskView.js");
 assert.ok(!taskSource.includes("operational-task-filters"), "The legacy fixed side filter must be removed from the task list");

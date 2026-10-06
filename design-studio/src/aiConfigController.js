@@ -57,15 +57,21 @@ async function saveConfig(state, formData, render, notify, onSaved) {
   state.aiConfigSaving = true;
   render();
   try {
-    const config = await saveAiServiceConfig({
+    const payload = {
       baseUrl: String(formData.get("baseUrl") || "").trim(),
       model: String(formData.get("model") || "").trim()
-    });
+    };
+    const apiKey = String(formData.get("apiKey") || "").trim();
+    if (apiKey) {
+      payload.apiKey = apiKey;
+    }
+    const config = await saveAiServiceConfig(payload);
     state.aiConfig = { status: "ready", config };
-    notify(config.configured ? "AI 服务配置已保存" : "配置已保存，仍需在服务端设置 API Key");
+    notify(config.configured ? "AI 服务配置已保存" : "配置已保存，仍需设置 API Key");
     onSaved?.();
   } catch (error) {
-    notify(error.message || "AI 服务配置保存失败");
+    const message = error.message || "AI 服务配置保存失败";
+    notify(/lead|login|403/i.test(message) ? "保存失败：需要负责人登录后方可修改 AI 服务配置" : message);
   } finally {
     state.aiConfigSaving = false;
     render();
