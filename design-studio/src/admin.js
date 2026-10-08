@@ -1,4 +1,5 @@
 import { getAiServiceConfig, saveAiServiceConfig } from "./aiConfigClient.js";
+import { PROVIDER_PRESETS } from "./aiConfigView.js";
 import { getCmoDatabaseConfig, probeCmoDatabase, saveCmoDatabaseConfig } from "./cmoCatalogClient.js";
 import { loadCollaborationSession } from "./projectBriefClient.js";
 import { applyTheme, getThemeConfig, saveThemeConfig } from "./themeConfigClient.js";
@@ -23,6 +24,22 @@ function render() {
   if (!state.session?.authenticated || !actor?.roles?.includes("lead")) { root.innerHTML = `<section class="surface surface-pad admin-denied"><h2>无管理权限</h2><p>请使用负责人账号登录工作台后再进入本页。</p><a class="quiet-button" href="./">返回工作台</a></section>`; return; }
   const config = state.config || {};
   const writable = Boolean(config.configurationWrite?.enabled);
+  const provider = config.provider || "custom";
+  const providerLabel = provider === "gemini"
+    ? "Google Gemini"
+    : provider === "deepseek"
+      ? "DeepSeek"
+      : provider === "qwen"
+        ? "通义千问"
+        : provider === "openai"
+          ? "OpenAI"
+          : "自定义";
+  const protocol = config.protocol || "auto";
+  const protocolLabel = protocol === "responses"
+    ? "Responses (缓存优化)"
+    : protocol === "chat"
+      ? "Chat Completions"
+      : "自动协商 (Auto)";
   const keySource = !config.configured
     ? "未配置"
     : config.apiKeySource === "windows-dpapi"
@@ -30,10 +47,26 @@ function render() {
       : config.apiKeySource === "server-environment"
         ? "服务进程环境变量"
         : "已配置";
-  root.innerHTML = `<section class="surface surface-pad admin-ai-panel"><div class="section-heading"><div><h2>AI 服务</h2><p>当前负责人：${escapeHtml(actor.label)}</p></div><span class="status-tag ${config.configured ? "" : "review"}">${config.configured ? "AI 已就绪" : "密钥未配置"}</span></div><div class="admin-status-grid"><div><span>运行模式</span><b>${escapeHtml(config.mode || "unknown")}</b></div><div><span>密钥来源</span><b>${escapeHtml(keySource)}</b></div><div><span>配置写入</span><b>${writable ? "负责人可修改" : "部署策略已禁用"}</b></div></div><form id="adminAiConfigForm" class="ai-config-form"><label><span>服务地址</span><input name="baseUrl" type="url" value="${escapeAttribute(config.baseUrl || "https://api.openai.com/v1")}" required></label><label><span>模型</span><input name="model" value="${escapeAttribute(config.model || "")}" required maxlength="120"></label><label class="ai-config-full-width"><span>API Key</span><input name="apiKey" type="password" autocomplete="new-password" minlength="16" maxlength="2048" placeholder="${config.configured ? "已配置密钥（如需更新请输入新密钥，留空则保持现有密钥）" : "输入 API Key，将使用 Windows DPAPI 在本机加密存储"}"></label><div class="admin-key-notice ai-config-full-width">API Key 保存后将使用 Windows DPAPI 在本机安全加密持久化，不在前端回显。留空则保持现有密钥。</div><div class="editor-actions ai-config-full-width"><button class="quiet-button" type="button" data-action="refresh">刷新状态</button><button type="submit" ${state.saving || !writable ? "disabled" : ""}>${state.saving ? "正在保存" : "保存配置"}</button></div></form></section>`;
+  root.innerHTML = `<section class="surface surface-pad admin-ai-panel"><div class="section-heading"><div><h2>AI 服务</h2><p>当前负责人：${escapeHtml(actor.label)}</p></div><span class="status-tag ${config.configured ? "" : "review"}">${config.configured ? "AI 已就绪" : "密钥未配置"}</span></div><div class="admin-status-grid"><div><span>运行模式</span><b>${escapeHtml(config.mode || "unknown")}</b></div><div><span>服务商</span><b>${escapeHtml(providerLabel)}</b></div><div><span>接口协议</span><b>${escapeHtml(protocolLabel)}</b></div><div><span>密钥来源</span><b>${escapeHtml(keySource)}</b></div><div><span>配置写入</span><b>${writable ? "负责人可修改" : "部署策略已禁用"}</b></div></div><form id="adminAiConfigForm" class="ai-config-form"><label class="ai-config-full-width"><span>服务商预设</span><select name="provider" id="adminAiConfigProviderSelect"><option value="gemini" ${provider === "gemini" ? "selected" : ""}>Google Gemini (本地网关 / Antigravity - 支持 Responses 缓存)</option><option value="deepseek" ${provider === "deepseek" ? "selected" : ""}>DeepSeek (深度求索官方 - 服务端前缀自动缓存)</option><option value="qwen" ${provider === "qwen" ? "selected" : ""}>通义千问 (阿里云百炼 DashScope - 上下文缓存加速)</option><option value="openai" ${provider === "openai" ? "selected" : ""}>OpenAI (官方标准服务)</option><option value="custom" ${provider === "custom" ? "selected" : ""}>自定义兼容端点</option></select></label><label><span>服务地址</span><input name="baseUrl" type="url" value="${escapeAttribute(config.baseUrl || "https://api.openai.com/v1")}" required></label><label><span>模型</span><input name="model" value="${escapeAttribute(config.model || "")}" required maxlength="120"></label><label class="ai-config-full-width"><span>接口协议</span><select name="protocol"><option value="auto" ${protocol === "auto" ? "selected" : ""}>自动协商（优先尝试 Responses 协议上下文缓存）</option><option value="responses" ${protocol === "responses" ? "selected" : ""}>Responses API（/responses，推荐，支持 Prompt Caching 提示词缓存）</option><option value="chat" ${protocol === "chat" ? "selected" : ""}>Chat Completions（/chat/completions，传统标准兼容）</option></select></label><label class="ai-config-full-width"><span>API Key</span><input name="apiKey" type="password" autocomplete="new-password" minlength="16" maxlength="2048" placeholder="${config.configured ? "已配置密钥（如需更新请输入新密钥，留空则保持现有密钥）" : "输入 API Key，将使用 Windows DPAPI 在本机加密存储"}"></label><div class="admin-key-notice admin-ai-provider-hint ai-config-full-width">${escapeHtml(PROVIDER_PRESETS[provider]?.hint || "可自选服务商，支持 Prompt Caching 上下文缓存加速。")}</div><div class="editor-actions ai-config-full-width"><button class="quiet-button" type="button" data-action="refresh">刷新状态</button><button type="submit" ${state.saving || !writable ? "disabled" : ""}>${state.saving ? "正在保存" : "保存配置"}</button></div></form></section>`;
   root.insertAdjacentHTML("beforeend", renderCmoPanel(state.cmo, writable, state.cmoProbe));
   root.insertAdjacentHTML("beforeend", renderThemePanel(state.theme, writable));
   root.querySelector("#adminAiConfigForm")?.addEventListener("submit", save);
+  root.querySelector("#adminAiConfigProviderSelect")?.addEventListener("change", (event) => {
+    const selected = String(event.target.value || "custom").trim();
+    const preset = PROVIDER_PRESETS[selected];
+    if (preset && selected !== "custom") {
+      const form = root.querySelector("#adminAiConfigForm");
+      if (!form) return;
+      const baseUrlInput = form.querySelector('input[name="baseUrl"]');
+      const modelInput = form.querySelector('input[name="model"]');
+      const protocolSelect = form.querySelector('select[name="protocol"]');
+      const hint = form.querySelector(".admin-ai-provider-hint");
+      if (baseUrlInput) baseUrlInput.value = preset.baseUrl;
+      if (modelInput) modelInput.value = preset.model;
+      if (protocolSelect) protocolSelect.value = preset.protocol;
+      if (hint) hint.textContent = preset.hint;
+    }
+  });
   root.querySelector("#adminCmoConfigForm")?.addEventListener("submit", saveCmo);
   root.querySelector("#adminThemeForm")?.addEventListener("submit", saveTheme);
   root.querySelector("[data-action='theme-reset']")?.addEventListener("click", resetThemeForm);
@@ -58,7 +91,7 @@ async function load() {
 
 async function save(event) {
   event.preventDefault(); state = { ...state, saving: true }; render();
-  try { const values = new FormData(event.currentTarget); const config = await saveAiServiceConfig({ baseUrl: values.get("baseUrl"), model: values.get("model"), apiKey: values.get("apiKey") }); state = { ...state, config }; notify("AI 服务配置已保存"); } catch (error) { notify(error.message || "AI 服务配置保存失败"); }
+  try { const values = new FormData(event.currentTarget); const config = await saveAiServiceConfig({ provider: values.get("provider"), baseUrl: values.get("baseUrl"), model: values.get("model"), protocol: values.get("protocol"), apiKey: values.get("apiKey") }); state = { ...state, config }; notify("AI 服务配置已保存"); } catch (error) { notify(error.message || "AI 服务配置保存失败"); }
   state = { ...state, saving: false }; render();
 }
 

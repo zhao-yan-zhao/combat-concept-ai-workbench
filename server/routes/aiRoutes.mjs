@@ -51,9 +51,25 @@ export function createAiHandlers(runtime) {
       response.end();
       return;
     }
-    const listener = { write, end: () => response.end() };
+    const keepAliveTimer = setInterval(() => {
+      try {
+        response.write(": keep-alive\n\n");
+      } catch {
+        clearInterval(keepAliveTimer);
+      }
+    }, 15000);
+    const listener = {
+      write,
+      end: () => {
+        clearInterval(keepAliveTimer);
+        response.end();
+      }
+    };
     job.listeners.add(listener);
-    response.on("close", () => job.listeners.delete(listener));
+    response.on("close", () => {
+      clearInterval(keepAliveTimer);
+      job.listeners.delete(listener);
+    });
   }
 
   async function runGenerationJob(job) {
@@ -66,8 +82,16 @@ export function createAiHandlers(runtime) {
     publish(job, { type: "start", jobId: job.id, model: getAiServiceConfig().model });
     try {
       let lastAssembled = "";
+      let lastThinking = "";
       for await (const chunk of streamOpenAi(input, base)) {
-        if (chunk.type === "delta") {
+        if (chunk.type === "thinking") {
+          lastThinking = lastThinking ? `${lastThinking}${chunk.text || ""}` : (chunk.text || "");
+          publish(job, {
+            type: "thinking",
+            text: chunk.text || "",
+            assembled: lastThinking
+          });
+        } else if (chunk.type === "delta") {
           lastAssembled = chunk.assembled || (lastAssembled + (chunk.text || ""));
           publish(job, {
             type: "delta",
@@ -160,9 +184,27 @@ export function createAiHandlers(runtime) {
     };
 
     writeEvent({ type: "start", model: getAiServiceConfig().model });
+    let lastAssembled = "";
+    let lastThinking = "";
+    const keepAliveTimer = setInterval(() => {
+      try {
+        response.write(": keep-alive\n\n");
+      } catch {
+        clearInterval(keepAliveTimer);
+      }
+    }, 15000);
+
     try {
-      let lastAssembled = "";
       for await (const chunk of streamOpenAi(input, base)) {
+        if (chunk.type === "thinking") {
+          lastThinking = lastThinking ? `${lastThinking}${chunk.text || ""}` : (chunk.text || "");
+          writeEvent({
+            type: "thinking",
+            text: chunk.text || "",
+            assembled: lastThinking
+          });
+          continue;
+        }
         if (chunk.type === "delta") {
           lastAssembled = chunk.assembled || (lastAssembled + (chunk.text || ""));
           writeEvent({
@@ -190,6 +232,8 @@ export function createAiHandlers(runtime) {
           message: String(fallbackError?.message || error?.message || "AI 流式生成失败")
         });
       }
+    } finally {
+      clearInterval(keepAliveTimer);
     }
     response.end();
   }

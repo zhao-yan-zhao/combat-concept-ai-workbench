@@ -1276,12 +1276,21 @@ export function createPhaseActionConceptFromForceMission(forceMission = {}, brie
 }
 
 /** Compact ov6a rules for phase-action AI analysis (no activity bindings). */
-export function compactRuleLibraryForAnalysis(ov6aOrCompact = null, limit = 40) {
+export function compactRuleLibraryForAnalysis(ov6aOrCompact = null, limit = 40, options = {}) {
   if (!ov6aOrCompact || typeof ov6aOrCompact !== "object") {
     return { count: 0, rules: [] };
   }
   const raw = Array.isArray(ov6aOrCompact.rules) ? ov6aOrCompact.rules : [];
-  const rules = raw.slice(0, limit).map((rule, index) => ({
+  let filtered = raw;
+  if (options.excludeTasks || options.scopeFilter === "phase") {
+    filtered = filtered.filter((rule) => {
+      const scope = String(rule?.scope || "");
+      const id = String(rule?.id || "");
+      if (scope.startsWith("任务：") || id.startsWith("rule-task-")) return false;
+      return true;
+    });
+  }
+  const rules = filtered.slice(0, limit).map((rule, index) => ({
     id: clean(rule?.id, 80) || `rule-${index + 1}`,
     name: clean(rule?.name || rule?.subject, 80) || `规则 ${index + 1}`,
     type: clean(rule?.type, 40) || "约束",

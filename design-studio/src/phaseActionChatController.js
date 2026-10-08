@@ -93,7 +93,7 @@ export function createPhaseActionChatController({
       const revisionNotes = [recentChat, `本轮修订要求：${question}`].filter(Boolean).join("\n");
       const previousPhaseNames = (state.phaseAction?.phases || []).map((phase) => phase.name).filter(Boolean);
       const diversitySeed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-      const ruleLibrary = compactRuleLibraryForAnalysis(state.ov6a || { rules: [] });
+      const ruleLibrary = compactRuleLibraryForAnalysis(state.ov6a || { rules: [] }, 20, { excludeTasks: true });
 
       try {
         const response = await generateWithAiStream({
@@ -110,8 +110,7 @@ export function createPhaseActionChatController({
             previousPhaseNames,
             diversitySeed,
             reviewNotes: revisionNotes,
-            revisionRequest: question,
-            "修订要求": "根据研究人员本轮修订要求，在保留合理部分的前提下更新阶段链。阶段数量仍可变（2～12）。优先落实本轮要求，不要无故整页重写无关阶段。输出须保持专业 CONOPS 语气（克制、可复核）：蓝/红行动写相对时点+主体+方式+对象/责任区+可观察门槛；红方须对蓝方行动作因果回应。时窗必须有理有据：相邻衔接、职能加权（主交战最长）、transitions.note 写时点与划分依据，禁止无依据等长切分。优先术语：航迹融合、交战授权、分层拦截、漏防补射、关键节点生存。若 analysis.ruleLibrary 非空，蓝/红行动与进入退出须落实规则中的作战活动与约束；已有类似表述则不重复堆叠。禁止空泛套话与“编队展开→电子诱发→火力释放→撤离”固定模板（除非修订明确要求）。回答结果必须是完整 PhaseActionConcept。"
+            revisionRequest: question
           },
           evidence: []
         }, {
@@ -122,9 +121,15 @@ export function createPhaseActionChatController({
           onJob,
           signal,
           onDelta: (payload) => {
-            const preview = String(payload?.preview || "").trim()
-              || (payload?.assembled ? "正在分析并生成阶段草案…" : "");
-            if (preview) onDelta?.({ preview, assembled: payload.assembled || "" });
+            const preview = String(payload?.preview || "").trim();
+            const thinking = String(payload?.thinking || "").trim();
+            if (preview || thinking || payload?.assembled) {
+              onDelta?.({
+                preview: preview || (thinking ? "正在推演作战逻辑与阶段时序…" : "正在分析并生成阶段草案…"),
+                assembled: payload.assembled || "",
+                thinking
+              });
+            }
           }
         });
 

@@ -90,8 +90,7 @@ export function createForceMissionChatController({
             currentForceMission: compactForceMissionForAnalysis(state.forceMission),
             cmoMissionTypes: listCmoMissionTypes(),
             reviewNotes: revisionNotes,
-            revisionRequest: question,
-            "修订要求": "根据研究人员本轮修订要求，在保留合理部分的前提下更新兵力与任务草案。必须同时输出概念兵力 forces 与作战兵力 combatForces。优先落实本轮要求，不要无故整页重写无关编组。概念兵力按阶段职责语义；作战兵力可挂接概念单元与任务类型。回答结果必须是完整 ForceMissionPlan。"
+            revisionRequest: question
           },
           evidence: []
         }, {
@@ -102,9 +101,15 @@ export function createForceMissionChatController({
           onJob,
           signal,
           onDelta: (payload) => {
-            const preview = String(payload?.preview || "").trim()
-              || (payload?.assembled ? "正在分析并生成兵力草案…" : "");
-            if (preview) onDelta?.({ preview, assembled: payload.assembled || "" });
+            const preview = String(payload?.preview || "").trim();
+            const thinking = String(payload?.thinking || "").trim();
+            if (preview || thinking || payload?.assembled) {
+              onDelta?.({
+                preview: preview || (thinking ? "正在推演作战兵力编成与平台配置…" : "正在分析并生成兵力草案…"),
+                assembled: payload.assembled || "",
+                thinking
+              });
+            }
           }
         });
 

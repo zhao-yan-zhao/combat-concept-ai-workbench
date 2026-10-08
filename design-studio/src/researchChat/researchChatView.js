@@ -150,6 +150,12 @@ export function renderResearchChatMessage(message, { scope = "brief", interactiv
           ${action}
         </div>
       </div>
+      ${message.thinking ? `
+        <details class="research-chat-thinking">
+          <summary>🧠 推演过程</summary>
+          <div class="research-chat-thinking-text">${escapeHtml(message.thinking)}</div>
+        </details>
+      ` : ""}
       <p>${escapeHtml(message.text)}</p>
     </div>
   </article>`;
@@ -167,7 +173,10 @@ export function scrollResearchChatToBottom(root, scope = "") {
 }
 
 /** In-place stream update without full app re-render (avoids input/scroll flicker). */
-export function patchResearchChatStream(scope, text, root = document) {
+export function patchResearchChatStream(scope, text, optionsOrRoot = document) {
+  const root = (optionsOrRoot && optionsOrRoot.nodeType) ? optionsOrRoot : document;
+  const options = (optionsOrRoot && !optionsOrRoot.nodeType && typeof optionsOrRoot === "object") ? optionsOrRoot : {};
+  const thinking = String(options.thinking || "").trim();
   const host = (root && root.querySelector)
     ? (root.querySelector(`[data-research-chat-scope="${scope}"]`) || root)
     : document;
@@ -177,26 +186,50 @@ export function patchResearchChatStream(scope, text, root = document) {
   const pending = panel.querySelector?.(`[data-research-chat-pending="true"] .inspiration-message-body`)
     || document.querySelector(`[data-research-chat-scope="${scope}"] [data-research-chat-pending="true"] .inspiration-message-body`);
   if (!pending) return;
-  const value = String(text || "").trim();
-  let stream = pending.querySelector("[data-research-chat-stream]");
+
   const typing = pending.querySelector(".research-chat-typing");
-  if (!value) return;
-  if (typing) typing.remove();
-  if (!stream) {
-    stream = document.createElement("p");
-    stream.className = "research-chat-stream";
-    stream.setAttribute("data-research-chat-stream", "");
-    stream.innerHTML = `<span class="research-chat-caret" aria-hidden="true"></span>`;
-    pending.appendChild(stream);
+  if (thinking || text) {
+    if (typing) typing.remove();
   }
-  const caret = stream.querySelector(".research-chat-caret");
-  stream.textContent = value;
-  if (caret) stream.appendChild(caret);
-  else {
-    const mark = document.createElement("span");
-    mark.className = "research-chat-caret";
-    mark.setAttribute("aria-hidden", "true");
-    stream.appendChild(mark);
+
+  if (thinking) {
+    let thinkEl = pending.querySelector("[data-research-chat-thinking]");
+    if (!thinkEl) {
+      thinkEl = document.createElement("details");
+      thinkEl.className = "research-chat-thinking";
+      thinkEl.setAttribute("data-research-chat-thinking", "");
+      thinkEl.open = true;
+      thinkEl.innerHTML = `<summary>🧠 思考推演中…</summary><div class="research-chat-thinking-text"></div>`;
+      const meta = pending.querySelector(".inspiration-message-meta");
+      if (meta && meta.nextSibling) {
+        pending.insertBefore(thinkEl, meta.nextSibling);
+      } else {
+        pending.prepend(thinkEl);
+      }
+    }
+    const thinkBody = thinkEl.querySelector(".research-chat-thinking-text");
+    if (thinkBody) thinkBody.textContent = thinking;
+  }
+
+  const value = String(text || "").trim();
+  if (value) {
+    let stream = pending.querySelector("[data-research-chat-stream]");
+    if (!stream) {
+      stream = document.createElement("p");
+      stream.className = "research-chat-stream";
+      stream.setAttribute("data-research-chat-stream", "");
+      stream.innerHTML = `<span class="research-chat-caret" aria-hidden="true"></span>`;
+      pending.appendChild(stream);
+    }
+    const caret = stream.querySelector(".research-chat-caret");
+    stream.textContent = value;
+    if (caret) stream.appendChild(caret);
+    else {
+      const mark = document.createElement("span");
+      mark.className = "research-chat-caret";
+      mark.setAttribute("aria-hidden", "true");
+      stream.appendChild(mark);
+    }
   }
   const source = pending.querySelector(".inspiration-message-source");
   if (source) source.textContent = "生成中";

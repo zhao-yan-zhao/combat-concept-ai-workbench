@@ -3,7 +3,7 @@
  * 一任务/对象一机；界面不使用 OV-1 文本框样式，不强调 OV 品牌。
  */
 import { resolveDodafProduct } from "./dodafProductStore.js";
-import { renderDerivedViewProvenance } from "./derivedViewProvenance.js";
+import { renderDerivedViewProvenancePopover } from "./derivedViewProvenance.js";
 import { renderProjectStorageActions } from "./projectStorageView.js";
 import {
   computeOv1WorldBounds,
@@ -68,12 +68,12 @@ export function renderStateMachineWorkbench(state = {}) {
         </div>
         <div class="sm-toolbar">
           ${storage ? renderProjectStorageActions(storage, { refreshAction: "refresh-project-ov6b" }) : ""}
+          ${renderDerivedViewProvenancePopover("ov6b")}
           ${machines.length ? `<button type="button" class="quiet-button danger-quiet" data-action="ov6b-clear-all" title="清空全部状态机">清空全部</button>` : ""}
           <button type="button" class="primary-btn" data-action="save-dodaf-ov6b">保存</button>
           <button type="button" class="quiet-button" data-action="advance-workflow">下一步</button>
         </div>
       </div>
-      ${renderDerivedViewProvenance("ov6b")}
     </header>
 
     ${machines.length
@@ -383,12 +383,12 @@ function renderStateMachineFlowCanvas(machine, { selectedStateId = "", selectedT
           const selected = selectedStateId === node.id ? " is-selected" : "";
           const kind = node.stateKind || "normal";
           return `<div class="sm-flow-node-wrap kind-${escapeHtml(kind)}${selected}" data-ov1-node="${id}" data-logical-x="${escapeHtml(String(node.x))}" data-logical-y="${escapeHtml(String(node.y))}" style="left:${escapeHtml(cssPos.left)};top:${escapeHtml(cssPos.top)}">
-            <button type="button" class="sm-flow-node kind-${escapeHtml(kind)}${selected}" data-ov1="${id}" title="${escapeHtml(node.label)}（${escapeHtml(KIND_LABELS[kind] || kind)}）">
+            <button type="button" class="sm-flow-node kind-${escapeHtml(kind)}${selected}" data-ov1="${id}" title="${escapeHtml(resolveNodeFullTitle(node, kind))}">
               ${kind === "initial" || kind === "final"
     ? `<span class="sm-flow-glyph" aria-hidden="true"></span>
                 <span class="sm-flow-node-caption">${escapeHtml(clip(node.label, 18))}</span>`
     : kind === "decision"
-      ? `<span class="sm-flow-node-label">${escapeHtml(clip(node.decisionExpression || (/^\d+$/.test(node.label.trim()) ? "条件判定" : node.label), 12))}</span>`
+      ? `<span class="sm-flow-node-label">${escapeHtml(resolveDecisionNodeText(node))}</span>`
       : `<span class="sm-flow-node-label">${escapeHtml(node.label)}</span>`}
             </button>
             <button type="button" class="sm-flow-port" data-ov1-port data-source-id="${id}" data-side="top" title="拖出转换" aria-label="从顶部拖出转换"></button>
@@ -482,30 +482,57 @@ function stateNodeCenterBox(node, bounds) {
   const cx = Number.parseFloat(css.left);
   const cy = Number.parseFloat(css.top);
   const kind = node.stateKind || "normal";
-  const worldWidth = Math.max(Number(bounds?.width) || 100, 1);
-  const worldHeight = Math.max(Number(bounds?.height) || 100, 1);
-  // Approximate served CSS sizes so first-paint edges meet the visible border.
+  // The layout stage width is approximately 1100~1400px, height ~700px.
+  // Standardizing base dimensions converts pixel sizes accurately to logical world % (0-100%).
   const pixel = kind === "normal"
     ? { w: 168, h: 64 }
     : kind === "decision"
-      ? { w: 94, h: 94 }
+      ? { w: 84, h: 84 }
       : { w: 34, h: 34 };
+  const baseW = 1200;
+  const baseH = 700;
   return {
     center: {
       x: Number.isFinite(cx) ? cx : 50,
       y: Number.isFinite(cy) ? cy : 50
     },
-    halfW: Math.max(1.2, (pixel.w / 2 / worldWidth) * 100),
-    halfH: Math.max(1, (pixel.h / 2 / worldHeight) * 100),
+    halfW: Math.max(1.2, (pixel.w / 2 / baseW) * 100),
+    halfH: Math.max(1.0, (pixel.h / 2 / baseH) * 100),
     shape: kind === "decision" ? "diamond" : "rect"
   };
+}
+
+function resolveDecisionNodeText(node) {
+  const label = String(node.label || "").trim();
+  const isDefaultNum = /^\d+$/.test(label);
+  const isDefaultPlaceholder = !label || label.startsWith("state-") || label === "判定" || label === "条件判定";
+  if (!isDefaultNum && !isDefaultPlaceholder && label.length <= 22) {
+    return label;
+  }
+  if (label && !isDefaultNum && !isDefaultPlaceholder) {
+    return clip(label, 20);
+  }
+  const expr = String(node.decisionExpression || "").trim();
+  if (!expr) return "判定";
+  if (expr.length <= 22) return expr;
+  return clip(expr, 20);
+}
+
+function resolveNodeFullTitle(node, kind) {
+  const kindLabel = KIND_LABELS[kind] || kind;
+  const label = String(node.label || "").trim();
+  const expr = String(node.decisionExpression || "").trim();
+  if (kind === "decision" && expr && expr !== label) {
+    return `${label}（${kindLabel}）\n判据: ${expr}`;
+  }
+  return `${label}（${kindLabel}）`;
 }
 
 function renderSmEdge(edge, geometry, selectedEdgeId = "") {
   if (!geometry) return "";
   const selected = selectedEdgeId && selectedEdgeId === edge.id ? " is-selected" : "";
   const marker = selected ? "url(#sm-flow-arrow-selected)" : "url(#sm-flow-arrow)";
-  const shared = `data-ov1-edge="${escapeHtml(edge.id)}" data-source-id="${escapeHtml(edge.sourceId)}" data-target-id="${escapeHtml(edge.targetId)}" data-edge-type="stateTransition"`;
+  const shared = `data-ov1-edge="${escapeHtml(edge.id)}" data-source-id="${escapeHtml(edge.sourceId)}" data-target-id="${escapeHtml(edge.targetId)}" data-edge-type="stateTransition" data-is-decision-branch="${edge.isDecisionBranch ? "true" : "false"}" data-is-backward="${geometry.backward ? "true" : "false"}"`;
   return `<path d="${geometry.path}" class="sm-flow-edge-hit ov1-concept-edge-hit${selected}" ${shared} fill="none"/><path d="${geometry.path}" class="sm-flow-edge ov1-concept-edge${selected}" ${shared} marker-end="${marker}"/>`;
 }
 

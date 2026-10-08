@@ -408,7 +408,7 @@ const htmlUml = renderOv6c({
   ov6cDiagramEngine: "js-sequence",
   ov6cSelectedSequenceId: ov6c.sequences[0].id
 });
-assert(htmlUml.includes("is-interactive") && htmlUml.includes("seq-gantt") && htmlUml.includes("seq-message-name-input"), "UML mode must keep interactive canvas");
+assert(htmlUml.includes("is-interactive") && htmlUml.includes("seq-gantt") && htmlUml.includes("seq-gantt-bar"), "UML mode must keep interactive canvas");
 assert(htmlUml.includes("data-seq-dsl-editor") && htmlUml.includes("ov6c-apply-dsl"), "UML DSL editor missing");
 assert(htmlUml.includes("UML") || htmlUml.includes("js-sequence"), "UML engine tools missing");
 

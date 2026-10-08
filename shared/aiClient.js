@@ -23,7 +23,7 @@ export async function generateWithAi(input) {
  */
 export async function generateWithAiStream(input, options = {}) {
   if (options.durable) return generateWithDurableAiStream(input, options);
-  const { onDelta, onStart, signal } = options;
+  const { onDelta, onStart, onThinking, signal } = options;
   const response = await fetch("/api/generate/stream", {
     method: "POST",
     headers: {
@@ -39,11 +39,11 @@ export async function generateWithAiStream(input, options = {}) {
     throw new Error(message || `AI 流式接口返回 ${response.status}`);
   }
 
-  return readAiStreamResponse(response, input, { onDelta, onStart, signal });
+  return readAiStreamResponse(response, input, { onDelta, onStart, onThinking, signal });
 }
 
 async function generateWithDurableAiStream(input, options = {}) {
-  const { onDelta, onStart, onJob, signal, resumeJobId = "", projectId, scope } = options;
+  const { onDelta, onStart, onThinking, onJob, signal, resumeJobId = "", projectId, scope } = options;
   const binding = normalizeJobBinding(projectId, scope);
   const clientId = getWorkbenchClientId();
   let jobId = String(resumeJobId || "").trim();
@@ -97,7 +97,7 @@ function getWorkbenchClientId() {
   }
 }
 
-async function readAiStreamResponse(response, input, { onDelta, onStart, signal } = {}) {
+async function readAiStreamResponse(response, input, { onDelta, onStart, onThinking, signal } = {}) {
 
   // Gateway returned plain JSON (non-SSE).
   const contentType = String(response.headers.get("content-type") || "");
@@ -137,6 +137,14 @@ async function readAiStreamResponse(response, input, { onDelta, onStart, signal 
       }
       if (event.type === "start") {
         onStart?.(event);
+        continue;
+      }
+      if (event.type === "thinking") {
+        onThinking?.(event);
+        onDelta?.({
+          thinking: event.text || "",
+          thinkingAssembled: event.assembled || ""
+        });
         continue;
       }
       if (event.type === "delta") {

@@ -62,7 +62,7 @@ const CATALOG = {
     ],
     revise: "可在本页编辑角色说明并保存；或从上游重新种子。",
     reviseActions: [
-      { view: "ov4", label: "编辑作战组织关系图" },
+      { action: "toggle-ov4-tools", label: "打开编辑工具箱" },
       { view: "ov1", label: "打开高层作战概念图" },
       { view: "ov5", label: "打开作战活动模型" }
     ]
@@ -105,7 +105,7 @@ const CATALOG = {
     ],
     revise: "可在本页编辑转换条件并保存；或从研究循环重新种子。",
     reviseActions: [
-      { view: "ov6b", label: "编辑状态转换" },
+      { action: "ov6b-toggle-editor", label: "打开编辑工具面板" },
       { view: "ooda", label: "打开研究辅助循环" }
     ]
   },
@@ -120,7 +120,7 @@ const CATALOG = {
     ],
     revise: "可在本页编辑事件时间/标题并保存；或从上游重新种子。",
     reviseActions: [
-      { view: "ov6c", label: "编辑事件序列" },
+      { action: "toggle-ov6c-tools", label: "打开编辑工具箱" },
       { view: "ooda", label: "打开研究辅助循环" },
       { view: "scenario", label: "打开想定" }
     ]
@@ -142,7 +142,10 @@ export function renderDerivedViewProvenance(id) {
     .map((source) => `<li><button type="button" class="text-link" data-view="${escapeAttr(source.view)}">${escapeHtml(source.label)}</button> · <code>${escapeHtml(source.fields)}</code></li>`)
     .join("");
   const actions = (item.reviseActions || [])
-    .map((action) => `<button type="button" class="ghost-btn compact" data-view="${escapeAttr(action.view)}">${escapeHtml(action.label)}</button>`)
+    .map((btn) => {
+      const attr = btn.action ? `data-action="${escapeAttr(btn.action)}"` : `data-view="${escapeAttr(btn.view)}"`;
+      return `<button type="button" class="ghost-btn compact" ${attr}>${escapeHtml(btn.label)}</button>`;
+    })
     .join("");
   return `<aside class="derived-provenance" data-derived-provenance="${escapeAttr(id)}">
     <div><strong>标准定位</strong><p>${escapeHtml(item.dodaf)}</p></div>
@@ -150,6 +153,28 @@ export function renderDerivedViewProvenance(id) {
     <div><strong>种子来源</strong><ul>${sources}</ul></div>
     <div><strong>如何修订</strong><p>${escapeHtml(item.revise)}</p><div class="derived-provenance-actions">${actions}</div></div>
   </aside>`;
+}
+
+export function renderDerivedViewProvenancePopover(id, { label = "规范溯源", title = "" } = {}) {
+  const item = getDerivedViewProvenance(id);
+  if (!item) return "";
+  const headerTitle = title || `${item.title || "规范产品"} · 标准定位与溯源`;
+  return `<details class="derived-provenance-dropdown" data-derived-provenance-dropdown="${escapeAttr(id)}">
+    <summary class="quiet-button derived-provenance-trigger" title="${escapeHtml(headerTitle)}" aria-label="${escapeHtml(headerTitle)}">
+      <span class="provenance-trigger-icon" aria-hidden="true">ℹ️</span>
+      <span>${escapeHtml(label)}</span>
+    </summary>
+    <div class="derived-provenance-popover" role="dialog" aria-label="${escapeHtml(headerTitle)}">
+      <div class="derived-provenance-popover-header">
+        <div class="provenance-popover-title">
+          <strong>${escapeHtml(headerTitle)}</strong>
+          <span class="mini-tag">DoDAF 规范</span>
+        </div>
+        <button type="button" class="quiet-button provenance-popover-close" data-action="close-provenance-popover" title="关闭" aria-label="关闭">×</button>
+      </div>
+      ${renderDerivedViewProvenance(id)}
+    </div>
+  </details>`;
 }
 
 function escapeHtml(value) {

@@ -178,16 +178,22 @@ export function createResearchChatController({
         onDelta: (payload) => {
           if (signal.aborted) return;
           const preview = String(payload?.preview || "").trim();
+          const thinking = String(payload?.thinkingAssembled || payload?.thinking || "").trim();
           if (preview) {
-            setSession(getState(), { type: "delta", text: preview });
+            setSession(getState(), { type: "delta", text: preview, thinking });
             // Prefer in-place DOM patch to avoid full re-render flicker while streaming.
-            patchResearchChatStream(scope, preview);
+            patchResearchChatStream(scope, preview, { thinking });
+            return;
+          }
+          if (thinking) {
+            setSession(getState(), { type: "delta", text: "", thinking });
+            patchResearchChatStream(scope, "", { thinking });
             return;
           }
           const assembled = String(payload?.assembled || "").trim();
           if (assembled && !looksLikeRawJsonOrThinking(assembled)) {
-            setSession(getState(), { type: "delta", text: assembled });
-            patchResearchChatStream(scope, assembled);
+            setSession(getState(), { type: "delta", text: assembled, thinking });
+            patchResearchChatStream(scope, assembled, { thinking });
           }
         }
       });
@@ -200,7 +206,7 @@ export function createResearchChatController({
       const advice = String(result?.advice || "").trim();
       const source = normalizeResultSource(result?.source);
       if (!advice) throw new Error("empty research chat advice");
-      setSession(getState(), { type: "complete", advice, source });
+      setSession(getState(), { type: "complete", advice, source, thinking: result?.thinking || "" });
       onAfterTurn(getState(), result);
       if (result?.notifyMessage) notify(result.notifyMessage);
     } catch (error) {

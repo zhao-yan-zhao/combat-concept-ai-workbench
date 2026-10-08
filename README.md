@@ -13,8 +13,43 @@
 - 最近完整基线：以 `scripts/check-*.mjs` 验收脚本为准。
 - 代码布局：`server.mjs` → `server/app.mjs`；领域与 HTTP 工具在 `server/`；共享库在 `shared/`；UI 在 `design-studio/`（壳层在 `design-studio/src/app/`）。
 
-## 开始试用
+## 快速启动
 
+本工作台提供了一键启动与环境自检脚本，支持 Windows 双击、PowerShell 参数化启动以及跨平台 Shell：
+
+### 方式一：Windows 双击一键启动（推荐）
+直接双击项目根目录下的 **`start.bat`**：
+- 自动检测 Node.js 版本（建议 v22.5.0+ 或 v24+，以支持原生 SQLite 引擎）；
+- 自动检查端口 8792 占用状态（若已在运行则直接打开浏览器，避免重复启动冲突）；
+- 自动检查本地 SQLite 数据库、CMO 装备库与概念图工具路径；
+- 服务就绪后**自动在默认浏览器中打开** `http://127.0.0.1:8792/`。
+
+若需停止服务，可双击 **`stop.bat`** 安全释放 8792 端口。
+
+### 方式二：PowerShell 终端启动
+```powershell
+# 1. 默认快速启动 (8792 端口，就绪后自动拉起浏览器)
+.\start.ps1
+
+# 2. 常用参数选项
+.\start.ps1 -Port 8793 -NoBrowser     # 自定义端口且不自动打开浏览器
+.\start.ps1 -CheckOnly                # 纯环境依赖检查模式
+.\start.ps1 -StorageMode file         # 测试模式使用 JSON 文件存储
+
+# 3. 停止服务
+.\stop.ps1                            # 停止 8792 端口服务
+.\stop.ps1 -All                       # 同时停止 8792 工作台与 8765 概念图工具
+```
+
+### 方式三：跨平台 Shell 启动 (Git Bash / Linux / macOS)
+```bash
+chmod +x start.sh
+./start.sh                           # 默认启动并自动拉起浏览器
+./start.sh 8793 --no-browser         # 自定义端口
+./start.sh --check-only              # 仅执行环境检测
+```
+
+### 方式四：手动传统方式
 在 PowerShell 中执行：
 
 ```powershell
@@ -23,7 +58,7 @@ $env:PORT = "8792"
 node server.mjs
 ```
 
-启动后工作台会尝试独立拉起概念图绘制工具（默认 `http://127.0.0.1:8765/`，进程互不影响）。打开 `http://127.0.0.1:8792/`，并确认服务健康：
+启动后工作台会尝试独立拉起概念图绘制工具（默认 `http://127.0.0.1:8765/`，进程互不影响）。浏览器访问 `http://127.0.0.1:8792/`，并可随时确认服务健康：
 
 ```powershell
 Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8792/api/health

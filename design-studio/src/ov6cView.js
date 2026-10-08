@@ -237,7 +237,7 @@ function renderSequenceEditor(sequence, { engine, selectedMessageId }) {
       <header class="seq-canvas-head">
         <div>
           <strong>${escapeHtml(sequence.name || "作战时间线")} — 甘特图</strong>
-          <small>点时间条选中 · 在条上改名称 · 右侧改起止、参与方与回链</small>
+          <small>点击时间条或左侧消息选中 · 右侧面板编辑起止、参与方与回链</small>
         </div>
       </header>
       <div class="seq-canvas-frame">
@@ -327,11 +327,8 @@ function renderGanttCanvas(sequence, { selectedMessageId, layout }) {
   const percent = (minutes) => ((Number(minutes) - layout.minStart) / span) * 100;
   const gridLines = layout.ticks.map((tick) =>
     `<i class="seq-gantt-gridline" style="left:${percent(tick).toFixed(3)}%"></i>`).join("");
-  const topMarks = layout.rows.slice(0, 8).map((row) => `
-    <span class="seq-gantt-mark" style="left:${percent(row.start).toFixed(3)}%">
-      <em>${formatSequenceClock(row.start)}</em>
-      <small>${escapeHtml(row.message.name || row.message.title || "")}</small>
-    </span>`).join("");
+  const topTicks = layout.ticks.map((tick) =>
+    `<span class="seq-gantt-tick is-top" style="left:${percent(tick).toFixed(3)}%">${formatSequenceClock(tick)}</span>`).join("");
 
   const rows = layout.rows.map((row) => {
     const message = row.message;
@@ -343,6 +340,8 @@ function renderGanttCanvas(sequence, { selectedMessageId, layout }) {
       : `${formatSequenceClock(row.start)}~${formatSequenceClock(row.end)}`;
     const overlaps = layout.rows.some((other) => other.id !== row.id && row.duration > 0 && other.duration > 0 && row.start < other.end && row.end > other.start);
     const unlinked = !(message.relatedActivityRefs || []).length;
+    const durationLabel = row.instant ? "瞬时事件" : `${row.duration}分钟`;
+    const tooltipText = `${row.index + 1}. ${message.name || message.title || `消息 ${row.index + 1}`} · ${clock}（${durationLabel}）`;
     return `<div class="seq-gantt-row ${selected ? "is-selected" : ""} ${overlaps ? "has-conflict" : ""}" data-message-id="${escapeHtml(message.id)}">
       <button type="button" class="seq-gantt-label" data-action="ov6c-select-message" data-sequence-id="${escapeHtml(sequence.id)}" data-message-id="${escapeHtml(message.id)}" title="${escapeHtml(message.name || "")}">
         <span>${escapeHtml(message.name || message.title || `消息 ${row.index + 1}`)}</span>
@@ -357,20 +356,9 @@ function renderGanttCanvas(sequence, { selectedMessageId, layout }) {
           data-sequence-id="${escapeHtml(sequence.id)}"
           data-message-id="${escapeHtml(message.id)}"
           role="button"
-          tabindex="0">
-          <span class="seq-message-seq">${message.sequence || row.index + 1}</span>
-          <input
-            class="seq-message-name-input"
-            data-action="ov6c-message-field"
-            data-field="name"
-            data-sequence-id="${escapeHtml(sequence.id)}"
-            data-message-id="${escapeHtml(message.id)}"
-            value="${escapeHtml(message.name || message.title || "")}"
-            maxlength="120"
-            title="直接修改消息名称"
-            placeholder="消息名称"
-          />
-          <span class="seq-gantt-clock">${clock}</span>
+          tabindex="0"
+          title="${escapeHtml(tooltipText)}"
+          aria-label="${escapeHtml(tooltipText)}">
           ${selected ? `<span class="seq-gantt-quick-tools" aria-label="时间条快捷操作">
             <button type="button" data-action="ov6c-adjust-message-time" data-field="offsetMinutes" data-delta="-5" data-sequence-id="${escapeHtml(sequence.id)}" data-message-id="${escapeHtml(message.id)}" title="前移 5 分钟">←</button>
             <button type="button" data-action="ov6c-adjust-message-time" data-field="offsetMinutes" data-delta="5" data-sequence-id="${escapeHtml(sequence.id)}" data-message-id="${escapeHtml(message.id)}" title="后移 5 分钟">→</button>
@@ -387,17 +375,11 @@ function renderGanttCanvas(sequence, { selectedMessageId, layout }) {
       <div class="seq-gantt-corner">任务 / 消息</div>
       <div class="seq-gantt-scale">
         ${gridLines}
-        ${topMarks}
+        ${topTicks}
       </div>
     </div>
     <div class="seq-gantt-body">
       ${rows || `<div class="ov6c-message-empty muted">尚无消息。点「加消息」，再在右侧设置起点和终点。</div>`}
-    </div>
-    <div class="seq-gantt-axis">
-      <div class="seq-gantt-corner">作战时间</div>
-      <div class="seq-gantt-scale">
-        ${layout.ticks.map((tick) => `<span class="seq-gantt-tick" style="left:${percent(tick).toFixed(3)}%">${formatSequenceClock(tick)}</span>`).join("")}
-      </div>
     </div>
   </div>`;
 }

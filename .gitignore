@@ -27,6 +27,8 @@ data/*secret*
 .codex-*.err.log
 
 # Local tooling / cache / editor
+.jeikcode/codegraph/
+.codegraph/
 .playwright-cli/
 .grok/
 .vscode/

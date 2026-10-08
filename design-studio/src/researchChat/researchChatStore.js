@@ -124,7 +124,8 @@ export function beginResearchChatTurn(session, question, {
 
 /** Progressive stream text into the pending assistant bubble (keeps pending=true). */
 export function updatePendingResearchChatText(session, text, {
-  maxMessageChars = MAX_MESSAGE_CHARS_DEFAULT
+  maxMessageChars = MAX_MESSAGE_CHARS_DEFAULT,
+  thinking = undefined
 } = {}) {
   const normalized = normalizeResearchChatSession(session, { maxMessageChars });
   const pendingIndex = findLastIndex(
@@ -136,10 +137,12 @@ export function updatePendingResearchChatText(session, text, {
   // Light path while streaming: avoid re-running full normalize on every delta.
   const nextText = clean(text).slice(0, maxMessageChars);
   const messages = [...normalized.messages];
+  const existingThinking = messages[pendingIndex].thinking || "";
   messages[pendingIndex] = {
     ...messages[pendingIndex],
     text: nextText,
-    streaming: Boolean(nextText),
+    thinking: thinking !== undefined ? clean(thinking) : existingThinking,
+    streaming: Boolean(nextText || thinking),
     truncated: clean(text).length > maxMessageChars
   };
   return {
@@ -151,7 +154,8 @@ export function updatePendingResearchChatText(session, text, {
 /** Fill the pending assistant bubble once the model returns (or local/error/cancel). */
 export function completeResearchChatTurn(session, advice, source = "ai", {
   topic = "consultation",
-  maxMessageChars = MAX_MESSAGE_CHARS_DEFAULT
+  maxMessageChars = MAX_MESSAGE_CHARS_DEFAULT,
+  thinking = undefined
 } = {}) {
   const normalized = normalizeResearchChatSession(session, { maxMessageChars });
   const assistantText = clean(advice);
@@ -164,9 +168,11 @@ export function completeResearchChatTurn(session, advice, source = "ai", {
   );
   if (pendingIndex >= 0) {
     const messages = [...normalized.messages];
+    const existingThinking = messages[pendingIndex]?.thinking || "";
     messages[pendingIndex] = applyTextLimit({
       ...messages[pendingIndex],
       text: assistantText,
+      thinking: clean(thinking !== undefined ? thinking : existingThinking),
       source: resolvedSource,
       pending: false,
       streaming: false,
@@ -478,8 +484,9 @@ function normalizeMessage(value, { maxMessageChars = MAX_MESSAGE_CHARS_DEFAULT }
     source: source || "",
     // Keep partial stream text on pending bubbles (do not wipe while streaming).
     text,
+    thinking: clean(value?.thinking || ""),
     pending,
-    streaming: Boolean(pending && text && value?.streaming !== false),
+    streaming: Boolean(pending && (text || value?.thinking) && value?.streaming !== false),
     jobId: pending ? clean(value?.jobId).replace(/[^a-f0-9-]/gi, "") : "",
     truncated: Boolean(value?.truncated) || text.length > maxMessageChars,
     createdAt: clean(value.createdAt).replace(/\n/g, " ") || new Date().toISOString()

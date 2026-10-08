@@ -565,12 +565,17 @@ function refreshConceptEdges(stage) {
     const box = nodeCssBox(element, ww, wh);
     if (box) boxes.set(element.dataset.ov1Node, { ...box, id: element.dataset.ov1Node });
   });
-  const edges = [...stage.querySelectorAll(".sm-flow-edge[data-ov1-edge], .ov1-concept-edge[data-ov1-edge]")].map((path) => ({
-    id: path.dataset.ov1Edge,
-    sourceId: path.dataset.sourceId,
-    targetId: path.dataset.targetId,
-    type: path.dataset.edgeType
-  }));
+  const edges = [...stage.querySelectorAll(".sm-flow-edge[data-ov1-edge], .ov1-concept-edge[data-ov1-edge]")].map((path) => {
+    const sourceBox = boxes.get(path.dataset.sourceId);
+    const isDecisionBranch = path.dataset.isDecisionBranch === "true" || sourceBox?.shape === "diamond";
+    return {
+      id: path.dataset.ov1Edge,
+      sourceId: path.dataset.sourceId,
+      targetId: path.dataset.targetId,
+      type: path.dataset.edgeType,
+      isDecisionBranch
+    };
+  });
   // Prefer flowchart router: nodes are center-anchored.
   const geometryById = routeSmFlowEdges(edges, boxes);
   const updatedLabels = new Set();

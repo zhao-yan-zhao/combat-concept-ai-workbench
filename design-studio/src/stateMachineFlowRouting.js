@@ -5,7 +5,8 @@
  */
 
 const PORT_GAP = 0.35;
-const LANE_PAD = 3.2;
+const LANE_PAD = 8.5;
+const ALIGN_TOLERANCE = 4.2;
 
 export function routeSmFlowEdges(edges = [], boxById = new Map()) {
   const boxes = normalizeBoxMap(boxById);
@@ -31,7 +32,7 @@ export function routeSmFlowEdge(source, target, edge = {}, obstacles = []) {
   const start = portPoint(from, sides.from);
   const end = portPoint(to, sides.to);
   const points = routeOrthogonal(from, to, sides.from, sides.to, start, end, blockers, backward);
-  const label = labelForPath(points, { backward, start, end });
+  const label = labelForPath(points, { backward, start, end, edge });
 
   return {
     kind: backward ? "backward-orthogonal" : "orthogonal",
@@ -44,7 +45,9 @@ export function routeSmFlowEdge(source, target, edge = {}, obstacles = []) {
 
 function choosePorts(from, to, { backward = false, blockers = [] } = {}) {
   if (backward) {
-    return { from: from.center.y <= to.center.y ? "bottom" : "top", to: to.center.y <= from.center.y ? "bottom" : "top" };
+    const preferAbove = from.center.y <= 50 && to.center.y <= 58;
+    const side = preferAbove ? "top" : "bottom";
+    return { from: side, to: side };
   }
   const dx = to.center.x - from.center.x;
   const dy = to.center.y - from.center.y;
@@ -80,7 +83,12 @@ function choosePorts(from, to, { backward = false, blockers = [] } = {}) {
 
 function routeOrthogonal(from, to, fromSide, toSide, start, end, blockers = [], backward = false) {
   if (fromSide === oppositeSide(toSide) && alignedOnSide(fromSide, start, end)) {
-    return [start, end];
+    if (sameAxis(fromSide, "left")) {
+      const midY = (start.y + end.y) / 2;
+      return [{ x: start.x, y: midY }, { x: end.x, y: midY }];
+    }
+    const midX = (start.x + end.x) / 2;
+    return [{ x: midX, y: start.y }, { x: midX, y: end.y }];
   }
 
   const fromOut = offsetAlong(start, fromSide, exitGap(from));
@@ -132,14 +140,35 @@ function detourAround(from, to, fromSide, toSide, start, end, fromOut, toOut, bl
   return scored[0]?.points || null;
 }
 
-function labelForPath(points, { backward, start, end }) {
+function labelForPath(points, { backward = false, start, end, edge = {} } = {}) {
+  if (!points || points.length < 2) {
+    return { x: 50, y: 50 };
+  }
+
+  // Decision branches (e.g. "满足", "不满足"): anchor snug to the decision diamond exit
+  if (edge.isDecisionBranch && points.length >= 2) {
+    const p0 = points[0];
+    const p1 = points[1];
+    const branchRatio = 0.5;
+    const bx = p0.x + (p1.x - p0.x) * branchRatio;
+    const by = p0.y + (p1.y - p0.y) * branchRatio;
+    const isVertical = Math.abs(p1.x - p0.x) < 0.6;
+    if (isVertical) {
+      // Offset snug to the right of vertical exit segment
+      return { x: bx + 2.8, y: by };
+    }
+    // Offset snug above horizontal exit segment
+    return { x: bx, y: by - 2.0 };
+  }
+
   const label = polylineMidpoint(points);
   if (!backward) {
-    return Math.abs(end.y - start.y) < 1.2
-      ? { x: label.x, y: label.y - 5.2 }
-      : { x: label.x, y: label.y - 3.4 };
+    return Math.abs(end.y - start.y) < 1.8
+      ? { x: label.x, y: label.y - 2.4 }
+      : { x: label.x, y: label.y - 1.8 };
   }
-  return { x: label.x, y: label.y - 5.6 };
+  // For backward routes, anchor cleanly on the bypass line
+  return { x: label.x, y: label.y - 1.8 };
 }
 
 function portPoint(box, side) {
@@ -210,7 +239,7 @@ function pathLength(points) {
 }
 
 function alignedOnSide(side, start, end) {
-  return sameAxis(side, "left") ? Math.abs(start.y - end.y) < 0.8 : Math.abs(start.x - end.x) < 0.8;
+  return sameAxis(side, "left") ? Math.abs(start.y - end.y) < ALIGN_TOLERANCE : Math.abs(start.x - end.x) < ALIGN_TOLERANCE;
 }
 
 function sameAxis(side, sample) {
@@ -284,7 +313,15 @@ function normalizeBox(value) {
 
 function pathFromPoints(points = []) {
   if (!points.length) return "";
-  return points
+  const deduplicated = points.filter((point, index) => {
+    if (index === 0) return true;
+    const prev = points[index - 1];
+    return Math.hypot(point.x - prev.x, point.y - prev.y) > 0.15;
+  });
+  if (deduplicated.length < 2) return "";
+  const totalLen = pathLength(deduplicated);
+  if (totalLen < 1.0) return "";
+  return deduplicated
     .map((point, index) => `${index === 0 ? "M" : "L"}${r(point.x)} ${r(point.y)}`)
     .join(" ");
 }

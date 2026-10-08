@@ -408,6 +408,29 @@ export function createRequestHandler(runtime) {
         }
         return;
       }
+      if ((request.method === "POST" || request.method === "GET") && url.pathname === "/api/ai-config/models") {
+        try {
+          await aiConfigWriteAuthorizer.authorize(request);
+          let input = {};
+          if (request.method === "POST") {
+            input = await readJson(request).catch(() => ({}));
+          } else {
+            input = {
+              baseUrl: url.searchParams.get("baseUrl") || undefined,
+              apiKey: url.searchParams.get("apiKey") || undefined
+            };
+          }
+          const result = await openAi.fetchUpstreamModels({
+            baseUrl: input?.baseUrl,
+            apiKey: input?.apiKey,
+            timeoutMs: 15000
+          });
+          sendJson(response, 200, result);
+        } catch (error) {
+          send(response, error.statusCode || 400, error.message, "text/plain;charset=utf-8");
+        }
+        return;
+      }
       if (request.method === "PUT" && url.pathname === "/api/ai-config") {
         try {
           await aiConfigWriteAuthorizer.authorize(request);

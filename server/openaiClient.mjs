@@ -9,7 +9,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
   async function callOpenAi(input, base) {
     const body = makeGenerationRequest(input, base, false);
     const timeoutMs = generationTimeoutMs(input);
-    const primaryUrl = resolveApiUrl(getConfig().baseUrl, "chat/completions");
+    const primaryUrl = resolveApiUrl(getConfig().baseUrl);
     let apiResponse;
     try {
       const result = await postOpenAi(primaryUrl, body, { timeoutMs });
@@ -355,15 +355,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       "",
       `当前工作流：${input.workflow?.title || input.workflowId || base.workflowTitle}`,
       `输出类型：${base.outputSchema}`,
-      "结构化想定：",
-      JSON.stringify(input.analysis || {}, null, 2),
-      "知识依据：",
-      JSON.stringify((input.evidence || []).map((item) => ({
-        title: item.title,
-        source: item.filePath || item.name || item.source,
-        summary: item.summary || item.text,
-        matchReasons: item.matchReasons || []
-      })), null, 2)
+      ...buildSanitizedContextParts(input.analysis, input.evidence, base.outputSchema)
     ];
     const contextStart = promptParts.lastIndexOf("");
     const defaultPrompt = promptParts.slice(0, contextStart).join("\n");
@@ -405,8 +397,13 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
                       ? conceptBriefSchema()
                       : genericAiDraftSchema();
 
+    const temperature = typeof input?.temperature === "number"
+      ? input.temperature
+      : resolveGenerationTemperature(input?.workflow?.outputSchema, isResearchChat);
+
     return {
       model: getConfig().model,
+      temperature,
       messages: [
         { role: "system", content: instructions },
         { role: "user", content: prompt }
@@ -434,6 +431,67 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     };
   }
 
+  function buildSanitizedContextParts(analysis = {}, evidence = [], outputSchema = "") {
+    const cleanAnalysis = { ...analysis };
+
+    // 1. If combatFocuses is present and has items, remove duplicate string combatFocus
+    if (Array.isArray(cleanAnalysis.combatFocuses) && cleanAnalysis.combatFocuses.length > 0 && cleanAnalysis.combatFocus) {
+      delete cleanAnalysis.combatFocus;
+    }
+
+    // 2. Filter out downstream task rules for PhaseActionConcept
+    if (outputSchema === "PhaseActionConcept" && cleanAnalysis.ruleLibrary && Array.isArray(cleanAnalysis.ruleLibrary.rules)) {
+      const filteredRules = cleanAnalysis.ruleLibrary.rules.filter((rule) => {
+        const scope = String(rule?.scope || "");
+        const id = String(rule?.id || "");
+        if (scope.startsWith("任务：") || id.startsWith("rule-task-")) return false;
+        return true;
+      }).slice(0, 20);
+      cleanAnalysis.ruleLibrary = {
+        count: filteredRules.length,
+        rules: filteredRules
+      };
+    }
+
+    // 3. Strip duplicate hardcoded prompt fields that may be passed by legacy controllers
+    delete cleanAnalysis["修订要求"];
+    delete cleanAnalysis["对话回答要求"];
+    delete cleanAnalysis["蓝红行动写作要求"];
+    delete cleanAnalysis["专业性要求"];
+    delete cleanAnalysis["时窗依据要求"];
+    delete cleanAnalysis["规则库落实要求"];
+    delete cleanAnalysis["重生成约束"];
+
+    // 4. Remove empty/null/undefined or empty array fields
+    for (const [key, value] of Object.entries(cleanAnalysis)) {
+      if (value === "" || value === null || value === undefined) {
+        delete cleanAnalysis[key];
+      } else if (Array.isArray(value) && value.length === 0) {
+        delete cleanAnalysis[key];
+      }
+    }
+
+    const parts = [
+      "结构化想定：",
+      JSON.stringify(cleanAnalysis)
+    ];
+
+    const cleanEvidence = Array.isArray(evidence)
+      ? evidence.map((item) => ({
+          title: item.title,
+          source: item.filePath || item.name || item.source,
+          summary: item.summary || item.text,
+          matchReasons: item.matchReasons || []
+        })).filter((item) => item.title || item.summary)
+      : [];
+
+    if (cleanEvidence.length > 0) {
+      parts.push("知识依据：", JSON.stringify(cleanEvidence));
+    }
+
+    return parts;
+  }
+
   /**
    * Stream OpenAI-compatible Responses API output as text deltas.
    * Yields { type: "delta", text, assembled } then { type: "done", draft, rawText }.
@@ -441,7 +499,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
   async function* streamOpenAi(input, base) {
     const payload = makeGenerationRequest(input, base, true);
     const timeoutMs = Math.max(generationTimeoutMs(input), 180000);
-    const primaryUrl = resolveApiUrl(getConfig().baseUrl, "chat/completions");
+    const primaryUrl = resolveApiUrl(getConfig().baseUrl);
     let apiResponse;
     try {
       const result = await postOpenAi(primaryUrl, payload, { timeoutMs, stream: true });
@@ -465,11 +523,44 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     }
 
     let assembled = "";
+    let inInlineThinking = false;
     for await (const event of iterateSse(apiResponse.body)) {
-      const piece = extractStreamDelta(event);
+      const thinkingPiece = extractStreamThinking(event);
+      if (thinkingPiece) {
+        yield { type: "thinking", text: thinkingPiece };
+      }
+      let piece = extractStreamDelta(event);
       if (piece) {
-        assembled += piece;
-        yield { type: "delta", text: piece, assembled };
+        if (!inInlineThinking && piece.includes("<think>")) {
+          const thinkIndex = piece.indexOf("<think>");
+          const before = piece.slice(0, thinkIndex);
+          const after = piece.slice(thinkIndex + 7);
+          if (before) {
+            assembled += before;
+            yield { type: "delta", text: before, assembled };
+          }
+          inInlineThinking = true;
+          piece = after;
+        }
+        if (inInlineThinking) {
+          if (piece.includes("</think>")) {
+            const endThinkIndex = piece.indexOf("</think>");
+            const thinkContent = piece.slice(0, endThinkIndex);
+            const after = piece.slice(endThinkIndex + 8);
+            if (thinkContent) {
+              yield { type: "thinking", text: thinkContent };
+            }
+            inInlineThinking = false;
+            piece = after;
+          } else {
+            yield { type: "thinking", text: piece };
+            piece = "";
+          }
+        }
+        if (piece) {
+          assembled += piece;
+          yield { type: "delta", text: piece, assembled };
+        }
       }
       if (event?.type === "response.completed" || event?.type === "response.failed") {
         const finalText = extractOutputText(event.response || event) || assembled;
@@ -542,6 +633,19 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     if (event.type === "response.output_text.delta" && event.delta != null) return String(event.delta);
     return "";
   }
+
+  function extractStreamThinking(event) {
+    if (!event || typeof event !== "object") return "";
+    if (typeof event.thinking === "string") return event.thinking;
+    if (typeof event.reasoning_content === "string") return event.reasoning_content;
+    if (typeof event.reasoning === "string") return event.reasoning;
+    const choice = event.choices?.[0];
+    if (choice?.delta?.reasoning_content) return String(choice.delta.reasoning_content);
+    if (choice?.delta?.reasoning) return String(choice.delta.reasoning);
+    if (choice?.delta?.thinking) return String(choice.delta.thinking);
+    if (typeof choice?.thinking === "string") return choice.thinking;
+    return "";
+  }
   
   async function fetchWithRetry(url, options, fetchOptions = {}) {
     const timeoutMs = Number(fetchOptions.timeoutMs) > 0 ? Number(fetchOptions.timeoutMs) : 90000;
@@ -574,12 +678,20 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
 
-  function resolveApiUrl(baseUrl, defaultEndpoint = "chat/completions") {
+  function resolveDefaultEndpoint(protocol = getConfig()?.protocol) {
+    if (protocol === "chat") {
+      return "chat/completions";
+    }
+    return "responses";
+  }
+
+  function resolveApiUrl(baseUrl, defaultEndpoint) {
     const trimmed = String(baseUrl || "").trim().replace(/\/+$/, "");
     if (trimmed.endsWith("/chat/completions") || trimmed.endsWith("/responses")) {
       return trimmed;
     }
-    return `${trimmed}/${defaultEndpoint}`;
+    const endpoint = defaultEndpoint || resolveDefaultEndpoint();
+    return `${trimmed}/${endpoint}`;
   }
 
   function alternateApiUrl(url) {
@@ -592,12 +704,47 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     return null;
   }
 
-  async function postOpenAi(url, body, { timeoutMs, stream = false } = {}) {
+  function formatRequestBodyForEndpoint(rawBody, url, provider, model) {
+    if (url.endsWith("/responses")) {
+      return rawBody;
+    }
+
+    const currentProvider = String(provider || "").toLowerCase();
+    const currentModel = String(model || rawBody?.model || "").toLowerCase();
+    const urlLower = String(url || "").toLowerCase();
+
+    const isDeepSeek = currentProvider === "deepseek" || currentModel.includes("deepseek") || urlLower.includes("deepseek");
+    const isQwen = currentProvider === "qwen" || currentModel.includes("qwen") || urlLower.includes("dashscope");
+    const isReasoner = currentModel.includes("reasoner");
+
+    const cleanBody = {
+      model: rawBody.model,
+      messages: rawBody.messages,
+      stream: rawBody.stream
+    };
+
+    if (!isReasoner && typeof rawBody.temperature === "number") {
+      cleanBody.temperature = rawBody.temperature;
+    }
+
+    if (isDeepSeek || isQwen) {
+      cleanBody.response_format = { type: "json_object" };
+    } else if (rawBody.response_format) {
+      cleanBody.response_format = rawBody.response_format;
+    }
+
+    return cleanBody;
+  }
+
+  async function postOpenAi(url, rawBody, { timeoutMs, stream = false } = {}) {
     const headers = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${getAiApiKey()}`
     };
     if (stream) headers.Accept = "text/event-stream";
+
+    const config = getConfig();
+    const body = formatRequestBodyForEndpoint(rawBody, url, config.provider, config.model);
 
     // 1. Primary attempt
     let res = await fetchWithRetry(url, {
@@ -611,10 +758,11 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       const altUrl = alternateApiUrl(url);
       if (altUrl) {
         try {
+          const altBody = formatRequestBodyForEndpoint(rawBody, altUrl, config.provider, config.model);
           const altRes = await fetchWithRetry(altUrl, {
             method: "POST",
             headers,
-            body: JSON.stringify(body)
+            body: JSON.stringify(altBody)
           }, { timeoutMs });
           if (altRes.ok || altRes.status !== 404) {
             return { response: altRes, effectiveUrl: altUrl };
@@ -693,6 +841,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     };
     const body = {
       model: getConfig().model,
+      temperature: 0.3,
       messages: [
         { role: "system", content: instructions },
         { role: "user", content: prompt }
@@ -718,7 +867,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       store: false
     };
 
-    const primaryUrl = resolveApiUrl(getConfig().baseUrl, "chat/completions");
+    const primaryUrl = resolveApiUrl(getConfig().baseUrl);
     let apiResponse;
     try {
       const result = await postOpenAi(primaryUrl, body, { timeoutMs: 90000 });
@@ -1425,12 +1574,106 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     ].map((item) => ({ ...item, content: resolvePrompt(item.id, item.defaultContent), customized: Boolean(getAiPromptOverrides()?.[item.id]) }));
   }
 
+  async function fetchUpstreamModels(options = {}) {
+    const targetBaseUrl = String(options.baseUrl !== undefined ? options.baseUrl : (getConfig()?.baseUrl || "")).trim();
+    if (!targetBaseUrl) {
+      throw new Error("请先填写有效的上游服务地址（Base URL）");
+    }
+    const targetApiKey = String(options.apiKey !== undefined ? options.apiKey : (getAiApiKey() || "")).trim();
+    const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 15000;
+
+    const candidateUrls = resolveCandidateModelUrls(targetBaseUrl);
+    let lastError = null;
+    let data = null;
+
+    for (const url of candidateUrls) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const headers = {
+          Accept: "application/json"
+        };
+        if (targetApiKey) {
+          headers.Authorization = `Bearer ${targetApiKey}`;
+        }
+        const res = await fetch(url, {
+          method: "GET",
+          headers,
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+        if (res.ok) {
+          data = await res.json();
+          break;
+        }
+        if (res.status === 401 || res.status === 403) {
+          throw new Error(`上游服务认证失败 (${res.status})，请检查 API Key 是否正确`);
+        }
+        lastError = new Error(`上游服务返回 HTTP ${res.status}`);
+      } catch (err) {
+        clearTimeout(timer);
+        if (err.name === "AbortError" || /aborted|timeout/i.test(err.message)) {
+          throw new Error(`请求上游模型列表超时（>${Math.round(timeoutMs / 1000)}s），请检查网络连接或服务地址`);
+        }
+        if (/认证失败/.test(err.message)) {
+          throw err;
+        }
+        lastError = err;
+      }
+    }
+
+    if (!data) {
+      throw lastError || new Error("未能从上游获取模型列表，请确认上游服务地址或是否支持 /models 端点");
+    }
+
+    const rawList = [];
+    if (Array.isArray(data?.data)) {
+      rawList.push(...data.data.map((item) => (typeof item === "string" ? item : item?.id || item?.name)));
+    } else if (Array.isArray(data?.models)) {
+      rawList.push(...data.models.map((item) => (typeof item === "string" ? item : item?.id || item?.name)));
+    } else if (Array.isArray(data)) {
+      rawList.push(...data.map((item) => (typeof item === "string" ? item : item?.id || item?.name)));
+    }
+
+    const models = Array.from(new Set(rawList.filter(Boolean)));
+    if (!models.length) {
+      throw new Error("上游服务返回了空模型列表");
+    }
+
+    const nonChatRegex = /(embedding|embed|whisper|tts|audio|dall-e|rerank|moderation)/i;
+    const isChatModel = (name) => !nonChatRegex.test(name);
+
+    models.sort((a, b) => {
+      const aChat = isChatModel(a);
+      const bChat = isChatModel(b);
+      if (aChat && !bChat) return -1;
+      if (!aChat && bChat) return 1;
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+    });
+
+    return { models, count: models.length };
+  }
+
+  function resolveCandidateModelUrls(rawBaseUrl) {
+    let trimmed = String(rawBaseUrl || "").trim().replace(/\/+$/, "");
+    trimmed = trimmed.replace(/\/chat\/completions$/, "").replace(/\/responses$/, "");
+    if (trimmed.endsWith("/models")) {
+      return [trimmed];
+    }
+    const urls = [`${trimmed}/models`];
+    if (!trimmed.endsWith("/v1")) {
+      urls.push(`${trimmed}/v1/models`);
+    }
+    return urls;
+  }
+
   return {
     callOpenAi,
     streamOpenAi,
     callOpenAiRedTeam,
     mergeAiDraft,
-    listPromptDefinitions
+    listPromptDefinitions,
+    fetchUpstreamModels
   };
 }
 
@@ -1448,4 +1691,30 @@ function generationPromptId(schema, researchChat = false) {
 
 function promptDefinition(id, name, description, defaultContent, variables = []) {
   return { id, name, group: id.startsWith("ai.red-team") ? "红方审阅" : "AI 生成", description, variables, defaultContent };
+}
+
+export function resolveGenerationTemperature(schema, isResearchChat = false) {
+  if (isResearchChat) return 0.7;
+  switch (schema) {
+    case "ConceptBrief":
+    case "CombatFocusOptions":
+      return 0.7;
+    case "ForceMissionPlan":
+    case "OrganizationRelationshipDraft":
+    case "OperationalTaskDraft":
+    case "TaskOrganizationDraft":
+    case "SequenceDraft":
+    case "StateMachineDraft":
+      return 0.1;
+    case "PhaseActionConcept":
+    case "OperationalConceptGraphic":
+    case "ConceptGraphicPlan":
+    case "ConceptMapInitialPlan":
+    case "RuleLibraryDraft":
+    case "RuleLibraryChangeSet":
+    case "ScenarioDraft":
+      return 0.2;
+    default:
+      return 0.3;
+  }
 }

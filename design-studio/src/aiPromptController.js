@@ -10,13 +10,13 @@ export function createAiPromptController({ getState, render, notify }) {
     } catch (error) {
       notify(error.message || "无法读取 AI 提示词");
     }
-    render();
+    render({ skipViewRoot: true });
   }
 
   async function persist(nextOverrides) {
     const state = getState();
     state.aiPromptSaving = true;
-    render();
+    render({ skipViewRoot: true });
     try {
       state.aiPromptCatalog = await saveAiPrompts(nextOverrides);
       notify("AI 提示词已保存，后续请求立即生效");
@@ -24,7 +24,7 @@ export function createAiPromptController({ getState, render, notify }) {
       notify(error.message || "AI 提示词保存失败");
     } finally {
       state.aiPromptSaving = false;
-      render();
+      render({ skipViewRoot: true });
     }
   }
 
@@ -42,13 +42,13 @@ export function createAiPromptController({ getState, render, notify }) {
     },
     handleAction(action, element) {
       const state = getState();
-      if (action === "open-ai-prompts") { state.aiPromptOpen = true; render(); void load(); return true; }
-      if (action === "close-ai-prompts") { state.aiPromptOpen = false; render(); return true; }
+      if (action === "open-ai-prompts") { state.aiPromptOpen = true; render({ skipViewRoot: true }); void load(); return true; }
+      if (action === "close-ai-prompts") { state.aiPromptOpen = false; render({ skipViewRoot: true }); return true; }
       if (action === "select-ai-prompt") {
         const promptId = element?.dataset.promptId || "";
         if (state.aiPromptSelectedId === promptId) return true;
         state.aiPromptSelectedId = promptId;
-        render();
+        render({ skipViewRoot: true });
         requestAnimationFrame(() => document.querySelector(`.ai-prompt-item.is-active[data-prompt-id="${CSS.escape(promptId)}"]`)?.scrollIntoView?.({ block: "nearest", inline: "nearest" }));
         return true;
       }

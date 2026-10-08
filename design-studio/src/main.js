@@ -172,8 +172,9 @@ function render(options = {}) {
       : { ...options };
     return;
   }
-  const appFocusSnapshot = captureViewFocus(document);
-  const appScrollSnapshots = captureViewScroll(document);
+  const skipView = Boolean(options.skipViewRoot);
+  const appFocusSnapshot = skipView ? null : captureViewFocus(document);
+  const appScrollSnapshots = skipView ? null : captureViewScroll(document);
   const meta = getViewMeta(state.activeView);
   const conceptTreeMarkup = renderTree(state.activeView, currentWorkflow(), state);
   const conceptTreeElem = $("#conceptTree");
@@ -231,12 +232,19 @@ function render(options = {}) {
     loginGate.innerHTML = loginMarkup;
     loginGate.dataset.renderedMarkup = loginMarkup;
   }
-  $("#aiConfigRoot").innerHTML = renderAiConfigPanel({ open: state.aiConfigOpen, service: state.aiConfig, saving: state.aiConfigSaving });
+  $("#aiConfigRoot").innerHTML = renderAiConfigPanel({
+    open: state.aiConfigOpen,
+    service: state.aiConfig,
+    saving: state.aiConfigSaving,
+    fetchingModels: state.aiConfigFetchingModels,
+    fetchedModels: state.aiConfigFetchedModels,
+    modelFetchHint: state.aiConfigModelFetchHint
+  });
   $("#aiPromptRoot").innerHTML = renderAiPromptPanel({ open: state.aiPromptOpen, catalog: state.aiPromptCatalog, selectedId: state.aiPromptSelectedId, saving: state.aiPromptSaving });
   $("#workflowGateRoot").innerHTML = renderWorkflowGate();
   renderOv1ToolboxFloatHost();
   // Project picker / menubar chrome toggles must not rebuild the concept-map iframe.
-  if (!options.skipViewRoot) {
+  if (!skipView) {
     if (!state.projectEntryRequired) {
       renderViewRoot(options);
       renderInspectorPanel();
@@ -244,9 +252,15 @@ function render(options = {}) {
     resizeBriefTextareas();
     closeOv1ModalIfOpen();
     bindDynamicEvents();
+  } else {
+    // Fast path: bind dialog and chrome handlers without tearing down and re-binding page views
+    aiConfigController.bind(document);
+    aiPromptController.bind(document);
   }
-  restoreViewFocus(document, appFocusSnapshot);
-  restoreViewScroll(document, appScrollSnapshots);
+  if (!skipView) {
+    restoreViewFocus(document, appFocusSnapshot);
+    restoreViewScroll(document, appScrollSnapshots);
+  }
 }
 
 /**
@@ -619,6 +633,7 @@ function bindDynamicEvents() {
   document.querySelectorAll(".brief-sidebar-editor textarea").forEach((textarea) => textarea.addEventListener("input", () => fitBriefTextarea(textarea)));
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
+      button.closest?.(".derived-provenance-dropdown")?.removeAttribute("open");
       const viewId = button.dataset.view;
       if (!viewId) return;
       const focusType = button.dataset.focusType || "";
@@ -986,6 +1001,10 @@ function select(type, id) {
 }
 
 function handleAction(action, source = null) {
+  if (source && source.closest && action !== "close-provenance-popover") {
+    source.closest(".derived-provenance-dropdown")?.removeAttribute("open");
+  }
+
   if (action === "toggle-workflow-test-mode") {
     void setWorkflowMode(currentWorkflow().mode === "free" ? "gated" : "free");
     return;
@@ -1102,6 +1121,10 @@ function handleAction(action, source = null) {
     render();
     return;
   }
+  if (action === "close-provenance-popover") {
+    source?.closest?.(".derived-provenance-dropdown")?.removeAttribute("open");
+    return;
+  }
   if (action === "close-state-machine-chat") {
     state.stateMachineChatOpen = false;
     render();
@@ -1129,7 +1152,7 @@ function handleAction(action, source = null) {
     state.contextPanelOpen = true;
     state.contextPanelFocus = source?.dataset?.contextFocus || "";
     closeMenubarMenus();
-    render();
+    render({ skipViewRoot: true });
     return;
   }
   if (action === "close-context-panel") {
@@ -1137,6 +1160,7 @@ function handleAction(action, source = null) {
     state.contextPanelFocus = "";
     const dialog = $("#contextPanelDialog");
     if (dialog?.open) dialog.close();
+    render({ skipViewRoot: true });
     return;
   }
 
@@ -1273,6 +1297,9 @@ function handleAction(action, source = null) {
     closeMenubarMenus();
     render();
     return;
+  }
+  if (action === "open-ai-config" || action === "open-ai-prompts") {
+    closeMenubarMenus();
   }
   if (knowledgeController.handleAction(action, $("#knowledgeVaultInput"))) return;
   if (aiConfigController.handleAction(action)) return;
@@ -3031,6 +3058,16 @@ function bindMenubarChrome() {
     }
     dismissMenubarChrome();
   }, true);
+
+  document.addEventListener("pointerdown", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    document.querySelectorAll(".derived-provenance-dropdown[open]").forEach((details) => {
+      if (!details.contains(target)) {
+        details.removeAttribute("open");
+      }
+    });
+  });
 
   // Focus left open surface: same 3s grace unless pointer is still inside.
   document.addEventListener("focusout", (event) => {
