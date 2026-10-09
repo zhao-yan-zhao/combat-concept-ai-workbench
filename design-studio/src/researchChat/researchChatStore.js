@@ -6,7 +6,7 @@
 
 export const RESEARCH_CHAT_SESSION_VERSION = 1;
 export const MAX_MESSAGES_DEFAULT = 48;
-export const MAX_MESSAGE_CHARS_DEFAULT = 800;
+export const MAX_MESSAGE_CHARS_DEFAULT = 3000;
 
 const SOURCE_VALUES = new Set(["ai", "local", "error", "cancelled"]);
 

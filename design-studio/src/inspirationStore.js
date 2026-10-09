@@ -321,4 +321,4 @@ function clean(value) {
 }
 
 function storageKey() { return projectScope === "default" ? STORAGE_KEY : `${STORAGE_KEY}:${projectScope}`; }
-function normalizeProjectScope(value) { return String(value || "default").trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || "default"; }
+function normalizeProjectScope(value) { return encodeURIComponent(String(value || "default").trim()).slice(0, 128) || "default"; }

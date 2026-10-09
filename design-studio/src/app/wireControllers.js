@@ -91,6 +91,7 @@ import {
   saveProjectKnowledge,
   searchProjectKnowledge
 } from "../projectKnowledgeClient.js";
+import { currentProjectTitle } from "./workflowGate.js";
 
 export function wireControllers({
   state,
@@ -491,6 +492,7 @@ export function wireControllers({
   const inspirationAdviceController = createInspirationAdviceController({
     projectId: activeProjectId,
     getState: () => state,
+    getProjectTitle: () => currentProjectTitle(state, project),
     render,
     notify: showToast,
     syncConversation: () => {
@@ -500,7 +502,7 @@ export function wireControllers({
         source: "research-chat"
       });
     },
-    applyBriefUpdate: (response, question) => applyResearchChatBriefUpdate(response, question)
+    applyBriefUpdate: (response, question, options) => applyResearchChatBriefUpdate(response, question, options)
   });
 
   const aiDirectionController = createAiDirectionController({

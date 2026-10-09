@@ -26,10 +26,10 @@ try {
 
   // 2. Defaults
   const initial = await loadAiServiceConfig({ configPath });
-  assert(initial.protocol === "auto", `Expected default protocol 'auto', got '${initial.protocol}'`);
+  assert(initial.protocol === "chat", `Expected default protocol 'chat', got '${initial.protocol}'`);
   
   const publicConfig = getPublicAiServiceConfig(initial, false);
-  assert(publicConfig.protocol === "auto", `Expected public protocol 'auto', got '${publicConfig.protocol}'`);
+  assert(publicConfig.protocol === "chat", `Expected public protocol 'chat', got '${publicConfig.protocol}'`);
   assert(publicConfig.presets?.gemini && publicConfig.presets?.deepseek && publicConfig.presets?.qwen, "Public config missing presets");
 
   // 3. Provider: Gemini
@@ -44,7 +44,7 @@ try {
   });
   const savedGemini = await loadAiServiceConfig({ configPath });
   assert(savedGemini.provider === "gemini", `Expected provider 'gemini', got '${savedGemini.provider}'`);
-  assert(savedGemini.protocol === "responses", `Expected protocol 'responses', got '${savedGemini.protocol}'`);
+  assert(savedGemini.protocol === "chat", `Expected protocol 'chat', got '${savedGemini.protocol}'`);
 
   // 4. Provider: DeepSeek
   await saveAiServiceConfig({
@@ -87,7 +87,7 @@ try {
     value: { baseUrl: "http://127.0.0.1:8045/v1", model: "test-model", protocol: "invalid-proto", provider: "invalid-provider" }
   });
   const savedFallback = await loadAiServiceConfig({ configPath });
-  assert(savedFallback.protocol === "auto", `Expected fallback 'auto', got '${savedFallback.protocol}'`);
+  assert(savedFallback.protocol === "chat", `Expected fallback 'chat', got '${savedFallback.protocol}'`);
   assert(savedFallback.provider === "gemini", `Expected detected fallback 'gemini' for 8045 port, got '${savedFallback.provider}'`);
 
   // 8. Client instantiation and protocol compatibility

@@ -7,12 +7,13 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
   const resolvePrompt = (id, fallback) => String(getAiPromptOverrides()?.[id] || fallback);
 
   async function callOpenAi(input, base) {
+    const isResearchChat = input.workflow?.title === "研究对话直接答复";
     const body = makeGenerationRequest(input, base, false);
     const timeoutMs = generationTimeoutMs(input);
-    const primaryUrl = resolveApiUrl(getConfig().baseUrl);
+    const primaryUrl = resolveApiUrl(getConfig().baseUrl, undefined, isResearchChat);
     let apiResponse;
     try {
-      const result = await postOpenAi(primaryUrl, body, { timeoutMs });
+      const result = await postOpenAi(primaryUrl, body, { timeoutMs, isResearchChat });
       apiResponse = result.response;
     } catch (error) {
       throw normalizeUpstreamError(error, timeoutMs);
@@ -165,10 +166,22 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         "时间线 timeline 必须结合各阶段 timeWindow 与蓝红对抗因果链，生成结构化推演事件流。"
       ] : []),
       ...(isResearchChat ? [
-        "研究对话要求：answer 必须直接回答“研究人员问题”，使用 1 至 3 句连贯中文，控制在 120 至 220 字。",
-        "briefUpdate 的六个字段必须全部存在。仅“本轮允许更新的简报字段”对应项可以填写从本轮回答提炼的内容；字段为 none 时全部返回空字符串。禁止把阶段、风险、回答摘要或其他字段内容互相挪用。",
-        "approach 只写实现研究目标的总体概念机制；assumptions 只写结论成立所依赖的前提与边界；expectedEffects 只写期望产生且可观察的效果；risk 只写可能导致目标不能实现的不确定性或不利后果。",
-        "不要复述完整简报，不要输出任务阶段、待核实、待交接、最小信息集等报告式标签。"
+        "研究对话定位：你是作战概念研究工作台的【资深军事概念研讨参谋】。你的职责是与研究人员进行专业、有实质深度、平等互动的战法机制研讨，并协助将其思考逐步提炼沉淀至右侧研究简报六字段（研究意图、研究目标、核心思路、关键假设、预期效果、主要风险）。",
+        "以“项目标题”为默认研究引子与宏观背景；若用户在提问或对话中明确提出了具体作战设想（如美军在吕宋岛的防空反导能力），必须立即以用户提出的实际课题为首要核心展开研讨，绝不套用无关套路。",
+        "核心语气与风格准则：",
+        "  1. 军事实质优先：懂战法、懂装备体系、懂对抗机理。遇到地缘地名、兵力编制或武器型号（如吕宋岛、爱国者、堤丰、反舰弹道导弹、无人蜂群等），必须立即基于真实战场背景与攻防对抗矛盾接话，切中实质，严禁输出无实质意义的敷衍空话（如“研究进程已就绪”、“研究框架已就绪”、“请提供具体场景或变量”等官僚化推脱）。",
+        "  2. 参谋式三段论回复结构（每次答复请按此有机组织，行文连贯自然，切勿输出硬标签）：",
+        "     - 第一层【机理与关键矛盾】：结合军事常识正面呼应用户的课题或问题，点出该作战设想的核心痛点、攻防对抗博弈焦点或概念成立的前提机理；",
+        "     - 第二层【提炼示范与同步提示】：为用户提炼出一句符合军事概念规范的精练表述，并在对话中自然提示已代拟写入右侧对应栏目供其审阅微调（同时将该表述写入 briefUpdate 的对应允许字段中）；",
+        "     - 第三层【分支推敲与启发引导】：针对作战概念的不确定性，主动提供 1 至 2 个具体的推演分支或关键对抗变量，供研究人员权衡利弊并选择深入方向。",
+        "  3. 典型场景应答策略：",
+        "     - 场景A（用户提出研究想法/主题）：以用户提出的具体课题为首要研究核心；剖析核心对抗矛盾；代拟规范研究意图（如“评估第一岛链前沿基地背景下，美军以吕宋岛陆基防空反导阵地为支点应对多批次饱和突防时的抗毁生存与联合拦截效能”）；给出 1-2 个可供深入的推演分支，询问倾向。",
+        "     - 场景B（用户询问字段概念或写法，如“研究意图应该如何填写”）：先通俗解释该栏目在概念设计中的立论原点作用；结合当前探讨的课题直接给出一句高质量的实战化示范句；启发用户提供其最关心的背景或核心难题。",
+        "     - 场景C（用户承接提问或质疑，如“你知道我想研究什么吗”或表达犹豫）：立即结合近期对话上下文清晰复述并确认当前研究的核心课题，不重置；针对用户犹豫点分析不同研究取向的利弊，协助研究员推敲决策。",
+        "     - 场景D（用户询问某字段现状或概念定义）：直接基于右侧简报已有内容或标准定义回答，briefUpdate 对应项置为空字符串。",
+        "  4. 简报回写规范：",
+        "     - briefUpdate 包含六个字段（researchIntent, objective, approach, assumptions, expectedEffects, risk）。",
+        "     - 仅当“本轮允许更新的简报字段”为对应项（或包含该项、或为 all/全部）且本轮有提炼成果时填入纯净研究表述；字段为 none 或纯咨询时对应项返回空字符串；严禁在 briefUpdate 写入元说明（如“建议填写”、“已更新”等词语）。"
       ] : []),
       ...(isRuleLibraryDraft ? [
         "规则库要求：只维护规则本体（name/type/scope/description），不要输出活动绑定或 OV 品牌字段。",
@@ -284,6 +297,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       ] : isOperationalTaskDraft ? [
         "作战任务要求：把已确认的阶段行动转换为独立、可复核的任务成果。",
         "1. 蓝红双方行动都要形成任务，side 与 phaseId 必须沿用 analysis.phaseAction，不得合并丢失。",
+        "1a. 数量与行动承接：若 analysis.phaseAction.expectedTaskCount 存在，必须尽量为本批给出的每一项阶段行动分别生成 1 个对应的独立作战任务，tasks 数组长度应尽量对齐 expectedTaskCount 项；每项任务的 sourceAction 必须原样引用对应阶段行动文本。",
         "2. missionType 只能使用 analysis.cmoMissionTypes 的 id，并选择最接近的 CMO 任务分类。",
         "2a. name 必须是 6-18 个汉字的规范且全局唯一任务名称，使用“区域/对象/作战功能 + 任务”格式，如“北部警戒空中预警任务”“前沿节点指挥控制任务”“主航渡线电子对抗任务”；禁止重名，禁止把 T+时点、完整行动句、条件或效果塞进名称。",
         "3. area.type 表达 CMO 式区域用途：patrol 巡逻区、prosecution 交战/追击区、support 支援区、transit 航渡走廊、target 目标区、exclusion 禁入区、other 其他。",
@@ -401,13 +415,21 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       ? input.temperature
       : resolveGenerationTemperature(input?.workflow?.outputSchema, isResearchChat);
 
+    const messages = isResearchChat
+      ? buildResearchChatMessages(input, instructions, prompt)
+      : [
+          { role: "system", content: instructions },
+          { role: "user", content: prompt }
+        ];
+
+    const effectivePrompt = isResearchChat
+      ? `【研究人员当前核心提问】：${input.analysis?.["研究人员问题"] || ""}\n\n${prompt}`
+      : prompt;
+
     return {
       model: getConfig().model,
       temperature,
-      messages: [
-        { role: "system", content: instructions },
-        { role: "user", content: prompt }
-      ],
+      messages,
       response_format: {
         type: "json_schema",
         json_schema: {
@@ -417,7 +439,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         }
       },
       instructions,
-      input: prompt,
+      input: effectivePrompt,
       stream: Boolean(stream),
       text: {
         format: {
@@ -429,6 +451,110 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       },
       store: false
     };
+  }
+
+  function buildResearchChatMessages(input, systemInstructions, promptContent) {
+    const analysis = input.analysis || {};
+    const currentQuestion = String(analysis["研究人员问题"] || analysis["question"] || "").trim();
+    const briefField = analysis["本轮允许更新的简报字段"] || "none";
+    const projectTitle = analysis["项目标题"] || "";
+    const currentBrief = analysis["当前研究简报"] || {};
+    const historyText = String(analysis["近期对话上下文"] || "").trim();
+
+    const recordedInspiration = String(analysis["已记录灵感"] || "").trim();
+    const hasRecordedInspiration = recordedInspiration && recordedInspiration !== "尚未形成结构化灵感。";
+    const cleanEvidence = Array.isArray(input.evidence)
+      ? input.evidence.map((item) => `- ${item.title || item.filePath || "引用材料"}: ${item.summary || item.text || ""}`).filter((t) => t.length > 3).join("\n")
+      : "";
+
+    const systemPrompt = [
+      systemInstructions,
+      "你目前正在以【资深军事概念研讨参谋】的身份与研究人员进行专业、有实质深度、平等互动的战法机制研讨。",
+      projectTitle ? `当前项目主题：${projectTitle}` : "",
+      hasRecordedInspiration ? `已沉淀灵感要点：\n${recordedInspiration}` : "",
+      cleanEvidence ? `参考知识依据：\n${cleanEvidence}` : "",
+      "当前右侧简报六字段状态：",
+      JSON.stringify(currentBrief, null, 2),
+      `本轮允许更新的简报字段：${briefField}`,
+      "",
+      "【核心准则】：",
+      "1. 严禁声称“当前会话未提供前序具体场景或研究标的”，严禁输出“研究框架已就绪”、“研究进程已确认”、“研究推进至下一阶段”等任何形式的八股套话！",
+      "2. 用户的作战设想或问题已在用户消息中明确给出。你必须第一句话就直接正面回应用户的军事课题，懂战法、懂装备体系、懂对抗机理（例如遇到吕宋岛立即关联堤丰/爱国者/雷达节点/防空反导对抗矛盾）。",
+      "3. 采用参谋式三段论回复：",
+      "   - 第一层【机理与关键矛盾】：结合军事常识正面呼应用户的课题，点出该作战设想的核心痛点、攻防对抗博弈焦点或概念成立的前提机理；",
+      "   - 第二层【提炼示范与同步提示】：为用户提炼出一句符合军事概念规范的精练表述，并在对话中自然提示已代拟写入右侧对应栏目供其审阅微调（同时将该表述写入 briefUpdate 的对应允许字段中）；",
+      "   - 第三层【分支推敲与启发引导】：针对作战概念的不确定性，主动提供 1 至 2 个具体的推演分支或关键对抗变量，供研究人员权衡利弊并选择深入方向。",
+      "4. 严格返回合法的 JSON 对象，格式为：",
+      JSON.stringify({
+        answer: "直接回答并提供专业参谋建议（连贯自然中文，切勿输出硬标签）",
+        briefUpdate: {
+          researchIntent: "",
+          objective: "",
+          approach: "",
+          assumptions: "",
+          expectedEffects: "",
+          risk: ""
+        }
+      }, null, 2),
+      "briefUpdate 仅在有明确成果且字段匹配（或允许更新包含该项/为 all）时填入规范纯净的研究表述；不写元说明，禁止挪用。"
+    ].filter(Boolean).join("\n");
+
+    const messages = [{ role: "system", content: systemPrompt }];
+
+    if (historyText && !historyText.includes("暂无历史对话")) {
+      const turns = parseConversationTurns(historyText);
+      for (const turn of turns) {
+        if (turn.role && turn.text) {
+          messages.push({ role: turn.role, content: turn.text });
+        }
+      }
+    }
+
+    const userContent = currentQuestion
+      ? `【研究人员当前提问】：${currentQuestion}`
+      : "请基于当前项目与研究简报状态，给出下一步概念研究建议。";
+
+    messages.push({ role: "user", content: userContent });
+
+    return messages;
+  }
+
+  function parseConversationTurns(historyText) {
+    if (!historyText || typeof historyText !== "string") return [];
+    const lines = historyText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const turns = [];
+    let currentRole = null;
+    let currentText = "";
+
+    const flush = () => {
+      if (currentRole && currentText.trim()) {
+        const cleaned = currentText.trim();
+        if (!/^(研究框架已就绪|研究进程已确认|研究推进至下一阶段|研究进入下一阶段|已收到继续指令|已转入作战概念推演|当前研究推进至作战概念体系架构|本阶段作战概念研究已完成|由于缺乏前置上下文)/.test(cleaned)) {
+          turns.push({ role: currentRole, text: cleaned });
+        }
+      }
+      currentRole = null;
+      currentText = "";
+    };
+
+    for (const line of lines) {
+      if (line.startsWith("【") && line.endsWith("】")) continue;
+      if (line.includes("条更早消息已折叠")) continue;
+
+      if (/^(研究人员|用户|User)[:：]/.test(line)) {
+        flush();
+        currentRole = "user";
+        currentText = line.replace(/^(研究人员|用户|User)[:：]\s*/, "");
+      } else if (/^(研究助手|AI|助理|Assistant)[:：]/.test(line)) {
+        flush();
+        currentRole = "assistant";
+        currentText = line.replace(/^(研究助手|AI|助理|Assistant)[:：]\s*/, "");
+      } else if (currentRole) {
+        currentText += "\n" + line;
+      }
+    }
+    flush();
+    return turns.slice(-10);
   }
 
   function buildSanitizedContextParts(analysis = {}, evidence = [], outputSchema = "") {
@@ -454,8 +580,9 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     }
 
     // 3. Strip duplicate hardcoded prompt fields that may be passed by legacy controllers
-    delete cleanAnalysis["修订要求"];
-    delete cleanAnalysis["对话回答要求"];
+    if (outputSchema !== "ConceptPlan") {
+      delete cleanAnalysis["对话回答要求"];
+    }
     delete cleanAnalysis["蓝红行动写作要求"];
     delete cleanAnalysis["专业性要求"];
     delete cleanAnalysis["时窗依据要求"];
@@ -497,12 +624,13 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
    * Yields { type: "delta", text, assembled } then { type: "done", draft, rawText }.
    */
   async function* streamOpenAi(input, base) {
+    const isResearchChat = input.workflow?.title === "研究对话直接答复";
     const payload = makeGenerationRequest(input, base, true);
     const timeoutMs = Math.max(generationTimeoutMs(input), 180000);
-    const primaryUrl = resolveApiUrl(getConfig().baseUrl);
+    const primaryUrl = resolveApiUrl(getConfig().baseUrl, undefined, isResearchChat);
     let apiResponse;
     try {
-      const result = await postOpenAi(primaryUrl, payload, { timeoutMs, stream: true });
+      const result = await postOpenAi(primaryUrl, payload, { timeoutMs, stream: true, isResearchChat });
       apiResponse = result.response;
     } catch (error) {
       throw normalizeUpstreamError(error, timeoutMs);
@@ -678,19 +806,25 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
 
-  function resolveDefaultEndpoint(protocol = getConfig()?.protocol) {
-    if (protocol === "chat") {
+  function resolveDefaultEndpoint(protocol = getConfig()?.protocol, isResearchChat = false) {
+    if (isResearchChat) {
       return "chat/completions";
     }
-    return "responses";
+    if (protocol === "responses") {
+      return "responses";
+    }
+    return "chat/completions";
   }
 
-  function resolveApiUrl(baseUrl, defaultEndpoint) {
+  function resolveApiUrl(baseUrl, defaultEndpoint, isResearchChat = false) {
     const trimmed = String(baseUrl || "").trim().replace(/\/+$/, "");
     if (trimmed.endsWith("/chat/completions") || trimmed.endsWith("/responses")) {
+      if (isResearchChat && trimmed.endsWith("/responses")) {
+        return trimmed.replace(/\/responses$/, "/chat/completions");
+      }
       return trimmed;
     }
-    const endpoint = defaultEndpoint || resolveDefaultEndpoint();
+    const endpoint = defaultEndpoint || resolveDefaultEndpoint(undefined, isResearchChat);
     return `${trimmed}/${endpoint}`;
   }
 
@@ -706,7 +840,20 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
 
   function formatRequestBodyForEndpoint(rawBody, url, provider, model) {
     if (url.endsWith("/responses")) {
-      return rawBody;
+      const cleanResponsesBody = {
+        model: rawBody.model,
+        stream: rawBody.stream,
+        instructions: rawBody.instructions,
+        input: rawBody.input,
+        store: false
+      };
+      if (typeof rawBody.temperature === "number") {
+        cleanResponsesBody.temperature = rawBody.temperature;
+      }
+      if (rawBody.text) {
+        cleanResponsesBody.text = rawBody.text;
+      }
+      return cleanResponsesBody;
     }
 
     const currentProvider = String(provider || "").toLowerCase();
@@ -918,9 +1065,10 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         ""
       ).trim();
       base.result = draft?.briefUpdate
-        ? { ...base.result, coreIdea: extractedAnswer || String(draft.answer || ""), briefUpdate: draft.briefUpdate }
+        ? { ...base.result, answer: extractedAnswer || String(draft.answer || ""), coreIdea: extractedAnswer || String(draft.answer || ""), briefUpdate: draft.briefUpdate }
         : {
             ...base.result,
+            answer: extractedAnswer || draft.summary || base.result.answer || base.result.coreIdea,
             coreIdea: extractedAnswer || draft.summary || base.result.coreIdea,
             phases: bullets.length ? bullets : base.result.phases,
             risks: risks.length ? risks : base.result.risks

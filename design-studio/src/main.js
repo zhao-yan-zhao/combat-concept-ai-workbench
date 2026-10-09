@@ -240,7 +240,13 @@ function render(options = {}) {
     fetchedModels: state.aiConfigFetchedModels,
     modelFetchHint: state.aiConfigModelFetchHint
   });
-  $("#aiPromptRoot").innerHTML = renderAiPromptPanel({ open: state.aiPromptOpen, catalog: state.aiPromptCatalog, selectedId: state.aiPromptSelectedId, saving: state.aiPromptSaving });
+  $("#aiPromptRoot").innerHTML = renderAiPromptPanel({
+    open: state.aiPromptOpen,
+    catalog: state.aiPromptCatalog,
+    selectedId: state.aiPromptSelectedId,
+    saving: state.aiPromptSaving,
+    drafts: state.aiPromptDrafts || {}
+  });
   $("#workflowGateRoot").innerHTML = renderWorkflowGate();
   renderOv1ToolboxFloatHost();
   // Project picker / menubar chrome toggles must not rebuild the concept-map iframe.
@@ -414,7 +420,9 @@ function restoreViewFocus(root, snapshot) {
   }
   if (!target) target = controls[snapshot.index] || null;
   if (!(target instanceof HTMLElement) || target.tagName !== snapshot.tagName) return;
-  if ("value" in target) target.value = snapshot.value;
+  if ("value" in target && (!state.briefDraftReveal || snapshot.scopeId !== "briefEditorForm")) {
+    target.value = snapshot.value;
+  }
   if (snapshot.checked !== undefined && "checked" in target) target.checked = snapshot.checked;
   target.focus({ preventScroll: true });
   if (snapshot.selectionStart !== null && typeof target.setSelectionRange === "function") {
@@ -669,7 +677,11 @@ function bindDynamicEvents() {
       }
       closeMenubarMenus();
       // Left floating step rail and menus: same entry path as workflow gate.
-      void navigateToResearchView(viewId);
+      const fromPhaseSubflow = (state.activeView === "phase-action" || state.activeView === "ov6c" || state.activeView === "ov6b" || state.activeView === "ov6a");
+      const entrySource = fromPhaseSubflow ? "phase-action" : (state.activeView || "default");
+      const completeOperationalTasks = fromPhaseSubflow && viewId === "operational-task";
+      if (completeOperationalTasks) void navigateToResearchView(viewId, { entrySource, completeOperationalTasks });
+      else void navigateToResearchView(viewId);
     });
   });
 
@@ -844,7 +856,7 @@ function bindDynamicEvents() {
   });
   document.querySelectorAll("[data-action]").forEach((button) => {
     // Workflow gate uses root-level delegation (survives soft refresh / open toggle).
-    if (button.closest("#workflowGateRoot")) return;
+    if (button.closest("#workflowGateRoot") || button.closest("#aiConfigRoot") || button.closest("#aiPromptRoot")) return;
     const fire = () => handleAction(button.dataset.action, button);
     if (button.matches("input, select, textarea")) {
       button.addEventListener("change", fire);
@@ -1869,14 +1881,26 @@ function restoreLocalConceptMapConflictDraft(model) {
   invalidateConceptMapDependents();
 }
 
-function applyResearchChatBriefUpdate(response, question) {
-  const update = deriveResearchChatBriefUpdate({ brief: state.brief, question, result: response?.result });
+function applyResearchChatBriefUpdate(response, question, options = {}) {
+  const update = deriveResearchChatBriefUpdate({
+    brief: state.brief,
+    question,
+    result: response?.result || response,
+    projectTitle: options.projectTitle || currentProjectTitle()
+  });
   if (!update.fields.length) return [];
   const nextBrief = saveConceptBrief({ ...state.brief, ...update.patch }, projectBriefSeed);
   if (!areConceptBriefsEqual(state.brief, nextBrief)) {
     state.brief = nextBrief;
     state.briefIntent = nextBrief.researchIntent;
+    state.briefDraftReveal = true;
     invalidateDerivedArtifacts();
+    window.setTimeout(() => {
+      if (!state.briefDraftReveal) return;
+      state.briefDraftReveal = false;
+      const form = document.querySelector("#briefEditorForm");
+      form?.classList.remove("is-draft-reveal");
+    }, 1500);
   }
   return update.fields;
 }
@@ -2388,6 +2412,13 @@ async function advanceRelatedWorkflow() {
   const completesPhaseSubflow = ctx.mainViewId === "phase-action"
     && state.activeView === "ov6c"
     && ctx.nextStep.id === "operational-task";
+  if (completesPhaseSubflow && state.phaseAction?.phases?.length >= 2 && state.phaseAction?.status !== "confirmed") {
+    try {
+      await conceptPlanningController.confirmPhaseAction();
+    } catch {
+      /* continue advancement */
+    }
+  }
   await navigateToResearchView(ctx.nextStep.id, {
     toast: `已进入${ctx.nextStep.label}`,
     force: true,
@@ -3151,3 +3182,45 @@ function bindWorkflowGateChrome() {
 
 bindMenubarChrome();
 bindWorkflowGateChrome();
+
+function bindAiModalsChrome() {
+  const configRoot = document.getElementById("aiConfigRoot");
+  if (configRoot && configRoot.dataset.actionsBound !== "true") {
+    configRoot.dataset.actionsBound = "true";
+    configRoot.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const button = target.closest("[data-action]");
+      if (!button || !configRoot.contains(button)) return;
+      handleAction(button.dataset.action, button);
+    });
+  }
+
+  const promptRoot = document.getElementById("aiPromptRoot");
+  if (promptRoot && promptRoot.dataset.actionsBound !== "true") {
+    promptRoot.dataset.actionsBound = "true";
+    promptRoot.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const button = target.closest("[data-action]");
+      if (!button || !promptRoot.contains(button)) return;
+      handleAction(button.dataset.action, button);
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (state.aiPromptOpen) {
+      event.preventDefault();
+      handleAction("close-ai-prompts");
+      return;
+    }
+    if (state.aiConfigOpen) {
+      event.preventDefault();
+      handleAction("close-ai-config");
+      return;
+    }
+  });
+}
+
+bindAiModalsChrome();

@@ -447,9 +447,22 @@ export function createConceptPlanningController({
 
   async function generateOperationalTasks({ silent = false } = {}) {
     const state = getState();
-    if (state.phaseAction?.status !== "confirmed" || state.phaseActionStorage?.stale) {
-      if (!silent) notify("请先确认阶段与行动");
+    const phases = Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : [];
+    if (!phases.length) {
+      if (!silent) notify("请先在「阶段行动」中划分阶段，再生成作战任务");
       return null;
+    }
+    if (state.phaseAction?.status !== "confirmed" && phases.length >= 2) {
+      try {
+        const next = confirmPhaseActionConcept(state.phaseAction);
+        state.phaseAction = persistPhaseAction(next, projectId);
+        void syncPhaseAction(state.phaseAction, { source: "phase-action:auto-confirm-for-tasks", silent: true });
+      } catch {
+        /* proceed with existing phases */
+      }
+    }
+    if (state.phaseActionStorage?.stale && state.phaseAction?.status === "confirmed") {
+      void syncPhaseAction(state.phaseAction, { source: "phase-action:refresh-lineage", silent: true });
     }
     if (state.operationalTaskGenerating) return null;
     state.operationalTaskGenerating = true;
@@ -463,6 +476,7 @@ export function createConceptPlanningController({
       const results = [];
       const generateBatch = async (batch) => {
         let lastError = null;
+        let candidateResponse = null;
         for (let attempt = 0; attempt < 2; attempt += 1) {
           try {
             const response = await generateWithAi({
@@ -473,22 +487,25 @@ export function createConceptPlanningController({
                 phaseAction: batch,
                 cmoMissionTypes: listCmoMissionTypes(),
                 taskAreaTypes: ["patrol", "prosecution", "support", "transit", "target", "exclusion", "other"],
-                generationConstraint: "直接返回任务 JSON；禁止工具调用、web_search、搜索占位或过程说明。"
+                generationConstraint: `必须为本批给出的阶段行动逐项生成作战任务，数量尽量与 expectedTaskCount（共 ${batch.expectedTaskCount} 项）一致；直接返回任务 JSON；禁止工具调用、web_search、搜索占位或过程说明。`
               },
               evidence: []
             });
-            if (isAiOutput(response) && Array.isArray(response.result?.tasks) && response.result.tasks.length === batch.expectedTaskCount) return response;
+            if (isAiOutput(response) && Array.isArray(response.result?.tasks) && response.result.tasks.length > 0) {
+              return response;
+            }
             lastError = new Error("Incomplete operational task AI batch");
           } catch (error) {
             lastError = error;
           }
         }
+        if (candidateResponse) return candidateResponse;
         throw lastError || new Error("Operational task AI batch failed");
       };
-      // Four concurrent small batches reduce wall-clock time while keeping each
-      // structured request small enough for reliable area/coordinate output.
-      for (let offset = 0; offset < batches.length; offset += 4) {
-        const wave = batches.slice(offset, offset + 4);
+      // Two concurrent small batches provide reliable execution without overwhelming
+      // the upstream model gateway, while keeping each request structured and responsive.
+      for (let offset = 0; offset < batches.length; offset += 2) {
+        const wave = batches.slice(offset, offset + 2);
         const responses = await Promise.all(wave.map(generateBatch));
         responses.forEach((response) => {
           results.push(response.result);

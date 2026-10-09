@@ -1294,6 +1294,7 @@ input:focus, textarea:focus, select:focus {
   background: transparent; color: var(--ink); font-size: 12px; font-weight: 600; text-align: left; text-decoration: none;
 }
 .menubar-panel button:hover, .menubar-panel .menubar-link:hover { background: rgba(61, 255, 197, .1); color: var(--cyan); }
+.ai-modal-backdrop { position: fixed; inset: 0; z-index: 79; background: rgba(3, 9, 8, .72); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
 .ai-prompt-dialog { position: fixed; inset: 0; z-index: 80; width: min(1180px, calc(100vw - 40px)); height: min(760px, calc(100vh - 40px)); margin: auto; padding: 0; border: 1px solid #304941; border-radius: 6px; background: #0d1714; color: var(--ink); box-shadow: 0 24px 70px rgba(0, 0, 0, .52); }
 .ai-prompt-dialog::backdrop { background: rgba(3, 9, 8, .72); }
 .ai-prompt-shell { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; }
@@ -1302,20 +1303,32 @@ input:focus, textarea:focus, select:focus {
 .ai-prompt-header p { margin-bottom: 0; color: var(--muted); font-size: 12px; }
 .ai-prompt-layout { display: grid; grid-template-columns: minmax(220px, 290px) minmax(0, 1fr); min-height: 0; }
 .ai-prompt-list { overflow: auto; padding: 10px; border-right: 1px solid var(--line); }
-.ai-prompt-item { display: grid; width: 100%; gap: 3px; margin: 0 0 4px; padding: 10px 11px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--ink); text-align: left; box-shadow: none; }
+.ai-prompt-item { display: grid; width: 100%; gap: 3px; margin: 0 0 4px; padding: 10px 11px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--ink); text-align: left; box-shadow: none; cursor: pointer; }
 .ai-prompt-item:hover, .ai-prompt-item.is-active { border-color: rgba(61, 255, 197, .25); background: rgba(61, 255, 197, .08); }
-.ai-prompt-item strong { font-size: 12px; }
-.ai-prompt-item span { color: var(--muted); font-size: 10px; }
-.ai-prompt-editor { overflow: auto; padding: 20px; }
-.ai-prompt-editor form { display: grid; gap: 13px; height: 100%; }
-.ai-prompt-editor label { display: grid; gap: 7px; min-height: 0; }
-.ai-prompt-editor textarea { width: 100%; min-height: 360px; resize: vertical; font: 12px/1.65 Consolas, "Microsoft YaHei", monospace; }
+.ai-prompt-item strong { font-size: 12px; pointer-events: none; }
+.ai-prompt-item span { color: var(--muted); font-size: 10px; pointer-events: none; }
+.ai-prompt-editor { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow: hidden; padding: 0; background: #0d1714; }
+.ai-prompt-editor .ai-prompt-form { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.ai-prompt-scrollable { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 13px; }
+.ai-prompt-scrollable .ai-prompt-content-label { display: flex; flex-direction: column; gap: 7px; flex: 1 1 auto; min-height: 340px; margin-top: 4px; }
+.ai-prompt-scrollable .ai-prompt-content-label span { font-size: 12px; color: var(--muted); font-weight: 600; }
+.ai-prompt-editor textarea { width: 100%; flex: 1 1 auto; min-height: 340px; resize: vertical; padding: 12px 14px; font: 12px/1.65 Consolas, "Microsoft YaHei", monospace; background: rgba(2, 6, 23, .72); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); box-sizing: border-box; }
 .ai-prompt-meta { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .ai-prompt-meta h3 { margin-bottom: 4px; font-size: 17px; letter-spacing: 0; }
 .ai-prompt-meta code { color: var(--cyan); font-size: 11px; }
 .ai-prompt-variables { display: flex; flex-wrap: wrap; gap: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); font-size: 11px; }
 .ai-prompt-variables strong { color: var(--ink); }
-@media (max-width: 760px) { .ai-prompt-dialog { width: calc(100vw - 16px); height: calc(100vh - 16px); } .ai-prompt-layout { grid-template-columns: 1fr; grid-template-rows: 180px minmax(0, 1fr); } .ai-prompt-list { border-right: 0; border-bottom: 1px solid var(--line); } .ai-prompt-editor { padding: 14px; } }
+.ai-prompt-actions { flex: 0 0 auto; display: flex !important; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 24px; background: rgba(10, 18, 16, .96); border-top: 1px solid var(--line); box-shadow: 0 -4px 18px rgba(0, 0, 0, .32); grid-template-columns: none !important; }
+.ai-prompt-actions-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.ai-prompt-actions button { width: auto; min-width: 96px; padding: 8px 18px; font-size: 12px; }
+.ai-prompt-draft-hint { font-size: 11px; color: var(--gold); padding: 2px 8px; border-radius: 999px; background: var(--gold-soft); border: 1px solid rgba(251, 191, 36, .28); }
+@media (max-width: 760px) {
+  .ai-prompt-dialog { width: calc(100vw - 16px); height: calc(100vh - 16px); }
+  .ai-prompt-layout { grid-template-columns: 1fr; grid-template-rows: 180px minmax(0, 1fr); }
+  .ai-prompt-list { border-right: 0; border-bottom: 1px solid var(--line); }
+  .ai-prompt-scrollable { padding: 14px; }
+  .ai-prompt-actions { padding: 10px 14px; }
+}
 
 .ai-config-dialog { position: fixed; inset: 0; z-index: 80; width: min(800px, calc(100vw - 40px)); max-height: min(860px, calc(100vh - 40px)); height: fit-content; margin: auto; padding: 0; border: 1px solid #304941; border-radius: 6px; background: #0d1714; color: var(--ink); box-shadow: 0 24px 70px rgba(0, 0, 0, .52); overflow: hidden; }
 .ai-config-dialog::backdrop { background: rgba(3, 9, 8, .72); }

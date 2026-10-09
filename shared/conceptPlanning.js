@@ -328,9 +328,70 @@ export function forceMissionPlanIncompleteReasons(plan, storage = {}) {
   ];
 }
 
+function inferFallbackTaskArea(phase = {}, side = "friendly", text = "", existingAiTasks = [], allPhases = []) {
+  const phaseArea = normalizeOperationalTaskArea(phase?.area || phase?.missionArea || phase?.taskArea);
+  if (phaseArea.name && phaseArea.name !== "待人工明确" && (phaseArea.points || []).some((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))) {
+    return phaseArea;
+  }
+  const samePhaseAi = existingAiTasks.find((t) => t.phaseId === phase?.id && t.side === side && t.area?.name && t.area.name !== "待人工明确" && (t.area?.points || []).some((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude)));
+  if (samePhaseAi?.area) {
+    return {
+      ...samePhaseAi.area,
+      name: `${samePhaseAi.area.name}（协同区）`,
+      needsReview: true,
+      basis: samePhaseAi.area.basis || "沿用同阶段同侧任务区域候选，待人工复核"
+    };
+  }
+  const anyAi = existingAiTasks.find((t) => t.area?.name && t.area.name !== "待人工明确" && (t.area?.points || []).some((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude)));
+  if (anyAi?.area) {
+    return {
+      ...anyAi.area,
+      name: `${phase?.name || "阶段"}作战任务区`,
+      needsReview: true,
+      basis: anyAi.area.basis || "参考已有任务地理基准派生候选，待人工复核"
+    };
+  }
+  const fullCorpus = (allPhases || []).map((p) => `${p.name} ${(p.blueActions || []).join(" ")} ${(p.redActions || []).join(" ")}`).join(" ") + ` ${text}`;
+  if (/吕宋|巴士海峡|菲律宾|第一岛链/i.test(fullCorpus)) {
+    return {
+      name: `${phase?.name || "前沿"}任务空海区`,
+      type: side === "friendly" ? "patrol" : "prosecution",
+      geometryType: "polygon",
+      coordinateSystem: "WGS84",
+      points: [
+        { id: "point-1", label: "基准北点", latitude: 20.8, longitude: 121.5 },
+        { id: "point-2", label: "基准东点", latitude: 20.3, longitude: 122.2 },
+        { id: "point-3", label: "基准南点", latitude: 19.8, longitude: 121.6 },
+        { id: "point-4", label: "基准西点", latitude: 20.2, longitude: 120.9 }
+      ],
+      radiusNm: 0,
+      description: "基于想定地理背景派生的初步候选区域",
+      basis: "AI 地理候选（吕宋海峡/巴士海峡扇区），待人工复核",
+      needsReview: true
+    };
+  }
+  return {
+    name: `${phase?.name || "任务"}作战责任区`,
+    type: side === "friendly" ? "patrol" : "prosecution",
+    geometryType: "polygon",
+    coordinateSystem: "WGS84",
+    points: [
+      { id: "point-1", label: "参考点 1", latitude: 24.5, longitude: 122.5 },
+      { id: "point-2", label: "参考点 2", latitude: 24.2, longitude: 123.2 },
+      { id: "point-3", label: "参考点 3", latitude: 23.5, longitude: 122.8 },
+      { id: "point-4", label: "参考点 4", latitude: 23.8, longitude: 122.0 }
+    ],
+    radiusNm: 0,
+    description: "初步推导的研究级任务区域候选",
+    basis: "基于想定任务类型自动派生的参考基准，待人工复核与微调",
+    needsReview: true
+  };
+}
+
 export function createOperationalTasksFromPhaseAction(plan = {}, phaseAction = {}, draft = null, { source = "local" } = {}) {
   const normalized = normalizeForceMissionPlan(plan);
   const phases = Array.isArray(phaseAction?.phases) ? phaseAction.phases : [];
+  const aiTasks = Array.isArray(draft?.tasks) ? draft.tasks : [];
   const fallbackTasks = [];
   for (const phase of phases) {
     const blue = Array.isArray(phase?.blueActions) ? phase.blueActions : (phase?.primaryActions || []);
@@ -345,7 +406,9 @@ export function createOperationalTasksFromPhaseAction(plan = {}, phaseAction = {
           side,
           phaseId: clean(phase?.id, 60),
           missionType: inferTaskMissionType(text),
-          area: normalizeOperationalTaskArea(phase?.area || phase?.missionArea || phase?.taskArea),
+          area: source === "ai"
+            ? inferFallbackTaskArea(phase, side, text, aiTasks, phases)
+            : normalizeOperationalTaskArea(phase?.area || phase?.missionArea || phase?.taskArea),
           objective: text,
           expectedEffect: (phase?.expectedEffects || [])[0] || "",
           sourceAction: text,
@@ -354,7 +417,27 @@ export function createOperationalTasksFromPhaseAction(plan = {}, phaseAction = {
       });
     }
   }
-  const generatedTasks = (Array.isArray(draft?.tasks) && draft.tasks.length ? draft.tasks : fallbackTasks).map((task) => ({
+
+  let mergedTasks = [];
+  if (aiTasks.length > 0) {
+    mergedTasks = [...aiTasks];
+    for (const fallback of fallbackTasks) {
+      const alreadyCovered = aiTasks.some((t) =>
+        (t.sourceAction && t.sourceAction.trim() === fallback.sourceAction.trim()) ||
+        (t.phaseId === fallback.phaseId && t.side === fallback.side && t.objective && fallback.objective && (t.objective.includes(fallback.objective.slice(0, 20)) || fallback.objective.includes(t.objective.slice(0, 20))))
+      );
+      if (!alreadyCovered) {
+        mergedTasks.push({
+          ...fallback,
+          id: `derived-${fallback.id}`
+        });
+      }
+    }
+  } else {
+    mergedTasks = fallbackTasks;
+  }
+
+  const generatedTasks = mergedTasks.map((task) => ({
     ...task,
     name: normalizeGeneratedTaskName(task?.name, task?.missionType, task?.objective || task?.sourceAction)
   }));
@@ -380,6 +463,14 @@ export function buildOperationalTaskGenerationBatches(phaseAction = {}, maxTasks
     const redActions = Array.isArray(phase?.redActions) ? phase.redActions : (phase?.secondaryActions || []);
     blueActions.forEach((action) => entries.push({ phase, side: "friendly", action }));
     redActions.forEach((action) => entries.push({ phase, side: "hostile", action }));
+  }
+  if (!entries.length) {
+    for (const phase of Array.isArray(phaseAction?.phases) ? phaseAction.phases : []) {
+      const fallbackAction = clean(phase?.objective, 200) || clean(phase?.name, 80);
+      if (fallbackAction) {
+        entries.push({ phase, side: "friendly", action: fallbackAction });
+      }
+    }
   }
   const batches = [];
   for (let offset = 0; offset < entries.length; offset += limit) {

@@ -4,8 +4,8 @@ export const PROVIDER_PRESETS = {
     label: "Google Gemini (本地网关 / Antigravity)",
     baseUrl: "http://127.0.0.1:8045/v1",
     model: "gemini-3.8-flash-high",
-    protocol: "responses",
-    hint: "Google Gemini：推荐 Responses API 协议，本地网关原生支持 Prompt Caching 上下文缓存，高吞吐低延迟。"
+    protocol: "chat",
+    hint: "Google Gemini：推荐 Chat Completions 协议（/chat/completions），完整支持 System Prompt、结构化 JSON 与思考过程。"
   },
   deepseek: {
     id: "deepseek",
@@ -87,6 +87,7 @@ export function renderAiConfigPanel({
   const isPresetModel = modelCandidates.includes(currentModel);
 
   return `
+    <div class="ai-modal-backdrop" data-action="close-ai-config"></div>
     <dialog class="ai-config-dialog" open aria-label="AI 服务配置">
       <div class="ai-config-shell">
         <header class="ai-config-header">
@@ -132,9 +133,9 @@ export function renderAiConfigPanel({
             <label class="ai-config-full-width">
               <span>接口协议</span>
               <select name="protocol" id="aiConfigProtocolSelect">
-                <option value="auto" ${protocol === "auto" ? "selected" : ""}>自动协商（优先尝试 Responses 协议上下文缓存）</option>
-                <option value="responses" ${protocol === "responses" ? "selected" : ""}>Responses API（/responses，推荐，支持上下文缓存 Prompt Caching）</option>
-                <option value="chat" ${protocol === "chat" ? "selected" : ""}>Chat Completions（/chat/completions，传统通用兼容）</option>
+                <option value="chat" ${protocol === "chat" ? "selected" : ""}>Chat Completions（/chat/completions，推荐通用标准兼容）</option>
+                <option value="auto" ${protocol === "auto" ? "selected" : ""}>自动协商（默认使用 Chat Completions）</option>
+                <option value="responses" ${protocol === "responses" ? "selected" : ""}>Responses API（/responses，实验性）</option>
               </select>
             </label>
             <label class="ai-config-full-width">

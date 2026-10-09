@@ -2,7 +2,7 @@ import { readFile, rename, writeFile } from "node:fs/promises";
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-5.5";
-const DEFAULT_PROTOCOL = "auto";
+const DEFAULT_PROTOCOL = "chat";
 const DEFAULT_PROVIDER = "custom";
 
 export const PROVIDER_PRESETS = {
@@ -11,8 +11,8 @@ export const PROVIDER_PRESETS = {
     label: "Google Gemini (本地网关 / Antigravity)",
     baseUrl: "http://127.0.0.1:8045/v1",
     model: "gemini-3.8-flash-high",
-    protocol: "responses",
-    description: "原生 Responses API 协议，支持 Prompt Caching 提示词缓存"
+    protocol: "chat",
+    description: "标准 OpenAI Chat Completions 兼容协议，支持结构化 JSON 与思考过程（推荐）"
   },
   deepseek: {
     id: "deepseek",

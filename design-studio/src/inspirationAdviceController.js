@@ -15,6 +15,7 @@ import { detectResearchChatBriefField } from "./researchChatBriefUpdate.js";
 export function createInspirationAdviceController({
   projectId,
   getState,
+  getProjectTitle = () => "",
   render,
   notify,
   syncConversation = () => {},
@@ -64,16 +65,33 @@ export function createInspirationAdviceController({
         currentQuestion: question
       });
       const briefField = detectResearchChatBriefField(question);
+      const brief = state.brief || {};
+      const projectTitle = String(getProjectTitle?.(state) || getProjectTitle?.() || "").trim();
       try {
         const response = await generateWithAiStream({
           workflowId: "concept",
           workflow: { id: "concept", title: "研究对话直接答复", outputSchema: "ConceptPlan" },
           analysis: {
+            "项目标题": projectTitle || "未命名项目",
             "已记录灵感": summarizeInspirationSession(state.inspiration) || "尚未形成结构化灵感。",
+            "当前研究简报": {
+              researchIntent: brief.researchIntent || "",
+              objective: brief.objective || "",
+              approach: brief.approach || "",
+              assumptions: brief.assumptions || "",
+              expectedEffects: brief.expectedEffects || "",
+              risk: brief.risk || ""
+            },
             "近期对话上下文": conversationContext || "这是首轮研究咨询，暂无历史对话。",
             "研究人员问题": question,
             "本轮允许更新的简报字段": briefField || "none",
-            "对话回答要求": "必须结合近期对话上下文理解当前问题；对“呢、这个、上述、继续、为什么”等承接或省略表达，沿用上一轮讨论对象和已形成判断，不得当作孤立新问题，也不得重复询问上下文中已有的信息。先直接回答研究人员当前问题，使用 1 至 3 句连贯中文，控制在 120 至 220 字。不得复述整个研究简报，不得罗列任务阶段、待核实、待交接、最小信息集等报告式标签；仅在确有必要时补充不超过两项需要进一步澄清的信息。回答仅限概念研究级判断、假设、约束和验证关注点；不得给出具体行动步骤、目标选择、路线、武器用法或规避建议。"
+            "对话回答要求": [
+              "你是作战概念研究工作台的【资深军事概念研讨参谋】：以“项目标题”与用户提出的实际课题为核心，展开有实质深度、平等互动的专业战法机制研讨，并顺带完善右侧研究简报。",
+              "回答采用参谋式三段论：① 结合军事常识回应关键矛盾、攻防痛点与装备对抗机理；② 提炼一句规范表述代拟写入右侧对应简报栏（并填入 briefUpdate 对应字段）且友好提示已代拟；③ 抛出 1 至 2 个推演分支或关键对抗变量供研究员权衡利弊。",
+              "当用户表达研究主题或询问如何填写某字段时，在 briefUpdate 允许字段写入贴合本课题的研究表述；用户若提出新课题，优先以用户最新课题为准。",
+              "多轮对话紧密承接：当用户承接询问（如“你知道我想研究什么吗”或表达犹豫）时，锁定当前核心课题，分析不同推演分支利弊，协助研究员推敲决策。",
+              "用户询问某字段现状时直接复述已有内容，briefUpdate 置空。严禁输出机械套话（如“研究框架已就绪”、“请提供变量”等说辞）。"
+            ].join("")
           },
           evidence: []
         }, {
@@ -94,7 +112,7 @@ export function createInspirationAdviceController({
           throw error;
         }
         const advice = formatAdvice(response);
-        const updatedFields = applyBriefUpdate(response, question);
+        const updatedFields = applyBriefUpdate(response, question, { projectTitle });
         return {
           advice,
           source: "ai",
@@ -131,7 +149,7 @@ function extractAdviceText(response) {
 
 function formatAdvice(response) {
   const text = extractAdviceText(response);
-  return (text || "请先明确研究对象、判断边界和可验证依据，再形成可复核的概念表述。").slice(0, 360);
+  return text || "请先明确研究对象、判断边界和可验证依据，再形成可复核的概念表述。";
 }
 
 function createFallbackAdvice(question, conversationContext = "") {
