@@ -32,6 +32,7 @@ import {
   attachForcePlatforms,
   compactForceMissionForAnalysis,
   confirmForceMissionPlan,
+  confirmConceptForcePlan,
   confirmOperationalTasks,
   buildOperationalTaskGenerationBatches,
   createOperationalTasksFromPhaseAction,
@@ -50,6 +51,8 @@ import {
   addOperationalTaskAreaPoint,
   removeOperationalTaskAreaPoint,
   updateCombatConceptLink,
+  updateCombatConceptLinks,
+  updateCombatPackageType,
   toggleForceTaskRef,
   updateForceMissionType,
   updateOperationalTask,
@@ -146,6 +149,22 @@ export function createConceptPlanningController({
         void changeOperationalTaskPlan(removeOperationalTaskAreaPoint(getState().forceMission, source?.dataset?.taskId || "", source?.dataset?.pointId || ""), "operational-task:remove-point");
         return true;
       }
+      if (action === "clear-all-operational-tasks") {
+        const state = getState();
+        const count = state.forceMission?.tasks?.length || 0;
+        if (!count || !window.confirm(`确定要清空全部 ${count} 项作战任务吗？此操作无法撤销。`)) return true;
+        const next = {
+          ...state.forceMission,
+          tasks: [],
+          tasksConfirmedAt: null
+        };
+        state.forceMission = persistForceMission(next, projectId);
+        state.operationalTaskSelectedId = "";
+        void syncForceMission(state.forceMission, { source: "operational-task:clear-all" });
+        notify("已清空全部作战任务");
+        render();
+        return true;
+      }
       if (action === "confirm-operational-tasks") {
         void confirmTasks();
         return true;
@@ -160,6 +179,25 @@ export function createConceptPlanningController({
       }
       if (action === "derive-combat-forces") {
         void deriveCombatForces();
+        return true;
+      }
+      if (action === "clear-all-forces") {
+        const state = getState();
+        const cCount = state.forceMission?.forces?.length || 0;
+        const bCount = state.forceMission?.combatForces?.length || 0;
+        if ((!cCount && !bCount) || !window.confirm(`确定要清空全部概念能力单元（${cCount}个）与作战编成（${bCount}个）吗？此操作无法撤销。`)) return true;
+        const next = {
+          ...state.forceMission,
+          forces: [],
+          combatForces: [],
+          status: "draft",
+          conceptConfirmedAt: null,
+          confirmedAt: null
+        };
+        state.forceMission = persistForceMission(next, projectId);
+        void syncForceMission(state.forceMission, { source: "force-mission:clear-all" });
+        notify("已清空全部作战兵力编成");
+        render();
         return true;
       }
       if (action === "add-combat-force") {
@@ -189,8 +227,28 @@ export function createConceptPlanningController({
         void generateForceMission({ withNotes: true, layer: "both" });
         return true;
       }
-      if (action === "confirm-force-mission") {
+      if (action === "confirm-force-mission" || action === "confirm-combat-forces") {
         void confirmForceMission();
+        return true;
+      }
+      if (action === "confirm-concept-forces") {
+        void confirmConceptForces();
+        return true;
+      }
+      if (action === "update-combat-package-type") {
+        const forceId = source?.dataset?.forceId || "";
+        const packageType = source?.value || source?.dataset?.packageType || "";
+        if (forceId && packageType) {
+          void changeCombatPackageType(forceId, packageType);
+        }
+        return true;
+      }
+      if (action === "toggle-combat-concept-link") {
+        const forceId = source?.dataset?.forceId || "";
+        const conceptId = source?.dataset?.conceptForceId || source?.value || "";
+        if (forceId && conceptId) {
+          void toggleCombatConceptLink(forceId, conceptId, Boolean(source?.checked));
+        }
         return true;
       }
       if (action === "open-force-platform-picker") {
@@ -304,6 +362,24 @@ export function createConceptPlanningController({
       }
       if (action === "confirm-phase-action") {
         void confirmPhaseAction();
+        return true;
+      }
+      if (action === "clear-all-phases") {
+        const state = getState();
+        const count = state.phaseAction?.phases?.length || 0;
+        if (!count || !window.confirm(`确定要清空全部 ${count} 个作战阶段与行动吗？此操作无法撤销。`)) return true;
+        const next = {
+          ...state.phaseAction,
+          phases: [],
+          transitions: [],
+          status: "draft",
+          confirmedAt: null
+        };
+        state.phaseAction = persistPhaseAction(next, projectId);
+        state.phaseActionFocusId = "";
+        void syncPhaseAction(state.phaseAction, { source: "phase-action:clear-all" });
+        notify("已清空全部阶段与行动");
+        render();
         return true;
       }
       if (action === "generate-concept-graphic") {
@@ -437,6 +513,8 @@ export function createConceptPlanningController({
     },
     confirmPhaseAction,
     confirmOperationalTasks: confirmTasks,
+    confirmConceptForces,
+    confirmCombatForces: confirmForceMission,
     confirmForceMission,
     generateCombatFocus,
     generateOperationalTasks,
@@ -1317,13 +1395,7 @@ export function createConceptPlanningController({
     }
     const resolvedLayer = normalizeLayer(layer);
     const wasConfirmed = isForceMissionPlanConfirmed(state.forceMission, state.forceMissionStorage);
-    const next = resolvedLayer === "concept"
-      ? applyPlatformRecommendations(state.forceMission, [{
-        forceId,
-        layer: "concept",
-        platforms: [{ ...hit, quantity: 1 }]
-      }])
-      : attachForcePlatform(state.forceMission, forceId, hit, "combat");
+    const next = attachForcePlatform(state.forceMission, forceId, hit, resolvedLayer);
     state.forceMission = persistForceMission(next, projectId);
     try {
       await syncForceMission(state.forceMission, { source: "force-mission:attach-platform" });
@@ -1683,6 +1755,24 @@ export function createConceptPlanningController({
     });
   }
 
+  async function confirmConceptForces() {
+    const state = getState();
+    if (state.forceMissionGenerating || state.forcePlatformRecommend?.running) {
+      notify("生成进行中，请稍后再确认");
+      return;
+    }
+    try {
+      const reviewNotes = document.querySelector("#forceMissionReviewNotes")?.value || state.forceMission?.reviewNotes || "";
+      const next = confirmConceptForcePlan(applyForceMissionReviewNotes(state.forceMission, reviewNotes), { reviewNotes });
+      state.forceMission = persistForceMission(next, projectId);
+      await syncForceMission(state.forceMission, { source: "force-mission:confirm-concept" });
+      notify("概念能力已确认，已解锁作战概念图 (OV-1) 与组织协同");
+      render();
+    } catch (error) {
+      notify(error?.message || "确认概念能力失败");
+    }
+  }
+
   async function confirmForceMission() {
     const state = getState();
     if (state.forceMissionGenerating || state.forcePlatformRecommend?.running) {
@@ -1694,12 +1784,47 @@ export function createConceptPlanningController({
       const next = confirmForceMissionPlan(applyForceMissionReviewNotes(state.forceMission, reviewNotes), { reviewNotes });
       state.forceMission = persistForceMission(next, projectId);
       await syncForceMission(state.forceMission, { source: "force-mission:confirm" });
-      notify("兵力与任务已确认，正在自动生成作战概念图草案");
+      notify("作战编成已确认，已全面解锁仿真推演与场景编译");
       render();
       await onForceMissionConfirmed?.(state.forceMission);
     } catch (error) {
-      notify(error?.message || "确认兵力与任务失败");
+      notify(error?.message || "确认作战兵力失败");
     }
+  }
+
+  async function changeCombatPackageType(forceId, packageType) {
+    const state = getState();
+    if (!forceId || state.forceMissionGenerating) return;
+    const wasConfirmed = isForceMissionPlanConfirmed(state.forceMission, state.forceMissionStorage);
+    const next = updateCombatPackageType(state.forceMission, forceId, packageType);
+    state.forceMission = persistForceMission(next, projectId);
+    try {
+      await syncForceMission(state.forceMission, { source: "force-mission:edit-package-type" });
+    } catch {
+      /* local draft remains */
+    }
+    notify(wasConfirmed ? "编组性质已改，计划回到草案" : "编组性质已更新");
+    render();
+  }
+
+  async function toggleCombatConceptLink(forceId, conceptForceId, checked) {
+    const state = getState();
+    if (!forceId || !conceptForceId || state.forceMissionGenerating) return;
+    const force = (state.forceMission?.combatForces || []).find((item) => item.id === forceId);
+    if (!force) return;
+    const current = new Set(Array.isArray(force.conceptForceIds) ? force.conceptForceIds : (force.conceptForceId ? [force.conceptForceId] : []));
+    if (checked) current.add(conceptForceId);
+    else current.delete(conceptForceId);
+    const wasConfirmed = isForceMissionPlanConfirmed(state.forceMission, state.forceMissionStorage);
+    const next = updateCombatConceptLinks(state.forceMission, forceId, [...current]);
+    state.forceMission = persistForceMission(next, projectId);
+    try {
+      await syncForceMission(state.forceMission, { source: "force-mission:edit-concept-links" });
+    } catch {
+      /* local draft remains */
+    }
+    notify(wasConfirmed ? "概念能力关联已改，计划回到草案" : "已更新概念能力关联");
+    render();
   }
 
   async function generatePhaseAction({ withNotes = false, silent = false } = {}) {

@@ -2,6 +2,10 @@ import { escapeHtml } from "./app/domUtils.js";
 import {
   forceMissionPlanIncompleteReasons,
   isForceMissionPlanConfirmed,
+  isConceptForcePlanConfirmed,
+  isCombatForcePlanConfirmed,
+  conceptForcePlanIncompleteReasons,
+  COMBAT_PACKAGE_TYPES,
   listCmoMissionTypes
 } from "./forceMissionStore.js";
 import { renderPlanningMigrationBanner } from "./planningContext.js";
@@ -23,7 +27,7 @@ const PLATFORM_DOMAINS = [
 
 /**
  * 作战兵力研究台。
- * 闭环：上游就绪 → 概念兵力 → 作战编成 → 点改/对话 → 确认 → 下游作战概念图。
+ * 闭环：上游就绪 → 概念能力单元 → 作战编成包 → 点改/对话 → 独立两阶段确认 → 下游作战概念图/仿真推演。
  */
 export function renderForceMission(state) {
   const plan = state.forceMission || {};
@@ -33,14 +37,20 @@ export function renderForceMission(state) {
   const hasDraft = (Array.isArray(plan.forces) && plan.forces.length > 0)
     || (Array.isArray(plan.combatForces) && plan.combatForces.length > 0);
   const confirmed = isForceMissionPlanConfirmed(plan, state.forceMissionStorage);
+  const conceptConfirmed = isConceptForcePlanConfirmed(plan, state.forceMissionStorage);
+  const combatConfirmed = isCombatForcePlanConfirmed(plan, state.forceMissionStorage);
   const chatOpen = Boolean(state.forceMissionChatOpen) && hasDraft;
   const status = state.forceMissionStorage?.stale
     ? "已过期"
     : confirmed
-      ? "已确认"
-      : plan.status === "draft"
-        ? "草案待复核"
-        : "待生成";
+      ? "已全量确认"
+      : combatConfirmed
+        ? "编成已确认"
+        : conceptConfirmed
+          ? "能力已确认"
+          : plan.status === "draft"
+            ? "草案待复核"
+            : "待生成";
   const forces = Array.isArray(plan.forces) ? plan.forces : [];
   const combatForces = Array.isArray(plan.combatForces) ? plan.combatForces : [];
   const upstream = describeUpstream(state);
@@ -54,6 +64,8 @@ export function renderForceMission(state) {
   // 已确认后仍可点改；改动会把计划降回草案，形成「改 → 再确认」闭环。
   const editable = hasDraft && !generating && !recommend.running && !chatGenerating;
   const tasksReady = Boolean(plan.tasks?.length && plan.tasksConfirmedAt);
+  const canConfirmConcept = tasksReady && forces.length > 0 && !conceptConfirmed && !busy;
+  const canConfirmCombat = tasksReady && forces.length > 0 && combatForces.length > 0 && !combatConfirmed && !busy;
   const canConfirm = tasksReady && forces.length > 0 && combatForces.length > 0 && !confirmed && !busy;
   const canGenerateConcept = tasksReady && !busy && upstream.canGenerate;
   const canGenerateCombat = tasksReady && !busy && upstream.canGenerate && forces.length > 0;
@@ -72,7 +84,12 @@ export function renderForceMission(state) {
   const combatCountLabel = formatPhaseSideCounts(phaseCombatForces);
   const conceptMissingEquip = forces.filter((force) => !formatConceptEquipment(force)).length;
   const combatMissingPlatform = combatForces.filter((force) => !(force.platforms || []).length).length;
-  const combatUnlinked = combatForces.filter((force) => !force.conceptForceId).length;
+  const combatUnlinked = combatForces.filter((force) => {
+    const ids = Array.isArray(force.conceptForceIds) && force.conceptForceIds.length > 0
+      ? force.conceptForceIds
+      : force.conceptForceId ? [force.conceptForceId] : [];
+    return ids.length === 0;
+  }).length;
   const incomplete = confirmed
     ? []
     : forceMissionPlanIncompleteReasons(plan, state.forceMissionStorage)
@@ -82,6 +99,8 @@ export function renderForceMission(state) {
     forces,
     combatForces,
     confirmed,
+    conceptConfirmed,
+    combatConfirmed,
     stale: Boolean(state.forceMissionStorage?.stale),
     busy,
     generatingLayer,
@@ -94,7 +113,7 @@ export function renderForceMission(state) {
       picker,
       catalogOpen,
       editable,
-      confirmed,
+      confirmed: conceptConfirmed || confirmed,
       drawerEnter
     })
     : renderLayerEmpty({
@@ -113,7 +132,7 @@ export function renderForceMission(state) {
       picker,
       catalogOpen,
       editable,
-      confirmed,
+      confirmed: combatConfirmed || confirmed,
       drawerEnter
     })
     : renderLayerEmpty({
@@ -131,19 +150,22 @@ export function renderForceMission(state) {
   const combatBtnLabel = generating && (generatingLayer === "combat" || generatingLayer === "both")
     ? "正在生成作战兵力…"
     : combatForces.length ? "重新生成作战兵力" : "生成作战兵力";
-  const confirmBtnLabel = confirmed ? "已确认" : "确认并进入作战概念图";
+  const confirmBtnLabel = confirmed ? "已全量确认" : "全量确认放行";
   const canRecommendCombat = !busy && catalogOpen && combatForces.length > 0;
 
   const mainBody = `
     ${renderForceMissionChrome({
       workflow,
       canConfirm,
+      canConfirmConcept,
       incomplete,
       conceptMissingEquip,
       combatMissingPlatform,
       combatUnlinked,
       catalogOpen,
       confirmed,
+      conceptConfirmed,
+      combatConfirmed,
       generating,
       generatingLayer,
       recommendRunning: recommend.running
@@ -161,6 +183,8 @@ export function renderForceMission(state) {
           canGenerateConcept,
           canGenerateCombat,
           canConfirm,
+          canConfirmConcept,
+          conceptConfirmed,
           canRecommendCombat,
           conceptBtnLabel,
           combatBtnLabel,
@@ -302,6 +326,8 @@ function resolveWorkflowProgress({
   forces = [],
   combatForces = [],
   confirmed = false,
+  conceptConfirmed = false,
+  combatConfirmed = false,
   stale = false,
   busy = false,
   generatingLayer = "",
@@ -317,6 +343,9 @@ function resolveWorkflowProgress({
   } else if (!hasConcept) {
     step = "concept";
     primaryAction = "concept";
+  } else if (!conceptConfirmed) {
+    step = "concept";
+    primaryAction = hasCombat ? "combat" : "confirm-concept";
   } else if (!hasCombat) {
     step = "combat";
     primaryAction = "combat";
@@ -337,6 +366,8 @@ function resolveWorkflowProgress({
     primaryAction,
     hasConcept,
     hasCombat,
+    conceptConfirmed: conceptConfirmed && !stale,
+    combatConfirmed: combatConfirmed && !stale,
     confirmed: confirmed && !stale,
     stale,
     busy
@@ -346,12 +377,15 @@ function resolveWorkflowProgress({
 function renderForceMissionChrome({
   workflow = {},
   canConfirm,
+  canConfirmConcept = false,
   incomplete = [],
   conceptMissingEquip = 0,
   combatMissingPlatform = 0,
   combatUnlinked = 0,
   catalogOpen = false,
   confirmed = false,
+  conceptConfirmed = false,
+  combatConfirmed = false,
   generating = false,
   generatingLayer = "",
   recommendRunning = false
@@ -360,23 +394,23 @@ function renderForceMissionChrome({
     {
       id: "concept",
       index: "1",
-      title: "概念兵力",
-      done: workflow.hasConcept,
+      title: "概念能力单元",
+      done: Boolean(workflow.conceptConfirmed || workflow.confirmed),
       active: workflow.step === "concept"
     },
     {
       id: "combat",
       index: "2",
-      title: "作战编成",
-      done: workflow.hasCombat,
+      title: "作战编成包",
+      done: Boolean(workflow.combatConfirmed || workflow.confirmed),
       active: workflow.step === "combat",
       locked: !workflow.hasConcept
     },
     {
       id: "confirm",
       index: "3",
-      title: "确认放行",
-      done: workflow.confirmed,
+      title: "全量放行",
+      done: Boolean(workflow.confirmed),
       active: workflow.step === "confirm" || workflow.step === "done",
       locked: !workflow.hasConcept || !workflow.hasCombat
     }
@@ -386,7 +420,7 @@ function renderForceMissionChrome({
   const actions = [];
   if (!workflow || workflow.step === "upstream") {
     tone = "is-warn";
-    message = "请先完成简报与阶段，再生成概念兵力。";
+    message = "请先完成简报与阶段，再生成概念能力单元。";
   } else if (generating) {
     message = generatingLayer === "combat"
       ? "正在生成作战兵力…"
@@ -397,27 +431,31 @@ function renderForceMissionChrome({
     message = "正在挂接平台…";
   } else if (confirmed && !workflow.stale) {
     tone = "is-ready";
-    message = "兵力与任务已确认。若再改动将回到草案。";
+    message = "概念能力单元与作战编成包均已确认放行。若再改动将回到草案。";
   } else if (workflow.stale) {
     tone = "is-warn";
     message = "上游变更导致本步已过期。请重新生成概念/作战兵力并确认。";
+  } else if (workflow.conceptConfirmed && !workflow.combatConfirmed) {
+    tone = "is-ready";
+    message = "概念能力单元已单独确认（OV-1 作战概念图已解锁）。可继续完善作战编成包并进行全量确认。";
+    actions.push(`<button type="button" class="quiet-button" data-action="select-force-mission-layer" data-layer="combat">完善作战编成包</button>`);
   } else if (workflow.step === "concept") {
-    message = "下一步：生成概念兵力（红蓝职责名单，按阶段归属）。";
+    message = "阶段 1：生成概念能力单元（红蓝战术职责与战技指标，按阶段归属）。确认后即可解锁 OV-1。";
   } else if (workflow.step === "combat") {
-    message = `概念兵力已就绪。下一步生成作战编成。${conceptMissingEquip ? ` ${conceptMissingEquip} 个概念单元尚未挂装备。` : ""}`;
-    actions.push(`<button type="button" class="quiet-button" data-action="select-force-mission-layer" data-layer="concept">回看概念兵力</button>`);
+    message = `概念能力已就绪。下一步深化作战编成包（多平台与性质分类）。${conceptMissingEquip ? ` ${conceptMissingEquip} 个概念单元待挂装备。` : ""}`;
+    actions.push(`<button type="button" class="quiet-button" data-action="select-force-mission-layer" data-layer="concept">回看概念能力</button>`);
   } else if (workflow.step === "confirm") {
     const hints = [];
     if (incomplete.length) hints.push(...incomplete);
-    if (combatUnlinked > 0) hints.push(`${combatUnlinked} 行作战编成未挂概念`);
+    if (combatUnlinked > 0) hints.push(`${combatUnlinked} 行作战编成未挂概念能力`);
     if (combatMissingPlatform > 0) hints.push(`${combatMissingPlatform} 行尚无平台`);
     if (!catalogOpen && combatMissingPlatform > 0) hints.push("装备目录未连接，平台可稍后补");
     if (canConfirm) {
       tone = "is-ready";
-      message = "两层草案已齐。复核后确认，将自动进入作战概念图。";
+      message = "两层均已就绪。全量确认后将放行仿真推演与场景编译。";
     } else {
       tone = "is-warn";
-      message = `两层草案已齐。尚不能确认：${hints.join("；") || "请检查草案完整性"}`;
+      message = `两层草案已齐。尚不能全量确认：${hints.join("；") || "请检查草案完整性"}`;
     }
     actions.push(`<button type="button" class="quiet-button" data-action="select-force-mission-layer" data-layer="combat">检查作战编成</button>`);
   }
@@ -476,10 +514,12 @@ function renderForceMissionRailActions({
   canGenerateConcept = false,
   canGenerateCombat = false,
   canConfirm = false,
+  canConfirmConcept = false,
+  conceptConfirmed = false,
   canRecommendCombat = false,
   conceptBtnLabel = "生成概念兵力",
   combatBtnLabel = "生成作战兵力",
-  confirmBtnLabel = "确认并进入作战概念图",
+  confirmBtnLabel = "全量确认放行",
   recommendRunning = false
 }) {
   const generateButtons = `<button type="button"
@@ -494,21 +534,32 @@ function renderForceMissionRailActions({
       ${canGenerateCombat ? "" : "disabled"}>从概念派生作战</button>
     ${canRecommendCombat ? `<button type="button" class="quiet-button" data-action="recommend-platforms-from-phases"
       ${recommendRunning ? "disabled" : ""}>${recommendRunning ? "正在挂接平台…" : "为作战兵力补挂平台"}</button>` : ""}`;
+  const hasForces = Boolean(workflow.hasConcept || workflow.hasCombat);
+  const clearButton = hasForces
+    ? `<button type="button" class="quiet-button danger-quiet" data-action="clear-all-forces" ${workflow.busy ? "disabled" : ""} title="清空已生成的全部概念兵力与作战编成">清空全部兵力</button>`
+    : "";
   const confirmedIdle = Boolean(workflow.confirmed) && !workflow.busy;
   if (confirmedIdle) {
     return `<div class="force-mission-rail-actions planning-actions is-collapsed" aria-label="兵力动作">
       <details class="force-mission-rail-regen">
         <summary>重新生成</summary>
         ${generateButtons}
+        ${clearButton}
       </details>
     </div>`;
   }
   return `<div class="force-mission-rail-actions planning-actions" aria-label="兵力动作">
     ${generateButtons}
     <button type="button"
+      class="${workflow.primaryAction === "confirm-concept" ? "" : "quiet-button"}"
+      data-action="confirm-concept-forces"
+      title="单独确认概念能力单元，可提前解锁 OV-1 作战概念图"
+      ${canConfirmConcept ? "" : "disabled"}>${conceptConfirmed ? "概念能力已确认 ✓" : "确认概念能力 (解锁OV-1)"}</button>
+    <button type="button"
       class="${workflow.primaryAction === "confirm" ? "" : "quiet-button"}"
       data-action="confirm-force-mission"
       ${canConfirm ? "" : "disabled"}>${escapeHtml(confirmBtnLabel)}</button>
+    ${clearButton}
   </div>`;
 }
 
@@ -587,8 +638,11 @@ function filterCombatForcesForPhase(combatForces = [], conceptForces = [], phase
   return combatForces.filter((force) => {
     const ownPhases = Array.isArray(force.phaseIds) ? force.phaseIds : [];
     if (ownPhases.length) return ownPhases.includes(phaseId);
-    if (!force.conceptForceId) return true;
-    return conceptIds.has(force.conceptForceId);
+    const linkedIds = Array.isArray(force.conceptForceIds) && force.conceptForceIds.length > 0
+      ? force.conceptForceIds
+      : force.conceptForceId ? [force.conceptForceId] : [];
+    if (!linkedIds.length) return true;
+    return linkedIds.some((id) => conceptIds.has(id));
   });
 }
 
@@ -690,6 +744,7 @@ function renderForceRosterItem({
 function renderConceptForceDetail(force, { tasks = [], picker = {}, catalogOpen = false, editable = false } = {}) {
   const equip = formatConceptEquipment(force);
   const platforms = Array.isArray(force.platforms) ? force.platforms : [];
+  const specs = Array.isArray(force.platformSpecs) ? force.platformSpecs : [];
   return `<article class="force-concept-detail is-open" data-force-card="${escapeAttribute(force.id)}" data-force-layer="concept">
     <header class="force-concept-detail-head">
       <div class="force-concept-detail-title">
@@ -701,23 +756,32 @@ function renderConceptForceDetail(force, { tasks = [], picker = {}, catalogOpen 
     </header>
     <div class="force-concept-detail-body">
       <section class="force-concept-detail-block">
-        <strong>任务</strong>
+        <strong>战术职责与任务</strong>
         <p>${escapeHtml(force.task || "（未写任务）")}</p>
         ${force.notes ? `<small>${escapeHtml(force.notes)}</small>` : ""}
       </section>
       ${renderForceTaskRefs(force, tasks, { editable, layer: "concept" })}
-      <section class="force-concept-detail-block">
-        <strong>装备类型 <em>仅 1 个</em></strong>
-        <div class="force-concept-equip-row">
-          <span class="${equip ? "" : "is-missing"}">${equip ? escapeHtml(equip) : "尚未挂接"}</span>
-          ${platforms[0] && editable ? `<button type="button" class="quiet-button" data-action="remove-force-platform"
-            data-force-id="${escapeAttribute(force.id)}" data-force-layer="concept" data-platform-id="${escapeAttribute(platforms[0].id)}">移除</button>` : ""}
+      ${specs.length ? `<section class="force-concept-detail-block">
+        <strong>战技指标参考 <em>${specs.length} 项规格</em></strong>
+        <div class="force-concept-specs-list" style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+          ${specs.map((spec) => `
+            <div style="background:var(--color-bg-subtle, #f5f7fa);padding:6px 10px;border-radius:4px;font-size:12px;border:1px solid var(--color-border-subtle, #e2e8f0);">
+              <div style="font-weight:600;display:flex;justify-content:space-between;">
+                <span>${escapeHtml(spec.name || spec.category || "能力规格")}</span>
+                <span class="mini-tag">${escapeHtml(spec.role || roleLabel(force.role))}</span>
+              </div>
+              ${spec.description ? `<div style="color:var(--color-text-muted, #64748b);margin-top:2px;">${escapeHtml(spec.description)}</div>` : ""}
+              ${spec.specs && Object.keys(spec.specs).length ? `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;">
+                ${Object.entries(spec.specs).map(([k, v]) => `<span style="font-size:11px;background:#fff;padding:1px 5px;border-radius:3px;border:1px solid #cbd5e1;">${escapeHtml(k)}: ${escapeHtml(String(v))}</span>`).join("")}
+              </div>` : ""}
+            </div>`).join("")}
         </div>
-        ${editable && catalogOpen
+      </section>` : ""}
+      <section class="force-concept-detail-block">
+        <strong>基准装备型号 <em>1~3 型参考</em></strong>
+        ${editable || catalogOpen
           ? renderInlinePlatformPicker(force, picker, catalogOpen, editable, "concept")
-          : editable && !catalogOpen
-            ? `<p class="planning-meta">装备目录未连接，无法检索。可在系统管理配置 DB3。</p>`
-            : ""}
+          : `<p class="planning-meta">${equip ? escapeHtml(equip) : "尚未挂接基准装备。"}</p>`}
       </section>
     </div>
   </article>`;
@@ -799,15 +863,21 @@ function renderCombatSideColumn({
           const missionType = formatCombatMissionType(force, missionTypes);
           const unitType = formatCombatUnitType(force);
           const name = displayCombatName(force);
+          const pkgTypeObj = COMBAT_PACKAGE_TYPES.find((pkg) => pkg.id === force.packageType);
+          const pkgLabel = pkgTypeObj ? pkgTypeObj.label : (force.packageType || "");
+          const linkedIds = Array.isArray(force.conceptForceIds) && force.conceptForceIds.length > 0
+            ? force.conceptForceIds
+            : force.conceptForceId ? [force.conceptForceId] : [];
+          const hasConceptLink = linkedIds.length > 0;
           return renderForceRosterItem({
             index: index + 1,
             forceId: force.id,
             layer: "combat",
             active,
-            warn: missingPlatform || !force.conceptForceId,
+            warn: missingPlatform || !hasConceptLink,
             name,
-            role: roleLabel(force.role),
-            badge: force.conceptForceId ? "" : "未挂概念",
+            role: [pkgLabel, roleLabel(force.role)].filter(Boolean).join(" · "),
+            badge: hasConceptLink ? "" : "未挂概念",
             line2: missingPlatform ? "平台  待挂" : `平台  ${platformSummary}`,
             line2Missing: missingPlatform,
             title: [force.task, platformSummary].filter(Boolean).join(" | ") || name,
@@ -815,9 +885,9 @@ function renderCombatSideColumn({
               side: sideLabel(force.side),
               role: roleLabel(force.role),
               type: missionType || "未分类",
-              status: confirmed ? "已确认" : missingPlatform || !force.conceptForceId ? "待补全" : "待确认"
+              status: confirmed ? "已确认" : missingPlatform || !hasConceptLink ? "待补全" : "待确认"
             },
-            search: [force.id, name, force.task, missionType, unitType, platformSummary, sideLabel(force.side), roleLabel(force.role)].filter(Boolean).join(" ")
+            search: [force.id, name, force.task, missionType, unitType, platformSummary, sideLabel(force.side), roleLabel(force.role), pkgLabel].filter(Boolean).join(" ")
           });
         }).join("")}</ul>`
       : `<p class="empty-inspector force-concept-empty">${escapeHtml(emptyText)}</p>`}
@@ -834,14 +904,19 @@ function renderCombatForceDetail(force, {
 } = {}) {
   const unitType = formatCombatUnitType(force);
   const composition = formatCombatComposition(force);
-  const linkedName = conceptName(conceptForces, force.conceptForceId);
+  const linkedIds = Array.isArray(force.conceptForceIds) && force.conceptForceIds.length > 0
+    ? force.conceptForceIds
+    : force.conceptForceId ? [force.conceptForceId] : [];
   const sideConceptOptions = (conceptForces || []).filter((item) => (
     !force.side || item.side === force.side || item.side === "unknown"
   ));
+  const pkgTypeObj = COMBAT_PACKAGE_TYPES.find((pkg) => pkg.id === force.packageType);
+  const pkgLabel = pkgTypeObj ? pkgTypeObj.label : (force.packageType || "主战突击");
+
   return `<article class="force-concept-detail is-open" data-force-card="${escapeAttribute(force.id)}" data-force-layer="combat">
     <header class="force-concept-detail-head">
       <div class="force-concept-detail-title">
-        <span class="force-role-tag">${escapeHtml(roleLabel(force.role))}</span>
+        <span class="force-role-tag">${escapeHtml(pkgLabel)}</span>
         ${editable
           ? `<input type="text" class="force-sidebar-control" data-combat-force-name="${escapeAttribute(force.id)}" value="${escapeAttribute(force.name || "")}" placeholder="作战编组名称" style="font-weight:bold;max-width:200px;">`
           : `<b>${escapeHtml(displayCombatName(force))}</b>`}
@@ -851,13 +926,21 @@ function renderCombatForceDetail(force, {
     </header>
     <div class="force-concept-detail-body">
       <section class="force-concept-detail-block">
-        <strong>主要任务</strong>
+        <strong>主要作战任务</strong>
         ${editable
           ? `<textarea class="force-sidebar-control" rows="3" data-combat-force-task="${escapeAttribute(force.id)}" placeholder="填写该编组承担的具体作战任务与可观察要求">${escapeHtml(force.task || "")}</textarea>`
           : `<p>${escapeHtml(force.task || "（未写任务）")}</p>`}
         ${force.notes ? `<small>${escapeHtml(force.notes)}</small>` : ""}
       </section>
       ${renderForceTaskRefs(force, tasks, { editable, layer: "combat" })}
+      <section class="force-concept-detail-block">
+        <strong>编组性质 (Combat Package Type)</strong>
+        ${editable
+          ? `<select class="force-sidebar-control" data-action="update-combat-package-type" data-force-id="${escapeAttribute(force.id)}">
+              ${COMBAT_PACKAGE_TYPES.map((pkg) => `<option value="${escapeAttribute(pkg.id)}" ${(force.packageType || "main") === pkg.id ? "selected" : ""}>${escapeHtml(pkg.label)} (${pkg.id})</option>`).join("")}
+            </select>`
+          : `<span>${escapeHtml(pkgLabel)}</span>`}
+      </section>
       <section class="force-concept-detail-block">
         <strong>作战角色</strong>
         ${editable
@@ -886,16 +969,22 @@ function renderCombatForceDetail(force, {
           : `<span>${escapeHtml(cmoMissionTypeLabelFromList(force.missionType, missionTypes) || force.missionType || "—")}</span>`}
       </section>
       <section class="force-concept-detail-block">
-        <strong>挂接概念兵力</strong>
-        ${editable
-          ? `<select class="force-sidebar-control" data-combat-concept-link="${escapeAttribute(force.id)}">
-              <option value="">（未挂接）</option>
-              ${sideConceptOptions.map((item) =>
-                `<option value="${escapeAttribute(item.id)}" ${item.id === force.conceptForceId ? "selected" : ""}>${escapeHtml(displayConceptName(item))}</option>`
-              ).join("")}
-            </select>`
-          : `<span>${escapeHtml(linkedName)}</span>`}
-        ${!force.conceptForceId ? `<small class="is-warn-text">未挂概念时，阶段过滤可能显示不稳定。</small>` : ""}
+        <strong>挂接概念能力单元 <em>${linkedIds.length} 项</em></strong>
+        <div class="force-task-ref-list" style="margin-top:6px;max-height:160px;overflow-y:auto;">
+          ${sideConceptOptions.map((item) => {
+            const isChecked = linkedIds.includes(item.id);
+            return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px;cursor:pointer;">
+              <input type="checkbox"
+                data-action="toggle-combat-concept-link"
+                data-force-id="${escapeAttribute(force.id)}"
+                data-concept-force-id="${escapeAttribute(item.id)}"
+                ${isChecked ? "checked" : ""}
+                ${editable ? "" : "disabled"}>
+              <span>${escapeHtml(displayConceptName(item))} <small style="color:var(--color-text-muted, #64748b);">(${escapeHtml(roleLabel(item.role))})</small></span>
+            </label>`;
+          }).join("") || `<small>暂无对应阵营的概念能力单元。</small>`}
+        </div>
+        ${!linkedIds.length ? `<small class="is-warn-text">未挂概念能力单元，阶段与任务追溯不完整。</small>` : ""}
       </section>
       <section class="force-concept-detail-block">
         <strong>CMO 平台 <em>可多型号</em></strong>
@@ -948,9 +1037,14 @@ function displayConceptName(force = {}) {
 
 function formatConceptEquipment(force = {}) {
   const platforms = Array.isArray(force.platforms) ? force.platforms : [];
-  const item = platforms[0];
-  if (!item?.name) return "";
-  return item.name;
+  if (platforms.length) {
+    return platforms.map((item) => item.name).filter(Boolean).join(" / ");
+  }
+  const specs = Array.isArray(force.platformSpecs) ? force.platformSpecs : [];
+  if (specs.length) {
+    return specs.map((s) => s.category || s.role || s.name || "战技指标").filter(Boolean).join(" / ");
+  }
+  return "";
 }
 
 function formatCombatComposition(force = {}) {
@@ -1004,19 +1098,19 @@ function renderInlinePlatformPicker(force, picker, catalogOpen, editable, layer 
 
   return `<div class="force-inline-picker ${isConcept ? "is-concept-sidebar" : "is-combat-sidebar"}">
     <div class="force-inline-picker-head">
-      <strong>${isConcept ? "检索更换" : "已挂平台"}</strong>
+      <strong>${isConcept ? `基准平台参考 (最多3型，当前 ${platforms.length})` : "已挂平台"}</strong>
     </div>
-    ${!isConcept
-      ? (platforms.length ? `<ul class="force-platform-list force-platform-list-compact">${platforms.map((item) => `
+    ${platforms.length
+      ? `<ul class="force-platform-list force-platform-list-compact">${platforms.map((item) => `
           <li>
             <div class="force-platform-meta">
               <span>${escapeHtml(item.name || "")}${item.quantity ? ` ×${item.quantity}` : ""}${Number(item.cmoId) > 0 ? "" : " · 无目录编号"}</span>
               <small>${escapeHtml(item.basis || (Number(item.cmoId) > 0
                 ? `CMO · ${item.domain || "—"}#${item.cmoId}${item.country ? ` · ${item.country}` : ""}`
-                : "无 CMO 目录依据，不得当作定型装备"))}</small>
+                : isConcept ? "无 CMO 目录依据，作基准规格参考" : "无 CMO 目录依据，不得当作定型装备"))}</small>
             </div>
             <div class="force-platform-actions">
-              ${editable ? `<label class="force-qty-label">数量
+              ${!isConcept && editable ? `<label class="force-qty-label">数量
                 <input type="number" min="1" max="99" value="${escapeAttribute(String(item.quantity || 1))}"
                   data-force-platform-qty="${escapeAttribute(force.id)}"
                   data-force-layer="${escapeAttribute(layer)}"
@@ -1026,8 +1120,8 @@ function renderInlinePlatformPicker(force, picker, catalogOpen, editable, layer 
                 data-force-id="${escapeAttribute(force.id)}" data-force-layer="${escapeAttribute(layer)}" data-platform-id="${escapeAttribute(item.id)}"
                 ${editable ? "" : "disabled"}>移除</button>
             </div>
-          </li>`).join("")}</ul>` : `<p class="empty-inspector force-platform-empty">尚未挂接平台（须从 CMO 目录选择并保留依据）。</p>`)
-      : ""}
+          </li>`).join("")}</ul>`
+      : `<p class="empty-inspector force-platform-empty">${isConcept ? "尚未挂接基准平台（可选 1~3 型参考）。" : "尚未挂接平台（须从 CMO 目录选择并保留依据）。"}</p>`}
     ${catalogOpen ? `
     <div class="force-platform-search-row">
       <input type="search" placeholder="${isConcept ? "装备关键词" : "平台关键词"}"
@@ -1062,7 +1156,7 @@ function renderInlinePlatformPicker(force, picker, catalogOpen, editable, layer 
             </label>` : `<span>${escapeHtml(item.name || "")}${item.country ? ` · ${escapeHtml(item.country)}` : ""}</span>`}
             <button type="button" data-action="attach-force-platform"
               data-force-id="${escapeAttribute(force.id)}" data-force-layer="${escapeAttribute(layer)}" data-result-index="${index}"
-              ${editable ? "" : "disabled"}>${isConcept ? "选用" : "挂接"}</button>
+              ${editable ? "" : "disabled"}>${isConcept ? "选用参考" : "挂接"}</button>
           </li>`;
         }).join("")}</ul>`
       : (active && query && !searching && !error

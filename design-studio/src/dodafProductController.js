@@ -95,7 +95,7 @@ import { generateWithAiStream, isAiOutput } from "../../shared/aiClient.js";
 import { generateMockOutput } from "../../shared/generator.js";
 import { normalizeDodafOv1b, normalizeDodafOv4, normalizeDodafOv6b, normalizeDodafOv6c } from "../../shared/dodaf/products.js";
 import { applySequenceDraft } from "./sequenceChatController.js";
-import { addOv1bTaskGroup, removeOv1bTaskGroup, updateOv1bTaskGroup } from "./ov1bStore.js";
+import { addOv1bTaskGroup, moveOv1bTaskStep, removeOv1bTaskGroup, setOv1bStepMode, updateOv1bTaskGroup } from "./ov1bStore.js";
 import { buildOv1cModel, buildOv7Model, updateMappingProduct } from "./mappingProductStore.js";
 
 const LOADERS = {
@@ -555,6 +555,19 @@ export function createDodafProductController({
       if (from < 0 || from === to) return true;
       taskRefs.splice(to, 0, taskRefs.splice(from, 1)[0]);
       persistOv6("ov1b", updateOv1bTaskGroup(model, item.id, { taskRefs }));
+      return true;
+    }
+    if (action === "ov1b-set-step-mode") {
+      const model = resolveDodafProduct(state, "ov1b").model;
+      const next = setOv1bStepMode(model, ds.groupId, ds.stepIndex, ds.mode);
+      persistOv6("ov1b", next, `已将步骤 ${ds.stepIndex} 执行模式设为 ${ds.mode === "parallel" ? "并行" : ds.mode === "trigger" ? "触发" : "串行"}`);
+      return true;
+    }
+    if (action === "ov1b-step-task") {
+      const model = resolveDodafProduct(state, "ov1b").model;
+      const delta = Number(ds.delta || 0);
+      const next = moveOv1bTaskStep(model, ds.groupId, ds.taskId, delta);
+      persistOv6("ov1b", next, delta > 0 ? "已将任务移至下一步骤" : "已将任务移至上一步骤");
       return true;
     }
 
@@ -1287,7 +1300,8 @@ export function createDodafProductController({
 
     async pregenerateOv1bFromTasks({ silent = false, force = false } = {}) {
       const state = getState();
-      const tasks = (state.forceMission?.tasks || []).map((task) => ({ id: task.id, name: task.name, side: task.side, missionType: task.missionType, objective: task.objective, expectedEffect: task.expectedEffect }));
+      const tasks = (state.forceMission?.tasks || []).map((task) => ({ id: task.id, name: task.name, side: task.side, phaseId: task.phaseId, missionType: task.missionType, objective: task.objective, expectedEffect: task.expectedEffect }));
+      const phaseAction = state.phaseActionConcept ? { phases: (state.phaseActionConcept.phases || []).map((p) => ({ id: p.id, name: p.name, timeWindow: p.timeWindow, objective: p.objective, expectedEffects: p.expectedEffects })) } : null;
       const current = normalizeDodafOv1b(state.ov1b || { taskGroups: [] });
       const taskFingerprint = buildTaskDecompositionFingerprint(tasks);
       if (state.taskDecompositionPregenerating) return { skipped: true, reason: "busy" };
@@ -1297,18 +1311,45 @@ export function createDodafProductController({
       try {
         let draft; let source = "ai";
         try {
-          const response = await generateWithAiStream({ workflowId: "task-organization", workflow: { id: "task-organization", title: "任务整理", outputSchema: "TaskOrganizationDraft" }, analysis: { tasks }, evidence: [] });
+          const response = await generateWithAiStream({ workflowId: "task-organization", workflow: { id: "task-organization", title: "任务整理", outputSchema: "TaskOrganizationDraft" }, analysis: { tasks, phaseAction }, evidence: [] });
           if (!isAiOutput(response) || !Array.isArray(response.result?.taskGroups)) throw new Error("task organization empty");
           draft = response.result;
         } catch {
-          const grouped = ["friendly", "hostile"].flatMap((side) => {
-            const items = tasks.filter((task) => (task.side === "hostile" ? "hostile" : "friendly") === side);
-            return items.length ? [{ name: side === "hostile" ? "红方任务" : "蓝方任务", dimension: "side", taskRefs: items.map((task) => task.id), rationale: "按阵营整理现有任务。", coordination: "组内顺序沿用任务清单。" }] : [];
-          });
-          draft = { taskGroups: grouped }; source = "local-fallback";
+          const mockOutput = generateMockOutput({
+            workflow: { id: "task-organization", outputSchema: "TaskOrganizationDraft" },
+            analysis: { tasks, phaseAction: state.phaseActionConcept },
+            evidence: []
+          }).result;
+          draft = mockOutput && Array.isArray(mockOutput.taskGroups) ? mockOutput : { taskGroups: [] };
+          source = "local-fallback";
         }
         const ids = new Set(tasks.map((task) => task.id));
-        const generated = (draft.taskGroups || []).map((item, index) => ({ id: `task-organization-ai-${taskFingerprint.slice(-8)}-${index + 1}`, name: String(item.name || `任务组 ${index + 1}`).slice(0, 240), dimension: String(item.dimension || "custom").slice(0, 80), taskRefs: [...new Set((item.taskRefs || []).filter((id) => ids.has(id)))], rationale: String(item.rationale || "").slice(0, 600), coordination: String(item.coordination || "").slice(0, 600), status: "pending_review" })).filter((item) => item.taskRefs.length);
+        const generated = (draft.taskGroups || []).map((item, index) => {
+          const steps = (Array.isArray(item?.steps) ? item.steps : []).map((st, sIdx) => ({
+            stepIndex: Number(st?.stepIndex || sIdx + 1),
+            name: String(st?.name || `步骤 ${sIdx + 1}`).slice(0, 120),
+            mode: ["sequential", "parallel", "trigger"].includes(st?.mode) ? st.mode : "sequential",
+            taskRefs: [...new Set((st?.taskRefs || []).filter((id) => ids.has(id)))],
+            dependsOn: [...new Set((st?.dependsOn || []).filter((id) => ids.has(id)))],
+            triggerCondition: String(st?.triggerCondition || "").slice(0, 300)
+          })).filter((st) => st.taskRefs.length > 0);
+
+          const taskRefs = steps.length
+            ? [...new Set(steps.flatMap((st) => st.taskRefs))]
+            : [...new Set((item?.taskRefs || []).filter((id) => ids.has(id)))];
+
+          return {
+            id: `task-organization-ai-${taskFingerprint.slice(-8)}-${index + 1}`,
+            name: String(item?.name || `任务组 ${index + 1}`).slice(0, 240),
+            dimension: String(item?.dimension || (item?.phaseRef ? "phase" : "custom")).slice(0, 80),
+            phaseRef: String(item?.phaseRef || "").slice(0, 160),
+            steps,
+            taskRefs,
+            rationale: String(item?.rationale || "").slice(0, 600),
+            coordination: String(item?.coordination || "").slice(0, 600),
+            status: "pending_review"
+          };
+        }).filter((item) => item.taskRefs.length);
         const taskGroups = mergeTaskDecompositionDraft(current.taskGroups, generated);
         const derivedFrom = { mode: source, sources: ["forceMissionPlan.tasks"], generatedAt: new Date().toISOString(), note: taskFingerprint };
         state.ov1b = saveLocalDodafProduct("ov1b", normalizeDodafOv1b({ ...current, taskGroups, derivedFrom, status: taskGroups.some((item) => item.status !== "confirmed") ? "pending_review" : taskGroups.length ? "confirmed" : "draft" }), projectId);

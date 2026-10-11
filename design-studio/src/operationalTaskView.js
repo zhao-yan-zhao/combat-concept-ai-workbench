@@ -20,12 +20,12 @@ export function renderOperationalTasks(state = {}) {
   return `<section class="operational-task-workbench">
     <header class="operational-task-header">
       <div><div class="operational-task-title-line"><h2>作战任务</h2>${renderStatus(confirmed, generating, source)}</div></div>
-      <div class="operational-task-actions"><button type="button" class="quiet-button" data-action="generate-operational-tasks" ${ready && !generating ? "" : "disabled"}>${generating ? generationLabel : tasks.length ? "AI 一键重新生成" : "AI 一键生成"}</button><button type="button" data-action="confirm-operational-tasks" ${tasks.length && !confirmed && !generating && !incompleteAreaCount ? "" : "disabled"}>${confirmed ? "任务已确认" : incompleteAreaCount ? `${incompleteAreaCount} 项区域待补齐` : "确认作战任务"}</button></div>
+      <div class="operational-task-actions"><button type="button" class="${tasks.length ? "quiet-button" : "primary-btn"}" data-action="generate-operational-tasks" ${ready && !generating ? "" : "disabled"}>${generating ? generationLabel : tasks.length ? "AI 一键重新生成" : "AI 一键生成"}</button>${tasks.length ? `<button type="button" class="quiet-button danger-quiet" data-action="clear-all-operational-tasks" ${generating ? "disabled" : ""} title="清空全部作战任务">清空全部任务</button>` : ""}<button type="button" data-action="confirm-operational-tasks" ${tasks.length && !confirmed && !generating && !incompleteAreaCount ? "" : "disabled"}>${confirmed ? "任务已确认" : incompleteAreaCount ? `${incompleteAreaCount} 项区域待补齐` : "确认作战任务"}</button></div>
     </header>
     ${!ready ? `<p class="force-next-banner is-warn">请先在“阶段行动”中生成阶段，再生成作战任务与区域候选。</p>` : ""}
     <div class="operational-task-layout ${selected ? "has-selection" : "is-empty"}">
       <aside class="operational-task-list" aria-label="作战任务列表" data-grouped-list-panel="operational-task" data-grouped-list-dimensions="阶段:phase|阵营:side|任务类型:type|状态:status" data-grouped-list-default-group="phase"><div class="operational-pane-head"><div><span>任务清单</span><strong>${tasks.length}</strong></div><small>按阶段与阵营</small></div><div class="operational-task-list-scroll" data-grouped-list-items>${tasks.map((task, index) => renderTaskListItem(task, index, selected?.id, phaseNames, confirmed)).join("") || renderEmpty()}</div><div class="operational-task-completion"><span>区域补全</span><strong>${completeCount}/${tasks.length}</strong></div></aside>
-      <main class="operational-task-editor">${selected ? renderTaskEditor(selected, phaseNames, listCmoMissionTypes()) : renderWorkspaceEmpty(ready)}</main>
+      <main class="operational-task-editor">${selected ? renderTaskEditor(selected, phaseNames, listCmoMissionTypes()) : renderWorkspaceEmpty(ready, generating)}</main>
       <aside class="operational-area-editor">${selected ? renderAreaEditor(selected) : `<div class="operational-empty-side"><span>区域</span><p>选择任务后编辑区域类型和坐标。</p></div>`}</aside>
     </div>
   </section>`;
@@ -80,4 +80,10 @@ function renderAreaPlot(area) {
 
 function optionList(options, selected) { return options.map(([value, label]) => `<option value="${value}" ${value === selected ? "selected" : ""}>${label}</option>`).join(""); }
 function renderEmpty() { return `<div class="operational-list-empty"><span>00</span><p>尚无任务</p></div>`; }
-function renderWorkspaceEmpty(ready) { return `<div class="operational-workspace-empty"><strong>${ready ? "生成作战任务" : "等待阶段确认"}</strong><p>${ready ? "AI 将同时给出 CMO 任务类型、区域用途和有依据的坐标候选。" : "阶段行动确认后，本步骤才具备生成依据。"}</p></div>`; }
+function renderWorkspaceEmpty(ready, generating = false) {
+  return `<div class="operational-workspace-empty">
+    <strong>${ready ? "生成作战任务" : "等待阶段确认"}</strong>
+    <p>${ready ? "AI 将同时给出 CMO 任务类型、区域用途和有依据的坐标候选。" : "阶段行动确认后，本步骤才具备生成依据。"}</p>
+    ${ready ? `<div class="operational-workspace-empty-actions" style="margin-top: 1rem;"><button type="button" class="primary-btn" data-action="generate-operational-tasks" ${generating ? "disabled" : ""}>AI 一键生成作战任务</button></div>` : ""}
+  </div>`;
+}

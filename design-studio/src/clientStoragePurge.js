@@ -55,3 +55,32 @@ export function ensureClientStoragePurged({ force = false } = {}) {
     return { purged: false, removed: [] };
   }
 }
+
+/**
+ * Clears cached drafts belonging to a specific project from browser storage.
+ */
+export function purgeProjectClientStorage(projectId) {
+  try {
+    if (typeof localStorage === "undefined") return [];
+    const targetScope = String(projectId || "default");
+    const storages = [localStorage, typeof sessionStorage !== "undefined" ? sessionStorage : null].filter(Boolean);
+    const removed = [];
+    for (const storage of storages) {
+      for (let index = storage.length - 1; index >= 0; index -= 1) {
+        const key = storage.key(index);
+        if (!key || key === EPOCH_KEY) continue;
+        const isProjectScoped =
+          key.endsWith(`:${targetScope}`) ||
+          key.includes(`:${targetScope}:`) ||
+          (targetScope === "default" && KEY_PREFIXES.some((prefix) => key.startsWith(prefix)) && !key.includes(":"));
+        if (isProjectScoped) {
+          storage.removeItem(key);
+          removed.push(key);
+        }
+      }
+    }
+    return removed;
+  } catch {
+    return [];
+  }
+}

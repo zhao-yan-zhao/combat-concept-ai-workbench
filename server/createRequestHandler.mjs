@@ -83,6 +83,11 @@ export function createRequestHandler(runtime) {
         else await projects.handleProjectMeta(request, response, projectId);
         return;
       }
+      const projectResetMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/reset$/);
+      if (projectResetMatch && request.method === "POST") {
+        await projects.handleProjectReset(request, response, decodeProjectId(projectResetMatch[1]));
+        return;
+      }
       const projectBriefMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/brief$/);
       if (projectBriefMatch && (request.method === "GET" || request.method === "PUT")) {
         await projects.handleProjectBrief(request, response, decodeProjectId(projectBriefMatch[1]));

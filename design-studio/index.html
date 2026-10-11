@@ -63,6 +63,8 @@
               <button type="button" data-view="validate">设计验证</button>
               <button type="button" data-view="scenario">自动想定</button>
               <button type="button" data-view="report">成果报告</button>
+              <hr>
+              <button type="button" data-action="reset-project-content" class="menubar-danger-btn">清空当前项目全部内容</button>
               <a id="adminEntry" class="menubar-link" href="./admin.html" hidden>系统管理</a>
             </div>
           </details>
@@ -84,6 +86,7 @@
           <button id="workflowTestModeBtn" class="workflow-test-mode-toggle" type="button" role="switch" data-action="toggle-workflow-test-mode" aria-checked="false" title="启用测试模式，所有阶段可自由访问"><span class="workflow-test-mode-track" aria-hidden="true"></span><span>测试模式</span></button>
           <button id="collaborationIdentityBtn" class="quiet-button collaboration-identity-button" type="button" data-action="open-account-management">账号管理</button>
           <button class="quiet-button" id="saveVersionBtn" title="保存当前概念版本" data-action="save-report-version">保存版本</button>
+          <button class="quiet-button danger-quiet" id="resetProjectBtn" type="button" data-action="reset-project-content" title="清空当前项目的全部设计内容并重置到阶段1">清空当前项目</button>
         </div>
       </header>
       <div id="workflowModeOverlay" class="workflow-mode-overlay" hidden aria-live="polite" aria-atomic="true">

@@ -569,11 +569,22 @@ export function updateOv6bState(model, machineId, stateId, patch = {}) {
 }
 
 /** Persist free-canvas positions and stop auto topology from overwriting them. */
-export function updateOv6bCanvasLayout(model, machineId, { canvasLayout = "manual", positions = [] } = {}) {
+export function updateOv6bCanvasLayout(model, machineId, { canvasLayout = "manual", positions = [], worldWidth, worldHeight } = {}) {
   const next = cloneModel(ensureOv6bModel(model));
   const machine = (next.stateMachines || []).find((item) => item.id === machineId);
   if (!machine) return normalizeDodafOv6b(next);
   if (canvasLayout === "auto" || canvasLayout === "manual") machine.canvasLayout = canvasLayout;
+  if (Number.isFinite(worldWidth) && worldWidth > 0) machine.worldWidth = Math.round(worldWidth);
+  if (Number.isFinite(worldHeight) && worldHeight > 0) machine.worldHeight = Math.round(worldHeight);
+  if (canvasLayout === "auto" && (!positions || !positions.length)) {
+    (machine.states || []).forEach((state) => {
+      delete state.x;
+      delete state.y;
+    });
+    delete machine.worldWidth;
+    delete machine.worldHeight;
+    return normalizeDodafOv6b(next);
+  }
   const byId = new Map((Array.isArray(positions) ? positions : []).map((item) => [item?.id, item]));
   (machine.states || []).forEach((state) => {
     const pos = byId.get(state.id);

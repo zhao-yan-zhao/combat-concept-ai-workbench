@@ -18,6 +18,7 @@ import { routeSmFlowEdges } from "./stateMachineFlowRouting.js";
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4;
+const DRAG_THRESHOLD = 8;
 
 let canvasPan = { x: 0, y: 0 };
 let canvasZoom = 1;
@@ -29,6 +30,18 @@ export function resetStateMachineCamera() {
   canvasZoom = 1;
   shouldFitCamera = true;
   lastMachineId = "";
+}
+
+function safeSetPointerCapture(target, pointerId) {
+  try {
+    if (typeof pointerId === "number") target?.setPointerCapture?.(pointerId);
+  } catch {}
+}
+
+function safeReleasePointerCapture(target, pointerId) {
+  try {
+    if (typeof pointerId === "number") target?.releasePointerCapture?.(pointerId);
+  } catch {}
 }
 
 export function createStateMachineCanvasController({
@@ -62,6 +75,17 @@ export function createStateMachineCanvasController({
           fitCameraToWorld(stage, world);
           applyWorldTransform(world);
           refreshEdges();
+        });
+        root.querySelector("[data-sm-canvas-layout]")?.addEventListener("click", () => {
+          const machine = currentMachine();
+          if (!machine) return;
+          const state = getState();
+          const model = resolveDodafProduct(state, "ov6b").model;
+          const next = updateOv6bCanvasLayout(model, machine.id, {
+            canvasLayout: "auto"
+          });
+          shouldFitCamera = true;
+          persistModel(next, "已完成自适应排版");
         });
         resizeObserver = new ResizeObserver(refreshEdges);
         resizeObserver.observe(stage);
@@ -124,7 +148,7 @@ export function createStateMachineCanvasController({
     let moved = false;
     board.classList.add("is-panning");
     stage.classList.add("is-panning");
-    stage.setPointerCapture?.(event.pointerId);
+    safeSetPointerCapture(stage, event.pointerId);
 
     const move = (pointer) => {
       const dx = pointer.clientX - start.x;
@@ -139,14 +163,14 @@ export function createStateMachineCanvasController({
     const cleanup = () => {
       board.classList.remove("is-panning");
       stage.classList.remove("is-panning");
-      stage.removeEventListener("pointermove", move);
-      stage.removeEventListener("pointerup", finish);
-      stage.removeEventListener("pointercancel", finish);
-      stage.releasePointerCapture?.(event.pointerId);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      safeReleasePointerCapture(stage, event.pointerId);
     };
-    stage.addEventListener("pointermove", move);
-    stage.addEventListener("pointerup", finish);
-    stage.addEventListener("pointercancel", finish);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
   }
 
   function zoomCanvas(event, stage, world, refreshEdges) {
@@ -215,7 +239,7 @@ export function createStateMachineCanvasController({
     };
 
     updateDraft(event);
-    stage.setPointerCapture?.(event.pointerId);
+    safeSetPointerCapture(stage, event.pointerId);
 
     const move = (pointer) => updateDraft(pointer);
     const finish = (pointer) => {
@@ -262,7 +286,7 @@ export function createStateMachineCanvasController({
       stage.removeEventListener("pointermove", move);
       stage.removeEventListener("pointerup", finish);
       stage.removeEventListener("pointercancel", cleanup);
-      stage.releasePointerCapture?.(event.pointerId);
+      safeReleasePointerCapture(stage, event.pointerId);
       refreshEdges();
     };
 
@@ -270,6 +294,8 @@ export function createStateMachineCanvasController({
     stage.addEventListener("pointerup", finish);
     stage.addEventListener("pointercancel", cleanup);
   }
+
+
 
   function dragNode(event, stage, element, refreshEdges) {
     if (event.button !== 0 || !event.isPrimary) return;
@@ -290,9 +316,7 @@ export function createStateMachineCanvasController({
     let settled = false;
     let lastPointer = event;
     let frame = 0;
-    element.classList.add("is-dragging");
-    element.querySelector(".sm-flow-node")?.classList.add("is-dragging");
-    element.setPointerCapture?.(event.pointerId);
+    safeSetPointerCapture(element, event.pointerId);
 
     const applyPointer = (pointer) => {
       if (!pointer || !Number.isFinite(pointer.clientX) || !Number.isFinite(pointer.clientY)) return;
@@ -309,8 +333,12 @@ export function createStateMachineCanvasController({
 
     const move = (pointer) => {
       lastPointer = pointer;
-      if (!moved && Math.hypot(pointer.clientX - start.x, pointer.clientY - start.y) < 3) return;
-      moved = true;
+      if (!moved) {
+        if (Math.hypot(pointer.clientX - start.x, pointer.clientY - start.y) < DRAG_THRESHOLD) return;
+        moved = true;
+        element.classList.add("is-dragging");
+        element.querySelector(".sm-flow-node")?.classList.add("is-dragging");
+      }
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
@@ -331,14 +359,20 @@ export function createStateMachineCanvasController({
       state.ov6bEditorOpen = true;
       state.stateMachineChatOpen = false;
       if (!moved) {
+        element.style.left = `${originLeft}%`;
+        element.style.top = `${originTop}%`;
         render();
         return;
       }
       applyPointer((pointer?.type === "pointerup" ? pointer : lastPointer) || pointer);
       const model = resolveDodafProduct(state, "ov6b").model;
+      const currentWorldWidth = Number.parseFloat(world.style.width) || Number.parseFloat(world.dataset.worldWidth) || 100;
+      const currentWorldHeight = Number.parseFloat(world.style.height) || Number.parseFloat(world.dataset.worldHeight) || 100;
       const next = updateOv6bCanvasLayout(model, machine.id, {
         canvasLayout: "manual",
-        positions: collectWorldNodePositions(stage)
+        positions: collectWorldNodePositions(stage),
+        worldWidth: currentWorldWidth,
+        worldHeight: currentWorldHeight
       });
       persistModel(next, "状态位置已更新");
     };
@@ -350,7 +384,7 @@ export function createStateMachineCanvasController({
       element.removeEventListener("pointerup", finish);
       element.removeEventListener("pointercancel", finish);
       element.removeEventListener("lostpointercapture", finish);
-      element.releasePointerCapture?.(event.pointerId);
+      safeReleasePointerCapture(element, event.pointerId);
     };
     element.addEventListener("pointermove", move);
     element.addEventListener("pointerup", finish);
@@ -375,7 +409,7 @@ export function createStateMachineCanvasController({
     let ghost = null;
     let lastPointer = event;
     let sourceId = "";
-    element.setPointerCapture?.(event.pointerId);
+    safeSetPointerCapture(element, event.pointerId);
 
     const updateHover = (pointer) => {
       lastPointer = pointer;
@@ -442,7 +476,7 @@ export function createStateMachineCanvasController({
       element.removeEventListener("pointermove", move);
       element.removeEventListener("pointerup", finish);
       element.removeEventListener("pointercancel", finish);
-      element.releasePointerCapture?.(event.pointerId);
+      safeReleasePointerCapture(element, event.pointerId);
     };
 
     element.addEventListener("pointermove", move);
@@ -650,13 +684,15 @@ function nodeCssBox(el, worldW, worldH) {
   const left = Number.parseFloat(el.style.left);
   const top = Number.parseFloat(el.style.top);
   if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
-  const body = el.querySelector(".sm-flow-node") || el;
-  const halfW = Math.max(1.1, ((body.offsetWidth || el.offsetWidth) / worldW) * 50);
-  const halfH = Math.max(1, ((body.offsetHeight || el.offsetHeight) / worldH) * 50);
+  const isDecision = el.classList.contains("kind-decision");
+  const elW = isDecision ? (el.offsetWidth || 108) : ((el.querySelector(".sm-flow-node")?.offsetWidth) || el.offsetWidth);
+  const elH = isDecision ? (el.offsetHeight || 108) : ((el.querySelector(".sm-flow-node")?.offsetHeight) || el.offsetHeight);
+  const halfW = Math.max(1.1, (elW / worldW) * 50);
+  const halfH = Math.max(1, (elH / worldH) * 50);
   return {
     halfW,
     halfH,
-    shape: el.classList.contains("kind-decision") ? "diamond" : "rect",
+    shape: isDecision ? "diamond" : "rect",
     // Center-positioned nodes: style left/top already point at center.
     center: { x: left, y: top }
   };

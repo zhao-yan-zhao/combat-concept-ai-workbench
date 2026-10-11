@@ -259,6 +259,7 @@ function renderPhaseChain({ phases, transitions, focusId, busy, focusConfirmed, 
         <div class="planning-actions phase-chain-actions">
           <button type="button" class="primary-button" data-action="confirm-phase-action" ${busy || chatGenerating || !phases.length || confirmed ? "disabled" : ""}>${confirmed ? "已确认 · 去规则绑定" : "确认阶段与行动"}</button>
           <button type="button" class="quiet-button" data-action="generate-phase-action" ${busy || !focusConfirmed ? "disabled" : ""}>${generating ? "正在生成…" : "重生成阶段草案"}</button>
+          ${phases.length ? `<button type="button" class="quiet-button danger-quiet" data-action="clear-all-phases" ${busy ? "disabled" : ""} title="清空已生成的全部阶段与行动">清空全部阶段</button>` : ""}
         </div>
       </aside>`;
 }

@@ -40,7 +40,8 @@ import { renderAiPromptPanel } from "./aiPromptView.js";
 import { getCmoCatalogStatus } from "./cmoCatalogClient.js";
 import { applyTheme, getThemeConfig } from "./themeConfigClient.js";
 import { renderProjectStorageFooter } from "./projectStorageView.js";
-import { createProject, deleteProject, loadProjects, updateProject } from "./projectBriefClient.js";
+import { createProject, deleteProject, loadProjects, resetProjectContent, updateProject } from "./projectBriefClient.js";
+import { ensureClientStoragePurged, purgeProjectClientStorage } from "./clientStoragePurge.js";
 import { renderProjectManager, renderProjectEntry } from "./projectManagerView.js";
 import { normalizeConceptMap, persistConceptMap } from "./conceptMapStore.js";
 import { normalizeForceMissionPlan, persistForceMission } from "./forceMissionStore.js";
@@ -174,7 +175,7 @@ function render(options = {}) {
   }
   const skipView = Boolean(options.skipViewRoot);
   const appFocusSnapshot = skipView ? null : captureViewFocus(document);
-  const appScrollSnapshots = skipView ? null : captureViewScroll(document);
+  const appScrollSnapshots = captureViewScroll(document);
   const meta = getViewMeta(state.activeView);
   const conceptTreeMarkup = renderTree(state.activeView, currentWorkflow(), state);
   const conceptTreeElem = $("#conceptTree");
@@ -1012,7 +1013,7 @@ function select(type, id) {
   current?.classList.add("selected");
 }
 
-function handleAction(action, source = null) {
+async function handleAction(action, source = null) {
   if (source && source.closest && action !== "close-provenance-popover") {
     source.closest(".derived-provenance-dropdown")?.removeAttribute("open");
   }
@@ -1312,6 +1313,28 @@ function handleAction(action, source = null) {
   }
   if (action === "open-ai-config" || action === "open-ai-prompts") {
     closeMenubarMenus();
+  }
+  if (action === "reset-project-content") {
+    closeMenubarMenus();
+    const title = currentProjectTitle();
+    const confirmed = window.confirm(
+      `确定要清空当前项目“${title}”的全部研究内容吗？\n\n此操作将清空：\n• 概念简报、研讨记录与研究方向\n• 阶段与行动规划\n• 作战任务、任务区域与作战兵力编成\n• 概念图及所有 DoDAF 架构模型（OV-1 至 OV-7）\n• 想定、OODA 循环与验证结果\n\n清空后项目将重置回第 1 阶段「概念简报」。此操作无法撤销，确定继续吗？`
+    );
+    if (!confirmed) return;
+    try {
+      showToast("正在清空项目全部内容…");
+      await resetProjectContent(state.activeProjectId);
+      purgeProjectClientStorage(state.activeProjectId);
+      ensureClientStoragePurged({ force: true });
+      showToast("项目已清空，正在重载…");
+      const url = new URL(window.location.href);
+      url.searchParams.set("project", state.activeProjectId);
+      url.hash = "brief";
+      window.location.assign(url);
+    } catch (error) {
+      showToast(error?.status === 403 ? "只有具备权限的成员可清空项目" : `清空项目失败：${error?.message || "网络异常"}`);
+    }
+    return;
   }
   if (knowledgeController.handleAction(action, $("#knowledgeVaultInput"))) return;
   if (aiConfigController.handleAction(action)) return;
@@ -2319,12 +2342,8 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
   if (viewId === "scenario" && (!state.scenario || !state.scenario.entities?.length)) {
     await scenarioController.compileOrGenerateScenario({ silent: false, forceAi: true });
   }
-  if (viewId === "operational-task" && (
-    !(state.forceMission?.tasks || []).length
-    || ((entrySource === "phase-action" || completeOperationalTasks) && operationalTasksNeedAiCompletion(state.forceMission?.tasks))
-  )) {
-    await conceptPlanningController.generateOperationalTasks({ silent: false });
-  }
+  // 作战任务改由人工在「作战任务」页面点击「AI 一键生成」，主线流转（如阶段行动/规则库确认或点击下一步）不再自动触发分批 AI 请求。
+  // completeOperationalTasks 仅保留契约兼容，不在此自动生成。
   // Entering OV-1b from the confirmed operational-task step must immediately
   // produce a reviewable task organization. The page remains visible while
   // generation runs so the user can see the busy state and resulting groups.
@@ -2494,9 +2513,7 @@ async function completeWorkflowStage() {
     showToast(relatedViewId
       ? `当前阶段已确认，已进入关联流程${relatedViewLabel(relatedViewId)}`
       : nextView ? "当前阶段已确认，已进入下一阶段" : "工作流已确认完成");
-    if (stage === 1 && nextMainView === "operational-task") {
-      await conceptPlanningController.generateOperationalTasks({ silent: false });
-    }
+    // stage === 1（阶段行动/规则库）确认后进入作战任务时，不再自动触发分批生成任务，改由用户在作战任务页面主动点击「AI 一键生成」
     if (stage === 2 && nextMainView === "force-mission") {
       await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
     }
@@ -3224,3 +3241,12 @@ function bindAiModalsChrome() {
 }
 
 bindAiModalsChrome();
+
+if (typeof window !== "undefined") {
+  window.__workbench = {
+    getState: () => state,
+    render,
+    goToWorkflowView,
+    navigateToResearchView
+  };
+}

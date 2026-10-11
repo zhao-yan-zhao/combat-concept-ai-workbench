@@ -42,10 +42,86 @@ const ROLE_SLOT_HOSTILE = Object.freeze({
 
 export { listCmoMissionTypes, cmoMissionTypeLabel, normalizeCmoMissionType };
 
+export const COMBAT_PACKAGE_TYPE_SET = new Set([
+  "main", "escort", "recon", "sead", "tanker", "screen", "support"
+]);
+
+export const COMBAT_PACKAGE_TYPES = [
+  { id: "main", label: "主战突击" },
+  { id: "escort", label: "伴随护航" },
+  { id: "recon", label: "侦察预警" },
+  { id: "sead", label: "防空压制" },
+  { id: "tanker", label: "加油中继" },
+  { id: "screen", label: "外围警戒" },
+  { id: "support", label: "综合支援" }
+];
+COMBAT_PACKAGE_TYPES.has = function hasPackageType(id) {
+  return COMBAT_PACKAGE_TYPE_SET.has(id);
+};
+
+export function inferCombatPackageType(role = "", missionType = "") {
+  if (missionType === "escort") return "escort";
+  if (missionType === "recon" || role === "sense") return "recon";
+  if (missionType === "sead" || missionType === "dead") return "sead";
+  if (missionType === "tanker") return "tanker";
+  if (missionType === "patrol_asw" || role === "surface") return "screen";
+  if (role === "support" || missionType === "support") return "support";
+  return "main";
+}
+
+export function normalizePlatformSpecs(specs = [], platforms = []) {
+  const list = Array.isArray(specs) ? specs : [];
+  const normalized = list.slice(0, 6).map((spec, index) => {
+    if (!spec || typeof spec !== "object") return null;
+    const type = clean(spec.type || spec.name || spec.category, 120);
+    if (!type) return null;
+    let specObj = null;
+    if (spec.specs && typeof spec.specs === "object" && !Array.isArray(spec.specs)) {
+      specObj = {};
+      for (const [k, v] of Object.entries(spec.specs)) {
+        if (k && v !== undefined && v !== null) {
+          specObj[clean(k, 60)] = clean(String(v), 120);
+        }
+      }
+    }
+    return {
+      id: slugId(spec.id, `spec-${index + 1}`),
+      type,
+      name: clean(spec.name || type, 120),
+      role: clean(spec.role, 40) || "",
+      category: clean(spec.category, 60) || "",
+      description: clean(spec.description || spec.desc, 400),
+      cmoId: Number(spec.cmoId) || 0,
+      domain: clean(spec.domain, 40) || "aircraft",
+      specs: specObj || (spec.keyParameters ? { keyParameters: clean(spec.keyParameters, 300) } : null),
+      keyParameters: clean(spec.keyParameters || spec.parameters || spec.basis, 300)
+    };
+  }).filter(Boolean);
+
+  if (normalized.length) return normalized;
+
+  const platformList = Array.isArray(platforms) ? platforms : [];
+  return platformList.slice(0, 3).map((p, index) => ({
+    id: `spec-${index + 1}`,
+    type: clean(p?.category || p?.name, 120) || "主战装备",
+    name: clean(p?.name, 120),
+    role: "",
+    category: clean(p?.category, 60) || "",
+    description: "",
+    cmoId: Number(p?.cmoId) || 0,
+    domain: clean(p?.domain, 40) || "aircraft",
+    specs: null,
+    keyParameters: clean(p?.basis, 300)
+  })).filter((item) => item.type || item.name);
+}
+
 export function createEmptyForceMissionPlan() {
   return {
     version: 1,
     status: "empty",
+    conceptStatus: "empty",
+    conceptConfirmedAt: "",
+    combatStatus: "empty",
     generation: emptyGeneration(),
     tasks: [],
     tasksConfirmedAt: "",
@@ -127,7 +203,7 @@ export function normalizeForceMissionPlan(value) {
     };
   }).filter(Boolean);
   const forceIds = new Set();
-  // Concept forces: duty semantics by phase + exactly one equipment type ref (research-level).
+  // Concept forces: duty semantics by phase + up to 3 platform types or specification metrics (research-level).
   // slot = abstract relative layout for concept-map (stored, not shown on force roster UI).
   const forces = (Array.isArray(input.forces) ? input.forces : []).slice(0, 120).map((item, index) => {
     const id = slugId(item?.id, `force-${index + 1}`);
@@ -136,6 +212,8 @@ export function normalizeForceMissionPlan(value) {
     const side = FORCE_SIDES.has(clean(item?.side, 20)) ? clean(item.side, 20) : "friendly";
     const role = FORCE_ROLES.has(clean(item?.role, 30)) ? clean(item.role, 30) : "maneuver";
     const missionType = normalizeCmoMissionType(item?.missionType, inferMissionTypeFromRole(role));
+    const platforms = normalizePlatformRefs(item?.platforms, 3);
+    const platformSpecs = normalizePlatformSpecs(item?.platformSpecs, platforms);
     const force = {
       id,
       name: clean(item.name, 120),
@@ -146,8 +224,8 @@ export function normalizeForceMissionPlan(value) {
       task: clean(item?.task, 400) || "研究级概念任务",
       taskRefs: normalizeStringList(item?.taskRefs || item?.taskIds, 24, 60),
       phaseIds: normalizeStringList(item?.phaseIds, 12, 60),
-      // One real equipment type per concept unit; combat layer refines quantities/composition.
-      platforms: normalizePlatformRefs(item?.platforms, 1),
+      platforms,
+      platformSpecs,
       notes: clean(item?.notes, 600),
       slot: normalizeLayoutSlot(item?.slot)
     };
@@ -164,23 +242,35 @@ export function normalizeForceMissionPlan(value) {
     combatForceIds.add(id);
     const side = FORCE_SIDES.has(clean(item?.side, 20)) ? clean(item.side, 20) : "friendly";
     const role = FORCE_ROLES.has(clean(item?.role, 30)) ? clean(item.role, 30) : "maneuver";
-    const conceptForceId = clean(item?.conceptForceId, 60);
-    const linkedConceptId = forceIds.has(conceptForceId) ? conceptForceId : "";
+    const rawConceptIds = Array.isArray(item?.conceptForceIds)
+      ? item.conceptForceIds
+      : (item?.conceptForceId ? [item.conceptForceId] : []);
+    const conceptForceIds = normalizeStringList(rawConceptIds, 12, 60).filter((cid) => forceIds.has(cid));
+    const linkedConceptId = conceptForceIds[0] || (forceIds.has(clean(item?.conceptForceId, 60)) ? clean(item.conceptForceId, 60) : "");
     const inheritedPhases = linkedConceptId ? (conceptPhaseById.get(linkedConceptId) || []) : [];
     const phaseIds = normalizeStringList(item?.phaseIds, 12, 60);
+    const packageType = COMBAT_PACKAGE_TYPES.has(clean(item?.packageType, 30))
+      ? clean(item?.packageType, 30)
+      : inferCombatPackageType(role, item?.missionType);
     const force = {
       id,
       name: clean(item.name, 120),
       side,
       role,
       conceptForceId: linkedConceptId,
+      conceptForceIds: conceptForceIds.length ? conceptForceIds : (linkedConceptId ? [linkedConceptId] : []),
+      packageType,
       group: clean(item?.group, 120) || "作战编组",
       missionType: normalizeCmoMissionType(item?.missionType, inferMissionTypeFromRole(role)),
       task: clean(item?.task, 400) || "研究级作战任务",
       taskRefs: normalizeStringList(item?.taskRefs || item?.taskIds, 24, 60),
       // Phase coverage for stage switcher (inherit from concept when missing).
       phaseIds: phaseIds.length ? phaseIds : inheritedPhases,
-      platforms: normalizePlatformRefs(item?.platforms),
+      platforms: normalizePlatformRefs(item?.platforms).map((plat) => ({
+        ...plat,
+        loadoutRole: clean(plat?.loadoutRole, 80),
+        baseLocation: clean(plat?.baseLocation, 120)
+      })),
       notes: clean(item?.notes, 600),
       slot: normalizeLayoutSlot(item?.slot)
     };
@@ -204,9 +294,21 @@ export function normalizeForceMissionPlan(value) {
       note: clean(item?.note, 400)
     };
   }).filter(Boolean);
+  const conceptStatus = PLAN_STATUSES.has(clean(input.conceptStatus, 24))
+    ? clean(input.conceptStatus, 24)
+    : (status === "confirmed" && forces.length > 0 ? "confirmed" : (forces.length > 0 ? "draft" : "empty"));
+  const conceptConfirmedAt = conceptStatus === "confirmed"
+    ? (clean(input.conceptConfirmedAt, 80) || clean(input.confirmedAt, 80) || (status === "confirmed" ? new Date().toISOString() : ""))
+    : "";
+  const combatStatus = PLAN_STATUSES.has(clean(input.combatStatus, 24))
+    ? clean(input.combatStatus, 24)
+    : (status === "confirmed" ? "confirmed" : (combatForces.length > 0 ? "draft" : "empty"));
   return {
     version: 1,
     status,
+    conceptStatus,
+    conceptConfirmedAt,
+    combatStatus,
     generation: normalizeGeneration(input.generation),
     tasks,
     tasksConfirmedAt: tasks.length ? (clean(input.tasksConfirmedAt, 80) || (status === "confirmed" ? clean(input.confirmedAt, 80) : "")) : "",
@@ -285,6 +387,21 @@ export function isForceMissionPlanConfirmed(plan, storage = {}) {
     && !storage?.stale;
 }
 
+export function isConceptForcePlanConfirmed(plan, storage = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  return (normalized.conceptStatus === "confirmed" || normalized.status === "confirmed")
+    && normalized.tasks.length > 0
+    && Boolean(normalized.tasksConfirmedAt)
+    && normalized.forces.length > 0
+    && normalized.forces.every((force) => force.role && force.task)
+    && Boolean(normalized.conceptConfirmedAt || normalized.confirmedAt)
+    && !storage?.stale;
+}
+
+export function isCombatForcePlanConfirmed(plan, storage = {}) {
+  return isForceMissionPlanConfirmed(plan, storage);
+}
+
 export function isOperationalTaskPlanConfirmed(plan, storage = {}) {
   const normalized = normalizeForceMissionPlan(plan);
   return normalized.tasks.length > 0
@@ -298,6 +415,18 @@ export function operationalTaskPlanIncompleteReasons(plan, storage = {}) {
   if (storage?.stale) reasons.push("复核已过期的作战任务");
   if (!normalized.tasks.length) reasons.push("作战任务草案");
   else if (!normalized.tasksConfirmedAt) reasons.push("确认作战任务");
+  return reasons;
+}
+
+export function conceptForcePlanIncompleteReasons(plan, storage = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  const reasons = [];
+  if (storage?.stale) reasons.push("复核已过期的概念兵力");
+  if (!normalized.tasks.length) reasons.push("作战任务草案");
+  else if (!normalized.tasksConfirmedAt) reasons.push("确认作战任务");
+  if (!normalized.forces.length) reasons.push("概念兵力草案");
+  else if (normalized.forces.some((force) => !force.task)) reasons.push("补全概念兵力任务");
+  if (!isConceptForcePlanConfirmed(normalized, storage)) reasons.push("确认概念兵力");
   return reasons;
 }
 
@@ -833,14 +962,24 @@ export function addCombatForce(plan = {}, forceData = {}) {
   const id = clean(forceData.id, 60) || `combat-custom-${Date.now()}-${index}`;
   const side = forceData.side === "hostile" ? "hostile" : "friendly";
   const name = clean(forceData.name, 120) || (side === "hostile" ? `红方·作战编组${index}` : `蓝方·作战编组${index}`);
-  const conceptForceId = clean(forceData.conceptForceId, 60)
+  const rawConceptIds = Array.isArray(forceData.conceptForceIds)
+    ? forceData.conceptForceIds
+    : (forceData.conceptForceId ? [forceData.conceptForceId] : []);
+  const conceptForceIds = normalizeStringList(rawConceptIds, 12, 60);
+  const conceptForceId = conceptForceIds[0]
+    || clean(forceData.conceptForceId, 60)
     || (normalized.forces.find((f) => f.side === side)?.id || "");
+  const packageType = COMBAT_PACKAGE_TYPES.has(clean(forceData.packageType, 30))
+    ? clean(forceData.packageType, 30)
+    : "main";
   const newForce = {
     id,
     name,
     side,
     role: FORCE_ROLES.has(forceData.role) ? forceData.role : "maneuver",
     conceptForceId,
+    conceptForceIds: conceptForceIds.length ? conceptForceIds : (conceptForceId ? [conceptForceId] : []),
+    packageType,
     group: clean(forceData.group, 120) || (side === "hostile" ? "红方作战编组" : "蓝方作战编组"),
     missionType: normalizeCmoMissionType(forceData.missionType, "strike"),
     task: clean(forceData.task, 400) || "执行阶段作战任务与协同",
@@ -852,6 +991,7 @@ export function addCombatForce(plan = {}, forceData = {}) {
   return normalizeForceMissionPlan({
     ...normalized,
     status: "draft",
+    combatStatus: "draft",
     confirmedAt: "",
     combatForces: [...normalized.combatForces, newForce]
   });
@@ -869,6 +1009,7 @@ export function removeCombatForce(plan = {}, forceId = "") {
   return normalizeForceMissionPlan({
     ...normalized,
     status: "draft",
+    combatStatus: "draft",
     confirmedAt: "",
     combatForces,
     relations
@@ -884,17 +1025,63 @@ export function updateCombatForce(plan = {}, forceId = "", patch = {}) {
   if (!id) return normalized;
   const combatForces = (normalized.combatForces || []).map((item) => {
     if (item.id !== id) return item;
-    return {
-      ...item,
-      ...patch,
-      platforms: patch.platforms ? normalizePlatformRefs(patch.platforms, 8) : item.platforms
-    };
+    const merged = { ...item, ...patch };
+    if (patch.conceptForceIds !== undefined) {
+      merged.conceptForceIds = normalizeStringList(patch.conceptForceIds, 12, 60);
+      merged.conceptForceId = merged.conceptForceIds[0] || "";
+    } else if (patch.conceptForceId !== undefined) {
+      merged.conceptForceId = clean(patch.conceptForceId, 60);
+      merged.conceptForceIds = merged.conceptForceId ? [merged.conceptForceId] : [];
+    }
+    if (patch.packageType !== undefined) {
+      merged.packageType = COMBAT_PACKAGE_TYPES.has(clean(patch.packageType, 30))
+        ? clean(patch.packageType, 30)
+        : item.packageType;
+    }
+    if (patch.platforms !== undefined) {
+      merged.platforms = normalizePlatformRefs(patch.platforms, 8);
+    }
+    return merged;
   });
   return normalizeForceMissionPlan({
     ...normalized,
     status: "draft",
+    combatStatus: "draft",
     confirmedAt: "",
     combatForces
+  });
+}
+
+export function updateCombatForceConceptLinks(plan = {}, forceId = "", conceptForceIds = []) {
+  return updateCombatForce(plan, forceId, { conceptForceIds });
+}
+
+export function updateCombatForcePackageType(plan = {}, forceId = "", packageType = "") {
+  return updateCombatForce(plan, forceId, { packageType });
+}
+
+export function updateConceptForce(plan = {}, forceId = "", patch = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  const id = String(forceId || "").trim();
+  if (!id) return normalized;
+  const forces = (normalized.forces || []).map((item) => {
+    if (item.id !== id) return item;
+    const merged = { ...item, ...patch };
+    if (patch.platforms !== undefined) {
+      merged.platforms = normalizePlatformRefs(patch.platforms, 3);
+    }
+    if (patch.platformSpecs !== undefined) {
+      merged.platformSpecs = normalizePlatformSpecs(patch.platformSpecs, merged.platforms);
+    }
+    return merged;
+  });
+  return normalizeForceMissionPlan({
+    ...normalized,
+    status: "draft",
+    conceptStatus: "draft",
+    conceptConfirmedAt: "",
+    confirmedAt: "",
+    forces
   });
 }
 
@@ -1535,17 +1722,38 @@ function listHasSimilar(list = [], clause = "") {
   });
 }
 
+export function confirmConceptForcePlan(plan, { reviewNotes = "" } = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  if (!normalized.tasks.length || !normalized.tasksConfirmedAt) throw new Error("Operational tasks must be confirmed first");
+  if (!normalized.forces.length) throw new Error("Concept forces require at least one concept force");
+  const now = new Date().toISOString();
+  return normalizeForceMissionPlan({
+    ...normalized,
+    conceptStatus: "confirmed",
+    conceptConfirmedAt: now,
+    reviewNotes: clean(reviewNotes, 2000) || normalized.reviewNotes
+  });
+}
+
 export function confirmForceMissionPlan(plan, { reviewNotes = "" } = {}) {
   const normalized = normalizeForceMissionPlan(plan);
   if (!normalized.tasks.length || !normalized.tasksConfirmedAt) throw new Error("Operational tasks must be confirmed first");
   if (!normalized.forces.length) throw new Error("Force mission plan requires at least one concept force");
   if (!normalized.combatForces.length) throw new Error("Force mission plan requires at least one combat force");
+  const now = new Date().toISOString();
   return normalizeForceMissionPlan({
     ...normalized,
     status: "confirmed",
-    confirmedAt: new Date().toISOString(),
+    conceptStatus: "confirmed",
+    conceptConfirmedAt: normalized.conceptConfirmedAt || now,
+    combatStatus: "confirmed",
+    confirmedAt: now,
     reviewNotes: clean(reviewNotes, 2000) || normalized.reviewNotes
   });
+}
+
+export function confirmCombatForcePlan(plan, { reviewNotes = "" } = {}) {
+  return confirmForceMissionPlan(plan, { reviewNotes });
 }
 
 export function confirmPhaseActionConcept(plan, { reviewNotes = "" } = {}) {
@@ -1896,7 +2104,7 @@ export const OV1_RESEARCH_SUBJECT_SIDE = "friendly";
 
 /** Concept-force-only context for OV-1: subject-side forces only; combat forces ignored. */
 export function conceptForceContextForOv1(plan, storage = {}) {
-  if (!isForceMissionPlanConfirmed(plan, storage)) return "未确认概念兵力；不要假定 OV-1 节点主体。";
+  if (!isConceptForcePlanConfirmed(plan, storage) && !isForceMissionPlanConfirmed(plan, storage)) return "未确认概念兵力；不要假定 OV-1 节点主体。";
   const { subjectSide, subjectForces, externalForces, subjectRelations } = partitionConceptForcesForOv1(plan);
   if (!subjectForces.length) return "研究主体（蓝方）概念兵力为空；不要假定 OV-1 节点主体。";
   const sideTag = (side) => (side === "hostile" ? "红" : side === "friendly" ? "蓝" : side || "—");
@@ -2319,6 +2527,10 @@ export function conceptForceEquipmentLabel(force = {}, brief = {}) {
     const solid = named.find((item) => !item.keywordOnly);
     return (real || solid || named[0]).name;
   }
+  const specs = Array.isArray(force?.platformSpecs) ? force.platformSpecs : [];
+  if (specs.length && (specs[0].name || specs[0].type)) {
+    return clean(specs[0].name || specs[0].type, 80);
+  }
   // Fallback: duty-derived research-level equipment type, still an equipment name not a duty title.
   const seeded = seedConceptEquipmentType(force, brief);
   return clean(seeded?.name, 80);
@@ -2564,6 +2776,8 @@ function normalizePlatformRefs(value, maxItems = 8) {
       country,
       category,
       quantity,
+      loadoutRole: clean(item?.loadoutRole, 60),
+      baseLocation: clean(item?.baseLocation, 120),
       basis
     };
   }).filter(Boolean);
@@ -2978,15 +3192,19 @@ function expandConceptToCombatPackages(force = {}, brief = {}, phaseHint = []) {
 
   const parentPhaseIds = Array.isArray(force.phaseIds) ? force.phaseIds.filter(Boolean) : [];
   const push = (suffix, name, role, missionType, platforms, task, notes = "") => {
+    const pkgType = COMBAT_PACKAGE_TYPES.has(suffix) ? suffix : inferCombatPackageType(role, missionType);
     packs.push({
       id: `combat-${force.id || "x"}-${suffix}`,
       name: `${sideZh}·${name}`,
       side,
       role,
       conceptForceId: force.id,
+      conceptForceIds: force.id ? [force.id] : [],
+      packageType: pkgType,
       group: side === "hostile" ? "红方作战编组" : "蓝方作战编组",
       missionType: missionType || force.missionType || inferMissionTypeFromRole(role),
       task,
+      taskRefs: Array.isArray(force.taskRefs) ? [...force.taskRefs] : [],
       phaseIds: parentPhaseIds,
       platforms: normalizePlatformRefs(platforms, 4),
       notes: notes || "CMO 向编成扩展",
@@ -3156,6 +3374,8 @@ function buildSideEnablerPackages(conceptForces = [], brief = {}, phaseHint = []
         side,
         role: "support",
         conceptForceId: anchor.id,
+        conceptForceIds: anchor.id ? [anchor.id] : [],
+        packageType: "tanker",
         group: side === "hostile" ? "红方作战编组" : "蓝方作战编组",
         missionType: "tanker",
         task: `跨概念共享的空中加油资源池，支撑多阶段 CAP/预警/突击航时${phaseNote}`,

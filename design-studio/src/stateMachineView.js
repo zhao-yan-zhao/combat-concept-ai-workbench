@@ -186,7 +186,18 @@ function renderMachineEditor(machine, { selectedStateId = "", subjects = [], sel
           <span class="sm-legend-item kind-decision">判定</span>
           <span class="sm-legend-item kind-final">结束</span>
         </div>
-        <button type="button" class="sm-canvas-fit" data-sm-canvas-fit title="回到全局视图" aria-label="回到全局视图">⌖</button>
+        <div class="sm-canvas-actions">
+          <button type="button" class="sm-canvas-btn sm-canvas-layout" data-sm-canvas-layout title="自适应排版：重新计算节点间距与转换条件位置，避免重叠" aria-label="自适应排版">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <rect x="2" y="2" width="5" height="5" rx="1"></rect>
+              <rect x="9" y="2" width="5" height="5" rx="1"></rect>
+              <rect x="5.5" y="9" width="5" height="5" rx="1"></rect>
+              <path d="M4.5 7v1a1 1 0 0 0 1 1h2m3-2v1a1 1 0 0 1-1 1"></path>
+            </svg>
+            <span>自适应排版</span>
+          </button>
+          <button type="button" class="sm-canvas-fit" data-sm-canvas-fit title="回到全局视图" aria-label="回到全局视图">⌖</button>
+        </div>
       </header>
       <div class="sm-canvas-frame">
         ${renderStateMachineFlowCanvas(machine, { selectedStateId, selectedTransitionId })}
@@ -348,14 +359,12 @@ function renderStateMachineFlowCanvas(machine, { selectedStateId = "", selectedT
     isDecisionBranch: stateById.get(item.fromStateRef)?.stateKind === "decision"
   }));
 
-  const bounds = computeOv1WorldBounds(nodes);
-  const { widthPct: baseWorldWidth, heightPct: baseWorldHeight } = ov1WorldCssSize(nodes);
-  // Keep enough physical room for 168px state nodes and their transition labels.
-  const worldWidth = Math.max(baseWorldWidth, nodes.length * 24);
-  const worldHeight = Math.max(baseWorldHeight, 112);
+  const bounds = computeSmWorldBounds(nodes);
+  const worldWidth = Math.max(100, prepared.worldWidth || 100, bounds.width);
+  const worldHeight = Math.max(100, prepared.worldHeight || 100, bounds.height);
   // Flowchart nodes are center-positioned (left/top + translate -50%).
   const centers = new Map(nodes.map((node) => {
-    const box = stateNodeCenterBox(node, bounds);
+    const box = stateNodeCenterBox(node, bounds, worldWidth, worldHeight);
     return [node.id, { id: node.id, ...box }];
   }));
   const edgeGeometryById = routeSmFlowEdges(edges, centers);
@@ -421,54 +430,268 @@ function prepareStateMachineCanvas(machine = {}) {
   });
 
   const visibleTransitions = transitions.filter((item) => !hiddenBypassIds.has(item.id));
+  let layoutMeta = {
+    worldWidth: Number.isFinite(Number(machine.worldWidth)) && Number(machine.worldWidth) > 0 ? Number(machine.worldWidth) : 100,
+    worldHeight: Number.isFinite(Number(machine.worldHeight)) && Number(machine.worldHeight) > 0 ? Number(machine.worldHeight) : 100
+  };
   if (machine.canvasLayout !== "manual") {
-    layoutStateMachineTopology(states, visibleTransitions, stateById);
+    layoutMeta = layoutStateMachineTopology(states, visibleTransitions, stateById) || layoutMeta;
   }
 
-  return { states, transitions: visibleTransitions };
+  return { states, transitions: visibleTransitions, ...layoutMeta };
+}
+
+function computeSmWorldBounds(nodes = []) {
+  let minX = 0;
+  let minY = 0;
+  let maxX = 100;
+  let maxY = 100;
+  nodes.forEach((node) => {
+    const x = Number.parseFloat(node.x);
+    const y = Number.parseFloat(node.y);
+    if (Number.isFinite(x)) {
+      if (x < minX) minX = Math.floor(x - 5);
+      if (x > maxX) maxX = Math.ceil(x + 5);
+    }
+    if (Number.isFinite(y)) {
+      if (y < minY) minY = Math.floor(y - 5);
+      if (y > maxY) maxY = Math.ceil(y + 5);
+    }
+  });
+  const width = Math.max(100, maxX - minX);
+  const height = Math.max(100, maxY - minY);
+  return { minX, minY, maxX, maxY, width, height, widthPct: width, heightPct: height };
+}
+
+const SM_NODE_DIMS = {
+  initial: { w: 34, h: 34 },
+  final: { w: 34, h: 34 },
+  decision: { w: 108, h: 108 },
+  normal: { w: 168, h: 64 }
+};
+
+function getNodeDim(kind) {
+  return SM_NODE_DIMS[kind] || SM_NODE_DIMS.normal;
+}
+
+function roundSmCoord(val) {
+  return Math.round(Number(val) * 100) / 100;
+}
+
+function estimateTransitionLabelWidth(edge) {
+  const text = String(edge.branchResult || edge.condition || edge.label || "").trim();
+  if (!text || text === "转换") return 48;
+  let textLen = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    textLen += text.charCodeAt(i) > 255 ? 12.5 : 7.5;
+  }
+  // Up to 220px, Chinese text comfortably stays on one line
+  const badgeWidth = textLen <= 220
+    ? textLen + 24
+    : Math.min(240, Math.ceil(textLen / 2) + 26);
+  return Math.max(64, Math.min(240, badgeWidth));
 }
 
 function layoutStateMachineTopology(states, transitions, stateById) {
-  if (!states.length) return;
-  const start = states.find((item) => item.kind === "initial") || states[0];
-  const rankById = new Map([[start.id, 0]]);
-  const queue = [start.id];
-  while (queue.length) {
-    const sourceId = queue.shift();
-    const nextRank = (rankById.get(sourceId) || 0) + 1;
-    transitions
-      .filter((edge) => edge.fromStateRef === sourceId && edge.toStateRef !== start.id)
-      .forEach((edge) => {
-        if (rankById.has(edge.toStateRef)) return;
-        rankById.set(edge.toStateRef, nextRank);
-        queue.push(edge.toStateRef);
-      });
+  if (!states.length) return { worldWidth: 100, worldHeight: 100 };
+  if (states.length === 1) {
+    states[0].x = "50%";
+    states[0].y = "50%";
+    return { worldWidth: 100, worldHeight: 100 };
   }
+
+  // 1. Identify start nodes and form DAG by filtering out cycles
+  const startNodes = states.filter((s) => s.kind === "initial");
+  const fallbackStart = states.find((s) => !transitions.some((t) => t.toStateRef === s.id)) || states[0];
+  const startList = startNodes.length ? startNodes : [fallbackStart];
+
+  // Detect back-edges to form a clean forward DAG for rank ordering
+  const visited = new Set();
+  const visiting = new Set();
+  const forwardEdges = [];
+  function traceDag(uId) {
+    visited.add(uId);
+    visiting.add(uId);
+    const outs = transitions.filter((t) => t.fromStateRef === uId);
+    for (const edge of outs) {
+      const vId = edge.toStateRef;
+      if (vId === uId) continue;
+      if (!visiting.has(vId)) {
+        forwardEdges.push(edge);
+        if (!visited.has(vId)) traceDag(vId);
+      }
+    }
+    visiting.delete(uId);
+  }
+  startList.forEach((s) => { if (!visited.has(s.id)) traceDag(s.id); });
+  states.forEach((s) => { if (!visited.has(s.id)) traceDag(s.id); });
+
+  // 2. Compute longest-path topological ranks on the forward DAG
+  const rankById = new Map();
+  startList.forEach((s) => rankById.set(s.id, 0));
+
+  // Relax ranks along forward edges
+  for (let pass = 0; pass < states.length + 1; pass += 1) {
+    let changed = false;
+    for (const edge of forwardEdges) {
+      const fromRank = rankById.get(edge.fromStateRef) ?? 0;
+      const toRank = rankById.get(edge.toStateRef);
+      const targetRank = fromRank + 1;
+      if (toRank === undefined || toRank < targetRank) {
+        rankById.set(edge.toStateRef, targetRank);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+
+  // Ensure final nodes sit in the last rank relative to their incoming neighbors
+  states.filter((s) => s.kind === "final").forEach((finalState) => {
+    const incomingRanks = transitions
+      .filter((t) => t.toStateRef === finalState.id)
+      .map((t) => rankById.get(t.fromStateRef))
+      .filter((r) => r !== undefined);
+    if (incomingRanks.length) {
+      const maxIn = Math.max(...incomingRanks);
+      if ((rankById.get(finalState.id) ?? 0) <= maxIn) {
+        rankById.set(finalState.id, maxIn + 1);
+      }
+    }
+  });
+
+  // Assign any remaining unranked states
   let fallbackRank = Math.max(0, ...rankById.values()) + 1;
   states.forEach((state) => {
     if (!rankById.has(state.id)) rankById.set(state.id, fallbackRank++);
   });
 
+  // 3. Group states by rank
   const groups = new Map();
   states.forEach((state) => {
     const rank = rankById.get(state.id) || 0;
     if (!groups.has(rank)) groups.set(rank, []);
     groups.get(rank).push(state);
   });
-  groups.forEach((group) => group.sort((left, right) => canvasKindWeight(left.kind) - canvasKindWeight(right.kind)));
-  const maxRank = Math.max(1, ...groups.keys());
-  groups.forEach((group, rank) => {
-    const spacing = group.length > 3 ? 18 : 24;
-    group.forEach((state, index) => {
-      state.x = `${14 + (rank / maxRank) * 72}%`;
-      state.y = `${50 + (index - (group.length - 1) / 2) * spacing}%`;
+
+  // Compact ranks (in case intermediate ranks are empty)
+  const sortedRankKeys = [...groups.keys()].sort((a, b) => a - b);
+  const normalizedGroups = new Map();
+  sortedRankKeys.forEach((oldRank, newRank) => {
+    const groupStates = groups.get(oldRank);
+    normalizedGroups.set(newRank, groupStates);
+    groupStates.forEach((s) => rankById.set(s.id, newRank));
+  });
+
+  const totalRanks = normalizedGroups.size;
+  const maxRank = Math.max(0, totalRanks - 1);
+
+  // Sort states within each rank to minimize edge crossings
+  normalizedGroups.forEach((group) => {
+    group.sort((a, b) => {
+      const kindDiff = canvasKindWeight(a.kind) - canvasKindWeight(b.kind);
+      if (kindDiff !== 0) return kindDiff;
+      const inA = transitions.filter((t) => t.toStateRef === a.id);
+      const inB = transitions.filter((t) => t.toStateRef === b.id);
+      const avgA = inA.length ? inA.reduce((sum, t) => sum + (rankById.get(t.fromStateRef) || 0), 0) / inA.length : 0;
+      const avgB = inB.length ? inB.reduce((sum, t) => sum + (rankById.get(t.fromStateRef) || 0), 0) / inB.length : 0;
+      return avgA - avgB;
     });
   });
+
+  // 4. Calculate adaptive horizontal spacing between ranks based on label sizes
+  const rankHalfW = new Map();
+  for (let r = 0; r <= maxRank; r += 1) {
+    const groupStates = normalizedGroups.get(r) || [];
+    const maxW = Math.max(...groupStates.map((s) => getNodeDim(s.kind).w), 34);
+    rankHalfW.set(r, maxW / 2);
+  }
+
+  const rankDx = new Map();
+  for (let r = 0; r < maxRank; r += 1) {
+    const connectingEdges = transitions.filter((t) => {
+      const fromRank = rankById.get(t.fromStateRef);
+      const toRank = rankById.get(t.toStateRef);
+      return fromRank === r && toRank === r + 1;
+    });
+    const maxLabelW = connectingEdges.length
+      ? Math.max(...connectingEdges.map(estimateTransitionLabelWidth))
+      : 0;
+    // Guaranteed clearance: label width + at least 72px padding (36px each side)
+    const requiredGap = maxLabelW > 0 ? maxLabelW + 72 : 140;
+    const hasDecision = (normalizedGroups.get(r) || []).some((s) => s.kind === "decision")
+      || (normalizedGroups.get(r + 1) || []).some((s) => s.kind === "decision");
+    const gap = Math.max(140, requiredGap + (hasDecision ? 32 : 0));
+    const dx = (rankHalfW.get(r) || 84) + gap + (rankHalfW.get(r + 1) || 84);
+    rankDx.set(r, dx);
+  }
+
+  // Accumulate X coordinates
+  const leftMargin = 100;
+  const rankPixelX = new Map();
+  let currentX = leftMargin + (rankHalfW.get(0) || 17);
+  rankPixelX.set(0, currentX);
+  for (let r = 0; r < maxRank; r += 1) {
+    currentX += (rankDx.get(r) || 280);
+    rankPixelX.set(r + 1, currentX);
+  }
+  const totalContentW = currentX + (rankHalfW.get(maxRank) || 17) + 100;
+
+  // 5. Calculate vertical spacing for each rank
+  const vGap = 72; // Space between stacked cards in the same rank
+  let maxRankH = 0;
+  const rankHeightMap = new Map();
+  for (let r = 0; r <= maxRank; r += 1) {
+    const groupStates = normalizedGroups.get(r) || [];
+    const hSum = groupStates.reduce((sum, s) => sum + getNodeDim(s.kind).h, 0);
+    const totalH = hSum + Math.max(0, groupStates.length - 1) * vGap;
+    rankHeightMap.set(r, totalH);
+    if (totalH > maxRankH) maxRankH = totalH;
+  }
+
+  const hasBackwardLoops = transitions.some((t) => (rankById.get(t.fromStateRef) ?? 0) > (rankById.get(t.toStateRef) ?? 0));
+  const totalContentH = Math.max(560, maxRankH + (hasBackwardLoops ? 220 : 160));
+  const centerY = hasBackwardLoops ? totalContentH * 0.55 : totalContentH / 2;
+
+  // Assign pixel coordinates to every state
+  normalizedGroups.forEach((group, rank) => {
+    const pxX = rankPixelX.get(rank);
+    const rHeight = rankHeightMap.get(rank) || 64;
+    let startY = centerY - (rHeight / 2);
+    group.forEach((state) => {
+      const dim = getNodeDim(state.kind);
+      state.pixelX = pxX;
+      state.pixelY = startY + (dim.h / 2);
+      startY += dim.h + vGap;
+    });
+  });
+
+  // 6. Map to percentage coordinates inside the scalable world
+  const refViewportW = 1100;
+  const refViewportH = 650;
+  const worldW = Math.max(refViewportW, totalContentW);
+  const worldH = Math.max(refViewportH, totalContentH);
+
+  // If content is smaller than reference viewport, center inside world
+  const xOffset = totalContentW < refViewportW ? (refViewportW - totalContentW) / 2 : 0;
+  const yOffset = totalContentH < refViewportH ? (refViewportH - totalContentH) / 2 : 0;
+
+  states.forEach((state) => {
+    const finalX = ((state.pixelX + xOffset) / worldW) * 100;
+    const finalY = ((state.pixelY + yOffset) / worldH) * 100;
+    state.x = `${roundSmCoord(finalX)}%`;
+    state.y = `${roundSmCoord(finalY)}%`;
+  });
+
+  const worldWidthPct = Math.max(100, Math.round((worldW / refViewportW) * 100));
+  const worldHeightPct = Math.max(100, Math.round((worldH / refViewportH) * 100));
+
+  return { worldWidth: worldWidthPct, worldHeight: worldHeightPct };
 }
 
 function canvasKindWeight(kind) {
-  if (kind === "decision") return 0;
-  if (kind === "normal") return 1;
+  if (kind === "initial") return 0;
+  if (kind === "decision") return 1;
+  if (kind === "normal") return 2;
   if (kind === "final") return 3;
   return 2;
 }
@@ -477,26 +700,20 @@ function canvasKindWeight(kind) {
  * First-paint box for center-positioned flowchart nodes.
  * left/top from layout are treated as the visual center.
  */
-function stateNodeCenterBox(node, bounds) {
+function stateNodeCenterBox(node, bounds, worldWidth = 100, worldHeight = 100) {
   const css = logicalToWorldCss(node.x, node.y, bounds);
   const cx = Number.parseFloat(css.left);
   const cy = Number.parseFloat(css.top);
   const kind = node.stateKind || "normal";
-  // The layout stage width is approximately 1100~1400px, height ~700px.
-  // Standardizing base dimensions converts pixel sizes accurately to logical world % (0-100%).
-  const pixel = kind === "normal"
-    ? { w: 168, h: 64 }
-    : kind === "decision"
-      ? { w: 84, h: 84 }
-      : { w: 34, h: 34 };
-  const baseW = 1200;
-  const baseH = 700;
+  const pixel = getNodeDim(kind);
+  const baseW = 1100 * (Math.max(worldWidth, 50) / 100);
+  const baseH = 650 * (Math.max(worldHeight, 50) / 100);
   return {
     center: {
       x: Number.isFinite(cx) ? cx : 50,
       y: Number.isFinite(cy) ? cy : 50
     },
-    halfW: Math.max(1.2, (pixel.w / 2 / baseW) * 100),
+    halfW: Math.max(1.0, (pixel.w / 2 / baseW) * 100),
     halfH: Math.max(1.0, (pixel.h / 2 / baseH) * 100),
     shape: kind === "decision" ? "diamond" : "rect"
   };
@@ -531,9 +748,10 @@ function resolveNodeFullTitle(node, kind) {
 function renderSmEdge(edge, geometry, selectedEdgeId = "") {
   if (!geometry) return "";
   const selected = selectedEdgeId && selectedEdgeId === edge.id ? " is-selected" : "";
+  const backward = geometry.backward ? " is-backward" : "";
   const marker = selected ? "url(#sm-flow-arrow-selected)" : "url(#sm-flow-arrow)";
   const shared = `data-ov1-edge="${escapeHtml(edge.id)}" data-source-id="${escapeHtml(edge.sourceId)}" data-target-id="${escapeHtml(edge.targetId)}" data-edge-type="stateTransition" data-is-decision-branch="${edge.isDecisionBranch ? "true" : "false"}" data-is-backward="${geometry.backward ? "true" : "false"}"`;
-  return `<path d="${geometry.path}" class="sm-flow-edge-hit ov1-concept-edge-hit${selected}" ${shared} fill="none"/><path d="${geometry.path}" class="sm-flow-edge ov1-concept-edge${selected}" ${shared} marker-end="${marker}"/>`;
+  return `<path d="${geometry.path}" class="sm-flow-edge-hit ov1-concept-edge-hit${selected}${backward}" ${shared} fill="none"/><path d="${geometry.path}" class="sm-flow-edge ov1-concept-edge${selected}${backward}" ${shared} marker-end="${marker}"/>`;
 }
 
 function renderSmEdgeLabel(edge, geometry, selectedEdgeId = "") {
@@ -543,8 +761,12 @@ function renderSmEdgeLabel(edge, geometry, selectedEdgeId = "") {
   const label = clip(full, 26);
   const empty = !String(edge.isDecisionBranch ? edge.branchResult : edge.condition || "").trim();
   const backward = geometry.backward ? " is-backward" : "";
-  const branch = edge.isDecisionBranch ? " is-branch" : "";
-  return `<button type="button" class="sm-flow-edge-label${selected}${empty ? " is-placeholder" : ""}${backward}${branch}" data-ov1-edge-label="${escapeHtml(edge.id)}" style="left:${geometry.label.x}%;top:${geometry.label.y}%" title="${escapeHtml(full)}">${escapeHtml(label)}</button>`;
+  const isPositive = /满足|是|通过|true|yes|1/i.test(full) && !/不满足|否|失败|false|no|0/i.test(full);
+  const isNegative = /不满足|否|失败|false|no|0/i.test(full);
+  const branchClass = edge.isDecisionBranch
+    ? (isPositive ? " is-branch branch-positive" : isNegative ? " is-branch branch-negative" : " is-branch")
+    : "";
+  return `<button type="button" class="sm-flow-edge-label${selected}${empty ? " is-placeholder" : ""}${backward}${branchClass}" data-ov1-edge-label="${escapeHtml(edge.id)}" style="left:${geometry.label.x}%;top:${geometry.label.y}%" title="${escapeHtml(full)}">${escapeHtml(label)}</button>`;
 }
 
 function renderStateMachineChatDock(state, { chatOpen = false, chatGenerating = false, model } = {}) {

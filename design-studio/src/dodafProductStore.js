@@ -96,6 +96,7 @@ export function resolveDodafProduct(state, resourceKey) {
     || current.sequences
     || current.mappings
     || current.decompositions
+    || current.taskGroups
     // Legacy OV-5a payloads are accepted here and migrated by normalizeDodafOv5a.
     || current.tree
     || current.exchanges

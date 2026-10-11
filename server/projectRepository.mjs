@@ -105,6 +105,69 @@ export function createFileProjectRepository({ filePath, databasePath = "", now =
         return { removed: true, projectId: id };
       });
     },
+    resetProject(projectId, input = {}) {
+      return enqueue(async () => {
+        const state = await loadState();
+        const catalog = normalizeProjectCatalog(state.projectCatalog, state.projects);
+        const id = normalizeProjectId(projectId);
+        let current = catalog[id];
+        if (!current && id === "default") {
+          current = { id: "default", title: "作战概念研究", description: "", archived: false, workflow: normalizeWorkflow(), createdAt: now(), updatedAt: now() };
+        }
+        if (!current) throw createNotFoundError("Project was not found");
+        const auditActor = getProjectWriteActor(input);
+        const source = getAuditSource(input, auditActor);
+        const currentRecord = normalizeProjectRecord(state.projects[id]);
+        const revision = Number(currentRecord?.revision || 0) + 1;
+        const updatedAt = now();
+        const audit = [
+          createAuditEntry({
+            revision,
+            action: "project.reset",
+            source,
+            actor: auditActor,
+            occurredAt: updatedAt,
+            summary: "清空当前项目全部内容",
+            briefRevision: revision
+          }),
+          ...(currentRecord?.audit || [])
+        ].slice(0, MAX_AUDIT_ENTRIES);
+
+        catalog[id] = {
+          ...current,
+          workflow: normalizeWorkflow({ version: 1, mode: "gate", completedThrough: 0, updatedAt }),
+          updatedAt
+        };
+        state.projectCatalog = catalog;
+
+        const existingKnowledge = currentRecord?.knowledge || null;
+        state.projects[id] = {
+          revision,
+          briefRevision: revision,
+          updatedAt,
+          direction: "未选择方向",
+          brief: {
+            researchIntent: "",
+            objective: "待补充",
+            approach: "待补充",
+            assumptions: "待补充",
+            expectedEffects: "待补充",
+            risk: "待补充",
+            evidenceRefs: []
+          },
+          inspiration: null,
+          directions: [],
+          ...(existingKnowledge ? { knowledge: existingKnowledge } : {}),
+          reportArchives: { items: [] },
+          modelSnapshots: { items: [] },
+          knowledgeCitationApprovals: [],
+          audit
+        };
+
+        await persistState(state);
+        return { reset: true, projectId: id, revision };
+      });
+    },
     getBrief(projectId) {
       return readRecord(projectId);
     },

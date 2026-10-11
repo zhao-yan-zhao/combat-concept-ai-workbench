@@ -255,21 +255,24 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         "0. analysis.operationalTasks 是上一步已确认的独立作战任务。生成兵力必须承接其 side、phaseId、CMO missionType、area、objective 与 expectedEffect；不得改写任务类型或虚构任务区域。",
         "1. 输入必须使用 analysis 简报 + phaseAction（阶段 id/名称/目标/蓝红行动/时窗）。phaseActionConfirmed=false 时仍按草案阶段生成，并在 openQuestions 注明“阶段未确认”。",
         "2. 红蓝双方都必须有兵力：side 用 friendly=蓝方、hostile=红方。禁止只生成蓝方再加一个“外部压力对象”凑数。",
-        "3. forces（概念兵力）= 职责语义 + 真实装备类型（研究级）：",
+        "3. forces（概念能力单元）= 职责语义 + 装备规格与基准（研究级）：",
         "   - forceLayer=concept 或 both：按每个 phase 单独设计；phaseIds 填真实阶段 id；可另设跨阶段单元。",
         "   - 数量不设上限；蓝/红都要有；宜按每条 blueActions/redActions 至少 1 个概念单元，并可补职能轴。",
         "   - 职责从该阶段行动提炼，禁止全阶段套同一套固定名称。",
-        "   - 硬性：每个概念兵力 platforms 恰好 1 个（一概念一装备类型）。",
+        "   - 装备与规格：可配置 1-3 型基准装备或性能指标规格 platformSpecs（含 type、domain、keyParameters、参考型号名与 cmoId）；platforms 数组同步填充 1-3 个基准平台保持兼容。",
+        "   - 每个概念能力单元必须承接 1 个或多个 analysis.operationalTasks 中对应阶段的稳定任务 id（taskRefs 必填）。",
         "   - 装备随本课题简报而定：从 researchIntent/objective 判断各方真实装备体系，禁止写死蓝美红中；红蓝须可区分。",
         "   - 装备匹配职责（防空≠预警机）；优先 analysis.cmoCatalog 真实型号，禁止编造 cmoId。",
         "   - 命名 6-14 字职责短名；task 40-120 字；role 用 sense|command|maneuver|air|airDefense|surface|support。",
         "   - forceLayer=combat：forces 原样回传 existingForceMission.forces（含 platforms）。",
-        "4. combatForces（作战兵力）= 面向 CMO 仿真可用的可执行编成（在概念兵力上多扩展）：",
-        "   - 输入：简报 + phaseAction + existingForceMission.forces（含概念装备）。forceLayer=combat 时必须充分扩展，不要 1 概念只出 1 条作战。",
-        "   - 硬性：必须覆盖 existingForceMission.forces 中每一个非 external 概念兵力（含全部阶段，不得只写前 3～4 个阶段）。",
-        "   - 扩展原则：每个概念兵力至少 1 个主队，重要概念再扩 1-3 个配套（护航/加油/雷达/再装填/屏护/中继），形成可在 CMO 中落成的兵力包。",
-        "   - 总量宜明显多于概念兵力（常见 2x-4x）；红蓝都要有；每个作战单元 conceptForceId 必填且同 side；phaseIds 继承所挂概念的 phaseIds。",
-        "   - platforms：以概念装备型号为基线，给出可仿真数量（如战斗机 8-24、AEW 2-4、地空导弹发射单元 4-8、舰艇 1-3）；可增补同体系配套平台 1-3 个。",
+        "4. combatForces（作战编成包）= 面向 CMO 仿真可用的可执行编成包（承接任务、关联能力、主队与多能配套）：",
+        "   - 输入：简报 + operationalTasks + existingForceMission.forces（概念能力）。forceLayer=combat 时必须充分扩展，不要 1 概念只出 1 条作战。",
+        "   - 硬性：必须覆盖 existingForceMission.forces 中每一个非 external 概念能力（含全部阶段，不得只写前 3～4 个阶段）。",
+        "   - 承接任务与能力：每个编成包承担具体的 taskRefs；conceptForceIds 填所支撑的 1 个或多个概念能力 id（conceptForceId 填首个做兼容），支持多能复用与联合编成。",
+        "   - packageType 指定编组性质（main/escort/recon/sead/tanker/screen/support）。",
+        "   - 扩展原则：每个重要任务或概念能力至少 1 个主队，再扩 1-3 个配套（护航/加油/雷达/再装填/屏护/中继），形成可在 CMO 中落成的兵力包。",
+        "   - 总量宜明显多于概念兵力（常见 2x-4x）；红蓝都要有；phaseIds 继承所关联概念能力或任务的 phaseIds。",
+        "   - platforms：以概念基线为参考，给出可仿真数量（如战斗机 8-24、AEW 2-4、地空导弹发射单元 4-8、舰艇 1-3）；可增补同体系配套平台 1-3 个，并附带 loadoutRole（挂载角色建议）与 baseLocation（部署基地建议）。",
         "   - name 用编组名（××主队/护航分队/加油分队/雷达分队）；task 写清任务、关联阶段/蓝红行动、如何服务概念职责。",
         "   - missionType 用 analysis.cmoMissionTypes（strike/patrol_aaw/recon/sead/tanker/command/support 等），尽量贴近 CMO 任务分类。",
         "   - 禁止脱离概念层与简报体系另起无关国家装备；禁止空壳“综合编组”而无平台数量。",
@@ -308,9 +311,9 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         "8. 直接完成 JSON 草案；禁止输出工具调用、web_search、搜索请求、搜索占位、过程说明或把这些内容伪装成任务。"
       ] : []),
       ...(isTaskOrganizationDraft ? [
-        "任务整理要求：输入仅使用 analysis.tasks。输出 taskGroups[]；只整理现有任务，不得新增、拆分、改写或复制任务。",
-        "每组输出 name、dimension、taskRefs、rationale、coordination；taskRefs 必须原样引用 analysis.tasks[].id，并按建议执行顺序排列。",
-        "优先按阵营、阶段、任务类型、作用区域整理；组名必须直接概括内容，例如‘红方任务’‘蓝方打击任务’，禁止使用‘兼容组’‘整理组 1’等无业务含义名称；指出协同、重复或冲突，但不得建立父子任务关系。"
+        "任务整理要求：输入仅使用 analysis.tasks 与可选的 analysis.phaseAction。输出 taskGroups[]；只整理现有任务，不得新增、拆分、改写或复制任务。",
+        "每组输出 name、dimension、phaseRef、steps、taskRefs、rationale、coordination；taskRefs 必须原样引用 analysis.tasks[].id，并按建议执行顺序排列。",
+        "优先以作战阶段为主轴划分任务组；组内构建分步执行管道（steps[]），标定模式（sequential 串行 / parallel 并行 / trigger 触发）与前置依赖（dependsOn）；组名必须直接概括内容，例如‘阶段一任务组：远海态势建立’，禁止使用‘兼容组’‘整理组 1’等无业务含义名称；指出协同、重复或冲突，但不得建立父子任务关系。"
       ] : []),
       ...(isPhaseActionConcept ? [
         "阶段与行动要求（专业 CONOPS 草案，供专家复核，不是科普叙述，也不是研究流程）：",
@@ -1304,7 +1307,36 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       type: "object", additionalProperties: false, required: ["summary", "taskGroups"],
       properties: {
         summary: { type: "string", maxLength: 600 },
-        taskGroups: { type: "array", maxItems: 120, items: { type: "object", additionalProperties: false, required: ["name", "dimension", "taskRefs", "rationale", "coordination"], properties: { name: { type: "string", maxLength: 240 }, dimension: { type: "string", maxLength: 80 }, taskRefs: { type: "array", maxItems: 120, items: { type: "string", maxLength: 180 } }, rationale: { type: "string", maxLength: 600 }, coordination: { type: "string", maxLength: 600 } } } }
+        taskGroups: {
+          type: "array", maxItems: 120,
+          items: {
+            type: "object", additionalProperties: false,
+            required: ["name", "dimension", "taskRefs", "rationale", "coordination"],
+            properties: {
+              name: { type: "string", maxLength: 240 },
+              dimension: { type: "string", maxLength: 80 },
+              phaseRef: { type: "string", maxLength: 160 },
+              steps: {
+                type: "array", maxItems: 40,
+                items: {
+                  type: "object", additionalProperties: false,
+                  required: ["stepIndex", "mode", "taskRefs"],
+                  properties: {
+                    stepIndex: { type: "integer" },
+                    name: { type: "string", maxLength: 120 },
+                    mode: { type: "string", enum: ["sequential", "parallel", "trigger"] },
+                    taskRefs: { type: "array", maxItems: 40, items: { type: "string", maxLength: 180 } },
+                    dependsOn: { type: "array", maxItems: 40, items: { type: "string", maxLength: 180 } },
+                    triggerCondition: { type: "string", maxLength: 300 }
+                  }
+                }
+              },
+              taskRefs: { type: "array", maxItems: 120, items: { type: "string", maxLength: 180 } },
+              rationale: { type: "string", maxLength: 600 },
+              coordination: { type: "string", maxLength: 600 }
+            }
+          }
+        }
       }
     };
   }

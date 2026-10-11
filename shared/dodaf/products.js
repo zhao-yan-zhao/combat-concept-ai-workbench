@@ -168,7 +168,35 @@ export function normalizeDodafOv1b(value) {
     status: "pending_review"
   }));
   const taskGroups = inputGroups.slice(0, 120).flatMap((item, index) => {
-      const taskRefs = [...new Set((Array.isArray(item?.taskRefs) ? item.taskRefs : []).map((ref) => clean(ref, 160)).filter(Boolean))];
+      const rawTaskRefs = [...new Set((Array.isArray(item?.taskRefs) ? item.taskRefs : []).map((ref) => clean(ref, 160)).filter(Boolean))];
+      let steps = [];
+      if (Array.isArray(item?.steps) && item.steps.length) {
+        steps = item.steps.map((st, sIdx) => {
+          const sRefs = [...new Set((Array.isArray(st?.taskRefs) ? st.taskRefs : []).map((r) => clean(r, 160)).filter(Boolean))];
+          const dependsOn = [...new Set((Array.isArray(st?.dependsOn) ? st.dependsOn : []).map((r) => clean(r, 160)).filter(Boolean))];
+          const mode = ["sequential", "parallel", "trigger"].includes(clean(st?.mode, 40)) ? clean(st.mode, 40) : "sequential";
+          return {
+            stepIndex: Number(st?.stepIndex || sIdx + 1),
+            name: clean(st?.name, 120) || `步骤 ${sIdx + 1}`,
+            mode,
+            taskRefs: sRefs,
+            dependsOn,
+            triggerCondition: clean(st?.triggerCondition, 400)
+          };
+        }).filter((st) => st.taskRefs.length > 0);
+      }
+      const stepsTaskRefs = steps.flatMap((st) => st.taskRefs);
+      if (rawTaskRefs.length && (!steps.length || stepsTaskRefs.join(",") !== rawTaskRefs.join(","))) {
+        steps = rawTaskRefs.map((ref, sIdx) => ({
+          stepIndex: sIdx + 1,
+          name: `步骤 ${sIdx + 1}`,
+          mode: "sequential",
+          taskRefs: [ref],
+          dependsOn: sIdx > 0 ? [rawTaskRefs[sIdx - 1]] : [],
+          triggerCondition: ""
+        }));
+      }
+      const taskRefs = steps.length ? [...new Set(steps.flatMap((st) => st.taskRefs))] : rawTaskRefs;
       if (!taskRefs.length) return [];
       let id = clean(item?.id, 180) || `task-group-${index + 1}`;
       if (seenIds.has(id)) id = stableId("task-group", taskRefs.join("::"), index + 1);
@@ -180,15 +208,37 @@ export function normalizeDodafOv1b(value) {
           : "pending_review";
       const rawName = clean(item?.name || item?.label, 240);
       const name = /^兼容(?:整理)?组(?:\s*\d+)?$/u.test(rawName) ? `任务组 ${index + 1}` : rawName || `任务组 ${index + 1}`;
+      const phaseRef = clean(item?.phaseRef || item?.phaseId, 160);
       return [{ id, name,
-        dimension: clean(item?.dimension || item?.groupBy, 80) || "custom", taskRefs,
+        dimension: clean(item?.dimension || item?.groupBy, 80) || (phaseRef ? "phase" : "custom"),
+        phaseRef,
+        steps,
+        taskRefs,
         rationale: clean(item?.rationale || item?.basis || item?.note, 1200), coordination: clean(item?.coordination, 1200),
         status,
         confirmedAt: clean(item?.confirmedAt, 80),
         sourceRefs: normalizeSourceRefs(item?.sourceRefs, taskRefs.map((objectId) => ({ resource: "forceMissionPlan", objectId })))
       }];
     });
-  const relations = taskGroups.flatMap((group) => group.taskRefs.map((taskRef, order) => ({ id: `${group.id}-${order + 1}`, dm2Type: "association", sourceId: group.id, targetId: taskRef, name: "task organized in group", properties: { order, status: group.status } })));
+  const groupRelations = taskGroups.flatMap((group) => group.taskRefs.map((taskRef, order) => ({ id: `${group.id}-${order + 1}`, dm2Type: "association", sourceId: group.id, targetId: taskRef, name: "task organized in group", properties: { order, status: group.status } })));
+  const dependencyRelations = [];
+  for (const group of taskGroups) {
+    for (const step of group.steps || []) {
+      for (const depRef of step.dependsOn || []) {
+        for (const taskRef of step.taskRefs || []) {
+          dependencyRelations.push({
+            id: `dep-${depRef}-${taskRef}`,
+            dm2Type: "dependency",
+            sourceId: depRef,
+            targetId: taskRef,
+            name: "task execution dependency",
+            properties: { mode: step.mode, groupId: group.id }
+          });
+        }
+      }
+    }
+  }
+  const relations = [...groupRelations, ...dependencyRelations];
 
   return createProductEnvelope({
     product: "OV-1b",
@@ -199,7 +249,7 @@ export function normalizeDodafOv1b(value) {
     provenance: normalizeProvenanceObject(value?.provenance),
     derivedFrom: value?.derivedFrom,
     extra: {
-      version: 2,
+      version: 3,
       kind: "persisted-ov1b-task-organization",
       generatedAt: nowIso(value?.generatedAt),
       status: ["draft", "pending_review", "confirmed", "stale", "conflict"].includes(clean(value?.status, 40))
@@ -1186,6 +1236,8 @@ function normalizeOv6bStateMachine(machine, index) {
     subjectType,
     name: clean(machine?.name, 240) || `状态机 ${index + 1}`,
     canvasLayout: machine?.canvasLayout === "manual" ? "manual" : "auto",
+    ...(Number.isFinite(Number(machine?.worldWidth)) && Number(machine.worldWidth) > 0 ? { worldWidth: Math.round(Number(machine.worldWidth)) } : {}),
+    ...(Number.isFinite(Number(machine?.worldHeight)) && Number(machine.worldHeight) > 0 ? { worldHeight: Math.round(Number(machine.worldHeight)) } : {}),
     states,
     transitions
   };

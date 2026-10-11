@@ -11,11 +11,27 @@ const ALIGN_TOLERANCE = 4.2;
 export function routeSmFlowEdges(edges = [], boxById = new Map()) {
   const boxes = normalizeBoxMap(boxById);
   const obstacles = [...boxes.values()];
+  const pairCounts = new Map();
+  const pairSeen = new Map();
+  edges.forEach((edge) => {
+    const key = `${edge.sourceId}->${edge.targetId}`;
+    pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+  });
   return new Map(
-    edges.map((edge) => [
-      edge.id,
-      routeSmFlowEdge(boxes.get(edge.sourceId), boxes.get(edge.targetId), edge, obstacles)
-    ]).filter((entry) => entry[1])
+    edges.map((edge) => {
+      const key = `${edge.sourceId}->${edge.targetId}`;
+      const count = pairCounts.get(key) || 1;
+      const index = pairSeen.get(key) || 0;
+      pairSeen.set(key, index + 1);
+      return [
+        edge.id,
+        routeSmFlowEdge(boxes.get(edge.sourceId), boxes.get(edge.targetId), {
+          ...edge,
+          parallelIndex: index,
+          parallelCount: count
+        }, obstacles)
+      ];
+    }).filter((entry) => entry[1])
   );
 }
 
@@ -29,8 +45,8 @@ export function routeSmFlowEdge(source, target, edge = {}, obstacles = []) {
     .filter((box) => box && !sameBox(box, from) && !sameBox(box, to));
   const backward = from.center.x > to.center.x + 1.4;
   const sides = choosePorts(from, to, { backward, blockers });
-  const start = portPoint(from, sides.from);
-  const end = portPoint(to, sides.to);
+  const start = portPoint(from, sides.from, false);
+  const end = portPoint(to, sides.to, true);
   const points = routeOrthogonal(from, to, sides.from, sides.to, start, end, blockers, backward);
   const label = labelForPath(points, { backward, start, end, edge });
 
@@ -45,9 +61,7 @@ export function routeSmFlowEdge(source, target, edge = {}, obstacles = []) {
 
 function choosePorts(from, to, { backward = false, blockers = [] } = {}) {
   if (backward) {
-    const preferAbove = from.center.y <= 50 && to.center.y <= 58;
-    const side = preferAbove ? "top" : "bottom";
-    return { from: side, to: side };
+    return { from: "top", to: "top" };
   }
   const dx = to.center.x - from.center.x;
   const dy = to.center.y - from.center.y;
@@ -95,10 +109,7 @@ function routeOrthogonal(from, to, fromSide, toSide, start, end, blockers = [], 
   const toOut = offsetAlong(end, toSide, exitGap(to));
 
   if (backward) {
-    const above = Math.min(outerLane(from, "top", blockers), outerLane(to, "top", blockers));
-    const below = Math.max(outerLane(from, "bottom", blockers), outerLane(to, "bottom", blockers));
-    const preferAbove = from.center.y <= 50 && to.center.y <= 58;
-    const laneY = preferAbove ? above : below;
+    const laneY = Math.min(outerLane(from, "top", blockers), outerLane(to, "top", blockers));
     return [start, fromOut, { x: fromOut.x, y: laneY }, { x: toOut.x, y: laneY }, toOut, end];
   }
 
@@ -145,38 +156,53 @@ function labelForPath(points, { backward = false, start, end, edge = {} } = {}) 
     return { x: 50, y: 50 };
   }
 
-  // Decision branches (e.g. "满足", "不满足"): anchor snug to the decision diamond exit
-  if (edge.isDecisionBranch && points.length >= 2) {
-    const p0 = points[0];
-    const p1 = points[1];
-    const branchRatio = 0.5;
-    const bx = p0.x + (p1.x - p0.x) * branchRatio;
-    const by = p0.y + (p1.y - p0.y) * branchRatio;
-    const isVertical = Math.abs(p1.x - p0.x) < 0.6;
-    if (isVertical) {
-      // Offset snug to the right of vertical exit segment
-      return { x: bx + 2.8, y: by };
+  // 1. Backward loop-back routes: center directly on the horizontal overhead bypass line
+  if (backward) {
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const segA = points[i];
+      const segB = points[i + 1];
+      if (Math.abs(segB.x - segA.x) > 2.0 && Math.abs(segB.y - segA.y) < 0.6) {
+        return { x: (segA.x + segB.x) / 2, y: segA.y };
+      }
     }
-    // Offset snug above horizontal exit segment
-    return { x: bx, y: by - 2.0 };
+    return polylineMidpoint(points);
   }
 
-  const label = polylineMidpoint(points);
-  if (!backward) {
-    return Math.abs(end.y - start.y) < 1.8
-      ? { x: label.x, y: label.y - 2.4 }
-      : { x: label.x, y: label.y - 1.8 };
+  // 2. Direct 2-point line: exactly at the geometric center of the line segment
+  let pt;
+  if (points.length === 2) {
+    pt = {
+      x: (points[0].x + points[1].x) / 2,
+      y: (points[0].y + points[1].y) / 2
+    };
+  } else {
+    // 3. Multi-segment orthogonal route: find the longest segment and center on it
+    const longest = points.slice(1).reduce((best, p, idx) => {
+      const prev = points[idx];
+      const len = Math.hypot(p.x - prev.x, p.y - prev.y);
+      return len > best.len ? { segA: prev, segB: p, len } : best;
+    }, { len: 0 });
+    pt = longest.len > 0
+      ? { x: (longest.segA.x + longest.segB.x) / 2, y: (longest.segA.y + longest.segB.y) / 2 }
+      : polylineMidpoint(points);
   }
-  // For backward routes, anchor cleanly on the bypass line
-  return { x: label.x, y: label.y - 1.8 };
+
+  // Shift slightly if parallel edges exist
+  if (edge.parallelCount > 1) {
+    const isHorizontal = Math.abs(end.y - start.y) < 1.8;
+    const offset = edge.parallelIndex === 0 ? -1.6 : 1.6;
+    return isHorizontal ? { x: pt.x, y: pt.y + offset } : { x: pt.x + offset, y: pt.y };
+  }
+
+  return pt;
 }
 
-function portPoint(box, side) {
-  const inset = PORT_GAP;
+function portPoint(box, side, isTarget = false) {
+  const inset = isTarget ? 0 : PORT_GAP;
   if (side === "left") return { x: box.center.x - box.halfW + inset, y: box.center.y };
   if (side === "right") return { x: box.center.x + box.halfW - inset, y: box.center.y };
-  if (side === "top") return { x: box.center.x, y: box.center.y - box.halfH + inset };
-  return { x: box.center.x, y: box.center.y + box.halfH - inset };
+  if (side === "top") return { x: box.center.x, y: box.center.y - box.halfH - (isTarget ? 0.25 : -inset) };
+  return { x: box.center.x, y: box.center.y + box.halfH + (isTarget ? 0.25 : -inset) };
 }
 
 function offsetAlong(point, side, distance) {

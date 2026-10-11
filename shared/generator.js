@@ -1,4 +1,4 @@
-﻿import { promptTemplates } from "./data.js";
+import { promptTemplates } from "./data.js";
 import { buildDefaultForceRelations, createPhaseActionConceptFromBrief } from "./conceptPlanning.js";
 import { inferOv4RelationCategory } from "./dodaf/ov4Taxonomy.js";
 
@@ -245,14 +245,14 @@ function createForceMissionPlanResult(analysis) {
       notes: force.notes || ""
     }))
     : [
-      { id: "sense", name: "概念感知单元", side: "friendly", role: "sense", group: "态势形成", missionType: "recon", task: `围绕“${objective}”形成研究级态势输入；${phaseHint}`, platforms: [], notes },
-      { id: "command", name: "概念指挥协同单元", side: "friendly", role: "command", group: "指挥协同", missionType: "command", task: "组织概念级协同与授权边界", platforms: [], notes: "" },
-      { id: "maneuver", name: "概念行动单元", side: "friendly", role: "maneuver", group: "概念行动", missionType: "strike", task: `支撑主方向行动方案比较；${phaseHint}`, platforms: [], notes: "" },
-      { id: "support", name: "概念保障单元", side: "friendly", role: "support", group: "持续保障", missionType: "support", task: "支撑过程连续性与资源复核", platforms: [], notes: "" },
-      { id: "external", name: "外部态势对象", side: "unknown", role: "external", group: "外部环境", missionType: "other", task: valueOf(analysis, "主要风险") || "表达外部约束与不确定性", platforms: [], notes: "" },
-      { id: "red-strike", name: "红方主突单元", side: "hostile", role: "maneuver", group: "红方编组", missionType: "strike", task: "对蓝方关键节点形成压力", platforms: [], notes: "" },
-      { id: "red-command", name: "红方协同节点", side: "hostile", role: "command", group: "红方编组", missionType: "command", task: "组织红方多轴协同", platforms: [], notes: "" },
-      { id: "red-ew", name: "红方诱偏压制单元", side: "hostile", role: "sense", group: "红方编组", missionType: "sead", task: "实施诱偏与压制", platforms: [], notes: "" }
+      { id: "sense", name: "概念感知单元", side: "friendly", role: "sense", group: "态势形成", missionType: "recon", task: `围绕“${objective}”形成研究级态势输入；${phaseHint}`, platforms: [], platformSpecs: [{ type: "预警监视机", name: "空中预警机", domain: "aircraft", keyParameters: "中高空广域态势感知" }], notes },
+      { id: "command", name: "概念指挥协同单元", side: "friendly", role: "command", group: "指挥协同", missionType: "command", task: "组织概念级协同与授权边界", platforms: [], platformSpecs: [{ type: "指挥控制中心", name: "联合战术指挥节点", domain: "facility", keyParameters: "网络化态势汇聚与协同控制" }], notes: "" },
+      { id: "maneuver", name: "概念行动单元", side: "friendly", role: "maneuver", group: "概念行动", missionType: "strike", task: `支撑主方向行动方案比较；${phaseHint}`, platforms: [], platformSpecs: [{ type: "多用途作战飞机", name: "战术制空突击机", domain: "aircraft", keyParameters: "制空截击与防区外打击" }], notes: "" },
+      { id: "support", name: "概念保障单元", side: "friendly", role: "support", group: "持续保障", missionType: "support", task: "支撑过程连续性与资源复核", platforms: [], platformSpecs: [{ type: "保障支援飞机", name: "空中加油支援机", domain: "aircraft", keyParameters: "战区持续滞空保障" }], notes: "" },
+      { id: "external", name: "外部态势对象", side: "unknown", role: "external", group: "外部环境", missionType: "other", task: valueOf(analysis, "主要风险") || "表达外部约束与不确定性", platforms: [], platformSpecs: [], notes: "" },
+      { id: "red-strike", name: "红方主突单元", side: "hostile", role: "maneuver", group: "红方编组", missionType: "strike", task: "对蓝方关键节点形成压力", platforms: [], platformSpecs: [{ type: "突击战机", name: "红方重型制空突击机", domain: "aircraft", keyParameters: "远程突防与反辐射压制" }], notes: "" },
+      { id: "red-command", name: "红方协同节点", side: "hostile", role: "command", group: "红方编组", missionType: "command", task: "组织红方多轴协同", platforms: [], platformSpecs: [{ type: "指挥所", name: "红方机动协同指挥所", domain: "ground", keyParameters: "多轴分队协同转换" }], notes: "" },
+      { id: "red-ew", name: "红方诱偏压制单元", side: "hostile", role: "sense", group: "红方编组", missionType: "sead", task: "实施诱偏与压制", platforms: [], platformSpecs: [{ type: "电子战飞机", name: "红方战术电子干扰机", domain: "aircraft", keyParameters: "雷达与通信压制扰乱" }], notes: "" }
     ];
   conceptForces.forEach((force) => {
     if (!Array.isArray(force.taskRefs)) force.taskRefs = taskRefsFor(force);
@@ -262,12 +262,12 @@ function createForceMissionPlanResult(analysis) {
     return hit?.id || fallback;
   };
   const combatForces = [
-    { id: "combat-sense", name: "预警侦察分队", side: "friendly", role: "sense", conceptForceId: conceptId(["sense"], "friendly", "sense"), group: "作战编组", missionType: "recon", task: `遂行侦察预警以支撑“${objective}”`, platforms: pickPlatform(0), notes: "" },
-    { id: "combat-command", name: "指挥控制节点", side: "friendly", role: "command", conceptForceId: conceptId(["command"], "friendly", "command"), group: "作战编组", missionType: "command", task: "遂行指挥协同与授权控制", platforms: [], notes: "" },
-    { id: "combat-strike", name: "主战突击分队", side: "friendly", role: "maneuver", conceptForceId: conceptId(["maneuver", "airDefense", "air"], "friendly", "maneuver"), group: "作战编组", missionType: "strike", task: `在主方向遂行打击与突击；${phaseHint}`, platforms: pickPlatform(1), notes: "" },
-    { id: "combat-support", name: "综合保障分队", side: "friendly", role: "support", conceptForceId: conceptId(["support"], "friendly", "support"), group: "作战编组", missionType: "support", task: "保障主战力量持续行动", platforms: [], notes: "" },
-    { id: "combat-red-strike", name: "红方突击分队", side: "hostile", role: "maneuver", conceptForceId: conceptId(["maneuver", "air"], "hostile", "red-strike"), group: "红方作战编组", missionType: "strike", task: "遂行主突防或突击轴行动", platforms: [], notes: "" },
-    { id: "combat-red-command", name: "红方行动协同节点", side: "hostile", role: "command", conceptForceId: conceptId(["command"], "hostile", "red-command"), group: "红方作战编组", missionType: "command", task: "组织红方多轴协同与转换", platforms: [], notes: "" }
+    { id: "combat-sense", name: "预警侦察分队", side: "friendly", role: "sense", conceptForceId: conceptId(["sense"], "friendly", "sense"), conceptForceIds: [conceptId(["sense"], "friendly", "sense")], packageType: "recon", group: "作战编组", missionType: "recon", task: `遂行侦察预警以支撑“${objective}”`, platforms: pickPlatform(0), notes: "" },
+    { id: "combat-command", name: "指挥控制节点", side: "friendly", role: "command", conceptForceId: conceptId(["command"], "friendly", "command"), conceptForceIds: [conceptId(["command"], "friendly", "command")], packageType: "main", group: "作战编组", missionType: "command", task: "遂行指挥协同与授权控制", platforms: [], notes: "" },
+    { id: "combat-strike", name: "主战突击分队", side: "friendly", role: "maneuver", conceptForceId: conceptId(["maneuver", "airDefense", "air"], "friendly", "maneuver"), conceptForceIds: [conceptId(["maneuver", "airDefense", "air"], "friendly", "maneuver")], packageType: "main", group: "作战编组", missionType: "strike", task: `在主方向遂行打击与突击；${phaseHint}`, platforms: pickPlatform(1), notes: "" },
+    { id: "combat-support", name: "综合保障分队", side: "friendly", role: "support", conceptForceId: conceptId(["support"], "friendly", "support"), conceptForceIds: [conceptId(["support"], "friendly", "support")], packageType: "support", group: "作战编组", missionType: "support", task: "保障主战力量持续行动", platforms: [], notes: "" },
+    { id: "combat-red-strike", name: "红方突击分队", side: "hostile", role: "maneuver", conceptForceId: conceptId(["maneuver", "air"], "hostile", "red-strike"), conceptForceIds: [conceptId(["maneuver", "air"], "hostile", "red-strike")], packageType: "main", group: "红方作战编组", missionType: "strike", task: "遂行主突防或突击轴行动", platforms: [], notes: "" },
+    { id: "combat-red-command", name: "红方行动协同节点", side: "hostile", role: "command", conceptForceId: conceptId(["command"], "hostile", "red-command"), conceptForceIds: [conceptId(["command"], "hostile", "red-command")], packageType: "main", group: "红方作战编组", missionType: "command", task: "组织红方多轴协同与转换", platforms: [], notes: "" }
   ];
   combatForces.forEach((force) => {
     force.taskRefs = taskRefsFor(force);
@@ -301,10 +301,146 @@ function createForceMissionPlanResult(analysis) {
 
 function createTaskOrganizationDraftResult(analysis = {}) {
   const tasks = Array.isArray(analysis.tasks) ? analysis.tasks : [];
-  const buckets = new Map();
-  tasks.forEach((task) => { const key = `${task?.side === "hostile" ? "hostile" : "friendly"}|${task?.missionType || "综合"}`; if (!buckets.has(key)) buckets.set(key, []); buckets.get(key).push(task); });
-  const taskGroups = [...buckets].map(([key, items]) => { const [side, missionType] = key.split("|"); return { name: `${side === "hostile" ? "红方" : "蓝方"}${missionType === "综合" ? "" : missionType}任务`, dimension: "missionType", taskRefs: items.map((item) => item.id), rationale: "按阵营和任务类型整理现有任务。", coordination: "组内顺序沿用任务清单顺序。" }; });
-  return { summary: "已将现有任务整理为待复核分组，未新增或拆分任务。", taskGroups };
+  const phases = Array.isArray(analysis?.phaseAction?.phases) ? analysis.phaseAction.phases : [];
+
+  let taskGroups = [];
+
+  if (phases.length) {
+    // 阶段主轴优先归组
+    const taskById = new Map(tasks.map((t) => [String(t.id), t]));
+    const assigned = new Set();
+    phases.forEach((phase, pIdx) => {
+      const phaseTasks = tasks.filter((t) => String(t.phaseId) === String(phase.id));
+      if (!phaseTasks.length) return;
+      phaseTasks.forEach((t) => assigned.add(t.id));
+
+      const steps = buildStepsFromTasks(phaseTasks);
+      taskGroups.push({
+        id: `task-group-phase-${phase.id || pIdx + 1}`,
+        name: phase.name ? `阶段任务组：${phase.name}` : `阶段任务组 ${pIdx + 1}`,
+        dimension: "phase",
+        phaseRef: phase.id || "",
+        steps,
+        taskRefs: steps.flatMap((s) => s.taskRefs),
+        rationale: `依据作战阶段“${phase.name || pIdx + 1}”归组，并按感知、打击、协同顺序分步。`,
+        coordination: `阶段内分步衔接，阶段结束需完成该阶段目标：${phase.objective || "达成预定战果"}。`
+      });
+    });
+
+    // 处理未分配阶段的任务（如红方对抗或未标注 phaseId 的任务）
+    const remainingTasks = tasks.filter((t) => !assigned.has(t.id));
+    if (remainingTasks.length) {
+      const buckets = new Map();
+      remainingTasks.forEach((task) => {
+        const key = `${task?.side === "hostile" ? "hostile" : "friendly"}|${task?.missionType || "综合"}`;
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push(task);
+      });
+      buckets.forEach((items, key) => {
+        const [side, missionType] = key.split("|");
+        const steps = buildStepsFromTasks(items);
+        taskGroups.push({
+          id: `task-group-${side}-${taskGroups.length + 1}`,
+          name: `${side === "hostile" ? "红方" : "蓝方"}${missionType === "综合" ? "" : missionType}任务`,
+          dimension: "missionType",
+          steps,
+          taskRefs: steps.flatMap((s) => s.taskRefs),
+          rationale: "按阵营与任务类型整理现有任务。",
+          coordination: "按组内分步流与依赖顺序执行。"
+        });
+      });
+    }
+  }
+
+  // 若无阶段信息或无任务组生成，按阵营与类型兜底
+  if (!taskGroups.length) {
+    const buckets = new Map();
+    tasks.forEach((task) => {
+      const key = `${task?.side === "hostile" ? "hostile" : "friendly"}|${task?.missionType || "综合"}`;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(task);
+    });
+    taskGroups = [...buckets].map(([key, items], idx) => {
+      const [side, missionType] = key.split("|");
+      const steps = buildStepsFromTasks(items);
+      return {
+        id: `task-group-${idx + 1}`,
+        name: `${side === "hostile" ? "红方" : "蓝方"}${missionType === "综合" ? "" : missionType}任务`,
+        dimension: "missionType",
+        steps,
+        taskRefs: steps.flatMap((s) => s.taskRefs),
+        rationale: "按阵营和任务类型整理现有任务。",
+        coordination: "组内顺序沿用任务清单顺序及前后置依赖。"
+      };
+    });
+  }
+
+  return { summary: "已将现有任务整理为具备分步时序与依赖的待复核分组，未新增或拆分任务。", taskGroups };
+}
+
+function buildStepsFromTasks(tasks = []) {
+  if (!tasks.length) return [];
+  // 识别感知类任务 vs 行动类任务
+  const reconTasks = [];
+  const strikeTasks = [];
+  const otherTasks = [];
+
+  for (const t of tasks) {
+    const text = `${t.missionType || ""} ${t.name || ""} ${t.objective || ""}`;
+    if (/侦察|态势|感知|探测|预警|recon|detect|sense/i.test(text)) {
+      reconTasks.push(t);
+    } else if (/打击|突击|压制|火力|拦截|strike|attack|fire/i.test(text)) {
+      strikeTasks.push(t);
+    } else {
+      otherTasks.push(t);
+    }
+  }
+
+  const steps = [];
+  if (reconTasks.length) {
+    steps.push({
+      stepIndex: steps.length + 1,
+      name: "态势感知与侦察分步",
+      mode: "parallel",
+      taskRefs: reconTasks.map((t) => t.id),
+      dependsOn: [],
+      triggerCondition: ""
+    });
+  }
+  if (strikeTasks.length) {
+    const prevTaskIds = steps.length ? steps[0].taskRefs.slice(0, 2) : [];
+    steps.push({
+      stepIndex: steps.length + 1,
+      name: "主要行动与火力打击分步",
+      mode: strikeTasks.length > 1 ? "sequential" : "parallel",
+      taskRefs: strikeTasks.map((t) => t.id),
+      dependsOn: prevTaskIds,
+      triggerCondition: prevTaskIds.length ? "前置侦察与态势已建立" : ""
+    });
+  }
+  if (otherTasks.length) {
+    const prevTaskIds = steps.length ? steps[steps.length - 1].taskRefs.slice(0, 1) : [];
+    steps.push({
+      stepIndex: steps.length + 1,
+      name: "综合支援与评估分步",
+      mode: "parallel",
+      taskRefs: otherTasks.map((t) => t.id),
+      dependsOn: prevTaskIds,
+      triggerCondition: ""
+    });
+  }
+
+  if (!steps.length) {
+    return tasks.map((t, idx) => ({
+      stepIndex: idx + 1,
+      name: `步骤 ${idx + 1}`,
+      mode: "sequential",
+      taskRefs: [t.id],
+      dependsOn: idx > 0 ? [tasks[idx - 1].id] : [],
+      triggerCondition: ""
+    }));
+  }
+  return steps;
 }
 
 function createOperationalTaskDraftResult(analysis) {

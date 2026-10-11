@@ -4,6 +4,43 @@ export async function loadProjects({ includeArchived = false } = {}) { return re
 export async function createProject(value) { return request(PROJECT_API_ROOT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value) }); }
 export async function updateProject(projectId, value) { return request(`${PROJECT_API_ROOT}/${encodeURIComponent(projectId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value) }); }
 export async function deleteProject(projectId) { return request(`${PROJECT_API_ROOT}/${encodeURIComponent(projectId)}`, { method: "DELETE" }); }
+export async function resetProjectContent(projectId) {
+  try {
+    return await request(`${PROJECT_API_ROOT}/${encodeURIComponent(projectId)}/reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+  } catch (error) {
+    if (error?.status === 404 || error?.status === 405) {
+      await saveProjectBrief(projectId, {
+        brief: { researchIntent: "", objective: "待补充", approach: "待补充", assumptions: "待补充", expectedEffects: "待补充", risk: "待补充", evidenceRefs: [] },
+        direction: "未选择方向",
+        inspiration: null,
+        directions: [],
+        source: "manual"
+      });
+      await saveProjectPhaseActionConcept(projectId, {
+        model: { phases: [], transitions: [], status: "draft" },
+        source: "manual"
+      }).catch(() => {});
+      await saveProjectForceMissionPlan(projectId, {
+        model: { forces: [], combatForces: [], tasks: [], status: "draft" },
+        source: "manual"
+      }).catch(() => {});
+      await saveProjectModel(projectId, "ov1", { model: null, source: "manual" }).catch(() => {});
+      await saveProjectModel(projectId, "ov5", { model: null, source: "manual" }).catch(() => {});
+      await saveProjectModel(projectId, "ov6a", { model: null, source: "manual" }).catch(() => {});
+      await saveProjectModel(projectId, "ov6b", { model: null, source: "manual" }).catch(() => {});
+      await saveProjectModel(projectId, "ov6c", { model: null, source: "manual" }).catch(() => {});
+      await saveProjectModel(projectId, "ooda", { model: null, source: "manual" }).catch(() => {});
+      await saveProjectModel(projectId, "scenario", { model: null, source: "manual" }).catch(() => {});
+      await saveProjectModel(projectId, "validation", { model: null, source: "manual" }).catch(() => {});
+      return { reset: true, fallback: true, projectId };
+    }
+    throw error;
+  }
+}
 
 export async function loadProjectBrief(projectId) {
   return request(`/api/projects/${encodeURIComponent(projectId)}/brief`);

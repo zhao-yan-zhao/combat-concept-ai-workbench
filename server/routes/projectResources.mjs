@@ -41,6 +41,15 @@ export function createProjectResourceHandlers(runtime) {
       sendJson(response, error.statusCode || 400, { error: error.message || "Project deletion is invalid" });
     }
   }
+
+  async function handleProjectReset(request, response, projectId) {
+    try {
+      const input = await readAuthorizedProjectInput(request);
+      sendJson(response, 200, await projectRepository.resetProject(projectId, input));
+    } catch (error) {
+      sendJson(response, error.statusCode || 400, { error: error.message || "Project reset is invalid" });
+    }
+  }
   
   async function handleProjectBrief(request, response, projectId) {
     try {
@@ -302,6 +311,7 @@ export function createProjectResourceHandlers(runtime) {
     handleProjects,
     handleProjectMeta,
     handleProjectDelete,
+    handleProjectReset,
     handleProjectBrief,
     handleProjectAudit,
     handleProjectCollaboration,

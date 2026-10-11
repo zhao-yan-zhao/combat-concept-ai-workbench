@@ -1,5 +1,7 @@
 import {
   confirmForceMissionPlan,
+  confirmConceptForcePlan,
+  confirmCombatForcePlan,
   createEmptyForceMissionPlan,
   createForceMissionPlanFromBrief,
   createOperationalTasksFromPhaseAction,
@@ -19,9 +21,12 @@ import {
   forceMissionDiagnostics,
   forceMissionPlanIncompleteReasons,
   operationalTaskPlanIncompleteReasons,
+  conceptForcePlanIncompleteReasons,
   combatForcePlanIncompleteReasons,
   isOperationalTaskPlanConfirmed,
   isForceMissionPlanConfirmed,
+  isConceptForcePlanConfirmed,
+  isCombatForcePlanConfirmed,
   listCmoMissionTypes,
   mapForcesForLayout,
   normalizeForceMissionPlan,
@@ -36,7 +41,11 @@ import {
   deriveCombatForcesFromConcept,
   addCombatForce,
   removeCombatForce,
-  updateCombatForce
+  updateCombatForce,
+  updateCombatForceConceptLinks,
+  updateCombatForcePackageType,
+  updateConceptForce,
+  COMBAT_PACKAGE_TYPES
 } from "../../shared/conceptPlanning.js";
 
 const STORAGE_PREFIX = "combat-concept-project-force-mission-v1";
@@ -76,9 +85,14 @@ export {
   addOperationalTaskAreaPoint,
   removeOperationalTaskAreaPoint,
   confirmForceMissionPlan,
+  confirmConceptForcePlan,
+  confirmCombatForcePlan,
   isForceMissionPlanConfirmed,
+  isConceptForcePlanConfirmed,
+  isCombatForcePlanConfirmed,
   forceMissionPlanIncompleteReasons,
   operationalTaskPlanIncompleteReasons,
+  conceptForcePlanIncompleteReasons,
   combatForcePlanIncompleteReasons,
   isOperationalTaskPlanConfirmed,
   forceMissionContextForDownstream,
@@ -100,7 +114,11 @@ export {
   deriveCombatForcesFromConcept,
   addCombatForce,
   removeCombatForce,
-  updateCombatForce
+  updateCombatForce,
+  updateCombatForceConceptLinks,
+  updateCombatForcePackageType,
+  updateConceptForce,
+  COMBAT_PACKAGE_TYPES
 };
 
 export function applyForceMissionReviewNotes(plan, reviewNotes) {
@@ -117,9 +135,29 @@ export function updateForceMissionType(plan, forceId, missionType, layer = "conc
 
 /** @param {"concept"|"combat"} layer */
 export function updateCombatConceptLink(plan, forceId, conceptForceId) {
+  return mapForce(plan, forceId, "combat", (force) => {
+    const cid = String(conceptForceId || "").trim();
+    return {
+      ...force,
+      conceptForceId: cid,
+      conceptForceIds: cid ? [cid] : []
+    };
+  });
+}
+
+export function updateCombatConceptLinks(plan, forceId, conceptForceIds) {
+  const ids = Array.isArray(conceptForceIds) ? conceptForceIds : (conceptForceIds ? [conceptForceIds] : []);
   return mapForce(plan, forceId, "combat", (force) => ({
     ...force,
-    conceptForceId: String(conceptForceId || "").trim()
+    conceptForceIds: ids,
+    conceptForceId: ids[0] || ""
+  }));
+}
+
+export function updateCombatPackageType(plan, forceId, packageType) {
+  return mapForce(plan, forceId, "combat", (force) => ({
+    ...force,
+    packageType: String(packageType || "main").trim()
   }));
 }
 

@@ -31,16 +31,18 @@ export function createOv1bCanvasController() {
           const next = Math.min(1, (viewport.clientWidth - 32) / stage.offsetWidth, (viewport.clientHeight - 32) / stage.offsetHeight);
           zoom = 1;
           applyZoom(next);
+          const isWargame = viewport.classList.contains("ov1b-wargame-viewport");
           requestAnimationFrame(() => {
-            viewport.scrollLeft = Math.max(0, (viewport.scrollWidth - viewport.clientWidth) / 2);
-            viewport.scrollTop = Math.max(0, (viewport.scrollHeight - viewport.clientHeight) / 2);
+            viewport.scrollLeft = isWargame ? 0 : Math.max(0, (viewport.scrollWidth - viewport.clientWidth) / 2);
+            viewport.scrollTop = isWargame ? 0 : Math.max(0, (viewport.scrollHeight - viewport.clientHeight) / 2);
           });
         };
+        const isWargame = viewport.classList.contains("ov1b-wargame-viewport");
         requestAnimationFrame(() => {
           applyZoom(zoom);
           const saved = cameraByTaskGroup.get(cameraKey);
-          viewport.scrollLeft = saved?.left ?? Math.max(0, (viewport.scrollWidth - viewport.clientWidth) / 2);
-          viewport.scrollTop = saved?.top ?? Math.max(0, (viewport.scrollHeight - viewport.clientHeight) / 2);
+          viewport.scrollLeft = saved?.left ?? (isWargame ? 0 : Math.max(0, (viewport.scrollWidth - viewport.clientWidth) / 2));
+          viewport.scrollTop = saved?.top ?? (isWargame ? 0 : Math.max(0, (viewport.scrollHeight - viewport.clientHeight) / 2));
         });
         const saveCamera = () => cameraByTaskGroup.set(cameraKey, { left: viewport.scrollLeft, top: viewport.scrollTop });
         viewport.addEventListener("scroll", saveCamera, { passive: true });

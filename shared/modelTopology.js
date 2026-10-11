@@ -405,6 +405,14 @@ function addOptionalMappingNodes(graph, indexes, state, roots) {
     indexes.ov1b.set(id, nodeId);
     graph.addLink({ sourceNodeId: roots.ov1b, targetNodeId: nodeId, relationType: MODEL_RELATION_TYPES.DERIVED_FROM, semantic: "任务整理组" });
     for (const taskRef of uniqueStrings(item?.taskRefs)) indexes.pendingRefs.push({ sourceKind: "task", sourceRef: taskRef, targetNodeId: nodeId, relationType: MODEL_RELATION_TYPES.BINDS_TO, semantic: "任务组引用", required: true });
+    if (item?.phaseRef) indexes.pendingRefs.push({ sourceKind: "phase", sourceRef: item.phaseRef, targetNodeId: nodeId, relationType: MODEL_RELATION_TYPES.DERIVED_FROM, semantic: "阶段支撑任务组", required: false });
+    for (const step of item?.steps || []) {
+      for (const depRef of step?.dependsOn || []) {
+        for (const targetRef of step?.taskRefs || []) {
+          indexes.pendingRefs.push({ sourceKind: "task", sourceRef: depRef, targetKind: "task", ref: targetRef, relationType: MODEL_RELATION_TYPES.BINDS_TO, semantic: `执行前置依赖(${step.mode || "sequential"})`, required: false });
+        }
+      }
+    }
   }
   for (const item of optionalItems(state.ov1c, ["mappings", "relations"])) {
     const id = clean(item?.id) || `ov1c-${indexes.ov1c.size + 1}`;
