@@ -77,9 +77,9 @@ export function buildReportPayload({ project, brief, inspiration, direction, for
   const ov1Snapshot = buildOv1Snapshot(ov1);
   const traceability = buildTraceability({ ov1: ov1Snapshot, ov5, ooda, scenario });
   // Prefer persisted DoDAF products when present; otherwise seed from builders.
-  const ov2 = persistedOv2 || buildOv2Model({ forceMission, ov1: ov1Snapshot, ov5, ooda, scenario });
-  const ov3 = persistedOv3 || buildOv3Model({ ov2, scenario });
   const ov4 = persistedOv4 || buildOv4Model({ forceMission, ov1: ov1Snapshot, ov5, ooda, scenario });
+  const ov2 = persistedOv2 || buildOv2Model({ forceMission, ov4, ov1: ov1Snapshot, ov5, ooda, scenario });
+  const ov3 = persistedOv3 || buildOv3Model({ ov2, scenario });
   const ov5a = persistedOv5a || buildOv5aModel({ ov5 });
   const ov6a = persistedOv6a || buildOv6aModel({ ov5 });
   const ov6b = persistedOv6b || buildOv6bModel({ ooda });

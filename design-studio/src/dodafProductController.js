@@ -11,6 +11,8 @@ import { applyOv5aToOv5b, applyOv5bToOv5a, setOv5aParent, syncOv5ActivityPair } 
 import { persistOv5Model } from "./ov5Store.js";
 import { compactForceMissionForAnalysis } from "../../shared/conceptPlanning.js";
 import { applyOrganizationRelationshipDraft, buildOv4ForceFingerprint } from "./ov4Builder.js";
+import { applyResourceFlowDraft, buildOv2ForceFingerprint } from "./ov2Builder.js";
+import { buildOv3Model } from "./ov3Builder.js";
 import { OV4_ECHELON_CATEGORIES, OV4_ORGANIZATION_CATEGORIES, OV4_RELATION_CATEGORIES } from "../../shared/dodaf/ov4Taxonomy.js";
 import {
   exportProjectArchitecture,
@@ -93,7 +95,7 @@ import {
 } from "./ov4DiagramStore.js";
 import { generateWithAiStream, isAiOutput } from "../../shared/aiClient.js";
 import { generateMockOutput } from "../../shared/generator.js";
-import { normalizeDodafOv1b, normalizeDodafOv4, normalizeDodafOv6b, normalizeDodafOv6c } from "../../shared/dodaf/products.js";
+import { normalizeDodafOv1b, normalizeDodafOv2, normalizeDodafOv3, normalizeDodafOv4, normalizeDodafOv6b, normalizeDodafOv6c } from "../../shared/dodaf/products.js";
 import { applySequenceDraft } from "./sequenceChatController.js";
 import { addOv1bTaskGroup, moveOv1bTaskStep, removeOv1bTaskGroup, setOv1bStepMode, updateOv1bTaskGroup } from "./ov1bStore.js";
 import { buildOv1cModel, buildOv7Model, updateMappingProduct } from "./mappingProductStore.js";
@@ -182,6 +184,49 @@ export function buildOrganizationRelationshipAnalysis(state = {}) {
     echelonCategories: OV4_ECHELON_CATEGORIES,
     relationCategories: OV4_RELATION_CATEGORIES,
     relationTypes: ["command", "support", "coordination", "information"]
+  };
+}
+
+export function buildResourceFlowAnalysis(state = {}) {
+  const forceMission = compactForceMissionForAnalysis(state.forceMission);
+  const brief = state.brief || {};
+  const ov4 = state.ov4 || {};
+  const roles = (Array.isArray(ov4.roles) ? ov4.roles : []).map((role) => ({
+    id: role.id,
+    label: role.label,
+    layer: role.layer || "concept",
+    detail: role.detail || "",
+    taskRefs: role.taskRefs || []
+  }));
+  const relations = (Array.isArray(ov4.relations) ? ov4.relations : []).map((rel) => ({
+    fromRoleId: rel.sourceRoleId || rel.fromRoleId,
+    toRoleId: rel.targetRoleId || rel.toRoleId,
+    relationshipType: rel.relationshipType || rel.type,
+    category: rel.relationshipCategory,
+    flowType: rel.flowType || (rel.relationshipType === "command" ? "控制流" : rel.relationshipType === "support" ? "资源流" : "信息流"),
+    note: rel.note || ""
+  }));
+  const operationalTasks = (Array.isArray(state.forceMission?.tasks) ? state.forceMission.tasks : []).map((task) => ({
+    id: task.id,
+    name: task.name,
+    side: task.side,
+    missionType: task.missionType,
+    objective: task.objective
+  }));
+
+  return {
+    brief: {
+      研究意图: brief.researchIntent || "",
+      任务目标: brief.objective || "",
+      核心思路: brief.approach || "",
+      预期效果: brief.expectedEffects || ""
+    },
+    forces: forceMission.forces,
+    combatForces: forceMission.combatForces,
+    ov4Roles: roles,
+    ov4Relations: relations,
+    operationalTasks,
+    flowTypes: ["控制流", "信息流", "资源流"]
   };
 }
 
@@ -1298,6 +1343,135 @@ export function createDodafProductController({
       }
     },
 
+    /**
+     * Entry from 作战兵力 / OV-4 → 作战资源流 (OV-2): AI generates categorized Needlines and
+     * ResourceFlow exchanges with data contracts, which will be projected to OV-3.
+     */
+    async pregenerateOv2FromForceAndOv4({ silent = false, force = false } = {}) {
+      const state = getState();
+      if (state.ov2Pregenerating) return { skipped: true, reason: "busy" };
+      const current = state.ov2 && typeof state.ov2 === "object"
+        ? normalizeDodafOv2(state.ov2)
+        : normalizeDodafOv2({ nodes: [], exchanges: [] });
+      const fingerprint = buildOv2ForceFingerprint(state.forceMission, state.ov4);
+      const visible = (current.nodes || []).length > 0 && (current.exchanges || []).length > 0;
+      const sameSource = String(current.derivedFrom?.note || "") === fingerprint;
+      const stale = Boolean(current.derivedFrom?.note) && String(current.derivedFrom.note).startsWith("ov2-force:") && !sameSource;
+      if (!force && visible && sameSource) {
+        return { skipped: true, reason: "has-resource-flows", count: current.exchanges.length };
+      }
+      const analysis = buildResourceFlowAnalysis(state);
+      if (!(analysis.forces.length || analysis.combatForces.length || analysis.ov4Roles.length)) {
+        if (!silent) notify("未能生成作战资源流：请先确认作战兵力与组织关系");
+        return { skipped: true, reason: "no-source" };
+      }
+
+      state.ov2Pregenerating = true;
+      render();
+      await new Promise((resolve) => {
+        if (typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        } else {
+          setTimeout(resolve, 32);
+        }
+      });
+      const startedAt = Date.now();
+      try {
+        let draft = null;
+        let source = "ai";
+        try {
+          const response = await generateWithAiStream({
+            workflowId: "ov2",
+            workflow: { id: "ov2", title: "作战资源流", outputSchema: "ResourceFlowDraft" },
+            analysis,
+            evidence: []
+          });
+          if (!Array.isArray(response?.result?.exchanges) || !response.result.exchanges.length) {
+            throw new Error("resource flow draft empty");
+          }
+          draft = response.result;
+        } catch {
+          draft = generateMockOutput({
+            workflow: { id: "ov2", title: "作战资源流", outputSchema: "ResourceFlowDraft" },
+            analysis,
+            evidence: []
+          }).result;
+          source = "local-fallback";
+        }
+
+        const next = normalizeDodafOv2(applyResourceFlowDraft(state, draft, { source, fingerprint }));
+        if (!(next.nodes || []).length) throw new Error("resource flow draft produced no nodes");
+        state.ov2 = saveLocalDodafProduct("ov2", next, projectId);
+        await syncControllers.ov2.sync(state.ov2, { source: "ov2:pregenerate-ai" });
+        await writebackArchitecture("ov2:pregenerate-ai");
+
+        // Automatically project into OV-3 so the matrix stays updated
+        await api.pregenerateOv3FromOv2({ silent: true, force: true });
+
+        const elapsed = Date.now() - startedAt;
+        if (elapsed < 600) await new Promise((resolve) => setTimeout(resolve, 600 - elapsed));
+        if (!silent) {
+          if (stale) notify(`兵力与组织关系已更新，已重新生成 ${next.nodes.length} 个作战节点、${(next.exchanges || []).length} 条资源流`);
+          else if (source === "ai") notify(`AI 已根据作战兵力与组织关系生成 ${next.nodes.length} 个作战节点、${(next.exchanges || []).length} 条资源流，请复核`);
+          else notify(`AI 暂不可用，已生成 ${next.nodes.length} 个作战节点、${(next.exchanges || []).length} 条本地资源流草案，请复核`);
+        }
+        return { applied: (next.exchanges || []).length, source, skipped: false };
+      } catch (error) {
+        if (!silent) notify("作战资源流自动生成失败，请在本页点击重新生成");
+        return { skipped: true, reason: "error", error: error instanceof Error ? error.message : String(error || "") };
+      } finally {
+        state.ov2Pregenerating = false;
+        render();
+      }
+    },
+
+    /**
+     * Controlled projection from OV-2 into OV-3 Resource Flow Matrix.
+     */
+    async pregenerateOv3FromOv2({ silent = false, force = false } = {}) {
+      const state = getState();
+      if (state.ov3Pregenerating) return { skipped: true, reason: "busy" };
+      const current = state.ov3 && typeof state.ov3 === "object"
+        ? normalizeDodafOv3(state.ov3)
+        : normalizeDodafOv3({ exchanges: [], activities: [] });
+      const ov2 = state.ov2 || buildOv2Model(state);
+      if (!ov2 || !(ov2.nodes || []).length) {
+        if (!silent) notify("未能生成资源流矩阵：请先建立 OV-2 资源交换");
+        return { skipped: true, reason: "no-ov2-nodes" };
+      }
+      if (!force && (current.exchanges || []).length > 0 && current.derivedFrom?.sources?.includes("ov2")) {
+        return { skipped: true, reason: "has-matrix-projection", count: current.exchanges.length };
+      }
+
+      state.ov3Pregenerating = true;
+      render();
+      try {
+        const projected = buildOv3Model({ ov2, scenario: state.scenario });
+        const next = normalizeDodafOv3({
+          ...projected,
+          derivedFrom: {
+            mode: "projection",
+            sources: ["ov2"],
+            generatedAt: new Date().toISOString(),
+            note: String(ov2.derivedFrom?.note || "projected-from-ov2")
+          }
+        });
+        state.ov3 = saveLocalDodafProduct("ov3", next, projectId);
+        await syncControllers.ov3.sync(state.ov3, { source: "ov3:project-from-ov2" });
+        await writebackArchitecture("ov3:project-from-ov2");
+        if (!silent) {
+          notify(`已根据 OV-2 资源流投影生成 ${next.exchanges.length} 行资源流矩阵事实`);
+        }
+        return { applied: next.exchanges.length, skipped: false };
+      } catch (error) {
+        if (!silent) notify("资源流矩阵投影生成失败，请在 OV-3 页面重试");
+        return { skipped: true, reason: "error", error: error instanceof Error ? error.message : String(error || "") };
+      } finally {
+        state.ov3Pregenerating = false;
+        render();
+      }
+    },
+
     async pregenerateOv1bFromTasks({ silent = false, force = false } = {}) {
       const state = getState();
       const tasks = (state.forceMission?.tasks || []).map((task) => ({ id: task.id, name: task.name, side: task.side, phaseId: task.phaseId, missionType: task.missionType, objective: task.objective, expectedEffect: task.expectedEffect }));
@@ -1659,7 +1833,9 @@ export function createDodafProductController({
       void syncControllers[resource].sync(state[resource], { source: "manual-edit" }).then(() => writebackArchitecture("manual-edit"));
       render();
       return true;
-    }
+    },
+
+    saveProduct
   };
 
   return api;
@@ -1669,6 +1845,14 @@ export function createDodafProductController({
     if (state[resource] && !window.confirm(`重新种子将覆盖当前 ${LABELS[resource]} 手改内容。是否继续？`)) return;
     if (resource === "ov4") {
       await api.pregenerateOv4FromForceMission({ silent: false, force: true });
+      return;
+    }
+    if (resource === "ov2") {
+      await api.pregenerateOv2FromForceAndOv4({ silent: false, force: true });
+      return;
+    }
+    if (resource === "ov3") {
+      await api.pregenerateOv3FromOv2({ silent: false, force: true });
       return;
     }
     if (resource === "ov5a") {
@@ -1695,6 +1879,9 @@ export function createDodafProductController({
     state[resource] = saveLocalDodafProduct(resource, resolved.model, projectId);
     await syncControllers[resource].sync(state[resource], { source: "manual" });
     await writebackArchitecture("manual");
+    if (resource === "ov2") {
+      await api.pregenerateOv3FromOv2({ silent: true, force: true });
+    }
     notify(`正在保存 ${LABELS[resource]}…`);
     render();
   }

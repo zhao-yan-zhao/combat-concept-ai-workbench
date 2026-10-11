@@ -1,6 +1,6 @@
-import { buildOv2Model } from "./ov2Builder.js";
+import { buildOv2Model, buildOv2ForceFingerprint } from "./ov2Builder.js";
 import { buildOv3Model } from "./ov3Builder.js";
-import { buildOv4Model } from "./ov4Builder.js";
+import { buildOv4Model, buildOv4ForceFingerprint } from "./ov4Builder.js";
 import { buildOv5aModel, buildOv6aModel, buildOv6bModel } from "./dodafOperationalBuilders.js";
 import { buildOv6cModel } from "./ov6cBuilder.js";
 import { buildOv1bModel } from "./ov1bStore.js";
@@ -27,7 +27,7 @@ const SEEDERS = {
   ov1c: (state) => buildOv1cModel(state),
   ov2: (state) => normalizeDodafOv2({
     ...buildOv2Model(state),
-    derivedFrom: { mode: "seeded", sources: ["forceMissionPlan"], generatedAt: new Date().toISOString(), note: "seeded-from-builders" }
+    derivedFrom: { mode: "seeded", sources: ["forceMissionPlan", "ov4"], generatedAt: new Date().toISOString(), note: buildOv2ForceFingerprint(state.forceMission, state.ov4) }
   }),
   ov3: (state) => normalizeDodafOv3({
     ...buildOv3Model({ ov2: state.ov2 || buildOv2Model(state), scenario: state.scenario }),
@@ -35,7 +35,7 @@ const SEEDERS = {
   }),
   ov4: (state) => normalizeDodafOv4({
     ...buildOv4Model(state),
-    derivedFrom: { mode: "seeded", sources: ["forceMissionPlan"], generatedAt: new Date().toISOString(), note: "seeded-from-builders" }
+    derivedFrom: { mode: "seeded", sources: ["forceMissionPlan"], generatedAt: new Date().toISOString(), note: buildOv4ForceFingerprint(state.forceMission) }
   }),
   ov5a: (state) => normalizeDodafOv5a({
     ...buildOv5aModel({ ov5: state.ov5 }),

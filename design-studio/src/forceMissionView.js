@@ -14,6 +14,7 @@ import {
   renderResearchChatFloatButton,
   renderResearchChatPanel
 } from "./researchChat/researchChatView.js";
+import { renderForceResourceSubflowBar } from "./forceResourceSubflowNav.js";
 
 const PLATFORM_DOMAINS = [
   { id: "", label: "全部域" },
@@ -170,6 +171,7 @@ export function renderForceMission(state) {
       generatingLayer,
       recommendRunning: recommend.running
     })}
+    ${renderForceResourceSubflowBar(state, "force-mission")}
     <div class="force-mission-workbench">
       <div class="force-mission-left">
         ${renderForceMissionRail({

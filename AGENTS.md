@@ -42,7 +42,7 @@ D:\项目\combat-concept-ai-workbench
 
 - `http://127.0.0.1:8792/` 是当前配置真实 AI 的工作台根入口；`/design-studio/` 保留为兼容路径。`8791` 仅保留为旧的本地降级服务，不作为验收或开发目标。
 - 端口号不代表代码版本。开始修改前必须确认当前目录为 `D:\项目\combat-concept-ai-workbench`，并以 `GET /api/health` 的服务状态确认验收目标。
-- 当前 8792 源码备份归档位于 `D:\项目\_backups\combat-concept-ai-workbench-8792-20260923-p1-optimizations.zip`。备份仅用于恢复，不在其中直接开发或启动服务；每次实质功能批次完成后更新此路径。
+- 当前 8792 源码备份归档位于 `D:\项目\_backups\combat-concept-ai-workbench-8792-20261011-force-resource-subflow.zip`。备份仅用于恢复，不在其中直接开发或启动服务；每次实质功能批次完成后更新此路径。
 
 ## 常用本地运行方式
 

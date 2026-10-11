@@ -70,9 +70,9 @@ function normalizeValidationResult(result, stale) {
 export function generateValidation(ov5Model, oodaModel, scenario, ov1Model, context = {}) {
   const issues = [];
   const forceMission = context?.forceMission || null;
-  const ov2Model = context?.ov2 || buildOv2Model({ forceMission, ov1: ov1Model, ov5: ov5Model, ooda: oodaModel, scenario });
-  const ov3Model = context?.ov3 || buildOv3Model({ ov2: ov2Model, scenario });
   const ov4Model = context?.ov4 || buildOv4Model({ forceMission, ov1: ov1Model, ov5: ov5Model, ooda: oodaModel, scenario });
+  const ov2Model = context?.ov2 || buildOv2Model({ forceMission, ov4: ov4Model, ov1: ov1Model, ov5: ov5Model, ooda: oodaModel, scenario });
+  const ov3Model = context?.ov3 || buildOv3Model({ ov2: ov2Model, scenario });
   const incoming = new Map(ov5Model.activities.map((activity) => [activity.id, 0]));
   ov5Model.edges.forEach((edge) => incoming.set(edge.targetId, (incoming.get(edge.targetId) || 0) + 1));
 

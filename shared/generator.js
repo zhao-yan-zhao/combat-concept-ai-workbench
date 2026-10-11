@@ -87,6 +87,9 @@ function createResultBySchema(schema, workflow, analysis, evidenceRefs) {
   if (schema === "OrganizationRelationshipDraft") {
     return createOrganizationRelationshipDraftResult(analysis);
   }
+  if (schema === "ResourceFlowDraft") {
+    return createResourceFlowDraftResult(analysis);
+  }
   if (schema === "OperationalTaskDraft") {
     return createOperationalTaskDraftResult(analysis);
   }
@@ -187,6 +190,77 @@ function createOrganizationRelationshipDraftResult(analysis) {
     summary: "已根据作战兵力生成组织指挥、保障与信息关系草案。",
     relations,
     diagrams: [{ name: "总体组织关系图", description: "覆盖当前兵力组织与协同关系。", roleIds }]
+  };
+}
+
+function createResourceFlowDraftResult(analysis) {
+  const units = [
+    ...(Array.isArray(analysis?.combatForces) && analysis.combatForces.length ? analysis.combatForces : []),
+    ...(Array.isArray(analysis?.forces) ? analysis.forces : [])
+  ];
+  const unitById = new Map(units.map((u) => [String(u.id), u]));
+  const relations = Array.isArray(analysis?.relations) ? analysis.relations : [];
+  const operationalTasks = Array.isArray(analysis?.operationalTasks) ? analysis.operationalTasks : [];
+  const taskIds = operationalTasks.map((t) => String(t.id));
+
+  const exchanges = [];
+  const seen = new Set();
+
+  relations.forEach((rel) => {
+    const sourceId = String(rel.fromForceId || rel.sourceRoleId || "");
+    const targetId = String(rel.toForceId || rel.targetRoleId || "");
+    if (!sourceId || !targetId || sourceId === targetId) return;
+    const key = `${sourceId}:${targetId}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    const source = unitById.get(sourceId) || { name: sourceId, role: "unit" };
+    const target = unitById.get(targetId) || { name: targetId, role: "unit" };
+
+    const cat = String(rel.relationshipCategory || "");
+    const type = String(rel.type || rel.relationshipType || "");
+    let flowType = "信息流";
+    if (cat.includes("指挥") || type === "command") flowType = "控制流";
+    else if (cat.includes("保障") || type === "support") flowType = "资源流";
+
+    const label = rel.note || (flowType === "控制流" ? `${source.name}指派指令` : flowType === "资源流" ? `${source.name}保障支援` : `${source.name}态势分发`);
+    const output = `${source.name}输出：${flowType}（${label}）`;
+    const input = `${target.name}接收：${flowType}（${label}）`;
+
+    const taskRefs = [...new Set([...(source.taskRefs || []), ...(target.taskRefs || [])])].filter((id) => taskIds.includes(id));
+
+    exchanges.push({
+      sourceNodeId: sourceId,
+      targetNodeId: targetId,
+      label,
+      flowType,
+      output,
+      input,
+      taskRefs
+    });
+  });
+
+  if (!exchanges.length && units.length >= 2) {
+    for (let i = 0; i < units.length - 1; i++) {
+      const source = units[i];
+      const target = units[i + 1];
+      const flowType = i === 0 ? "控制流" : "信息流";
+      const label = flowType === "控制流" ? `${source.name}指挥协同指令` : `${source.name}战术态势数据`;
+      exchanges.push({
+        sourceNodeId: source.id,
+        targetNodeId: target.id,
+        label,
+        flowType,
+        output: `${source.name}输出：${label}`,
+        input: `${target.name}接收：${label}`,
+        taskRefs: (source.taskRefs || []).filter((id) => taskIds.includes(id))
+      });
+    }
+  }
+
+  return {
+    summary: `已根据作战兵力与组织关系生成 ${exchanges.length} 条作战资源流 (Needlines)，涵盖信息流、控制流与资源流。`,
+    exchanges
   };
 }
 
@@ -1435,7 +1509,26 @@ function renderResultMarkdown(result, schema) {
     ].join("\n");
   }
 
-  return [`## ${result.name}`, ...result.sections.map((section) => `### ${section.title}\n${section.text}`)].join("\n\n");
+  if (schema === "OrganizationRelationshipDraft") {
+    return [
+      "## 组织关系草案",
+      result.summary || "",
+      "### 关系列表",
+      ...(result.relations || []).map((rel) => `- ${rel.fromForceId || rel.sourceRoleId} -[${rel.flowType || rel.relationshipType || "关系"}]-> ${rel.toForceId || rel.targetRoleId}：${rel.note || ""}`)
+    ].join("\n");
+  }
+
+  if (schema === "ResourceFlowDraft") {
+    return [
+      "## 作战资源流草案",
+      result.summary || "",
+      "### 资源交换列表",
+      ...(result.exchanges || []).map((item) => `- ${item.sourceNodeId} -[${item.flowType}]-> ${item.targetNodeId}：${item.label}（输出：${item.output} / 接收：${item.input}）`)
+    ].join("\n");
+  }
+
+  const sections = Array.isArray(result?.sections) ? result.sections : [];
+  return [`## ${result?.name || "生成结果"}`, ...sections.map((section) => `### ${section.title}\n${section.text}`)].join("\n\n");
 }
 
 function renderEvaluationMarkdown(evaluation) {

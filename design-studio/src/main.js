@@ -1252,7 +1252,42 @@ async function handleAction(action, source = null) {
       void dodafProductController.pregenerateOv4FromForceMission({ silent: false, force: true });
       return;
     }
+    if (state.activeView === "ov2") {
+      const hasExchanges = Boolean((state.ov2?.exchanges || []).length);
+      if (hasExchanges && !window.confirm("将用 AI 重新生成作战资源流，覆盖当前内容。是否继续？")) return;
+      void dodafProductController.pregenerateOv2FromForceAndOv4({ silent: false, force: true });
+      return;
+    }
+    if (state.activeView === "ov3") {
+      void dodafProductController.pregenerateOv3FromOv2({ silent: false, force: true });
+      return;
+    }
     showToast(`${getViewMeta(state.activeView)?.label || "当前子流程"}的 AI 工具已就绪；请先确认上游内容，再让 AI 生成或检查本页草案。`);
+    return;
+  }
+  if (action === "save-and-advance-ov4") {
+    void (async () => {
+      await dodafProductController.saveProduct("ov4");
+      await navigateToResearchView("ov2", { toast: "已保存组织关系 (OV-4)，进入作战资源流 (OV-2)", entrySource: "ov4" });
+    })();
+    return;
+  }
+  if (action === "save-and-advance-ov2") {
+    void (async () => {
+      await dodafProductController.saveProduct("ov2");
+      await navigateToResearchView("ov3", { toast: "已保存作战资源流 (OV-2)，进入资源流矩阵 (OV-3)", entrySource: "ov2" });
+    })();
+    return;
+  }
+  if (action === "save-and-advance-ov3") {
+    void (async () => {
+      await dodafProductController.saveProduct("ov3");
+      await navigateToResearchView("force-mission", { toast: "已保存资源流矩阵 (OV-3)，返回作战兵力", entrySource: "ov3" });
+    })();
+    return;
+  }
+  if (action === "return-force-mission") {
+    void navigateToResearchView("force-mission", { toast: "返回作战兵力" });
     return;
   }
   if (action === "toggle-ov1b-edit") {
@@ -2332,6 +2367,12 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
   }
   if (viewId === "ov4") {
     await dodafProductController.pregenerateOv4FromForceMission({ silent: false });
+  }
+  if (viewId === "ov2") {
+    await dodafProductController.pregenerateOv2FromForceAndOv4({ silent: false });
+  }
+  if (viewId === "ov3") {
+    await dodafProductController.pregenerateOv3FromOv2({ silent: false });
   }
   if (viewId === "force-mission" && !(state.forceMission?.forces || []).length && (state.forceMission?.tasksConfirmedAt || (state.forceMission?.tasks || []).length)) {
     await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });

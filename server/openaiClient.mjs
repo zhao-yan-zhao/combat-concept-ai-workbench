@@ -32,6 +32,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       "TaskOrganizationDraft",
       "ForceMissionPlan",
       "OrganizationRelationshipDraft",
+      "ResourceFlowDraft",
       "ConceptGraphicPlan",
       "ConceptMapInitialPlan",
       "OperationalConceptGraphic",
@@ -65,6 +66,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     const isConceptMapInitialPlan = input.workflow?.outputSchema === "ConceptMapInitialPlan";
     const isForceMissionPlan = input.workflow?.outputSchema === "ForceMissionPlan";
     const isOrganizationRelationshipDraft = input.workflow?.outputSchema === "OrganizationRelationshipDraft";
+    const isResourceFlowDraft = input.workflow?.outputSchema === "ResourceFlowDraft";
     const isOperationalTaskDraft = input.workflow?.outputSchema === "OperationalTaskDraft";
     const isTaskOrganizationDraft = input.workflow?.outputSchema === "TaskOrganizationDraft";
     const isPhaseActionConcept = input.workflow?.outputSchema === "PhaseActionConcept";
@@ -107,6 +109,9 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         '{ "summary": "1-3 句中文说明",',
         '  "relations": [{ "fromForceId": "已有兵力 id", "toForceId": "已有兵力 id", "type": "command|support|coordination|information", "relationshipCategory": "作战指挥|支援保障|信息报送|协同|上下级隶属|作战控制|行政控制|配属|其他", "note": "链路含义" }],',
         '  "diagrams": [{ "name": "总体组织关系图", "description": "观察范围", "roleIds": ["兵力 id"] }] }'
+      ] : isResourceFlowDraft ? [
+        '{ "summary": "1-3 句中文说明，概述本轮资源流规划",',
+        '  "exchanges": [{ "sourceNodeId": "已有兵力节点 id", "targetNodeId": "已有兵力节点 id", "label": "交换主题", "flowType": "信息流|控制流|资源流", "output": "源输出数据/指令契约说明", "input": "宿接收处理规范说明", "taskRefs": ["任务 id"] }] }'
       ] : isPhaseActionConcept ? [
         '{ "summary": "1-3 句中文说明，概述本轮阶段划分或修订要点",',
         '  "phases": [{ "id": "phase-1", "name": "编队展开", "sequence": 1, "timeWindow": "T+00:00至T+00:40", "objective": "阶段目标一句话", "blueActions": ["蓝方概念级行动叙述"], "redActions": ["红方概念级行动叙述"], "primaryActions": ["与 blueActions 相同"], "secondaryActions": ["与 redActions 相同"], "entryConditions": ["进入门槛"], "exitConditions": ["退出/转换门槛"], "expectedEffects": ["阶段效果"], "forceIds": [] }],',
@@ -297,6 +302,16 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         "6. diagrams 按层切分：有作战兵力时第一张只含 combatForces，第二张只含 forces；只有一层时出一张。roleIds 必须是已有兵力 id。不要把两层混在一张默认图里。",
         "7. note 用一句话写清该链路的作战含义；禁止空泛套话（组织协同/保持优势）。",
         "8. 可参考 analysis.existingRelations，但必须补齐最低覆盖，不得只原样复制空或残缺关系。"
+      ] : isResourceFlowDraft ? [
+        "作战资源流要求：根据已确认作战兵力与 OV-4 组织关系生成 OV-2 资源交换流 (Needlines / ResourceFlows)，并为 OV-3 矩阵提供输入输出契约。",
+        "1. 节点识别：sourceNodeId 与 targetNodeId 必须使用 analysis.forces 与 analysis.combatForces 的已有兵力节点 id，禁止自环或虚构节点。",
+        "2. 流类型明确：flowType 必须为“信息流”、“控制流”或“资源流”之一：",
+        "   - 控制流：用于指挥授权、任务指派、协同控制指令（对应 command / coordination 关系）；",
+        "   - 信息流：用于雷达探测、空情预警、战场态势分发、战损评估（对应 information 关系）；",
+        "   - 资源流：用于燃油补给、弹药配发、维修保障、物资调运（对应 support 关系）。",
+        "3. 输入输出契约规范：每个交换必须定义 output（源节点输出内容规范）和 input（宿节点期望输入与处理），语义要对齐以便后续 OV-3 矩阵判定 compatibility 直接匹配。",
+        "4. taskRefs 关联：必须引用 analysis.operationalTasks 中相关联的任务 id；无法明确时给空数组。",
+        "5. label 必须是简练明确的战术交换主题（如“防空拦截指派指令”、“广域海空态势数据”、“加油补给保障申请”），禁止泛泛而谈。"
       ] : isOperationalTaskDraft ? [
         "作战任务要求：把已确认的阶段行动转换为独立、可复核的任务成果。",
         "1. 蓝红双方行动都要形成任务，side 与 phaseId 必须沿用 analysis.phaseAction，不得合并丢失。",
@@ -392,6 +407,8 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
           ? forceMissionPlanSchema()
           : isOrganizationRelationshipDraft
             ? organizationRelationshipDraftSchema()
+          : isResourceFlowDraft
+            ? resourceFlowDraftSchema()
           : isPhaseActionConcept
             ? phaseActionConceptSchema()
             : isRuleLibraryChangeSet
@@ -1078,7 +1095,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
           };
     }
 
-    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "OperationalTaskDraft" || base.outputSchema === "TaskOrganizationDraft" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "OrganizationRelationshipDraft" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft" || base.outputSchema === "ScenarioDraft") && draft && typeof draft === "object") {
+    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "OperationalTaskDraft" || base.outputSchema === "TaskOrganizationDraft" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "OrganizationRelationshipDraft" || base.outputSchema === "ResourceFlowDraft" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft" || base.outputSchema === "ScenarioDraft") && draft && typeof draft === "object") {
       base.result = draft;
     }
   
@@ -1295,6 +1312,36 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
               name: { type: "string", maxLength: 160 },
               description: { type: "string", maxLength: 400 },
               roleIds: { type: "array", maxItems: 48, items: { type: "string", maxLength: 60 } }
+            }
+          }
+        }
+      }
+    };
+  }
+
+  function resourceFlowDraftSchema() {
+    return {
+      type: "object",
+      additionalProperties: false,
+      required: ["summary", "exchanges"],
+      properties: {
+        summary: { type: "string", maxLength: 600 },
+        exchanges: {
+          type: "array",
+          minItems: 1,
+          maxItems: 64,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["sourceNodeId", "targetNodeId", "label", "flowType", "output", "input"],
+            properties: {
+              sourceNodeId: { type: "string", maxLength: 60 },
+              targetNodeId: { type: "string", maxLength: 60 },
+              label: { type: "string", maxLength: 240 },
+              flowType: { type: "string", enum: ["信息流", "控制流", "资源流"] },
+              output: { type: "string", maxLength: 320 },
+              input: { type: "string", maxLength: 320 },
+              taskRefs: { type: "array", maxItems: 16, items: { type: "string", maxLength: 60 } }
             }
           }
         }
@@ -1725,6 +1772,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       ["TaskOrganizationDraft", "任务整理", "对现有任务进行分组、排序与协同梳理"],
       ["ForceMissionPlan", "兵力任务", "概念兵力与作战兵力规划"],
       ["OrganizationRelationshipDraft", "组织关系", "从已确认作战兵力生成 OV-4 组织指挥、保障与信息关系"],
+      ["ResourceFlowDraft", "作战资源流", "从已确认作战兵力与组织关系生成 OV-2 作战资源流与输入输出契约"],
       ["PhaseActionConcept", "阶段行动", "阶段、蓝红行动与转换条件"],
       ["RuleLibraryChangeSet", "规则变更集", "上游变化形成待审规则建议"],
       ["RuleLibraryDraft", "规则库", "规则生成、修订与咨询"],
@@ -1861,7 +1909,7 @@ function generationPromptId(schema, researchChat = false) {
   if (researchChat) return "ai.generate.research-chat";
   const ids = {
     ConceptBrief: "concept-brief", OperationalConceptGraphic: "ov1-graphic", CombatFocusOptions: "combat-focus",
-    OperationalTaskDraft: "operational-task", TaskOrganizationDraft: "task-organization", ForceMissionPlan: "force-mission", OrganizationRelationshipDraft: "ov4", PhaseActionConcept: "phase-action",
+    OperationalTaskDraft: "operational-task", TaskOrganizationDraft: "task-organization", ForceMissionPlan: "force-mission", OrganizationRelationshipDraft: "ov4", ResourceFlowDraft: "ov2", PhaseActionConcept: "phase-action",
     RuleLibraryChangeSet: "rule-change-set", RuleLibraryDraft: "rule-library", SequenceDraft: "sequence",
     StateMachineDraft: "state-machine", ConceptGraphicPlan: "concept-graphic-plan", ConceptMapInitialPlan: "concept-map-initial",
     ScenarioDraft: "scenario"
@@ -1881,6 +1929,7 @@ export function resolveGenerationTemperature(schema, isResearchChat = false) {
       return 0.7;
     case "ForceMissionPlan":
     case "OrganizationRelationshipDraft":
+    case "ResourceFlowDraft":
     case "OperationalTaskDraft":
     case "TaskOrganizationDraft":
     case "SequenceDraft":

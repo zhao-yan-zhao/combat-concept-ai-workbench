@@ -4,6 +4,7 @@ import { resolveOv4SelectedDiagramId } from "./ov4DiagramStore.js";
 import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
 import { buildOv4ForceFingerprint } from "./ov4Builder.js";
 import { OV4_ECHELON_CATEGORIES, OV4_ORGANIZATION_CATEGORIES, OV4_RELATION_CATEGORIES, ov4RelationShortLabel, ov4RelationStyleKey } from "../../shared/dodaf/ov4Taxonomy.js";
+import { renderForceResourceSubflowBar } from "./forceResourceSubflowNav.js";
 
 export function renderOv4(state) {
   const { model, source } = resolveDodafProduct(state, "ov4");
@@ -17,7 +18,8 @@ export function renderOv4(state) {
   const stale = String(model.derivedFrom?.note || "").startsWith("ov4-force:") && model.derivedFrom.note !== fingerprint;
   const statusLabel = stale ? "兵力已更新，待重生成" : source === "persisted" ? "已持久化" : "本地/种子";
   return `<section class="ov4-page" data-view-page="organization-relationship" data-dodaf-product="OV-4">
-    <header class="ov4-top"><div class="ov4-bar"><div class="ov4-identity"><h2>作战组织关系图</h2><small class="ov4-summary ${stale ? "is-review" : ""}">${statusLabel} · ${diagrams.length} 张关系图 · ${model.roles?.length || 0} 个共享角色 · ${model.relations?.length || 0} 条共享关系</small></div><div class="ov4-toolbar">${state.ov4Storage ? renderProjectStorageActions(state.ov4Storage, { refreshAction: "refresh-project-ov4" }) : ""}<button type="button" class="quiet-button" data-action="seed-dodaf-ov4">重新生成</button><button type="button" class="primary-btn" data-action="save-dodaf-ov4">保存</button></div></div></header>
+    ${renderForceResourceSubflowBar(state, "ov4")}
+    <header class="ov4-top"><div class="ov4-bar"><div class="ov4-identity"><h2>作战组织关系图</h2><small class="ov4-summary ${stale ? "is-review" : ""}">${statusLabel} · ${diagrams.length} 张关系图 · ${model.roles?.length || 0} 个共享角色 · ${model.relations?.length || 0} 条共享关系</small></div><div class="ov4-toolbar"><button type="button" class="quiet-button" data-action="return-force-mission">← 返回兵力</button>${state.ov4Storage ? renderProjectStorageActions(state.ov4Storage, { refreshAction: "refresh-project-ov4" }) : ""}<button type="button" class="quiet-button" data-action="seed-dodaf-ov4">重新生成</button><button type="button" class="ghost-btn" data-action="save-dodaf-ov4">保存</button><button type="button" class="primary-btn" data-action="save-and-advance-ov2">保存并进入资源流 (OV-2) →</button></div></div></header>
     <div class="ov4-workbench ${toolsOpen ? "is-tools-docked" : ""} ${editorOpen ? "is-editor-open" : ""}">
       ${renderDiagramPanel(diagrams, selectedId)}
       <main class="ov4-main-panel"><header class="ov4-canvas-head"><div><strong>${escapeHtml(diagram?.name || "组织关系图")}</strong><small>拖动组织框 · 空白平移 · 滚轮缩放</small></div><span class="ov4-relation-legend" aria-label="关系图例">指挥 · 保障 · 上报 · 协同</span><span>${scoped.roles.length} 角色 · ${scoped.relations.length} 关系</span><button type="button" class="sm-canvas-fit" data-ov4-canvas-fit title="适配全部组织" aria-label="适配全部组织">⌖</button></header>${renderOrganizationCanvas(scoped, diagram)}</main>

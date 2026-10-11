@@ -105,15 +105,15 @@ function compatibility(output, input) {
 function normalizeContract(value) {
   return String(value || "")
     .toLowerCase()
-    .replace(/[，,；;、/|]+/g, " ")
+    .replace(/[，,；;、/|：:（）()【】[\]]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 function tokensOf(value) {
-  const stop = new Set(["的", "与", "和", "及", "或", "等", "后", "前", "对", "在", "为", "and", "or", "the", "a", "an", "to", "of"]);
+  const stop = new Set(["的", "与", "和", "及", "或", "等", "后", "前", "对", "在", "为", "输出", "接收", "输入", "and", "or", "the", "a", "an", "to", "of"]);
   return String(value || "")
-    .split(/[\s,，、；;:/|]+/)
+    .split(/[\s,，、；;:/|：:（）()【】[\]]+/)
     .map((token) => token.trim())
     .filter((token) => token.length >= 2 && !stop.has(token));
 }

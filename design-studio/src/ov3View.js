@@ -2,6 +2,7 @@ import { resolveDodafProduct } from "./dodafProductStore.js";
 import { renderDerivedViewProvenance } from "./derivedViewProvenance.js";
 import { renderProjectStorageState } from "./projectStorageView.js";
 import { renderDodafLegend, renderEdgeBadge, renderEntityBadge } from "./dodafDraftingView.js";
+import { renderForceResourceSubflowBar } from "./forceResourceSubflowNav.js";
 
 export function renderOv3(state) {
   const { model, source } = resolveDodafProduct(state, "ov3");
@@ -11,13 +12,16 @@ export function renderOv3(state) {
   const unresolved = model.unresolved || { missingContractCount: 0, mismatchCount: 0 };
   return `
     <section class="surface surface-pad dodaf-drafting-surface" data-dodaf-product="OV-3">
+      ${renderForceResourceSubflowBar(state, "ov3")}
       <div class="section-heading"><div><h2>作战资源流矩阵</h2><p>DoDAF 2.02 / DM2 资源流矩阵。交换事实由 OV-2 拥有，本页只保存投影视图与复核状态。</p></div><span class="mini-tag">${source === "persisted" ? "已持久化" : "种子/草稿"} · OV-2 投影</span></div>
       ${renderDerivedViewProvenance("ov3")}
       ${renderProjectStorageState(storage, { refreshAction: "refresh-project-ov3" })}
       ${renderDodafLegend("OV-3")}
       <div class="toolbar-row dodaf-product-actions">
-        <button type="button" class="ghost-btn" data-action="seed-dodaf-ov3">从上游重新种子</button>
-        <button type="button" class="primary-btn" data-action="save-dodaf-ov3">保存 OV-3</button>
+        <button type="button" class="quiet-button" data-action="return-force-mission">← 返回兵力</button>
+        <button type="button" class="ghost-btn" data-action="seed-dodaf-ov3">从 OV-2 重新投影</button>
+        <button type="button" class="ghost-btn" data-action="save-dodaf-ov3">保存 OV-3</button>
+        <button type="button" class="primary-btn" data-action="save-and-advance-ov3">保存并完成兵力与资源流 →</button>
       </div>
       <div class="ov2-summary"><span>${(model.exchanges || []).length} 条交换</span><span>${unresolved.missingContractCount || 0} 条定义缺失</span><span>${unresolved.mismatchCount || 0} 条待映射</span><span>${(model.entities || []).length} 个 DM2 实体</span></div>
       <section class="ov3-matrix-section" aria-labelledby="ov3-matrix-heading">

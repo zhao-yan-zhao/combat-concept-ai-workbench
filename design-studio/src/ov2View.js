@@ -2,6 +2,7 @@ import { resolveDodafProduct } from "./dodafProductStore.js";
 import { renderDerivedViewProvenance } from "./derivedViewProvenance.js";
 import { renderProjectStorageState } from "./projectStorageView.js";
 import { renderDodafLegend, renderEdgeBadge, renderEntityChip } from "./dodafDraftingView.js";
+import { renderForceResourceSubflowBar } from "./forceResourceSubflowNav.js";
 
 export function renderOv2(state) {
   const { model, source } = resolveDodafProduct(state, "ov2");
@@ -9,6 +10,7 @@ export function renderOv2(state) {
   const notes = model.view?.notes || "";
   return `
     <section class="surface surface-pad dodaf-drafting-surface" data-dodaf-product="OV-2">
+      ${renderForceResourceSubflowBar(state, "ov2")}
       <div class="section-heading">
         <div>
           <h2>作战资源流描述</h2>
@@ -20,8 +22,10 @@ export function renderOv2(state) {
       ${renderProjectStorageState(storage, { refreshAction: "refresh-project-ov2" })}
       ${renderDodafLegend("OV-2")}
       <div class="toolbar-row dodaf-product-actions">
-        <button type="button" class="ghost-btn" data-action="seed-dodaf-ov2">从上游重新种子</button>
-        <button type="button" class="primary-btn" data-action="save-dodaf-ov2">保存 OV-2</button>
+        <button type="button" class="quiet-button" data-action="return-force-mission">← 返回兵力</button>
+        <button type="button" class="ghost-btn" data-action="seed-dodaf-ov2">从上游重新生成</button>
+        <button type="button" class="ghost-btn" data-action="save-dodaf-ov2">保存 OV-2</button>
+        <button type="button" class="primary-btn" data-action="save-and-advance-ov3">保存并进入资源流矩阵 (OV-3) →</button>
         <button type="button" class="ghost-btn" data-action="export-architecture-json">导出架构包 JSON</button>
         <button type="button" class="ghost-btn" data-action="export-architecture-xml">导出架构包 XML</button>
         <button type="button" class="ghost-btn" data-action="import-architecture-file">从文件导入架构包</button>

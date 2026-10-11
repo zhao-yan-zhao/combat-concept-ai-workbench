@@ -12001,3 +12001,170 @@ button.primary-btn.compact {
   display: flex;
   flex-direction: column;
 }
+
+/* Subflow Pipeline Bar for Combat Forces -> OV-4 -> OV-2 -> OV-3 */
+.subflow-pipeline-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.85));
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  flex-wrap: wrap;
+}
+
+.subflow-pipeline-bar.is-mainline {
+  margin-top: 4px;
+  margin-bottom: 14px;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.98), rgba(24, 34, 53, 0.9));
+  border-color: rgba(99, 102, 241, 0.25);
+}
+
+.subflow-pipeline-bar.in-subflow {
+  border-color: rgba(56, 189, 248, 0.25);
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.subflow-pipeline-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.subflow-pipeline-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  background: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.subflow-pipeline-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.subflow-pipeline-steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.subflow-pipeline-arrow {
+  color: #64748b;
+  font-size: 12px;
+  user-select: none;
+}
+
+.subflow-pipeline-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #cbd5e1;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+}
+
+.subflow-pipeline-pill:hover:not(.is-current):not(.is-main-active) {
+  background: rgba(51, 65, 85, 0.9);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #f8fafc;
+}
+
+.subflow-pipeline-pill.is-main-active {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #c7d2fe;
+  cursor: default;
+}
+
+.subflow-pipeline-pill.is-current {
+  background: rgba(14, 165, 233, 0.2);
+  border-color: rgba(14, 165, 233, 0.5);
+  color: #38bdf8;
+  font-weight: 600;
+  cursor: default;
+  box-shadow: 0 0 8px rgba(14, 165, 233, 0.2);
+}
+
+.subflow-pipeline-pill.is-ready .subflow-pill-meta {
+  color: #34d399;
+}
+
+.subflow-pipeline-pill.is-pending .subflow-pill-meta {
+  color: #94a3b8;
+}
+
+.subflow-pill-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+}
+
+.subflow-pill-name {
+  font-size: 12px;
+}
+
+.subflow-pill-meta {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.subflow-pipeline-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.subflow-pipeline-cta {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: #a5b4fc;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.subflow-pipeline-cta:hover {
+  background: rgba(99, 102, 241, 0.3);
+  color: #e0e7ff;
+}
+
+.subflow-back-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.subflow-next-btn {
+  font-size: 12px;
+  padding: 5px 12px;
+}
+

@@ -1,4 +1,4 @@
-﻿import { inspectOv1Model } from "./ov1Diagnostics.js";
+import { inspectOv1Model } from "./ov1Diagnostics.js";
 import { buildOv2Model } from "./ov2Builder.js";
 import { buildOv3Model } from "./ov3Builder.js";
 import { buildOv4Model } from "./ov4Builder.js";
@@ -29,9 +29,9 @@ export function buildStructureReview(state = {}) {
   const scenario = state.scenario || {};
   const validationResult = state.validationResult || null;
   const ov1Inspect = inspectOv1Model(ov1);
-  const ov2 = resolveProductOrBuild(state, "ov2", () => buildOv2Model({ forceMission: state.forceMission, ov1, ov5, ooda, scenario }));
-  const ov3 = resolveProductOrBuild(state, "ov3", () => buildOv3Model({ ov2, scenario }));
   const ov4 = resolveProductOrBuild(state, "ov4", () => buildOv4Model({ forceMission: state.forceMission, ov1, ov5, ooda, scenario }));
+  const ov2 = resolveProductOrBuild(state, "ov2", () => buildOv2Model({ forceMission: state.forceMission, ov4, ov1, ov5, ooda, scenario }));
+  const ov3 = resolveProductOrBuild(state, "ov3", () => buildOv3Model({ ov2, scenario }));
   const ov5a = resolveProductOrBuild(state, "ov5a", () => buildOv5aModel({ ov5 }));
   const ov6a = resolveProductOrBuild(state, "ov6a", () => buildOv6aModel({ ov5 }));
   const ov6b = resolveProductOrBuild(state, "ov6b", () => buildOv6bModel({ ooda }));
