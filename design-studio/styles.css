@@ -4394,6 +4394,913 @@ h3 { margin-bottom: 8px; font-size: 15px; color: #d9f3e8; }
 .ov2-exchange:hover { border-color: var(--green); background: #f3faf6; }
 .ov2-exchange span { color: var(--muted); font-size: 10px; }
 .ov2-diagnostics { margin-top: 16px; }
+
+/* ==========================================================================
+   OV-2 Operational Resource Flow Workbench (DoDAF 2.02 / DM2)
+   ========================================================================== */
+.studio-workspace:has(.ov2-page) { overflow: hidden; }
+.studio-workspace:has(.ov2-page) > .view-root { flex: 1 1 auto; min-height: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.studio-workspace:has(.ov2-page) > .view-root > .ov2-page { flex: 1 1 auto; min-height: 0; height: 100%; }
+
+.ov2-page {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  color: var(--ink);
+  padding: 8px 12px;
+}
+
+.ov2-header {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, .88);
+}
+.ov2-header-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ov2-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ov2-title-row h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.ov2-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+.ov2-stats-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, .12);
+  border: 1px solid rgba(148, 163, 184, .25);
+  color: var(--ink);
+  font-size: 11px;
+}
+.ov2-help-pill-btn {
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 12px;
+  border: 1px dashed rgba(56, 189, 248, .5) !important;
+  color: #38bdf8 !important;
+}
+.ov2-help-pill-btn.is-active {
+  background: rgba(56, 189, 248, .2) !important;
+  border-style: solid !important;
+}
+
+.ov2-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.ov2-header-actions .quiet-button,
+.ov2-header-actions .ghost-btn,
+.ov2-header-actions .primary-btn {
+  min-height: 28px;
+  padding: 2px 9px;
+  font-size: 11.5px;
+}
+
+/* Collapsible Help Drawer */
+.ov2-help-drawer {
+  flex: 0 0 auto;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: all .25s ease-in-out;
+  pointer-events: none;
+  background: rgba(15, 23, 42, .95);
+  border: 0 solid var(--line);
+  border-radius: 8px;
+}
+.ov2-help-drawer.is-open {
+  max-height: 520px;
+  overflow-y: auto;
+  opacity: 1;
+  pointer-events: auto;
+  border-width: 1px;
+  padding: 12px;
+  margin-bottom: 4px;
+}
+.ov2-help-drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.ov2-notes-block {
+  margin-top: 10px;
+}
+
+/* 3-Panel Workbench */
+.ov2-workbench {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(210px, 240px) minmax(0, 1fr) 0;
+  gap: 8px;
+  align-items: stretch;
+  transition: grid-template-columns .2s ease;
+}
+.ov2-workbench.is-editor-open {
+  grid-template-columns: minmax(210px, 240px) minmax(0, 1fr) minmax(320px, 360px);
+}
+
+/* Left Node Panel */
+.ov2-node-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, .7);
+  overflow: hidden;
+}
+.ov2-panel-head {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, .14);
+}
+.ov2-panel-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ov2-panel-head h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ov2-badge {
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: rgba(148, 163, 184, .15);
+  font-size: 10px;
+  color: var(--muted);
+}
+.ov2-clear-filter-btn {
+  padding: 1px 6px;
+  font-size: 10.5px;
+  color: #38bdf8 !important;
+}
+
+.ov2-node-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+}
+.ov2-node-item {
+  width: 100%;
+}
+.ov2-node-btn {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1px solid rgba(148, 163, 184, .15);
+  border-radius: 6px;
+  background: rgba(30, 41, 59, .4);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: all .15s ease;
+}
+.ov2-node-btn:hover {
+  background: rgba(56, 189, 248, .1);
+  border-color: rgba(56, 189, 248, .35);
+}
+.ov2-node-item.is-selected .ov2-node-btn {
+  background: rgba(14, 116, 144, .25);
+  border-color: #06b6d4;
+  box-shadow: 0 0 8px rgba(6, 182, 212, .25);
+}
+.ov2-node-btn-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+}
+.ov2-node-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov2-pill-tag {
+  font-size: 9.5px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, .15);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.ov2-node-btn-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+.ov2-flow-counter {
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+.ov2-flow-counter.is-out {
+  background: rgba(59, 130, 246, .15);
+  color: #60a5fa;
+}
+.ov2-flow-counter.is-in {
+  background: rgba(16, 185, 129, .15);
+  color: #34d399;
+}
+.ov2-task-count {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+/* Center Main Panel */
+.ov2-main-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, .8);
+  overflow: hidden;
+  position: relative;
+}
+.ov2-canvas-head {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, .14);
+  background: rgba(15, 23, 42, .9);
+}
+.ov2-flow-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.ov2-filter-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-right: 2px;
+}
+.ov2-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid rgba(148, 163, 184, .25);
+  border-radius: 12px;
+  background: rgba(30, 41, 59, .4);
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.ov2-filter-btn:hover {
+  background: rgba(148, 163, 184, .15);
+  color: var(--ink);
+}
+.ov2-filter-btn.is-active {
+  background: rgba(56, 189, 248, .15);
+  border-color: #38bdf8;
+  color: #38bdf8;
+  font-weight: 600;
+}
+.ov2-filter-btn .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.ov2-filter-btn .dot.control { background: #f43f5e; }
+.ov2-filter-btn .dot.information { background: #10b981; }
+.ov2-filter-btn .dot.resource { background: #0284c7; }
+
+.ov2-view-switcher {
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(148, 163, 184, .25);
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, .6);
+}
+.ov2-switch-btn {
+  padding: 3px 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.ov2-switch-btn.is-active {
+  background: rgba(56, 189, 248, .2);
+  color: #38bdf8;
+  font-weight: 600;
+}
+.ov2-add-btn {
+  padding: 3px 9px;
+  font-size: 11px;
+  color: #38bdf8 !important;
+  border-color: rgba(56, 189, 248, .4) !important;
+}
+
+.ov2-node-focus-bar {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 10px;
+  background: rgba(14, 116, 144, .2);
+  border-bottom: 1px solid rgba(6, 182, 212, .3);
+  font-size: 11px;
+  color: var(--ink);
+}
+.ov2-node-focus-bar strong {
+  color: #38bdf8;
+}
+
+.ov2-view-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+.ov2-view-body.is-table-view {
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.ov2-canvas-zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(15, 23, 42, .6);
+  border: 1px solid rgba(148, 163, 184, .25);
+  border-radius: 6px;
+  padding: 1px 3px;
+}
+.ov2-zoom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.ov2-zoom-btn:hover {
+  background: rgba(148, 163, 184, .18);
+  border-color: rgba(56, 189, 248, .4);
+  color: #38bdf8;
+}
+.ov2-zoom-label {
+  display: inline-block;
+  min-width: 38px;
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--ink);
+  font-family: monospace;
+}
+
+/* Canvas Frame & Elements */
+.ov2-canvas-frame {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+.ov2-canvas-frame.is-panning,
+.ov2-canvas-stage.is-panning {
+  cursor: grabbing !important;
+  user-select: none;
+}
+.ov2-canvas-stage {
+  min-width: 100%;
+  min-height: 100%;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+}
+.ov2-canvas-world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.ov2-node-card.is-dragging {
+  cursor: grabbing !important;
+  z-index: 50 !important;
+  box-shadow: 0 10px 25px rgba(56, 189, 248, .4) !important;
+  border-color: #38bdf8 !important;
+  opacity: 0.95;
+}
+.ov2-canvas-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+.ov2-canvas-labels-layer,
+.ov2-canvas-nodes-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ov2-col-header-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: rgba(30, 41, 59, .75);
+  border: 1px solid rgba(148, 163, 184, .25);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .2);
+}
+
+/* Canvas Paths */
+.ov2-flow-line {
+  fill: none !important;
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+  transition: all .2s ease;
+}
+.ov2-flow-line.flow-control { stroke: #f43f5e; stroke-width: 2.2px; }
+.ov2-flow-line.flow-information { stroke: #10b981; stroke-dasharray: 4 3; }
+.ov2-flow-line.flow-resource { stroke: #0284c7; stroke-width: 2.4px; }
+.ov2-flow-line.is-selected-flow {
+  stroke-width: 3.5px !important;
+  stroke: #38bdf8 !important;
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, .7));
+}
+.ov2-flow-line.is-connected-flow {
+  stroke-width: 2.8px;
+}
+.ov2-flow-line.is-dimmed {
+  opacity: .12;
+}
+
+/* Canvas Flow Label Buttons */
+.ov2-flow-label-btn {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, .92);
+  border: 1px solid rgba(148, 163, 184, .3);
+  color: var(--ink);
+  font-size: 10px;
+  cursor: pointer;
+  pointer-events: auto;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .4);
+  transition: all .15s ease;
+  max-width: 120px;
+}
+.ov2-flow-label-btn:hover {
+  transform: translate(-50%, -50%) scale(1.08);
+  border-color: #38bdf8;
+  z-index: 10;
+}
+.ov2-flow-label-btn.flow-control { border-color: rgba(244, 63, 94, .5); }
+.ov2-flow-label-btn.flow-information { border-color: rgba(16, 185, 129, .5); }
+.ov2-flow-label-btn.flow-resource { border-color: rgba(2, 132, 199, .5); }
+.ov2-flow-label-btn.is-selected {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 0 10px rgba(56, 189, 248, .8);
+  z-index: 20;
+}
+.ov2-flow-label-btn.is-dimmed {
+  opacity: .15;
+}
+.ov2-label-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.flow-control .ov2-label-dot { background: #f43f5e; }
+.flow-information .ov2-label-dot { background: #10b981; }
+.flow-resource .ov2-label-dot { background: #0284c7; }
+.ov2-label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Canvas Node Cards */
+.ov2-node-card {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 200px;
+  height: 70px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, .25);
+  background: rgba(30, 41, 59, .88);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .4);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: all .2s ease;
+}
+.ov2-node-card:hover {
+  border-color: #38bdf8;
+  transform: translate(-50%, -50%) translateY(-2px);
+  box-shadow: 0 6px 16px rgba(56, 189, 248, .2);
+}
+.ov2-node-card.is-focused-node {
+  border-color: #06b6d4;
+  box-shadow: 0 0 14px rgba(6, 182, 212, .5);
+  background: rgba(14, 116, 144, .35);
+}
+.ov2-node-card.is-linked-node {
+  border-color: rgba(56, 189, 248, .6);
+}
+.ov2-node-card.is-dimmed-node {
+  opacity: .25;
+}
+.ov2-node-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+.ov2-node-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov2-node-layer-badge {
+  font-size: 9.5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(148, 163, 184, .2);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.ov2-node-card-body {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Structured Table View */
+.ov2-table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+.ov2-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  text-align: left;
+}
+.ov2-table th {
+  padding: 8px 10px;
+  border-bottom: 2px solid rgba(148, 163, 184, .2);
+  color: var(--muted);
+  font-weight: 600;
+  background: rgba(15, 23, 42, .8);
+}
+.ov2-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, .1);
+  vertical-align: middle;
+}
+.ov2-table-row:hover {
+  background: rgba(56, 189, 248, .08);
+}
+.ov2-table-row.is-selected-row {
+  background: rgba(14, 116, 144, .22);
+}
+.ov2-entity-pill {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(30, 41, 59, .6);
+  border: 1px solid rgba(148, 163, 184, .2);
+  font-weight: 600;
+  color: var(--ink);
+}
+.ov2-flow-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 500;
+}
+.ov2-flow-type-badge.control { background: rgba(244, 63, 94, .15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, .3); }
+.ov2-flow-type-badge.information { background: rgba(16, 185, 129, .15); color: #34d399; border: 1px solid rgba(16, 185, 129, .3); }
+.ov2-flow-type-badge.resource { background: rgba(2, 132, 199, .15); color: #38bdf8; border: 1px solid rgba(2, 132, 199, .3); }
+.ov2-contract-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10.5px;
+}
+.contract-out { color: #60a5fa; }
+.contract-in { color: #34d399; }
+.ov2-meta-activities {
+  color: var(--muted);
+  font-size: 10px;
+}
+.ov2-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ov2-row-actions button {
+  padding: 2px 6px;
+  font-size: 10.5px;
+}
+
+/* Bottom Diagnostics Bar */
+.ov2-diagnostics-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  border-top: 1px solid rgba(148, 163, 184, .14);
+  background: rgba(15, 23, 42, .9);
+  font-size: 11px;
+}
+.ov2-diag-title {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.ov2-diag-items {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+}
+.ov2-diag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+}
+.ov2-diag-badge.ready { background: rgba(16, 185, 129, .15); color: #34d399; }
+.ov2-diag-badge.review { background: rgba(245, 158, 11, .15); color: #fbbf24; }
+.ov2-diag-badge.pending { background: rgba(239, 68, 68, .15); color: #f87171; }
+.ov2-diag-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* Right Property Dock */
+.ov2-property-dock {
+  display: none;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, .88);
+  overflow-y: auto;
+}
+.ov2-workbench.is-editor-open .ov2-property-dock {
+  display: flex;
+  flex-direction: column;
+}
+.ov2-dock-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.ov2-dock-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, .15);
+}
+.ov2-dock-tag {
+  font-size: 10px;
+  color: #38bdf8;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.ov2-dock-head h4 {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.ov2-dock-body {
+  flex: 1 1 auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.ov2-flow-direction-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(30, 41, 59, .6);
+  font-size: 11px;
+}
+.direction-node {
+  font-weight: 600;
+  color: var(--ink);
+}
+.direction-arrow {
+  color: #38bdf8;
+}
+.ov2-reverse-btn {
+  margin-left: auto;
+  padding: 2px 6px;
+  font-size: 10px;
+}
+.ov2-dock-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(148, 163, 184, .2);
+}
+.ov2-dock-section h5 {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ov2-dock-footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, .15);
+}
+
+.ov2-node-detail-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(30, 41, 59, .5);
+  font-size: 11.5px;
+}
+.detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.detail-row .label {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+.detail-row p {
+  margin: 0;
+  line-height: 1.4;
+}
+.ov2-dock-flow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ov2-dock-flow-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(148, 163, 184, .15);
+  background: rgba(15, 23, 42, .6);
+  color: var(--ink);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+}
+.ov2-dock-flow-item:hover {
+  background: rgba(56, 189, 248, .15);
+  border-color: #38bdf8;
+}
+.ov2-dock-guide {
+  padding: 24px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.guide-icon {
+  font-size: 32px;
+}
+.ov2-dock-guide h4 {
+  margin: 0;
+  font-size: 13px;
+}
+.ov2-dock-guide p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.ov2-dock-stats-box {
+  display: flex;
+  gap: 16px;
+  margin: 12px 0;
+}
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.stat-num {
+  font-size: 18px;
+  font-weight: 700;
+  color: #38bdf8;
+}
+.stat-label {
+  font-size: 10px;
+  color: var(--muted);
+}
+
 .ov3-table-wrap { overflow-x: auto; border: 1px solid var(--line); }
 .studio-workspace:has(.ov4-page) { overflow: hidden; }
 .studio-workspace:has(.ov4-page) > .view-root { flex: 1 1 auto; min-height: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
@@ -4409,15 +5316,70 @@ h3 { margin-bottom: 8px; font-size: 15px; color: #d9f3e8; }
 .ov4-toolbar .project-storage-actions { display: inline-flex; align-items: center; gap: 4px; }
 .ov4-toolbar .quiet-button, .ov4-toolbar .primary-btn { min-height: 30px; padding: 3px 10px; font-size: 12px; }
 .ov4-toolbar .quiet-button { border: 1px solid var(--line); background: rgba(15, 23, 42, .95) !important; color: var(--ink) !important; box-shadow: none !important; font-weight: 600; }
-.ov4-workbench { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(190px, 220px) minmax(0, 1fr) 0 0; gap: 6px; align-items: stretch; }
+.ov4-workbench { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(190px, 220px) minmax(0, 1fr) 0 0; gap: 6px; align-items: stretch; transition: grid-template-columns .2s ease; }
 .ov4-workbench.is-tools-docked:has(> .ov4-edit-rail) { grid-template-columns: minmax(190px, 220px) minmax(0, 1fr) 0 46px; }
 .ov4-workbench.is-editor-open { grid-template-columns: minmax(190px, 220px) minmax(0, 1fr) minmax(280px, 320px) 0; }
 .ov4-workbench.is-tools-docked.is-editor-open:has(> .ov4-edit-rail) { grid-template-columns: minmax(190px, 220px) minmax(0, 1fr) minmax(280px, 320px) 46px; }
+.ov4-workbench.is-sidebar-collapsed { grid-template-columns: minmax(0, 1fr) 0 0; }
+.ov4-workbench.is-sidebar-collapsed.is-tools-docked:has(> .ov4-edit-rail) { grid-template-columns: minmax(0, 1fr) 0 46px; }
+.ov4-workbench.is-sidebar-collapsed.is-editor-open { grid-template-columns: minmax(0, 1fr) minmax(280px, 320px) 0; }
+.ov4-workbench.is-sidebar-collapsed.is-tools-docked.is-editor-open:has(> .ov4-edit-rail) { grid-template-columns: minmax(0, 1fr) minmax(280px, 320px) 46px; }
+.ov4-workbench.is-sidebar-collapsed > .ov4-diagram-panel { display: none !important; }
+.ov4-panel-head { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid rgba(148, 163, 184, .14); }
+.ov4-canvas-head { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid rgba(148, 163, 184, .14); }
+.ov4-panel-head strong, .ov4-canvas-head strong { font-size: 12px; }
+.ov4-panel-head-actions { display: inline-flex; align-items: center; gap: 6px; }
+.ov4-panel-btn, .ov4-icon-button, .ov4-collapse-sidebar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, .3);
+  border-radius: 5px;
+  background: rgba(2, 6, 23, .45);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all .15s ease;
+  flex: 0 0 24px;
+  box-sizing: border-box;
+}
+.ov4-panel-btn:hover, .ov4-icon-button:hover, .ov4-collapse-sidebar-btn:hover {
+  background: rgba(148, 163, 184, .18);
+  border-color: rgba(56, 189, 248, .55);
+  color: #38bdf8;
+}
+.ov4-panel-btn svg, .ov4-icon-button svg, .ov4-collapse-sidebar-btn svg {
+  display: block;
+  pointer-events: none;
+}
+.ov4-expand-sidebar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid rgba(148, 163, 184, .4);
+  border-radius: 5px;
+  background: #ffffff;
+  color: #1e293b;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, .12);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 6px;
+  transition: all .15s ease;
+}
+.ov4-expand-sidebar-btn:hover {
+  background: #f1f5f9;
+  border-color: #38bdf8;
+  color: #0284c7;
+}
+.ov4-expand-sidebar-btn svg {
+  display: block;
+}
 .ov4-diagram-panel, .ov4-main-panel, .ov4-editor-dock { min-width: 0; min-height: 0; height: 100%; border: 1px solid var(--line); border-radius: 8px; background: rgba(15, 23, 42, .72); overflow: hidden; }
 .ov4-diagram-panel, .ov4-editor-dock, .ov4-main-panel { display: flex; flex-direction: column; }
-.ov4-panel-head, .ov4-canvas-head { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 8px 10px; border-bottom: 1px solid rgba(148, 163, 184, .14); }
-.ov4-panel-head strong, .ov4-canvas-head strong { font-size: 12px; }
-.ov4-icon-button { width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--ink); font-size: 18px; line-height: 1; cursor: pointer; }
 .ov4-diagram-list { flex: 1 1 auto; min-height: 0; display: grid; align-content: start; gap: 5px; padding: 6px; overflow: auto; }
 .ov4-diagram-item { display: grid; gap: 5px; width: 100%; border: 1px solid transparent; border-radius: 6px; padding: 9px; background: rgba(2, 6, 23, .35); color: inherit; text-align: left; cursor: pointer; }
 .ov4-diagram-item:hover, .ov4-diagram-item.is-selected { border-color: rgba(56, 189, 248, .55); background: rgba(14, 116, 144, .16); }
@@ -4443,53 +5405,237 @@ h3 { margin-bottom: 8px; font-size: 15px; color: #d9f3e8; }
 .ov4-role-footer small { color: var(--muted); font-size: 10px; }
 .ov4-main-panel { padding: 8px; background: rgba(2, 6, 23, .35); }
 .ov4-main-panel .ov4-canvas-head { margin: -8px -8px 8px; }
-.ov4-canvas-frame { flex: 1 1 auto; min-height: 0; overflow: hidden; border: 1px solid rgba(59, 130, 246, .28); border-radius: 8px; background: #f8fafc; }
-.ov4-canvas-stage { position: relative; width: 100%; height: 100%; overflow: hidden; cursor: grab; touch-action: none; user-select: none; background: linear-gradient(rgba(148,163,184,.14) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.14) 1px,transparent 1px),#f8fafc; background-size: 28px 28px; }
+.ov4-canvas-frame { flex: 1 1 auto; min-height: 0; overflow: hidden; border: 1px solid rgba(148, 163, 184, .25); border-radius: 8px; background: #f8fafc; }
+.ov4-canvas-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  background-color: #f8fafc;
+  background-image: radial-gradient(rgba(100, 116, 139, .22) 1.2px, transparent 1.2px);
+  background-size: 22px 22px;
+}
 .ov4-canvas-stage.is-panning { cursor: grabbing; }
-.ov4-org-canvas { position: absolute; top: 0; left: 0; min-width: 100%; min-height: 100%; transform-origin: 0 0; will-change: transform; }
-.ov4-org-links { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 720px; overflow: visible; }
+.ov4-org-canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+.ov4-org-links { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .ov4-org-scope { fill: none; stroke: #94a3b8; stroke-width: 1.4; stroke-dasharray: 4 5; }
-.ov4-org-relation { fill: none; stroke: #2563eb; stroke-width: 2.25; }
-.ov4-org-relation.relation-subordinate { stroke: #172033; stroke-width: 2.6; }
-.ov4-org-relation.relation-command { stroke: #dc2626; stroke-width: 2.6; }
-.ov4-org-relation.relation-control { stroke: #7c3aed; stroke-width: 2.4; }
-.ov4-org-relation.relation-admin { stroke: #64748b; stroke-dasharray: 8 4; }
-.ov4-org-relation.relation-attached { stroke: #d97706; stroke-dasharray: 7 4; }
-.ov4-org-relation.relation-coordination { stroke: #0284c7; stroke-dasharray: 5 4; }
-.ov4-org-relation.relation-support { stroke: #15803d; stroke-dasharray: 9 4 2 4; }
-.ov4-org-relation.relation-information { stroke: #0891b2; stroke-dasharray: 2 4; }
-.ov4-org-relation-label { font-size: 11px; font-weight: 700; paint-order: stroke fill; stroke: #fff; stroke-width: 3px; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
-.ov4-org-relation-label.relation-subordinate { fill: #172033; }
-.ov4-org-relation-label.relation-command { fill: #dc2626; }
-.ov4-org-relation-label.relation-control { fill: #7c3aed; }
-.ov4-org-relation-label.relation-admin { fill: #64748b; }
-.ov4-org-relation-label.relation-attached { fill: #d97706; }
-.ov4-org-relation-label.relation-coordination { fill: #0284c7; }
-.ov4-org-relation-label.relation-support { fill: #15803d; }
-.ov4-org-relation-label.relation-information { fill: #0891b2; }
-.ov4-org-relation-label.relation-other { fill: #2563eb; }
-.ov4-relation-legend { color: var(--muted); font-size: 10px; letter-spacing: .02em; }
-.ov4-org-links marker.relation-subordinate path { fill: #172033; }
+.ov4-canvas-legend-wrap { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ov4-relation-legend { display: inline-flex; align-items: center; gap: 4px; }
+.ov4-legend-title { color: var(--muted); font-size: 10.5px; margin-right: 2px; }
+.ov4-legend-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, .3);
+  background: rgba(2, 6, 23, .35);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.ov4-legend-filter:hover { background: rgba(148, 163, 184, .15); color: var(--ink); border-color: rgba(148, 163, 184, .5); }
+.ov4-legend-filter.is-active { background: #1e293b; color: #ffffff; border-color: #38bdf8; font-weight: 700; box-shadow: 0 0 8px rgba(56, 189, 248, .3); }
+.ov4-legend-filter.filter-command.is-active { background: #dc2626; border-color: #ef4444; color: #fff; box-shadow: 0 0 8px rgba(220, 38, 38, .4); }
+.ov4-legend-filter.filter-support.is-active { background: #16a34a; border-color: #22c55e; color: #fff; box-shadow: 0 0 8px rgba(22, 163, 74, .4); }
+.ov4-legend-filter.filter-information.is-active { background: #0891b2; border-color: #06b6d4; color: #fff; box-shadow: 0 0 8px rgba(8, 145, 178, .4); }
+.ov4-legend-filter.filter-coordination.is-active { background: #0284c7; border-color: #38bdf8; color: #fff; box-shadow: 0 0 8px rgba(2, 132, 199, .4); }
+.legend-swatch { display: inline-block; width: 6px; height: 6px; border-radius: 50%; }
+.legend-swatch.command { background: #dc2626; }
+.legend-swatch.support { background: #16a34a; }
+.legend-swatch.information { background: #0891b2; }
+.legend-swatch.coordination { background: #0284c7; }
+
+.ov4-stats-pill { padding: 2px 7px; border-radius: 999px; background: rgba(148, 163, 184, .15); color: var(--muted); font-size: 10px; font-weight: 600; }
+.ov4-warning-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 12px; background: #fffbeb; border: 1px solid #fde68a; color: #b45309; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.ov4-canvas-actions { display: flex; align-items: center; gap: 6px; }
+.ov4-flow-edge-label-layer { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.ov4-org-relation { fill: none; stroke: #2563eb; stroke-width: 2.2px; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; pointer-events: stroke; transition: opacity .18s ease, stroke-width .18s ease; }
+.ov4-org-relation-hit { fill: none; stroke: transparent; stroke-width: 14px; pointer-events: stroke; cursor: pointer; }
+.ov4-org-relation.relation-subordinate { stroke: #1e293b; stroke-width: 2.5px; }
+.ov4-org-relation.relation-command { stroke: #dc2626; stroke-width: 2.5px; }
+.ov4-org-relation.relation-control { stroke: #7c3aed; stroke-width: 2.2px; }
+.ov4-org-relation.relation-admin { stroke: #64748b; stroke-width: 1.8px; stroke-dasharray: 6 3; }
+.ov4-org-relation.relation-attached { stroke: #d97706; stroke-width: 2px; stroke-dasharray: 6 3; }
+.ov4-org-relation.relation-coordination { stroke: #0284c7; stroke-width: 2px; stroke-dasharray: 6 3; }
+.ov4-org-relation.relation-support { stroke: #16a34a; stroke-width: 2px; stroke-dasharray: 8 3 2 3; }
+.ov4-org-relation.relation-information { stroke: #0891b2; stroke-width: 1.8px; stroke-dasharray: 4 3; }
+.ov4-org-relation.is-backward { stroke-dasharray: 5 3; opacity: .88; }
+
+/* Link Focus & Edge Dimming */
+.ov4-org-edge.is-dimmed { opacity: 0.08 !important; }
+.ov4-org-edge.is-focused { stroke-width: 3.4px !important; opacity: 1 !important; filter: drop-shadow(0 0 5px rgba(37, 99, 235, .55)); }
+.ov4-org-edge.is-filtered-out, .ov4-org-relation-label.is-filtered-out { display: none !important; }
+
+.ov4-org-relation-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  width: max-content;
+  max-width: 200px;
+  min-height: 22px;
+  padding: 3px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1e293b;
+  font: 700 11px/1.35 "Microsoft YaHei", system-ui, sans-serif;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, .08);
+  pointer-events: auto;
+  cursor: pointer;
+  white-space: nowrap;
+  text-align: center;
+  transition: transform .12s, box-shadow .12s, opacity .18s;
+}
+.ov4-org-relation-label:hover { transform: translate(-50%, -50%) scale(1.05); box-shadow: 0 3px 8px rgba(15, 23, 42, .14); }
+.ov4-org-relation-label.relation-command { border-color: rgba(220, 38, 38, .45); color: #b91c1c; background: #fff5f5; }
+.ov4-org-relation-label.relation-subordinate { border-color: rgba(30, 41, 59, .45); color: #0f172a; background: #f8fafc; }
+.ov4-org-relation-label.relation-control { border-color: rgba(124, 58, 237, .45); color: #6d28d9; background: #f5f3ff; }
+.ov4-org-relation-label.relation-admin { border-color: rgba(100, 116, 139, .45); color: #475569; background: #f8fafc; }
+.ov4-org-relation-label.relation-attached { border-color: rgba(217, 119, 6, .45); color: #b45309; background: #fffbeb; }
+.ov4-org-relation-label.relation-coordination { border-color: rgba(2, 132, 199, .45); color: #0369a1; background: #f0f9ff; }
+.ov4-org-relation-label.relation-support { border-color: rgba(22, 163, 74, .45); color: #15803d; background: #f0fdf4; }
+.ov4-org-relation-label.relation-information { border-color: rgba(8, 145, 178, .45); color: #0e7490; background: #ecfeff; }
+.ov4-org-relation-label.relation-other { border-color: rgba(37, 99, 235, .45); color: #1d4ed8; background: #eff6ff; }
+.ov4-org-relation-label.is-backward { border-style: dashed; }
+.ov4-org-relation-label.is-dimmed { opacity: 0.1 !important; pointer-events: none; }
+.ov4-org-relation-label.is-focused { opacity: 1 !important; font-weight: 800; box-shadow: 0 0 0 2px rgba(37, 99, 235, .3), 0 4px 12px rgba(15, 23, 42, .16); transform: translate(-50%, -50%) scale(1.08); z-index: 6; }
+
+.ov4-org-links marker.relation-subordinate path { fill: #1e293b; }
 .ov4-org-links marker.relation-command path { fill: #dc2626; }
 .ov4-org-links marker.relation-control path { fill: #7c3aed; }
 .ov4-org-links marker.relation-admin path { fill: #64748b; }
 .ov4-org-links marker.relation-attached path { fill: #d97706; }
 .ov4-org-links marker.relation-coordination path { fill: #0284c7; }
-.ov4-org-links marker.relation-support path { fill: #15803d; }
+.ov4-org-links marker.relation-support path { fill: #16a34a; }
 .ov4-org-links marker.relation-information path { fill: #0891b2; }
 .ov4-org-links marker.relation-other path { fill: #2563eb; }
 .ov4-org-root { position: absolute; top: 26px; left: 50%; z-index: 1; display: grid; gap: 2px; width: 170px; padding: 8px 10px; border: 2px solid #334155; background: #fff; color: #172033; text-align: center; transform: translateX(-50%); }
 .ov4-org-root strong { font-size: 13px; }
 .ov4-org-root span { color: #64748b; font-size: 10px; }
-.ov4-org-node-wrap { position: absolute; z-index: 2; width: 184px; transform: translate(-50%, -50%); touch-action: none; }
-.ov4-org-node-wrap.is-dragging { z-index: 5; }
-.ov4-org-role { display: grid; gap: 4px; width: 100%; min-height: 74px; padding: 10px 12px; border: 1px solid #4f6f77; border-top: 5px solid #0f9f91; border-radius: 2px; background: linear-gradient(90deg,#42c8bd,#d4eee7); color: #132d2b; box-shadow: 0 3px 8px rgba(28, 50, 61, .12); text-align: center; cursor: grab; }
-.ov4-org-node-wrap.is-dragging .ov4-org-role { cursor: grabbing; box-shadow: 0 8px 18px rgba(15,23,42,.22); }
-.ov4-org-role.is-review { border-top-color: #d97706; background: linear-gradient(90deg,#f7cf73,#fff3c8); }
-.ov4-org-role:hover, .ov4-org-role:focus-visible { border-color: #0ea5e9; outline: 0; }
-.ov4-org-role strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.ov4-org-role span { color: #64748b; font-size: 10px; }
-.ov4-org-role small { color: #355f5a; font-size: 9px; font-weight: 700; }
+
+/* Node Card Wrapper & High Contrast States */
+.ov4-org-node-wrap { position: absolute; z-index: 3; width: 220px; height: 86px; transform: translate(-50%, -50%); touch-action: none; user-select: none; transition: transform .15s ease, opacity .18s ease, filter .18s ease; }
+.ov4-org-node-wrap.is-dragging { z-index: 20; }
+.ov4-org-node-wrap.is-selected { z-index: 15; transform: translate(-50%, -50%) scale(1.035); }
+.ov4-org-node-wrap.is-dimmed { opacity: 0.22; filter: grayscale(40%); }
+.ov4-org-node-wrap.is-dimmed:hover { opacity: 0.9; filter: none; }
+.ov4-org-node-wrap.is-linked .ov4-org-role { border-color: #0284c7 !important; box-shadow: 0 0 0 2px rgba(2, 132, 199, .3), 0 4px 12px rgba(15, 23, 42, .1) !important; }
+
+/* Unclicked Normal Node Card */
+.ov4-org-role {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+  padding: 8px 10px;
+  border: 1.5px solid #cbd5e1;
+  border-top: 3.5px solid #2563eb;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, .06), 0 3px 10px rgba(15, 23, 42, .04);
+  text-align: left;
+  cursor: grab;
+  box-sizing: border-box;
+  transition: border-color .15s, box-shadow .15s, transform .12s;
+  position: relative;
+}
+.ov4-org-role.side-blue { border-top-color: #2563eb; border-left: 1.5px solid #dbeafe; }
+.ov4-org-role.side-red { border-top-color: #dc2626; border-left: 1.5px solid #fee2e2; background: #fffcfc; }
+.ov4-org-role.side-neutral { border-top-color: #475569; }
+.ov4-org-role.is-review { border-top-color: #d97706; background: #fffdfa; }
+.ov4-org-role:hover, .ov4-org-role:focus-visible { border-color: #94a3b8; outline: 0; box-shadow: 0 4px 14px rgba(15, 23, 42, .12); }
+.ov4-org-node-wrap.is-dragging .ov4-org-role { cursor: grabbing; box-shadow: 0 10px 24px rgba(15, 23, 42, .24); border-color: #2563eb; transform: scale(1.02); }
+
+/* Clicked / Selected Card - High Contrast & Radiant Blue/Red Halo */
+.ov4-org-role.is-selected {
+  border: 2.5px solid #2563eb !important;
+  border-top: 3.5px solid #1d4ed8 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3.5px rgba(37, 99, 235, .28), 0 8px 24px rgba(37, 99, 235, .22) !important;
+}
+.ov4-org-role.is-selected.side-red {
+  border-color: #dc2626 !important;
+  border-top-color: #b91c1c !important;
+  box-shadow: 0 0 0 3.5px rgba(220, 38, 38, .28), 0 8px 24px rgba(220, 38, 38, .22) !important;
+}
+.ov4-org-role.is-selected .ov4-node-title {
+  color: #090d16;
+  font-weight: 800;
+}
+.ov4-selected-indicator {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, .5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 900;
+  pointer-events: none;
+}
+.ov4-selected-indicator::after {
+  content: "✓";
+  line-height: 1;
+}
+.ov4-org-role.side-red .ov4-selected-indicator {
+  background: #dc2626;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, .5);
+}
+
+.ov4-node-header { display: flex; justify-content: space-between; align-items: center; gap: 4px; line-height: 1; }
+.ov4-node-tags { display: flex; align-items: center; gap: 4px; }
+.ov4-side-badge { padding: 2px 5px; border-radius: 3px; font-size: 9.5px; font-weight: 700; line-height: 1; white-space: nowrap; }
+.ov4-side-badge.side-blue { background: #eff6ff; color: #1d4ed8; border: 1px solid rgba(37, 99, 235, .25); }
+.ov4-side-badge.side-red { background: #fef2f2; color: #b91c1c; border: 1px solid rgba(220, 38, 38, .25); }
+.ov4-side-badge.side-neutral { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+.ov4-echelon-badge { padding: 2px 5px; border-radius: 3px; background: #f1f5f9; color: #475569; font-size: 9.5px; font-weight: 600; white-space: nowrap; }
+.ov4-category-tag { font-size: 9.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 90px; color: #64748b; }
+.ov4-category-tag.side-blue { color: #0284c7; }
+.ov4-category-tag.side-red { color: #b91c1c; }
+
+.ov4-node-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-all;
+  margin: 4px 0;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+}
+.ov4-node-footer { display: flex; justify-content: space-between; align-items: center; gap: 4px; border-top: 1px dashed #e2e8f0; padding-top: 3px; margin-top: 2px; color: #64748b; font-size: 9.5px; }
+.ov4-meta-tasks { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
+.ov4-state-indicator { font-size: 9px; font-weight: 600; padding: 1px 4px; border-radius: 2px; }
+.ov4-state-indicator.ready { color: #15803d; background: #dcfce7; }
+.ov4-state-indicator.review { color: #b45309; background: #fef3c7; }
+.ov4-classification-list article.is-selected-row { border-color: rgba(56, 189, 248, .8) !important; background: rgba(14, 116, 144, .22) !important; }
+.ov2-filter-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; margin-bottom: 12px; border-radius: 6px; background: rgba(14, 116, 144, .15); border: 1px solid rgba(56, 189, 248, .35); color: var(--ink); font-size: 11.5px; }
+.ov2-filter-banner strong { color: #38bdf8; }
+.ov2-filter-banner button { padding: 2px 8px; font-size: 11px; }
+.is-inherited-focus { outline: 2px solid #38bdf8; outline-offset: 2px; border-radius: 6px; }
+.ov4-batch-bar { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; margin-bottom: 8px; border-radius: 6px; background: rgba(2, 6, 23, .4); border: 1px dashed rgba(148, 163, 184, .25); }
+.ov4-batch-bar small { color: var(--muted); font-size: 10px; }
+.ov4-batch-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ov4-batch-controls select { box-sizing: border-box; width: 100%; border: 1px solid rgba(148, 163, 184, .3); border-radius: 4px; padding: 4px 6px; background: rgba(15, 23, 42, .8); color: var(--ink); font-size: 10px; }
 .ov4-editor-dock.is-collapsed { visibility: hidden; border: 0; }
 .ov4-editor-dock-head { display: flex; flex: 0 0 auto; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 10px; border-bottom: 1px solid rgba(148, 163, 184, .14); }
 .ov4-editor-dock-head div { display: grid; gap: 2px; }

@@ -661,6 +661,11 @@ export function createDodafProductController({
       render();
       return true;
     }
+    if (action === "ov4-toggle-sidebar") {
+      state.ov4SidebarCollapsed = !state.ov4SidebarCollapsed;
+      render();
+      return true;
+    }
     if (action === "ov4-add-diagram") {
       const next = addOv4Diagram(resolveDodafProduct(state, "ov4").model);
       state.ov4SelectedDiagramId = next.diagrams?.at(-1)?.id || "";
@@ -697,6 +702,41 @@ export function createDodafProductController({
     if (action === "ov4-relation-classification") {
       if (!ds.relationId || ds.field !== "relationshipCategory") return true;
       persistOv6("ov4", updateOv4RelationClassification(resolveDodafProduct(state, "ov4").model, ds.relationId, { relationshipCategory: el?.value || "" }));
+      return true;
+    }
+    if (action === "ov4-select-role") {
+      if (!ds.roleId) return true;
+      state.ov4SelectedRoleId = (state.ov4SelectedRoleId === ds.roleId) ? "" : ds.roleId;
+      render();
+      return true;
+    }
+    if (action === "clear-ov2-node-filter") {
+      state.ov2SelectedNodeId = "";
+      render();
+      return true;
+    }
+    if (action === "ov4-batch-echelon") {
+      const val = el?.value;
+      if (!val) return true;
+      const model = resolveDodafProduct(state, "ov4").model;
+      const targetRoleIds = state.ov4SelectedRoleId ? [state.ov4SelectedRoleId] : (model.roles || []).map((r) => r.id);
+      let nextModel = model;
+      for (const rId of targetRoleIds) {
+        nextModel = updateOv4RoleClassification(nextModel, rId, { echelonCategory: val });
+      }
+      persistOv6("ov4", nextModel, `已批量应用组织层级：${val}`);
+      return true;
+    }
+    if (action === "ov4-batch-org") {
+      const val = el?.value;
+      if (!val) return true;
+      const model = resolveDodafProduct(state, "ov4").model;
+      const targetRoleIds = state.ov4SelectedRoleId ? [state.ov4SelectedRoleId] : (model.roles || []).map((r) => r.id);
+      let nextModel = model;
+      for (const rId of targetRoleIds) {
+        nextModel = updateOv4RoleClassification(nextModel, rId, { organizationCategory: val });
+      }
+      persistOv6("ov4", nextModel, `已批量应用组织类别：${val}`);
       return true;
     }
 

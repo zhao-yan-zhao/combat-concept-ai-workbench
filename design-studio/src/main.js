@@ -100,6 +100,7 @@ const {
   stateMachineChatController,
   stateMachineCanvasController,
   ov4CanvasController,
+  ov2CanvasController,
   researchChatProjectSync,
   collaborationController
 } = wireControllers({
@@ -676,6 +677,9 @@ function bindDynamicEvents() {
       } else if (workflowPrimaryStepIds.includes(viewId)) {
         state.relatedModelReturnContext = null;
       }
+      if (state.activeView === "ov4" && viewId === "ov2" && state.ov4SelectedRoleId) {
+        state.ov2SelectedNodeId = state.ov4SelectedRoleId;
+      }
       closeMenubarMenus();
       // Left floating step rail and menus: same entry path as workflow gate.
       const fromPhaseSubflow = (state.activeView === "phase-action" || state.activeView === "ov6c" || state.activeView === "ov6b" || state.activeView === "ov6a");
@@ -773,7 +777,13 @@ function bindDynamicEvents() {
     button.addEventListener("click", () => select("activity", button.dataset.activity));
   });
   document.querySelectorAll("[data-ov2-exchange]").forEach((button) => {
-    button.addEventListener("click", () => select("ov2-exchange", button.dataset.ov2Exchange));
+    button.addEventListener("click", () => {
+      const exchangeId = button.dataset.ov2Exchange;
+      state.ov2SelectedExchangeId = exchangeId;
+      state.ov2EditorOpen = true;
+      select("ov2-exchange", exchangeId);
+      render();
+    });
   });
   document.querySelectorAll("[data-ov3-exchange]").forEach((button) => {
     button.addEventListener("click", () => select("ov3-exchange", button.dataset.ov3Exchange));
@@ -911,6 +921,7 @@ function bindDynamicEvents() {
   ov1CanvasController.bind(document);
   stateMachineCanvasController.bind(document);
   ov4CanvasController.bind(document);
+  ov2CanvasController.bind(document);
   sequenceCanvasController.bind(document);
   ov1bCanvasController.bind(document);
   ov5CanvasController.bind(document);
@@ -1268,6 +1279,9 @@ async function handleAction(action, source = null) {
   if (action === "save-and-advance-ov4") {
     void (async () => {
       await dodafProductController.saveProduct("ov4");
+      if (state.ov4SelectedRoleId) {
+        state.ov2SelectedNodeId = state.ov4SelectedRoleId;
+      }
       await navigateToResearchView("ov2", { toast: "已保存组织关系 (OV-4)，进入作战资源流 (OV-2)", entrySource: "ov4" });
     })();
     return;
@@ -1277,6 +1291,114 @@ async function handleAction(action, source = null) {
       await dodafProductController.saveProduct("ov2");
       await navigateToResearchView("ov3", { toast: "已保存作战资源流 (OV-2)，进入资源流矩阵 (OV-3)", entrySource: "ov2" });
     })();
+    return;
+  }
+  if (action === "ov2-toggle-help") {
+    state.ov2HelpOpen = state.ov2HelpOpen !== true;
+    render();
+    return;
+  }
+  if (action === "ov2-set-view-mode") {
+    state.ov2ViewMode = source?.dataset?.mode || "canvas";
+    render();
+    return;
+  }
+  if (action === "ov2-filter-flow") {
+    state.ov2FlowFilter = source?.dataset?.flow || "all";
+    render();
+    return;
+  }
+  if (action === "ov2-select-node") {
+    const nodeId = source?.dataset?.nodeId || "";
+    state.ov2SelectedNodeId = state.ov2SelectedNodeId === nodeId ? "" : nodeId;
+    render();
+    return;
+  }
+  if (action === "clear-ov2-node-filter") {
+    state.ov2SelectedNodeId = "";
+    render();
+    return;
+  }
+  if (action === "ov2-close-editor") {
+    state.ov2SelectedExchangeId = "";
+    state.ov2EditorOpen = false;
+    render();
+    return;
+  }
+  if (action === "ov2-reverse-exchange") {
+    const exchangeId = source?.dataset?.exchangeId || state.ov2SelectedExchangeId;
+    if (exchangeId && state.ov2?.exchanges) {
+      const ex = state.ov2.exchanges.find((item) => item.id === exchangeId);
+      if (ex) {
+        const tempId = ex.sourceNodeId;
+        const tempLabel = ex.sourceNodeLabel;
+        const tempForce = ex.sourceForceRef;
+        const tempActId = ex.sourceActivityId;
+        const tempActTitle = ex.sourceActivityTitle;
+        const tempOut = ex.output;
+
+        ex.sourceNodeId = ex.targetNodeId;
+        ex.sourceNodeLabel = ex.targetNodeLabel;
+        ex.sourceForceRef = ex.targetForceRef;
+        ex.sourceActivityId = ex.targetActivityId;
+        ex.sourceActivityTitle = ex.targetActivityTitle;
+        ex.output = ex.input;
+
+        ex.targetNodeId = tempId;
+        ex.targetNodeLabel = tempLabel;
+        ex.targetForceRef = tempForce;
+        ex.targetActivityId = tempActId;
+        ex.targetActivityTitle = tempActTitle;
+        ex.input = tempOut;
+
+        void dodafProductController.saveProduct("ov2");
+        showToast(`已反转流向：${ex.sourceNodeLabel} ➔ ${ex.targetNodeLabel}`);
+        render();
+      }
+    }
+    return;
+  }
+  if (action === "ov2-delete-exchange") {
+    const exchangeId = source?.dataset?.exchangeId || state.ov2SelectedExchangeId;
+    if (exchangeId && state.ov2?.exchanges) {
+      state.ov2.exchanges = state.ov2.exchanges.filter((item) => item.id !== exchangeId);
+      if (state.ov2SelectedExchangeId === exchangeId) {
+        state.ov2SelectedExchangeId = "";
+        state.ov2EditorOpen = false;
+      }
+      void dodafProductController.saveProduct("ov2");
+      showToast("已删除该条作战资源流");
+      render();
+    }
+    return;
+  }
+  if (action === "ov2-add-exchange") {
+    const nodes = state.ov2?.nodes || [];
+    const src = nodes[0] || { id: "node-1", label: "执行节点1" };
+    const tgt = nodes[1] || nodes[0] || { id: "node-2", label: "执行节点2" };
+    const newEx = {
+      id: `ov2-${Date.now().toString(36)}`,
+      sourceNodeId: src.id,
+      targetNodeId: tgt.id,
+      sourceNodeLabel: src.label || src.id,
+      targetNodeLabel: tgt.label || tgt.id,
+      label: "新资源交换",
+      flowType: "信息流",
+      output: `${src.label || src.id}输出数据`,
+      input: `${tgt.label || tgt.id}接收数据`,
+      sourceActivityTitle: "",
+      targetActivityTitle: "",
+      taskRefs: []
+    };
+    state.ov2 = {
+      ...(state.ov2 || {}),
+      exchanges: [newEx, ...(state.ov2?.exchanges || [])]
+    };
+    state.ov2SelectedExchangeId = newEx.id;
+    state.ov2EditorOpen = true;
+    void dodafProductController.saveProduct("ov2");
+    showToast("已新建资源流，请在右侧完善载荷与契约");
+    render();
     return;
   }
   if (action === "save-and-advance-ov3") {

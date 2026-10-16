@@ -41,6 +41,7 @@ import { createCollaborationController } from "../collaborationController.js";
 import { createDodafProductController } from "../dodafProductController.js";
 import { createStateMachineCanvasController } from "../stateMachineCanvasController.js";
 import { createOv4CanvasController } from "../ov4CanvasController.js";
+import { createOv2CanvasController } from "../ov2CanvasController.js";
 import { createAiOv1Draft } from "../ov1DraftStore.js";
 import { saveOv1Model } from "../ov1Store.js";
 import { selectionFor } from "../ui.js";
@@ -710,6 +711,10 @@ export function wireControllers({
       writeArchitecture: true
     })
   });
+  const ov2CanvasController = createOv2CanvasController({
+    getState: () => state,
+    render
+  });
 
   const ruleLibraryChatController = createRuleLibraryChatController({
     projectId: activeProjectId,
@@ -804,6 +809,7 @@ export function wireControllers({
     stateMachineChatController,
     stateMachineCanvasController,
     ov4CanvasController,
+    ov2CanvasController,
     researchChatProjectSync,
     collaborationController
   };
