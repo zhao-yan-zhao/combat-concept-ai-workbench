@@ -8,10 +8,10 @@ export function renderConceptGraphic(state) {
   const confirmed = isConceptGraphicPlanConfirmed(plan, state.conceptGraphicStorage);
   const status = state.conceptGraphicStorage?.stale
     ? "已过期"
-    : confirmed
-      ? "已确认"
+    : (confirmed || nodes.length > 0)
+      ? "已就绪"
       : plan.status === "draft"
-        ? "草案待复核"
+        ? "已就绪"
         : "待生成";
   const nodes = Array.isArray(plan.nodes) ? plan.nodes : [];
   const edges = Array.isArray(plan.edges) ? plan.edges : [];

@@ -6,7 +6,7 @@ import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js"
  * The AI entry is intentionally first and cannot be omitted from a subflow.
  */
 const SUBFLOW_TOOLS = Object.freeze({
-  "operational-task": { label: "作战任务工具箱", ai: ["generate-operational-tasks", "AI 生成任务"], items: [["confirm-operational-tasks", "确认任务", "check"], ["open-context-panel", "查看上游依据", "doc"]] },
+  "operational-task": { label: "作战任务工具箱", ai: ["generate-operational-tasks", "AI 生成任务"], items: [["add-operational-task", "新增作战任务", "plus"], ["confirm-operational-tasks", "确认任务", "check"], ["open-context-panel", "查看上游依据", "doc"]] },
   "phase-action": { label: "阶段行动工具箱", ai: ["generate-phase-action", "AI 生成阶段"], items: [["toggle-phase-action-chat", "阶段行动对话", "chat"], ["confirm-phase-action", "确认阶段行动", "check"]] },
   ov1b: { label: "任务分解工具箱", ai: ["generate-task-decomposition", "AI 生成任务分解"], items: [["toggle-ov1b-edit", "编辑任务分解", "relations"], ["ov1b-review-current", "确认/撤回当前任务组", "check"], ["ov1b-add-group", "新增任务组", "plus"], ["seed-dodaf-ov1b", "刷新任务来源", "refresh"]] },
   ov1c: { label: "任务活动映射工具箱", ai: ["open-subflow-ai", "AI 检查映射"], items: [["seed-dodaf-ov1c", "刷新来源", "refresh"], ["save-dodaf-ov1c", "保存映射", "check"]] },
@@ -18,7 +18,7 @@ const SUBFLOW_TOOLS = Object.freeze({
   ov3: { label: "资源流矩阵工具箱", ai: ["open-subflow-ai", "AI 检查矩阵"], items: [["seed-dodaf-ov3", "刷新来源", "refresh"], ["save-dodaf-ov3", "保存矩阵", "check"]] },
   ov5a: { label: "活动分解工具箱", ai: ["open-subflow-ai", "AI 检查分解"], items: [["sync-ov5a-from-ov5b", "从活动同步", "refresh"], ["sync-ov5b-from-ov5a", "应用父子关系", "relations"]] },
   ov5: { label: "作战活动工具箱", ai: ["generate-ov5", "AI 生成活动"], items: [["add-activity", "新增活动", "plus"], ["open-structure-review", "结构核对", "check"]] },
-  ov6a: { label: "规则库工具箱", ai: ["open-rule-library-chat", "AI 复核规则"], items: [["seed-dodaf-ov6a", "刷新规则来源", "refresh"], ["save-dodaf-ov6a", "保存规则库", "check"]] },
+  ov6a: { label: "规则库工具箱", ai: ["open-rule-library-chat", "打开 AI 对话"], items: [["seed-dodaf-ov6a", "刷新规则来源", "refresh"], ["save-dodaf-ov6a", "保存规则库", "check"]] },
   ov6b: { label: "状态机工具箱", ai: ["open-state-machine-chat", "AI 分析状态机"], items: [["toggle-ov6b-tools", "状态机编辑", "state"], ["seed-dodaf-ov6b", "刷新状态来源", "refresh"]] },
   ov6c: { label: "时序图工具箱", ai: ["open-sequence-chat", "AI 生成时序"], items: [["toggle-ov6c-tools", "时序编辑", "transition"], ["seed-dodaf-ov6c", "刷新时序来源", "refresh"]] },
   ov7: { label: "状态活动映射工具箱", ai: ["open-subflow-ai", "AI 检查映射"], items: [["seed-dodaf-ov7", "刷新来源", "refresh"], ["save-dodaf-ov7", "保存映射", "check"]] },

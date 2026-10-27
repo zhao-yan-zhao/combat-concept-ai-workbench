@@ -119,12 +119,13 @@ export function listRuleBindingCandidates(state = {}) {
     seen.add(key);
     candidates.push({ type, ref: id, name: String(name || id).trim() || id, source });
   };
+  (state.phaseAction?.phases || []).forEach((phase, index) => push("phase", phase?.id || `phase-${index + 1}`, phase?.name || phase?.id || `阶段 ${index + 1}`, "phaseAction.phases"));
   (state.forceMission?.tasks || []).forEach((task, index) => push("task", task?.id || `task-${index + 1}`, task?.name || task?.id || `任务 ${index + 1}`, "forceMissionPlan.tasks"));
   [
     ...(state.forceMission?.forces || []),
     ...(state.forceMission?.combatForces || [])
   ].forEach((force, index) => push("force", force?.id || `force-${index + 1}`, force?.name || force?.id || `兵力 ${index + 1}`, "forceMissionPlan.forces"));
-  return candidates.slice(0, 96);
+  return candidates.slice(0, 128);
 }
 
 export function listStableReferenceCandidates(state = {}) {
@@ -301,11 +302,13 @@ export function toggleOv6aActivityBinding(model, ruleId, activityRef, { checked 
 export function toggleOv6aObjectBinding(model, ruleId, bindingType, objectRef, { checked = true, status = "pending" } = {}) {
   const next = cloneModel(ensureOv6aModel(model));
   const rule = (next.rules || []).find((item) => item.id === ruleId);
-  const config = bindingType === "task"
-    ? { field: "taskBindings", refField: "taskRef" }
-    : bindingType === "force"
-      ? { field: "forceBindings", refField: "forceRef" }
-      : null;
+  const config = bindingType === "phase"
+    ? { field: "phaseBindings", refField: "phaseRef" }
+    : bindingType === "task"
+      ? { field: "taskBindings", refField: "taskRef" }
+      : bindingType === "force"
+        ? { field: "forceBindings", refField: "forceRef" }
+        : null;
   if (!rule || !config || !objectRef) return normalizeDodafOv6a(next);
   const bindings = Array.isArray(rule[config.field]) ? [...rule[config.field]] : [];
   const existingIndex = bindings.findIndex((item) => item[config.refField] === objectRef);
@@ -323,11 +326,13 @@ export function toggleOv6aObjectBinding(model, ruleId, bindingType, objectRef, {
 export function setOv6aObjectBindingStatus(model, ruleId, bindingType, objectRef, status) {
   const next = cloneModel(ensureOv6aModel(model));
   const rule = (next.rules || []).find((item) => item.id === ruleId);
-  const config = bindingType === "task"
-    ? { field: "taskBindings", refField: "taskRef" }
-    : bindingType === "force"
-      ? { field: "forceBindings", refField: "forceRef" }
-      : null;
+  const config = bindingType === "phase"
+    ? { field: "phaseBindings", refField: "phaseRef" }
+    : bindingType === "task"
+      ? { field: "taskBindings", refField: "taskRef" }
+      : bindingType === "force"
+        ? { field: "forceBindings", refField: "forceRef" }
+        : null;
   const binding = config && rule ? (rule[config.field] || []).find((item) => item[config.refField] === objectRef) : null;
   if (!binding) return normalizeDodafOv6a(next);
   binding.bindingStatus = BINDING_STATUSES.includes(status) ? status : "pending";

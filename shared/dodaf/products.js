@@ -197,9 +197,9 @@ export function normalizeDodafOv1b(value) {
         }));
       }
       const taskRefs = steps.length ? [...new Set(steps.flatMap((st) => st.taskRefs))] : rawTaskRefs;
-      if (!taskRefs.length) return [];
+      if (!taskRefs.length && !item?.id && !item?.name) return [];
       let id = clean(item?.id, 180) || `task-group-${index + 1}`;
-      if (seenIds.has(id)) id = stableId("task-group", taskRefs.join("::"), index + 1);
+      if (seenIds.has(id)) id = stableId("task-group", taskRefs.join("::") || "empty", index + 1);
       seenIds.add(id);
       const status = ["pending_review", "confirmed", "stale", "conflict"].includes(clean(item?.status, 40))
         ? clean(item.status, 40)
@@ -1086,7 +1086,8 @@ function normalizeRuleChangeSet(value) {
       rule: {
         id: rule.id, name: rule.name, type: rule.type, scope: rule.scope, description: rule.description,
         phaseRefs: (change?.rule?.phaseRefs || []).map((item) => clean(item, 160)).filter(Boolean).slice(0, 24),
-        taskRefs: (change?.rule?.taskRefs || []).map((item) => clean(item, 160)).filter(Boolean).slice(0, 48)
+        taskRefs: (change?.rule?.taskRefs || []).map((item) => clean(item, 160)).filter(Boolean).slice(0, 48),
+        forceRefs: (change?.rule?.forceRefs || []).map((item) => clean(item, 160)).filter(Boolean).slice(0, 48)
       },
       rationale: clean(change?.rationale, 800),
       status: ["pending", "applied", "ignored"].includes(change?.status) ? change.status : "pending"

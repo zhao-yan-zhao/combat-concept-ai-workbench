@@ -6,7 +6,7 @@
     <base href="/design-studio/">
     <title>作战概念设计工具</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="./styles.css?v=0.67-force-rail">
+    <link rel="stylesheet" href="./styles.css?v=1793018181354">
   </head>
   <body>
     <div class="studio-shell" id="studioShell">
@@ -102,6 +102,9 @@
             <span id="workflowModeEstimate">通常少于 1 分钟</span>
           </div>
           <small id="workflowModeProgressHint">进度按预计耗时估算，实际以 AI 返回为准</small>
+          <button id="workflowModeOverlayDismissBtn" class="workflow-mode-overlay-dismiss" type="button" data-action="force-dismiss-busy-overlay" hidden title="操作耗时较长时可点击退出等待">
+            解除等待并恢复工作台
+          </button>
         </div>
       </div>
 
@@ -165,6 +168,6 @@
     <div class="toast" id="toast" role="status"></div>
     <input id="knowledgeVaultInput" type="file" accept=".md,.markdown,.txt" webkitdirectory directory multiple hidden>
     <script src="./vendor/drawflow-0.0.60.min.js"></script>
-    <script type="module" src="./src/main.js?v=0.67-force-rail"></script>
+    <script type="module" src="./src/main.js?v=0.68-task-group"></script>
   </body>
 </html>

@@ -20,12 +20,12 @@ export function renderOperationalTasks(state = {}) {
   return `<section class="operational-task-workbench">
     <header class="operational-task-header">
       <div><div class="operational-task-title-line"><h2>作战任务</h2>${renderStatus(confirmed, generating, source)}</div></div>
-      <div class="operational-task-actions"><button type="button" class="${tasks.length ? "quiet-button" : "primary-btn"}" data-action="generate-operational-tasks" ${ready && !generating ? "" : "disabled"}>${generating ? generationLabel : tasks.length ? "AI 一键重新生成" : "AI 一键生成"}</button>${tasks.length ? `<button type="button" class="quiet-button danger-quiet" data-action="clear-all-operational-tasks" ${generating ? "disabled" : ""} title="清空全部作战任务">清空全部任务</button>` : ""}<button type="button" data-action="confirm-operational-tasks" ${tasks.length && !confirmed && !generating && !incompleteAreaCount ? "" : "disabled"}>${confirmed ? "任务已确认" : incompleteAreaCount ? `${incompleteAreaCount} 项区域待补齐` : "确认作战任务"}</button></div>
+      <div class="operational-task-actions">${tasks.length ? `<button type="button" class="quiet-button" data-view="ov6a" data-related-model="true" title="基于作战任务生成并审核规则库 (OV-6a)">任务规则 OV-6a</button><button type="button" class="quiet-button" data-view="ov6b" data-related-model="true" title="基于作战任务生成状态机 (OV-6b)">任务状态机 OV-6b</button><button type="button" class="quiet-button" data-view="ov6c" data-related-model="true" title="基于作战任务生成时序图 (OV-6c)">任务时序 OV-6c</button>` : ""}<button type="button" class="quiet-button" data-action="add-operational-task" ${generating ? "disabled" : ""} title="手动新增作战任务">＋ 新增任务</button><button type="button" class="${tasks.length ? "quiet-button" : "primary-btn"}" data-action="generate-operational-tasks" ${ready && !generating ? "" : "disabled"}>${generating ? generationLabel : tasks.length ? "AI 一键重新生成" : "AI 一键生成"}</button>${tasks.length ? `<button type="button" class="quiet-button danger-quiet" data-action="clear-all-operational-tasks" ${generating ? "disabled" : ""} title="清空全部作战任务">清空全部任务</button>` : ""}<button type="button" data-action="confirm-operational-tasks" ${tasks.length && !confirmed && !generating && !incompleteAreaCount ? "" : "disabled"}>${confirmed ? "任务已确认" : incompleteAreaCount ? `${incompleteAreaCount} 项区域待补齐` : "确认作战任务"}</button></div>
     </header>
     ${!ready ? `<p class="force-next-banner is-warn">请先在“阶段行动”中生成阶段，再生成作战任务与区域候选。</p>` : ""}
     <div class="operational-task-layout ${selected ? "has-selection" : "is-empty"}">
-      <aside class="operational-task-list" aria-label="作战任务列表" data-grouped-list-panel="operational-task" data-grouped-list-dimensions="阶段:phase|阵营:side|任务类型:type|状态:status" data-grouped-list-default-group="phase"><div class="operational-pane-head"><div><span>任务清单</span><strong>${tasks.length}</strong></div><small>按阶段与阵营</small></div><div class="operational-task-list-scroll" data-grouped-list-items>${tasks.map((task, index) => renderTaskListItem(task, index, selected?.id, phaseNames, confirmed)).join("") || renderEmpty()}</div><div class="operational-task-completion"><span>区域补全</span><strong>${completeCount}/${tasks.length}</strong></div></aside>
-      <main class="operational-task-editor">${selected ? renderTaskEditor(selected, phaseNames, listCmoMissionTypes()) : renderWorkspaceEmpty(ready, generating)}</main>
+      <aside class="operational-task-list" aria-label="作战任务列表" data-grouped-list-panel="operational-task" data-grouped-list-dimensions="阶段:phase|阵营:side|任务类型:type|状态:status" data-grouped-list-default-group="phase"><div class="operational-pane-head"><div><span>任务清单</span><strong>${tasks.length}</strong></div><div><small>按阶段与阵营</small><button type="button" class="quiet-button compact" data-action="add-operational-task" ${generating ? "disabled" : ""} title="新增作战任务">＋ 新增</button></div></div><div class="operational-task-list-scroll" data-grouped-list-items>${tasks.map((task, index) => renderTaskListItem(task, index, selected?.id, phaseNames, confirmed)).join("") || renderEmpty()}</div><div class="operational-task-completion"><span>区域补全</span><strong>${completeCount}/${tasks.length}</strong></div></aside>
+      <main class="operational-task-editor">${selected ? renderTaskEditor(selected, phaseNames, listCmoMissionTypes(), phases) : renderWorkspaceEmpty(ready, generating)}</main>
       <aside class="operational-area-editor">${selected ? renderAreaEditor(selected) : `<div class="operational-empty-side"><span>区域</span><p>选择任务后编辑区域类型和坐标。</p></div>`}</aside>
     </div>
   </section>`;
@@ -33,8 +33,8 @@ export function renderOperationalTasks(state = {}) {
 
 function renderStatus(confirmed, generating, source) {
   if (generating) return `<span class="operational-status is-running">生成中</span>`;
-  if (confirmed) return `<span class="operational-status is-confirmed">已确认</span>`;
-  if (source) return `<span class="operational-status">${source === "ai" ? "AI 草案" : source === "mixed" ? "AI 补齐中" : "本地草案"}</span>`;
+  if (confirmed) return `<span class="operational-status is-confirmed">已就绪</span>`;
+  if (source) return `<span class="operational-status is-confirmed">已就绪</span>`;
   return `<span class="operational-status">待生成</span>`;
 }
 
@@ -42,15 +42,18 @@ function renderTaskListItem(task, index, selectedId, phaseNames, confirmed) {
   const coordinateCount = (task.area?.points || []).filter((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude)).length;
   const phaseLabel = phaseNames.get(task.phaseId) || "未挂接阶段";
   const sideLabel = task.side === "hostile" ? "红方" : task.side === "friendly" ? "蓝方" : "其他";
-  const statusLabel = confirmed ? "已确认" : coordinateCount ? "待确认" : "待补全";
+  const statusLabel = confirmed ? "已就绪" : coordinateCount ? "已就绪" : "待补全";
   return `<div class="operational-task-list-item ${task.id === selectedId ? "is-active" : ""}" data-grouped-list-item data-group-phase="${escapeHtml(phaseLabel)}" data-group-side="${sideLabel}" data-group-type="${escapeHtml(task.missionType || "未分类")}" data-group-status="${statusLabel}" data-search="${escapeHtml([task.id, task.name, task.objective, task.expectedEffect, phaseLabel, sideLabel, task.missionType].filter(Boolean).join(" "))}"><button type="button" class="operational-task-select" data-action="select-operational-task" data-task-id="${escapeHtml(task.id)}"><span class="operational-task-index">${String(index + 1).padStart(2, "0")}</span><span class="operational-task-list-copy"><strong>${escapeHtml(task.name)}</strong><small>${escapeHtml(phaseLabel)} · ${sideLabel}</small></span></button><button type="button" class="operational-task-delete" data-action="remove-operational-task" data-task-id="${escapeHtml(task.id)}" title="删除任务" aria-label="删除任务">×</button></div>`;
 }
 
-function renderTaskEditor(task, phaseNames, missionTypes) {
-  return `<div class="operational-editor-scroll"><div class="operational-pane-head"><div><span>任务定义</span><strong>${task.side === "hostile" ? "红方" : "蓝方"}</strong></div><small>${escapeHtml(phaseNames.get(task.phaseId) || "未挂接阶段")}</small></div>
+function renderTaskEditor(task, phaseNames, missionTypes, phases = []) {
+  const selectedPhase = phases.find((p) => p.id === task.phaseId);
+  const phaseLabel = selectedPhase?.name || phaseNames.get(task.phaseId) || "未挂接阶段";
+  return `<div class="operational-editor-scroll"><div class="operational-pane-head"><div><span>任务定义</span><strong>${task.side === "hostile" ? "红方" : "蓝方"}</strong></div><small>${escapeHtml(phaseLabel)}</small></div>
     <div class="operational-form-section"><label class="operational-field is-wide"><span>任务名称</span><input data-operational-task-field="name" data-task-id="${escapeHtml(task.id)}" value="${escapeHtml(task.name)}"></label><label class="operational-field is-wide"><span>任务类型 <em>CMO</em></span><select data-operational-task-field="missionType" data-task-id="${escapeHtml(task.id)}">${missionTypes.map((type) => `<option value="${escapeHtml(type.id)}" ${type.id === task.missionType ? "selected" : ""}>${escapeHtml(type.label)}</option>`).join("")}</select></label></div>
+    <div class="operational-form-section"><label class="operational-field"><span>所属阶段</span><select data-operational-task-field="phaseId" data-task-id="${escapeHtml(task.id)}">${phases.length ? phases.map((phase) => `<option value="${escapeHtml(phase.id)}" ${phase.id === task.phaseId ? "selected" : ""}>${escapeHtml(phase.name)}</option>`).join("") : `<option value="">未挂接阶段</option>`}</select></label><label class="operational-field"><span>所属阵营</span><select data-operational-task-field="side" data-task-id="${escapeHtml(task.id)}"><option value="friendly" ${task.side === "friendly" ? "selected" : ""}>蓝方</option><option value="hostile" ${task.side === "hostile" ? "selected" : ""}>红方</option></select></label></div>
     <div class="operational-form-section is-prose"><label class="operational-field"><span>任务目的</span><textarea data-operational-task-field="objective" data-task-id="${escapeHtml(task.id)}">${escapeHtml(task.objective)}</textarea></label><label class="operational-field"><span>预期效果</span><textarea data-operational-task-field="expectedEffect" data-task-id="${escapeHtml(task.id)}">${escapeHtml(task.expectedEffect || "")}</textarea></label></div>
-    <div class="operational-source-block"><span>阶段行动来源</span><p>${escapeHtml(task.sourceAction || "未记录来源行动")}</p></div></div>`;
+    <div class="operational-source-block"><span>阶段行动来源</span><p>${escapeHtml(task.sourceAction || "人工新增作战任务")}</p></div></div>`;
 }
 
 function renderAreaEditor(task) {
@@ -82,8 +85,8 @@ function optionList(options, selected) { return options.map(([value, label]) => 
 function renderEmpty() { return `<div class="operational-list-empty"><span>00</span><p>尚无任务</p></div>`; }
 function renderWorkspaceEmpty(ready, generating = false) {
   return `<div class="operational-workspace-empty">
-    <strong>${ready ? "生成作战任务" : "等待阶段确认"}</strong>
-    <p>${ready ? "AI 将同时给出 CMO 任务类型、区域用途和有依据的坐标候选。" : "阶段行动确认后，本步骤才具备生成依据。"}</p>
-    ${ready ? `<div class="operational-workspace-empty-actions" style="margin-top: 1rem;"><button type="button" class="primary-btn" data-action="generate-operational-tasks" ${generating ? "disabled" : ""}>AI 一键生成作战任务</button></div>` : ""}
+    <strong>${ready ? "生成或新增作战任务" : "等待阶段确认"}</strong>
+    <p>${ready ? "AI 将同时给出 CMO 任务类型、区域用途和有依据的坐标候选；也可手动新增任务进行自定义设计。" : "阶段行动确认后，本步骤才具备生成依据。"}</p>
+    ${ready ? `<div class="operational-workspace-empty-actions" style="margin-top: 1rem; display: flex; gap: 8px; justify-content: center;"><button type="button" class="primary-btn" data-action="generate-operational-tasks" ${generating ? "disabled" : ""}>AI 一键生成作战任务</button><button type="button" class="quiet-button" data-action="add-operational-task" ${generating ? "disabled" : ""}>手动新增任务</button></div>` : ""}
   </div>`;
 }

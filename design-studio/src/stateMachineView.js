@@ -54,7 +54,8 @@ export function renderStateMachineWorkbench(state = {}) {
   const toolsOpen = state.ov6bToolsOpen === true;
   const editorOpen = Boolean(state.ov6bEditorOpen);
   const chatOpen = Boolean(state.stateMachineChatOpen);
-  const chatGenerating = Boolean(state.stateMachineChatGenerating || state.stateMachinePregenerating);
+  const pregenerating = Boolean(state.stateMachinePregenerating);
+  const chatGenerating = Boolean(state.stateMachineChatGenerating || pregenerating);
   const totalStates = machines.reduce((sum, item) => sum + (item.states?.length || 0), 0);
   const totalTransitions = machines.reduce((sum, item) => sum + (item.transitions?.length || 0), 0);
   const reviewCount = machines.filter((item) => !diagnoseOv6bMachineLocal(item).ok).length;
@@ -69,6 +70,8 @@ export function renderStateMachineWorkbench(state = {}) {
         <div class="sm-toolbar">
           ${storage ? renderProjectStorageActions(storage, { refreshAction: "refresh-project-ov6b" }) : ""}
           ${renderDerivedViewProvenancePopover("ov6b")}
+          <button type="button" class="quiet-button" data-action="ov6b-generate-task-machines" ${pregenerating ? "disabled" : ""} title="基于作战任务执行全周期生成状态机">生成任务状态机</button>
+          <button type="button" class="quiet-button" data-action="ov6b-generate-force-machines" ${pregenerating ? "disabled" : ""} title="基于作战兵力执勤与行动生成状态机">生成兵力状态机</button>
           ${machines.length ? `<button type="button" class="quiet-button danger-quiet" data-action="ov6b-clear-all" title="清空全部状态机">清空全部</button>` : ""}
           <button type="button" class="primary-btn" data-action="save-dodaf-ov6b">保存</button>
           <button type="button" class="quiet-button" data-action="advance-workflow">下一步</button>
@@ -893,7 +896,9 @@ function renderEmptyWorkbench(subjects = [], { toolsOpen = false, chatOpen = fal
       <h3>尚无状态机</h3>
       <p>来自阶段行动的候选定义为阶段机，不为阶段容器额外建机。${escapeHtml(hint)}</p>
       <div class="sm-empty-actions">
-        <button type="button" class="primary-btn" data-action="ov6b-seed-subjects" ${subjects.length ? "" : "disabled"}>识别建模对象</button>
+        <button type="button" class="primary-btn" data-action="ov6b-generate-task-machines">生成任务状态机</button>
+        <button type="button" class="primary-btn" data-action="ov6b-generate-force-machines">生成兵力状态机</button>
+        <button type="button" class="quiet-button" data-action="ov6b-seed-subjects" ${subjects.length ? "" : "disabled"}>识别建模对象</button>
         <button type="button" class="quiet-button" data-action="ov6b-add-machine" data-subject-type="phase">新建阶段机</button>
         <button type="button" class="quiet-button" data-action="ov6b-add-machine" data-subject-type="task">新建任务机</button>
         <button type="button" class="quiet-button" data-action="open-state-machine-chat">打开状态机对话</button>

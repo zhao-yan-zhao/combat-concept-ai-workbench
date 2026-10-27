@@ -641,6 +641,41 @@ export function confirmOperationalTasks(plan = {}) {
   return normalizeForceMissionPlan({ ...normalized, tasksConfirmedAt: new Date().toISOString() });
 }
 
+export function addOperationalTask(plan = {}, taskData = {}, { phaseAction = null } = {}) {
+  const normalized = normalizeForceMissionPlan(plan);
+  const phases = Array.isArray(phaseAction?.phases) ? phaseAction.phases : [];
+  const index = (normalized.tasks || []).length + 1;
+  const id = slugId(taskData?.id, `task-custom-${Date.now()}-${index}`);
+  const side = FORCE_SIDES.has(clean(taskData?.side, 20)) ? clean(taskData.side, 20) : "friendly";
+  const phaseId = clean(taskData?.phaseId, 60) || (phases[0]?.id || "");
+  const missionType = normalizeCmoMissionType(taskData?.missionType, "strike");
+  const fallbackPhase = phases.find((p) => p.id === phaseId) || phases[0] || null;
+  const sideLabel = side === "hostile" ? "红方" : "蓝方";
+  const defaultBaseName = fallbackPhase?.name ? `${fallbackPhase.name.replace(/阶段$/u, "")}作战任务${index}` : `${sideLabel}作战任务${index}`;
+  const name = clean(taskData?.name, 120) || defaultBaseName;
+  const defaultArea = taskData?.area
+    ? normalizeOperationalTaskArea(taskData.area)
+    : inferFallbackTaskArea(fallbackPhase, side, name, normalized.tasks, phases);
+  const newTask = {
+    id,
+    name,
+    side,
+    phaseId,
+    missionType,
+    area: defaultArea,
+    objective: clean(taskData?.objective, 500) || "执行阶段作战任务与战术要求",
+    expectedEffect: clean(taskData?.expectedEffect, 500) || "",
+    sourceAction: clean(taskData?.sourceAction, 400) || "人工新增作战任务",
+    notes: clean(taskData?.notes, 600) || ""
+  };
+  return normalizeForceMissionPlan({
+    ...normalized,
+    status: normalized.status === "empty" ? "draft" : normalized.status,
+    tasks: [...normalized.tasks, newTask],
+    tasksConfirmedAt: ""
+  });
+}
+
 export function updateOperationalTask(plan = {}, taskId = "", patch = {}) {
   const normalized = normalizeForceMissionPlan(plan);
   return normalizeForceMissionPlan({

@@ -37,23 +37,23 @@ export function renderForceMission(state) {
   const chatGenerating = Boolean(state.forceMissionChatGenerating);
   const hasDraft = (Array.isArray(plan.forces) && plan.forces.length > 0)
     || (Array.isArray(plan.combatForces) && plan.combatForces.length > 0);
+  const forces = Array.isArray(plan.forces) ? plan.forces : [];
+  const combatForces = Array.isArray(plan.combatForces) ? plan.combatForces : [];
   const confirmed = isForceMissionPlanConfirmed(plan, state.forceMissionStorage);
   const conceptConfirmed = isConceptForcePlanConfirmed(plan, state.forceMissionStorage);
   const combatConfirmed = isCombatForcePlanConfirmed(plan, state.forceMissionStorage);
   const chatOpen = Boolean(state.forceMissionChatOpen) && hasDraft;
   const status = state.forceMissionStorage?.stale
     ? "已过期"
-    : confirmed
-      ? "已全量确认"
+    : (confirmed || (forces.length > 0 && combatForces.length > 0))
+      ? "已就绪"
       : combatConfirmed
-        ? "编成已确认"
+        ? "编成已就绪"
         : conceptConfirmed
-          ? "能力已确认"
+          ? "能力已就绪"
           : plan.status === "draft"
-            ? "草案待复核"
+            ? "已就绪"
             : "待生成";
-  const forces = Array.isArray(plan.forces) ? plan.forces : [];
-  const combatForces = Array.isArray(plan.combatForces) ? plan.combatForces : [];
   const upstream = describeUpstream(state);
   const cmo = state.cmoCatalogStatus || {};
   const missionTypes = listCmoMissionTypes();
@@ -151,7 +151,7 @@ export function renderForceMission(state) {
   const combatBtnLabel = generating && (generatingLayer === "combat" || generatingLayer === "both")
     ? "正在生成作战兵力…"
     : combatForces.length ? "重新生成作战兵力" : "生成作战兵力";
-  const confirmBtnLabel = confirmed ? "已全量确认" : "全量确认放行";
+  const confirmBtnLabel = (confirmed || (forces.length > 0 && combatForces.length > 0)) ? "兵力已就绪" : "确认放行";
   const canRecommendCombat = !busy && catalogOpen && combatForces.length > 0;
 
   const mainBody = `
@@ -301,7 +301,7 @@ function renderForceMissionChatPanel({ chat, chatGenerating, busy, confirmed, ha
         ? "兵力生成进行中，请稍候"
         : "";
   const footerHtml = `<div class="phase-review-chat-footer">
-        <button type="button" data-action="confirm-force-mission" ${busy || chatGenerating || !hasDraft || confirmed ? "disabled" : ""}>${confirmed ? "已确认" : "确认并进入作战概念图"}</button>
+        <button type="button" data-action="confirm-force-mission" ${busy || chatGenerating || !hasDraft ? "disabled" : ""}>${(confirmed || hasDraft) ? "兵力已就绪" : "进入作战概念图"}</button>
         <p class="planning-meta">生成来源：${escapeHtml(plan.generation?.source || "—")} · 概念 ${Array.isArray(plan.forces) ? plan.forces.length : 0} · 作战 ${Array.isArray(plan.combatForces) ? plan.combatForces.length : 0}</p>
       </div>`;
   return renderResearchChatPanel({
@@ -310,7 +310,7 @@ function renderForceMissionChatPanel({ chat, chatGenerating, busy, confirmed, ha
     generating: chatGenerating,
     title: "核验对话",
     subtitle: "用自然语言修订概念/作战兵力与关系，中间栏即时同步。",
-    statusLabel: chatGenerating ? "正在修订" : confirmed ? "已确认" : "研究助手",
+    statusLabel: chatGenerating ? "正在修订" : (confirmed || hasDraft) ? "已就绪" : "研究助手",
     placeholder: confirmed ? "本步已确认，如需修改请先重新生成草案" : "输入修订要求，例如：补充护航分队；主战任务改为 SEAD",
     emptyTitle: "开始核验修订",
     emptyText: "例如：为阶段 2 增加预警概念单元；作战兵力挂接主攻概念编组。",
@@ -556,7 +556,7 @@ function renderForceMissionRailActions({
       class="${workflow.primaryAction === "confirm-concept" ? "" : "quiet-button"}"
       data-action="confirm-concept-forces"
       title="单独确认概念能力单元，可提前解锁 OV-1 作战概念图"
-      ${canConfirmConcept ? "" : "disabled"}>${conceptConfirmed ? "概念能力已确认 ✓" : "确认概念能力 (解锁OV-1)"}</button>
+      ${canConfirmConcept ? "" : "disabled"}>${conceptConfirmed ? "概念能力已就绪 ✓" : "概念能力就绪"}</button>
     <button type="button"
       class="${workflow.primaryAction === "confirm" ? "" : "quiet-button"}"
       data-action="confirm-force-mission"
@@ -697,7 +697,7 @@ function renderConceptSideColumn({ title, className, items = [], emptyText = "",
             groups: {
               side: sideLabel(force.side),
               role: roleLabel(force.role),
-              status: confirmed ? "已确认" : equip ? "待确认" : "待补全"
+              status: (confirmed || equip) ? "已就绪" : "待补全"
             },
             search: [force.id, name, force.task, equip, sideLabel(force.side), roleLabel(force.role)].filter(Boolean).join(" ")
           });
@@ -722,7 +722,7 @@ function renderForceRosterItem({
   groups = {},
   search = ""
 }) {
-  return `<li class="force-roster-item ${active ? "is-active" : ""} ${warn ? "is-warn" : ""}" data-grouped-list-item data-group-side="${escapeAttribute(groups.side || "未分类")}" data-group-role="${escapeAttribute(groups.role || "未分类")}" data-group-type="${escapeAttribute(groups.type || "未分类")}" data-group-status="${escapeAttribute(groups.status || "待确认")}" data-search="${escapeAttribute(search || name)}">
+  return `<li class="force-roster-item ${active ? "is-active" : ""} ${warn ? "is-warn" : ""}" data-grouped-list-item data-group-side="${escapeAttribute(groups.side || "未分类")}" data-group-role="${escapeAttribute(groups.role || "未分类")}" data-group-type="${escapeAttribute(groups.type || "未分类")}" data-group-status="${escapeAttribute(groups.status || "已就绪")}" data-search="${escapeAttribute(search || name)}">
     <div class="force-roster-hit"
       role="button"
       tabindex="0"
@@ -887,7 +887,7 @@ function renderCombatSideColumn({
               side: sideLabel(force.side),
               role: roleLabel(force.role),
               type: missionType || "未分类",
-              status: confirmed ? "已确认" : missingPlatform || !hasConceptLink ? "待补全" : "待确认"
+              status: (confirmed || (!missingPlatform && hasConceptLink)) ? "已就绪" : "待补全"
             },
             search: [force.id, name, force.task, missionType, unitType, platformSummary, sideLabel(force.side), roleLabel(force.role), pkgLabel].filter(Boolean).join(" ")
           });

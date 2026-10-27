@@ -6,8 +6,8 @@ export const RELATED_VIEWS = Object.freeze({
   "phase-action": ["ov6a", "ov6b", "ov6c"],
   "operational-task": ["ov1b", "ov6a", "ov6b", "ov6c"],
   "force-mission": ["ov4", "ov2", "ov3", "ov6a", "ov6b", "ov6c"],
-  ov1: ["ov5a", "ov5"],
-  "concept-map": ["ov5a", "ov5"],
+  ov1: ["ov5a", "ov5", "ooda"],
+  "concept-map": ["ov5a", "ov5", "ooda"],
   scenario: ["ov1c", "ov7", "structure-review"]
 });
 
@@ -30,6 +30,7 @@ const RELATED_LABELS = Object.freeze({
   ov3: "资源流矩阵 OV3",
   ov5a: "作战活动分解 OV5a",
   ov5: "作战活动 OV5b",
+  ooda: "研究循环 OODA",
   ov1c: "任务与活动映射 OV1c",
   ov7: "状态与活动映射 OV7",
   "structure-review": "跨模型校核"
@@ -62,7 +63,7 @@ export function resolveRelatedMainViewId(activeViewId, relatedViewId, currentCon
     || (workflowPrimaryStepIds.includes(activeViewId) ? activeViewId : "");
 }
 
-const AVAILABLE_VIEWS = new Set(["ov1b", "ov1c", "ov6a", "ov6b", "ov6c", "ov7", "ov4", "ov2", "ov3", "ov5a", "ov5", "structure-review"]);
+const AVAILABLE_VIEWS = new Set(["ov1b", "ov1c", "ov6a", "ov6b", "ov6c", "ov7", "ov4", "ov2", "ov3", "ov5a", "ov5", "ooda", "structure-review"]);
 
 const STATUS_LABELS = Object.freeze({
   empty: "未生成",
@@ -80,7 +81,8 @@ const RELATED_RETURN_TOOLBAR_SELECTORS = [
   ".ov4-toolbar",
   ".mapping-toolbar",
   ".dodaf-product-actions",
-  ".project-storage-actions"
+  ".project-storage-actions",
+  ".activity-toolbar"
 ];
 
 export function relatedFlowNumber(viewId, index = 0) {

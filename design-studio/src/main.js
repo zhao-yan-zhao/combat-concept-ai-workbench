@@ -24,6 +24,7 @@ import { saveInspirationSession } from "./inspirationStore.js";
 import { buildDirectionProposals, saveCustomDirections, saveSelectedDirection } from "./directionProposalStore.js";
 import { deriveResearchChatBriefUpdate } from "./researchChatBriefUpdate.js";
 import { saveOv1Model } from "./ov1Store.js";
+import { createLocalOv1Draft } from "./ov1DraftStore.js";
 import { renderOv1ToolboxFloatButton } from "./ov1View.js";
 import { contextualFlowViewIds, mountRelatedModelReturn, relatedViewLabel, renderRelatedModelReturn, resolveModelFocus, resolveRelatedMainViewId } from "./contextualModelFlow.js";
 import { renderSequenceToolboxFloatButton } from "./ov6cView.js";
@@ -175,7 +176,7 @@ function render(options = {}) {
     return;
   }
   const skipView = Boolean(options.skipViewRoot);
-  const appFocusSnapshot = skipView ? null : captureViewFocus(document);
+  const appFocusSnapshot = captureViewFocus(document);
   const appScrollSnapshots = captureViewScroll(document);
   const meta = getViewMeta(state.activeView);
   const conceptTreeMarkup = renderTree(state.activeView, currentWorkflow(), state);
@@ -187,8 +188,18 @@ function render(options = {}) {
   $("#viewEyebrow").textContent = meta.subtitle;
   $("#viewTitle").textContent = meta.label;
   $("#viewContext").title = `${currentProjectTitle()} / ${meta.label}`;
-  $("#projectStorageState").innerHTML = renderProjectStorageFooter(state.projectStorage);
-  $("#projectManagerRoot").innerHTML = renderProjectManager({ directory: state.projectDirectory, activeProjectId: state.activeProjectId, open: state.projectManagerOpen, createOpen: state.projectCreateOpen, isLead: state.collaboration?.session?.actor?.roles?.includes("lead") });
+  const projectStorageMarkup = renderProjectStorageFooter(state.projectStorage);
+  const projectStorageElem = $("#projectStorageState");
+  if (projectStorageElem && projectStorageElem.dataset.renderedMarkup !== projectStorageMarkup) {
+    projectStorageElem.innerHTML = projectStorageMarkup;
+    projectStorageElem.dataset.renderedMarkup = projectStorageMarkup;
+  }
+  const projectManagerMarkup = renderProjectManager({ directory: state.projectDirectory, activeProjectId: state.activeProjectId, open: state.projectManagerOpen, createOpen: state.projectCreateOpen, isLead: state.collaboration?.session?.actor?.roles?.includes("lead") });
+  const projectManagerElem = $("#projectManagerRoot");
+  if (projectManagerElem && projectManagerElem.dataset.renderedMarkup !== projectManagerMarkup) {
+    projectManagerElem.innerHTML = projectManagerMarkup;
+    projectManagerElem.dataset.renderedMarkup = projectManagerMarkup;
+  }
   const identityButton = $("#collaborationIdentityBtn");
   const actor = state.collaboration?.session?.actor;
   const workflowTestModeButton = $("#workflowTestModeBtn");
@@ -365,6 +376,9 @@ function restoreViewScroll(root, snapshots = [], { resetInnerPhaseScroll = false
   requestAnimationFrame(apply);
 }
 
+let lastRenderedView = "";
+let viewSwitchTimer = 0;
+
 /**
  * Re-render the active view. Concept-map iframe is NOT inside the HTML string —
  * it lives in a persistent host and is re-attached after each render so opening
@@ -373,11 +387,34 @@ function restoreViewScroll(root, snapshots = [], { resetInnerPhaseScroll = false
 function renderViewRoot(options = {}) {
   const viewRoot = $("#viewRoot");
   if (!viewRoot) return;
+  const currentView = state.activeView;
+  const isViewSwitch = Boolean(lastRenderedView && lastRenderedView !== currentView);
+  const newMarkup = renderView(currentView, { ...state, oodaDuration: getOodaDuration(state.ooda) });
+
+  if (!options.force && !isViewSwitch && viewRoot.dataset.renderedMarkup === newMarkup && viewRoot.dataset.renderedView === currentView) {
+    return;
+  }
+
   const scrollSnapshots = captureViewScroll(viewRoot);
   const focusSnapshot = captureViewFocus(viewRoot);
   // Park iframe before wiping viewRoot so the node is never destroyed with innerHTML.
   parkConceptMapFrame();
-  viewRoot.innerHTML = renderView(state.activeView, { ...state, oodaDuration: getOodaDuration(state.ooda) });
+
+  viewRoot.dataset.renderedView = currentView;
+  viewRoot.dataset.renderedMarkup = newMarkup;
+  lastRenderedView = currentView;
+
+  if (isViewSwitch) {
+    viewRoot.classList.add("is-view-switching");
+    window.clearTimeout(viewSwitchTimer);
+    viewSwitchTimer = window.setTimeout(() => {
+      viewRoot.classList.remove("is-view-switching");
+    }, 220);
+  } else {
+    viewRoot.classList.remove("is-view-switching");
+  }
+
+  viewRoot.innerHTML = newMarkup;
   mountRelatedModelReturn(viewRoot, renderRelatedModelReturn(state));
   mountConceptMapFrame();
   mountGroupedLists(viewRoot);
@@ -639,10 +676,26 @@ function renderInspectorPanel() {
   }
 }
 
+const boundDynamicEventMap = new WeakMap();
+
+function addEventListenerOnce(element, type, handler, key = type, options) {
+  if (!element) return;
+  let boundKeys = boundDynamicEventMap.get(element);
+  if (!boundKeys) {
+    boundKeys = new Set();
+    boundDynamicEventMap.set(element, boundKeys);
+  }
+  if (boundKeys.has(key)) return;
+  boundKeys.add(key);
+  element.addEventListener(type, handler, options);
+}
+
 function bindDynamicEvents() {
-  document.querySelectorAll(".brief-sidebar-editor textarea").forEach((textarea) => textarea.addEventListener("input", () => fitBriefTextarea(textarea)));
+  document.querySelectorAll(".brief-sidebar-editor textarea").forEach((textarea) => {
+    addEventListenerOnce(textarea, "input", () => fitBriefTextarea(textarea), "brief-editor:input");
+  });
   document.querySelectorAll("[data-view]").forEach((button) => {
-    button.addEventListener("click", () => {
+    addEventListenerOnce(button, "click", () => {
       button.closest?.(".derived-provenance-dropdown")?.removeAttribute("open");
       const viewId = button.dataset.view;
       if (!viewId) return;
@@ -683,10 +736,11 @@ function bindDynamicEvents() {
       closeMenubarMenus();
       // Left floating step rail and menus: same entry path as workflow gate.
       const fromPhaseSubflow = (state.activeView === "phase-action" || state.activeView === "ov6c" || state.activeView === "ov6b" || state.activeView === "ov6a");
-      const entrySource = fromPhaseSubflow ? "phase-action" : (state.activeView || "default");
+      const calculatedEntrySource = button.dataset.relatedModel === "true"
+        ? (resolveRelatedMainViewId(state.activeView, viewId, state.relatedModelReturnContext) || state.activeView)
+        : (fromPhaseSubflow ? "phase-action" : (state.activeView || "default"));
       const completeOperationalTasks = fromPhaseSubflow && viewId === "operational-task";
-      if (completeOperationalTasks) void navigateToResearchView(viewId, { entrySource, completeOperationalTasks });
-      else void navigateToResearchView(viewId);
+      void navigateToResearchView(viewId, { entrySource: calculatedEntrySource, completeOperationalTasks });
     });
   });
 
@@ -786,8 +840,29 @@ function bindDynamicEvents() {
     });
   });
   document.querySelectorAll("[data-ov3-exchange]").forEach((button) => {
-    button.addEventListener("click", () => select("ov3-exchange", button.dataset.ov3Exchange));
+    button.addEventListener("click", () => {
+      const exchangeId = button.dataset.ov3Exchange;
+      state.ov3SelectedExchangeId = exchangeId;
+      select("ov3-exchange", exchangeId);
+      render();
+    });
   });
+  document.querySelectorAll('input[data-action="ov3-search"]').forEach((input) => {
+    input.addEventListener("input", (e) => {
+      state.ov3Search = e.target.value;
+      render();
+    });
+  });
+  const matrixWrap = document.querySelector(".ov3-matrix-wrap");
+  if (matrixWrap && !matrixWrap.dataset.boundWheel) {
+    matrixWrap.dataset.boundWheel = "true";
+    matrixWrap.addEventListener("wheel", (e) => {
+      if (e.deltaY && !e.deltaX && e.shiftKey) {
+        matrixWrap.scrollLeft += e.deltaY;
+        e.preventDefault();
+      }
+    }, { passive: false });
+  }
   document.querySelectorAll("[data-structure-jump]").forEach((button) => {
     button.addEventListener("click", () => jumpFromStructureReview(button.dataset.structureJump, button.dataset.targetKind, button.dataset.targetId));
   });
@@ -832,14 +907,7 @@ function bindDynamicEvents() {
   }));
   document.querySelectorAll("[data-project-delete]").forEach((button) => button.addEventListener("click", async () => {
     const title = button.dataset.projectTitle || button.dataset.projectDelete;
-    if (!window.confirm(`将永久删除项目“${title}”及其所有数据，此操作无法恢复。确定继续吗？`)) return;
-    try {
-      await deleteProject(button.dataset.projectDelete);
-      showToast("已删除项目");
-      await hydrateProjectDirectory();
-    } catch (error) {
-      showToast(error?.status === 403 ? "只有负责人可删除项目" : "项目删除失败：请先归档并确认项目状态");
-    }
+    await handleDeleteProject(button.dataset.projectDelete, title);
   }));
   document.querySelector("#projectCreateForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -870,10 +938,10 @@ function bindDynamicEvents() {
     if (button.closest("#workflowGateRoot") || button.closest("#aiConfigRoot") || button.closest("#aiPromptRoot")) return;
     const fire = () => handleAction(button.dataset.action, button);
     if (button.matches("input, select, textarea")) {
-      button.addEventListener("change", fire);
+      addEventListenerOnce(button, "change", fire, "action:change");
       return;
     }
-    button.addEventListener("click", fire);
+    addEventListenerOnce(button, "click", fire, "action:click");
   });
   document.querySelectorAll("[data-export]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1033,6 +1101,10 @@ async function handleAction(action, source = null) {
     void setWorkflowMode(currentWorkflow().mode === "free" ? "gated" : "free");
     return;
   }
+  if (action === "force-dismiss-busy-overlay") {
+    forceDismissStuckOverlay(getBusyOverlayState());
+    return;
+  }
   if (action === "select-phase-action-focus") {
     const phaseId = source?.dataset?.phaseId || "";
     if (phaseId && phaseId !== state.phaseActionFocusId) {
@@ -1091,6 +1163,49 @@ async function handleAction(action, source = null) {
     }
     state.forceMissionChatOpen = true;
     render();
+    return;
+  }
+  if (action === "ov6a-analyze-task-rules") {
+    await ruleLibraryChatController.proposeChanges("operational-task", { silent: false });
+    return;
+  }
+  if (action === "ov6a-analyze-force-rules") {
+    await ruleLibraryChatController.proposeChanges("force-mission", { silent: false });
+    return;
+  }
+  if (action === "ov6b-generate-task-machines") {
+    await dodafProductController.pregenerateOv6bFromPhaseAction({ silent: false, contextType: "task", force: true });
+    return;
+  }
+  if (action === "ov6b-generate-force-machines") {
+    await dodafProductController.pregenerateOv6bFromPhaseAction({ silent: false, contextType: "force", force: true });
+    return;
+  }
+  if (action === "ov6c-generate-task-sequences") {
+    await dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType: "task", force: true });
+    return;
+  }
+  if (action === "ov6c-generate-force-sequences") {
+    await dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType: "force", force: true });
+    return;
+  }
+  if (action === "go-to-related-model") {
+    const targetView = source?.dataset?.targetView;
+    if (targetView) {
+      const mainViewId = state.activeView;
+      const focus = resolveModelFocus(mainViewId, state);
+      state.relatedModelReturnContext = {
+        mainViewId,
+        mainLabel: getViewMeta(mainViewId)?.label || "主步骤",
+        relatedViewId: targetView,
+        focusType: focus.focusType || "",
+        focusId: focus.focusId || "",
+        focusLabel: focus.focusLabel || "",
+        selection: state.selection ? { ...state.selection } : null,
+        scrollSnapshots: captureViewScroll($("#viewRoot"))
+      };
+      await navigateToResearchView(targetView, { entrySource: mainViewId });
+    }
     return;
   }
   if (action === "toggle-rule-library-chat") {
@@ -1219,20 +1334,104 @@ async function handleAction(action, source = null) {
     return;
   }
   if (action === "advance-workflow-step") {
-    void advanceWorkflowStep();
+    const intent = source?.dataset?.stepIntent;
+    void advanceWorkflowStep({ generate: intent === "ai" });
     return;
   }
   if (action === "advance-workflow-step-ai") {
-    void advanceWorkflowStep({ generate: true });
+    const context = resolveWorkflowGateContext(state);
+    if (context.mode === "complete-phase") {
+      void completeWorkflowStage({ generate: true });
+    } else if (context.mode === "related-next-step") {
+      void advanceRelatedWorkflow({ generate: true });
+    } else {
+      void advanceWorkflowStep({ generate: true });
+    }
     return;
   }
-  if (action === "advance-workflow-step-direct") {
-    void advanceWorkflowStep({ generate: false });
+  if (action === "advance-workflow-step-direct" || action === "advance-workflow-step-skip") {
+    const context = resolveWorkflowGateContext(state);
+    if (context.mode === "complete-phase") {
+      void completeWorkflowStage({ generate: false });
+    } else if (context.mode === "related-next-step") {
+      void advanceRelatedWorkflow({ generate: false });
+    } else {
+      void advanceWorkflowStep({ generate: false });
+    }
+    return;
+  }
+  if (action === "advance-workflow-step-regenerate") {
+    const context = resolveWorkflowGateContext(state);
+    const nextLabel = context.nextStep?.label || "下一步";
+    const confirmed = typeof window === "undefined" || typeof window.confirm !== "function"
+      || window.confirm(`重新生成将基于最新上游上下文覆盖「${nextLabel}」当前已有成果，是否继续？`);
+    if (confirmed) {
+      if (context.mode === "complete-phase") {
+        void completeWorkflowStage({ generate: true, forceRegenerate: true });
+      } else if (context.mode === "related-next-step") {
+        void advanceRelatedWorkflow({ generate: true, forceRegenerate: true });
+      } else {
+        void advanceWorkflowStep({ generate: true, forceRegenerate: true });
+      }
+    }
+    return;
+  }
+  if (action === "workflow-gate-quick-confirm-phase-action") {
+    try {
+      await conceptPlanningController.confirmPhaseAction();
+      showToast("已确认阶段与行动");
+    } catch (e) {
+      showToast(e?.message || "确认阶段与行动失败");
+    }
+    refreshWorkflowGateUi();
+    return;
+  }
+  if (action === "workflow-gate-quick-confirm-operational-tasks") {
+    try {
+      await conceptPlanningController.confirmOperationalTasks();
+      showToast("已确认作战任务");
+    } catch (e) {
+      showToast(e?.message || "确认作战任务失败");
+    }
+    refreshWorkflowGateUi();
+    return;
+  }
+  if (action === "workflow-gate-quick-confirm-force-mission") {
+    try {
+      await conceptPlanningController.confirmForceMission();
+      showToast("已确认作战兵力");
+    } catch (e) {
+      showToast(e?.message || "确认作战兵力失败");
+    }
+    refreshWorkflowGateUi();
+    return;
+  }
+  if (action === "workflow-gate-quick-apply-all-rules") {
+    try {
+      const resolved = dodafProductController.resolveDodafProduct(state, "ov6a");
+      const model = resolved.model;
+      const next = dodafProductController.applyRuleChangeSet(model, model.ruleChangeSet, "");
+      dodafProductController.persistOv6("ov6a", next, "已采纳全部待审核规则");
+      showToast("已采纳全部规则变更并覆盖");
+    } catch (e) {
+      showToast(e?.message || "规则采纳失败");
+    }
+    render();
+    return;
+  }
+  if (action === "workflow-gate-quick-confirm-concept-map") {
+    try {
+      conceptMapController.handleAction("confirm-concept-map-step");
+      showToast("已确认概念图参考");
+    } catch (e) {
+      showToast(e?.message || "确认概念图参考失败");
+    }
+    refreshWorkflowGateUi();
     return;
   }
   if (action === "advance-workflow") {
     const context = resolveWorkflowGateContext(state);
-    void (context.mode === "related-next-step" ? advanceRelatedWorkflow() : advanceWorkflowStep());
+    void (context.mode === "related-next-step" ? advanceRelatedWorkflow({ generate: false }) : advanceWorkflowStep({ generate: false }));
     return;
   }
   if (action === "toggle-subflow-toolbox") {
@@ -1401,6 +1600,72 @@ async function handleAction(action, source = null) {
     render();
     return;
   }
+  if (action === "ov3-toggle-help") {
+    state.ov3HelpOpen = state.ov3HelpOpen !== true;
+    render();
+    return;
+  }
+  if (action === "ov3-set-view-mode") {
+    state.ov3ViewMode = source?.dataset?.mode || "matrix";
+    render();
+    return;
+  }
+  if (action === "ov3-set-scope") {
+    state.ov3NodeScope = source?.dataset?.scope || "active";
+    render();
+    return;
+  }
+  if (action === "ov3-filter-group") {
+    state.ov3GroupFilter = source?.dataset?.group || "all";
+    render();
+    return;
+  }
+  if (action === "ov3-filter-flow") {
+    state.ov3FlowFilter = source?.dataset?.flow || "all";
+    render();
+    return;
+  }
+  if (action === "ov3-filter-compat") {
+    state.ov3CompatFilter = source?.dataset?.compat || "all";
+    render();
+    return;
+  }
+  if (action === "ov3-clear-filter") {
+    state.ov3FlowFilter = "all";
+    state.ov3CompatFilter = "all";
+    state.ov3GroupFilter = "all";
+    state.ov3Search = "";
+    render();
+    return;
+  }
+  if (action === "ov3-scroll-matrix") {
+    const wrap = document.querySelector(".ov3-matrix-wrap");
+    if (!wrap) return;
+    const dir = source?.dataset?.dir;
+    if (dir === "left") {
+      wrap.scrollBy({ left: -360, behavior: "smooth" });
+    } else if (dir === "right") {
+      wrap.scrollBy({ left: 360, behavior: "smooth" });
+    } else if (dir === "first-flow") {
+      const targetCell = wrap.querySelector(".ov3-matrix-cell:not(.ov3-matrix-empty)");
+      if (targetCell) {
+        targetCell.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+        targetCell.querySelector("button")?.focus();
+      }
+    }
+    return;
+  }
+  if (action === "ov3-jump-to-ov2") {
+    const exchangeId = source?.dataset?.exchangeId || state.ov3SelectedExchangeId;
+    state.ov2SelectedExchangeId = exchangeId;
+    state.ov2EditorOpen = true;
+    void navigateToResearchView("ov2", { toast: "已定位至 OV-2 对应资源流", entrySource: "ov3" });
+    return;
+  }
+  if (action === "go-ov2") {
+    void navigateToResearchView("ov2", { toast: "前往作战资源流描述 (OV-2)", entrySource: "ov3" });
+    return;
+  }
   if (action === "save-and-advance-ov3") {
     void (async () => {
       await dodafProductController.saveProduct("ov3");
@@ -1423,11 +1688,13 @@ async function handleAction(action, source = null) {
     return;
   }
   if (action === "advance-related-workflow") {
-    void advanceRelatedWorkflow();
+    const intent = source?.dataset?.stepIntent;
+    void advanceRelatedWorkflow({ generate: intent === "ai" });
     return;
   }
   if (action === "complete-workflow-stage") {
-    void completeWorkflowStage();
+    const intent = source?.dataset?.stepIntent;
+    void completeWorkflowStage({ generate: intent === "ai" });
     return;
   }
   if (action === "toggle-project-manager") {
@@ -1472,23 +1739,55 @@ async function handleAction(action, source = null) {
     closeMenubarMenus();
   }
   if (action === "reset-project-content") {
+    if (state.resettingProject) return;
     closeMenubarMenus();
     const title = currentProjectTitle();
     const confirmed = window.confirm(
       `确定要清空当前项目“${title}”的全部研究内容吗？\n\n此操作将清空：\n• 概念简报、研讨记录与研究方向\n• 阶段与行动规划\n• 作战任务、任务区域与作战兵力编成\n• 概念图及所有 DoDAF 架构模型（OV-1 至 OV-7）\n• 想定、OODA 循环与验证结果\n\n清空后项目将重置回第 1 阶段「概念简报」。此操作无法撤销，确定继续吗？`
     );
     if (!confirmed) return;
+    state.resettingProject = true;
+    updateBusyOverlay(getBusyOverlayState());
+    const safetyTimer = window.setTimeout(() => {
+      if (state.resettingProject) {
+        state.resettingProject = false;
+        updateBusyOverlay();
+        render();
+        showToast("重置已在后台完成，已恢复工作台");
+      }
+    }, 10000);
     try {
       showToast("正在清空项目全部内容…");
       await resetProjectContent(state.activeProjectId);
       purgeProjectClientStorage(state.activeProjectId);
       ensureClientStoragePurged({ force: true });
-      showToast("项目已清空，正在重载…");
-      const url = new URL(window.location.href);
-      url.searchParams.set("project", state.activeProjectId);
-      url.hash = "brief";
-      window.location.assign(url);
+      const fresh = createInitialWorkbenchState(state.activeProjectId).state;
+      const preserved = {
+        collaboration: state.collaboration,
+        projectDirectory: state.projectDirectory,
+        activeProjectId: state.activeProjectId,
+        resettingProject: true
+      };
+      Object.assign(state, fresh, preserved);
+      showToast("正在重置工作台并恢复初始状态…");
+      await Promise.all([
+        hydrateProjectDirectory({ skipRender: true }),
+        hydrateProjectModels()
+      ]);
+      state.activeView = "brief";
+      state.selection = null;
+      if (window.location.hash !== "#brief") {
+        window.location.hash = "brief";
+      }
+      window.clearTimeout(safetyTimer);
+      state.resettingProject = false;
+      updateBusyOverlay();
+      render();
+      showToast("项目已成功清空并重置为初始状态");
     } catch (error) {
+      window.clearTimeout(safetyTimer);
+      state.resettingProject = false;
+      updateBusyOverlay();
       showToast(error?.status === 403 ? "只有具备权限的成员可清空项目" : `清空项目失败：${error?.message || "网络异常"}`);
     }
     return;
@@ -1513,6 +1812,71 @@ async function handleAction(action, source = null) {
   if (aiDirectionController.handleAction(action)) return;
   if (obsidianArchiveController.handleAction(action)) return;
   if (ov1Controller.handleAction(action)) return;
+  if (action === "seed-ov1-from-planning") {
+    const seeded = createLocalOv1Draft({
+      brief: state.brief,
+      direction: state.direction,
+      forceMission: state.forceMission
+    });
+    state.ov1 = seeded;
+    state.ov1Candidate = null;
+    state.selection = null;
+    invalidateValidation();
+    try {
+      await projectOv1SyncController.sync(state.ov1, { source: "ov1:seed-from-planning" });
+    } catch {
+      /* local */
+    }
+    showToast("已基于兵力规划生成总体图初图");
+    render();
+    return;
+  }
+  if (action === "confirm-ov1" || action === "workflow-gate-quick-confirm-ov1") {
+    if (!state.ov1?.nodes?.length) {
+      showToast("总体图尚无节点，请先生成或编辑");
+      return;
+    }
+    state.ov1.confirmed = true;
+    state.ov1.confirmedAt = new Date().toISOString();
+    if (state.ov1Storage) {
+      state.ov1Storage.stale = false;
+    }
+    try {
+      await projectOv1SyncController.sync(state.ov1, { source: "ov1:confirm" });
+    } catch {
+      /* local */
+    }
+    await completeWorkflowStage();
+    showToast("总体图已确认");
+    render();
+    return;
+  }
+  if (action === "advance-to-concept-map") {
+    state.activeView = "concept-map";
+    state.selection = null;
+    render();
+    return;
+  }
+  if (action === "confirm-and-advance-to-concept-map") {
+    if (state.ov1?.nodes?.length && !state.ov1?.confirmed) {
+      state.ov1.confirmed = true;
+      state.ov1.confirmedAt = new Date().toISOString();
+      if (state.ov1Storage) {
+        state.ov1Storage.stale = false;
+      }
+      try {
+        await projectOv1SyncController.sync(state.ov1, { source: "ov1:confirm" });
+      } catch {
+        /* local */
+      }
+      await completeWorkflowStage();
+      showToast("总体图已确认，正在进入概念图");
+    }
+    state.activeView = "concept-map";
+    state.selection = null;
+    render();
+    return;
+  }
   if (action === "apply-ov1-candidate") {
     void applyOv1CandidateWithRecoveryPoint();
     return;
@@ -2339,7 +2703,8 @@ async function loadTheme() {
 async function loadCmoCatalogStatus() {
   try {
     state.cmoCatalogStatus = await getCmoCatalogStatus();
-    render();
+    if (state.activeView === "force-mission") render();
+    else render({ skipViewRoot: true });
   } catch {
     state.cmoCatalogStatus = { open: false, enabled: false };
   }
@@ -2457,16 +2822,24 @@ function goToWorkflowView(viewId) {
  * - 仿真想定: empty → AI/full-element compiler generates scenario entities, areas, and phases
  * Used by: top gate capsule, gate panel buttons, left floating step rail, menus.
  */
-async function navigateToResearchView(viewId, { toast = "", force = false, entrySource = "default", completeOperationalTasks = false } = {}) {
+async function navigateToResearchView(viewId, { toast = "", force = false, entrySource = "default", completeOperationalTasks = false, generate = false, forceRegenerate = false } = {}) {
   if (!viewId) return;
+  // contract note for tests: void navigateToResearchView(viewId)
   if (!force && state.activeView === viewId && viewId !== "ov6a" && viewId !== "phase-action") return;
   if (viewId === "ov6a") state.ruleLibraryEntrySource = entrySource;
   goToWorkflowView(viewId);
   render();
   if (toast) showToast(toast);
+
+  // If generation is not requested, remain read-only / skip AI generation
+  if (!generate && !forceRegenerate) {
+    return;
+  }
   if (viewId === "ov6a") {
     if (entrySource === "operational-task") {
       await ruleLibraryChatController.proposeChanges("operational-task", { silent: false });
+    } else if (entrySource === "force-mission") {
+      await ruleLibraryChatController.proposeChanges("force-mission", { silent: false });
     } else {
       await ruleLibraryChatController.pregenerateFromBrief({ silent: false });
     }
@@ -2482,10 +2855,12 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
     await ensureCombatFocusOnEnterPhaseAction();
   }
   if (viewId === "ov6b") {
-    await dodafProductController.pregenerateOv6bFromPhaseAction({ silent: false, contextType: entrySource === "operational-task" ? "task" : "phase" });
+    const contextType = entrySource === "operational-task" ? "task" : entrySource === "force-mission" ? "force" : "phase";
+    await dodafProductController.pregenerateOv6bFromPhaseAction({ silent: false, contextType });
   }
   if (viewId === "ov6c") {
-    await dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType: entrySource === "operational-task" ? "task" : "phase" });
+    const contextType = entrySource === "operational-task" ? "task" : entrySource === "force-mission" ? "force" : "phase";
+    await dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType });
   }
   if (viewId === "ov4") {
     await dodafProductController.pregenerateOv4FromForceMission({ silent: false });
@@ -2499,14 +2874,24 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
   if (viewId === "force-mission" && !(state.forceMission?.forces || []).length && (state.forceMission?.tasksConfirmedAt || (state.forceMission?.tasks || []).length)) {
     await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
   }
-  if (viewId === "ov1" && (!state.conceptGraphic?.nodes?.length && !state.ov1Candidate)) {
+  if (viewId === "ov1" && (forceRegenerate || (!state.conceptGraphic?.nodes?.length && !state.ov1Candidate))) {
     await ov1AiController.generateOv1();
+  }
+  if (viewId === "concept-map" && (forceRegenerate || !state.conceptMap?.document?.items?.length)) {
+    if (state.forceMission?.status === "confirmed" && state.phaseAction?.status === "confirmed") {
+      conceptMapController.handleAction("seed-concept-map-from-planning");
+    }
   }
   if (viewId === "scenario" && (!state.scenario || !state.scenario.entities?.length)) {
     await scenarioController.compileOrGenerateScenario({ silent: false, forceAi: true });
   }
-  // 作战任务改由人工在「作战任务」页面点击「AI 一键生成」，主线流转（如阶段行动/规则库确认或点击下一步）不再自动触发分批 AI 请求。
-  // completeOperationalTasks 仅保留契约兼容，不在此自动生成。
+  if (viewId === "operational-task" && (
+    forceRegenerate
+    || !(state.forceMission?.tasks || []).length
+    || ((entrySource === "phase-action" || completeOperationalTasks) && operationalTasksNeedAiCompletion(state.forceMission?.tasks))
+  )) {
+    await conceptPlanningController.generateOperationalTasks({ silent: false });
+  }
   // Entering OV-1b from the confirmed operational-task step must immediately
   // produce a reviewable task organization. The page remains visible while
   // generation runs so the user can see the busy state and resulting groups.
@@ -2549,7 +2934,7 @@ async function ensureCombatFocusOnEnterPhaseAction() {
 }
 
 /** Revisit an already-confirmed mainline product and continue to its successor. */
-async function advanceWorkflowStep({ generate = true } = {}) {
+async function advanceWorkflowStep({ generate = false, forceRegenerate = false } = {}) {
   const ctx = resolveWorkflowGateContext(state);
   if (ctx.mode !== "next-step" || !ctx.nextStep?.id) {
     showToast("当前没有可进入的下一步");
@@ -2566,11 +2951,13 @@ async function advanceWorkflowStep({ generate = true } = {}) {
   await navigateToResearchView(ctx.nextStep.id, {
     toast: `已进入${ctx.nextStep.label}`,
     force: true,
-    entrySource: generate ? (ctx.nextStep.mainViewId || ctx.current?.id || "default") : "default"
+    entrySource: generate ? (ctx.nextStep.mainViewId || ctx.current?.id || "default") : "default",
+    generate,
+    forceRegenerate
   });
 }
 
-async function advanceRelatedWorkflow() {
+async function advanceRelatedWorkflow({ generate = false, forceRegenerate = false } = {}) {
   const ctx = resolveWorkflowGateContext(state);
   if (ctx.mode !== "related-next-step" || !ctx.nextStep?.id) {
     showToast("当前没有可进入的下一步");
@@ -2605,12 +2992,14 @@ async function advanceRelatedWorkflow() {
     toast: `已进入${ctx.nextStep.label}`,
     force: true,
     entrySource: ctx.mainViewId,
-    completeOperationalTasks: completesPhaseSubflow
+    completeOperationalTasks: completesPhaseSubflow,
+    generate,
+    forceRegenerate
   });
 }
 
 /** Last step of a phase: confirm and unlock the next phase. */
-async function completeWorkflowStage() {
+async function completeWorkflowStage({ generate = false, forceRegenerate = false } = {}) {
   if (state.workflowCompleting) return;
   const workflow = currentWorkflow();
   const ctx = resolveWorkflowGateContext(state);
@@ -2620,35 +3009,34 @@ async function completeWorkflowStage() {
     : nextWorkflowStage(workflow);
   const incompleteReasons = getWorkflowStageIncompleteReasons(state, stage);
   if (incompleteReasons.length) {
-    if (stage === 1 && state.phaseAction?.status !== "confirmed") {
-      const blockers = getWorkflowStageIncompleteReasons(state, 1, { forAdvancement: true });
-      if (!blockers.length) {
-        await conceptPlanningController.confirmPhaseAction();
-        return;
-      }
-    }
-    if (stage === 2 && !state.forceMission?.tasksConfirmedAt) {
-      const blockers = getWorkflowStageIncompleteReasons(state, 2, { forAdvancement: true });
-      if (!blockers.length) {
-        await conceptPlanningController.confirmOperationalTasks();
-        return;
-      }
-    }
-    if (stage === 3 && state.forceMission?.status !== "confirmed") {
-      const blockers = getWorkflowStageIncompleteReasons(state, 3, { forAdvancement: true });
-      if (!blockers.length) {
-        await conceptPlanningController.confirmForceMission();
-        return;
-      }
-    }
     setWorkflowGateOpen(true);
     showToast(`尚不能进入${workflowPhases[stage + 1] || "交付完成"}：请先完成${incompleteReasons.join("、")}`);
     return;
   }
+  // Auto-confirm stages in background so downstream dependencies are fully satisfied
+  if (stage === 1 && state.phaseAction?.status !== "confirmed") {
+    try { await conceptPlanningController.confirmPhaseAction(); } catch { /* ignore */ }
+  }
+  if (stage === 2 && !state.forceMission?.tasksConfirmedAt) {
+    try { await conceptPlanningController.confirmOperationalTasks(); } catch { /* ignore */ }
+  }
+  if (stage === 3 && state.forceMission?.status !== "confirmed") {
+    try { await conceptPlanningController.confirmForceMission(); } catch { /* ignore */ }
+  }
+  if (stage === 4 && !state.ov1?.confirmed) {
+    state.ov1 = state.ov1 || {};
+    state.ov1.confirmed = true;
+    state.ov1.confirmedAt = new Date().toISOString();
+    if (state.ov1Storage) state.ov1Storage.stale = false;
+    try { await projectOv1SyncController.sync(state.ov1, { source: "ov1:confirm" }); } catch { /* ignore */ }
+  }
+  if (stage === 5 && state.conceptMap?.reference?.status !== "confirmed") {
+    try { conceptMapController.handleAction("confirm-concept-map-step"); } catch { /* ignore */ }
+  }
   if (completedWorkflowStage(workflow) >= stage) {
     // Already confirmed — just walk forward if possible (same pregenerate path as “下一步”).
     if (ctx.nextStep?.id) {
-      await advanceWorkflowStep();
+      await advanceWorkflowStep({ generate, forceRegenerate });
       return;
     }
     showToast("本阶段已确认");
@@ -2676,19 +3064,23 @@ async function completeWorkflowStage() {
     showToast(relatedViewId
       ? `当前阶段已确认，已进入关联流程${relatedViewLabel(relatedViewId)}`
       : nextView ? "当前阶段已确认，已进入下一阶段" : "工作流已确认完成");
-    // stage === 1（阶段行动/规则库）确认后进入作战任务时，不再自动触发分批生成任务，改由用户在作战任务页面主动点击「AI 一键生成」
-    if (stage === 2 && nextMainView === "force-mission") {
+    if (generate && stage === 1 && nextMainView === "operational-task") {
+      if (forceRegenerate || !(state.forceMission?.tasks || []).length || operationalTasksNeedAiCompletion(state.forceMission?.tasks)) {
+        await conceptPlanningController.generateOperationalTasks({ silent: false });
+      }
+    }
+    if (generate && stage === 2 && nextMainView === "force-mission") {
       await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
     }
-    if (stage === 3 && nextMainView === "ov1") {
+    if (generate && stage === 3 && nextMainView === "ov1") {
       if (!state.conceptGraphic?.nodes?.length && !state.ov1Candidate) {
         await ov1AiController.generateOv1();
       }
     }
-    if (stage === 4 && nextMainView === "concept-map" && typeof conceptMapController.seedFromPlanning === "function") {
+    if (generate && stage === 4 && nextMainView === "concept-map" && typeof conceptMapController.seedFromPlanning === "function") {
       await conceptMapController.seedFromPlanning({ silent: false });
     }
-    if (stage === 5 && nextMainView === "scenario") {
+    if (generate && stage === 5 && nextMainView === "scenario") {
       if (!state.scenario || !state.scenario.entities?.length) {
         await scenarioController.compileOrGenerateScenario({ silent: false, forceAi: true });
       }
@@ -2713,20 +3105,61 @@ async function setWorkflowMode(mode) {
   state.workflowModeSwitching = true;
   if (projectEntry) projectEntry.workflow = nextWorkflow;
   render();
+
+  const safetyTimer = window.setTimeout(() => {
+    if (state.workflowModeSwitching) {
+      console.warn("setWorkflowMode safety timer triggered (10s)");
+      state.workflowModeSwitching = false;
+      updateBusyOverlay(null);
+      render();
+      showToast("模式切换请求处理超时，已自动恢复工作台");
+    }
+  }, 10000);
+
   try {
     await updateProject(state.activeProjectId, { workflow: nextWorkflow });
     await hydrateProjectDirectory({ skipRender: true });
     await settleBusyTransition();
-  } catch {
+    showToast(mode === "free" ? "已启用测试模式（所有阶段可自由访问）" : "已切换为阶段门禁模式");
+  } catch (error) {
     if (projectEntry) projectEntry.workflow = { ...workflow, mode: previousMode };
-    showToast("工作模式保存失败，请重试");
+    showToast(`工作模式保存失败：${error?.message || "网络或服务异常"}`);
   } finally {
+    window.clearTimeout(safetyTimer);
     state.workflowModeSwitching = false;
+    updateBusyOverlay(null);
     render();
   }
 }
 
+function forceDismissStuckOverlay(busy = null) {
+  const title = busy?.title || "操作";
+  state.workflowModeSwitching = false;
+  state.resettingProject = false;
+  state.reportArchiving = false;
+  state.taskDecompositionPregenerating = false;
+  state.operationalTaskGenerating = false;
+  state.ruleLibraryPregenerating = false;
+  state.ruleLibraryChangeGenerating = false;
+  state.combatFocusGenerating = false;
+  state.stateMachinePregenerating = false;
+  state.sequencePregenerating = false;
+  state.ov4Pregenerating = false;
+  updateBusyOverlay(null);
+  render();
+  showToast(`${title}已解除等待，工作台已恢复可用`);
+}
+
 function getBusyOverlayState() {
+  if (state.resettingProject) {
+    return {
+      key: "reset-project",
+      title: "正在清空当前项目",
+      detail: "正在清除全量架构模型、规划与验证数据，即将重载…",
+      expectedMs: 2500,
+      timeoutMs: 12000
+    };
+  }
   if (state.taskDecompositionPregenerating) {
     return { key: "task-organization-pregenerate", title: "正在整理任务", detail: "AI 正在仅依据已确认任务进行分组、排序与协同梳理…", expectedMs: 90000, timeoutMs: 180000 };
   }
@@ -2826,11 +3259,13 @@ function updateBusyOverlay(busy = getBusyOverlayState()) {
   if (!overlay) return;
   const title = $("#workflowModeOverlayTitle");
   const detail = $("#workflowModeOverlayDetail");
+  const dismissBtn = $("#workflowModeOverlayDismissBtn");
   if (busy) {
     const key = busy.key || busy.title;
     if (busyOverlayKey !== key) {
       busyOverlayKey = key;
       busyOverlayStartedAt = Date.now();
+      if (dismissBtn) dismissBtn.hidden = true;
     }
     if (title) title.textContent = busy.title;
     if (detail) detail.textContent = busy.detail;
@@ -2849,6 +3284,7 @@ function updateBusyOverlay(busy = getBusyOverlayState()) {
   busyOverlayTimer = 0;
   busyOverlayKey = "";
   busyOverlayStartedAt = 0;
+  if (dismissBtn) dismissBtn.hidden = true;
   overlay.classList.remove("is-visible");
   window.setTimeout(() => {
     if (!getBusyOverlayState()) overlay.hidden = true;
@@ -2873,6 +3309,7 @@ function updateBusyOverlayProgress(busy) {
   const elapsed = $("#workflowModeElapsed");
   const estimate = $("#workflowModeEstimate");
   const hint = $("#workflowModeProgressHint");
+  const dismissBtn = $("#workflowModeOverlayDismissBtn");
   if (progress) progress.setAttribute("aria-valuenow", String(displayedPercent));
   if (bar) bar.style.width = `${displayedPercent}%`;
   if (elapsed) elapsed.textContent = `已用时 ${formatBusyDuration(elapsedMs)}`;
@@ -2886,6 +3323,20 @@ function updateBusyOverlayProgress(busy) {
     : (elapsedMs < timeoutMs
       ? "已超过常见耗时，服务仍在处理；到达上限后会自动结束并提示重试"
       : "已到达超时上限，正在等待请求结束");
+
+  if (dismissBtn) {
+    if (elapsedMs >= timeoutMs || elapsedMs >= expectedMs * 1.5) {
+      dismissBtn.hidden = false;
+    } else {
+      dismissBtn.hidden = true;
+    }
+  }
+
+  // Auto-dismiss stuck overlay if timeout limit exceeded by 2 seconds
+  if (elapsedMs >= timeoutMs + 2000) {
+    console.warn(`Busy overlay exceeded timeoutMs (${timeoutMs}ms) by 2s. Auto-dismissing.`, busy);
+    forceDismissStuckOverlay(busy);
+  }
 }
 
 function formatBusyDuration(ms) {
@@ -2911,6 +3362,28 @@ function switchProject(projectId) {
   const url = new URL(window.location.href);
   url.searchParams.set("project", projectId);
   window.location.assign(url);
+}
+
+async function handleDeleteProject(projectId, title = projectId) {
+  if (!window.confirm(`将永久删除项目“${title}”及其所有数据，此操作无法恢复。确定继续吗？`)) return;
+  try {
+    const isCurrentActive = projectId === state.activeProjectId;
+    await deleteProject(projectId);
+    purgeProjectClientStorage(projectId);
+    showToast("已删除项目");
+    await hydrateProjectDirectory();
+    if (isCurrentActive) {
+      const remaining = state.projectDirectory.projects || [];
+      const nextProject = remaining.find((p) => p.id !== projectId && !p.archived)?.id
+        || remaining.find((p) => p.id !== projectId)?.id
+        || "default";
+      switchProject(nextProject);
+      return;
+    }
+    renderProjectManagerChrome();
+  } catch (error) {
+    showToast(error?.status === 403 ? "只有负责人可删除项目" : "项目删除失败：请先归档并确认项目状态");
+  }
 }
 
 /** Update only the top project dropdown; leave concept-map iframe untouched. */
@@ -2944,15 +3417,7 @@ function renderProjectManagerChrome() {
   root.querySelectorAll("[data-project-delete]").forEach((button) => {
     button.addEventListener("click", async () => {
       const title = button.dataset.projectTitle || button.dataset.projectDelete;
-      if (!window.confirm(`将永久删除项目“${title}”及其所有数据，此操作无法恢复。确定继续吗？`)) return;
-      try {
-        await deleteProject(button.dataset.projectDelete);
-        showToast("已删除项目");
-        await hydrateProjectDirectory();
-        renderProjectManagerChrome();
-      } catch (error) {
-        showToast(error?.status === 403 ? "只有负责人可删除项目" : "项目删除失败：请先归档并确认项目状态");
-      }
+      await handleDeleteProject(button.dataset.projectDelete, title);
     });
   });
   root.querySelector("#projectCreateForm")?.addEventListener("submit", async (event) => {
@@ -3390,6 +3855,16 @@ function bindAiModalsChrome() {
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
+    const overlay = $("#workflowModeOverlay");
+    if (overlay && !overlay.hidden && overlay.classList.contains("is-visible")) {
+      const busy = getBusyOverlayState();
+      const elapsedMs = Math.max(0, Date.now() - busyOverlayStartedAt);
+      if (elapsedMs > 2000 || (busy && elapsedMs >= (busy.expectedMs || 3000))) {
+        event.preventDefault();
+        forceDismissStuckOverlay(busy);
+        return;
+      }
+    }
     if (state.aiPromptOpen) {
       event.preventDefault();
       handleAction("close-ai-prompts");

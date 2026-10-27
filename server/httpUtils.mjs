@@ -1,11 +1,82 @@
 import { spawn } from "node:child_process";
 
-export async function readJson(request) {
-  const chunks = [];
-  for await (const chunk of request) {
-    chunks.push(chunk);
-  }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+export async function readJson(request, timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let timer = null;
+    let settled = false;
+
+    function cleanup() {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      request.removeListener("data", onData);
+      request.removeListener("end", onEnd);
+      request.removeListener("error", onError);
+      request.removeListener("close", onClose);
+    }
+
+    function onData(chunk) {
+      chunks.push(chunk);
+    }
+
+    function onEnd() {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      try {
+        const text = Buffer.concat(chunks).toString("utf8").trim();
+        resolve(text ? JSON.parse(text) : {});
+      } catch (err) {
+        const parseError = new Error(`JSON 解析失败: ${err.message}`);
+        parseError.statusCode = 400;
+        reject(parseError);
+      }
+    }
+
+    function onError(err) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(err);
+    }
+
+    function onClose() {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (!request.readableEnded) {
+        const err = new Error("请求连接在读取完成前关闭");
+        err.statusCode = 400;
+        reject(err);
+      } else {
+        onEnd();
+      }
+    }
+
+    if (timeoutMs > 0) {
+      timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        const err = new Error(`读取请求体超时（超过 ${timeoutMs}ms）`);
+        err.statusCode = 408;
+        reject(err);
+      }, timeoutMs);
+    }
+
+    request.on("data", onData);
+    request.on("end", onEnd);
+    request.on("error", onError);
+    request.on("close", onClose);
+
+    if (request.readableEnded) {
+      onEnd();
+    } else {
+      request.resume();
+    }
+  });
 }
 
 export function decodeProjectId(value) {

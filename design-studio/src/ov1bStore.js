@@ -5,9 +5,21 @@ export function buildOv1bModel(state = {}) {
   return normalizeDodafOv1b({ ...existing, derivedFrom: existing.derivedFrom || { mode: "seeded", sources: ["forceMissionPlan.tasks"], generatedAt: new Date().toISOString(), note: "task-organization-reference-only" } });
 }
 
-export function addOv1bTaskGroup(model, { name = "新任务组", dimension = "custom", taskRefs = [], rationale = "", coordination = "" } = {}) {
+export function addOv1bTaskGroup(model, { name = "", dimension = "phase", taskRefs = [], rationale = "", coordination = "", phaseRef = "" } = {}) {
   const next = structuredClone(model || {}); next.taskGroups = Array.isArray(next.taskGroups) ? next.taskGroups : [];
-  next.taskGroups.push({ id: `task-group-${Date.now().toString(36)}`, name, dimension, taskRefs, rationale, coordination, status: "pending_review" });
+  const count = next.taskGroups.length + 1;
+  const groupName = name || `新任务组 ${count}`;
+  next.taskGroups.push({
+    id: `task-group-${Date.now().toString(36)}`,
+    name: groupName,
+    dimension,
+    phaseRef,
+    taskRefs: [...taskRefs],
+    steps: [{ stepIndex: 1, name: "默认步骤", mode: "sequential", taskRefs: [...taskRefs], dependsOn: [] }],
+    rationale,
+    coordination,
+    status: "pending_review"
+  });
   next.status = "pending_review"; next.derivedFrom = null; return normalizeDodafOv1b(next);
 }
 

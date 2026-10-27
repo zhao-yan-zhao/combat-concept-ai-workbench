@@ -339,9 +339,15 @@ export function createRuleLibraryChatController({
           evidence: []
         });
         if (!isAiOutput(response) || !Array.isArray(response.result?.changes)) throw new Error("rule change set empty");
-        changeSet = source === "phase-action"
-          ? ensurePhaseRuleCoverage(response.result, analysis)
-          : response.result;
+        if (source === "phase-action") {
+          changeSet = ensurePhaseRuleCoverage(response.result, analysis);
+        } else if (source === "operational-task") {
+          changeSet = ensureTaskRuleCoverage(response.result, analysis);
+        } else if (source === "force-mission") {
+          changeSet = ensureForceRuleCoverage(response.result, analysis);
+        } else {
+          changeSet = response.result;
+        }
       } catch {
         changeSet = generateMockOutput({
           workflow: { id: "rule-library-change-set", title: "规则库变更建议", outputSchema: "RuleLibraryChangeSet" },
@@ -349,6 +355,8 @@ export function createRuleLibraryChatController({
           evidence: []
         }).result;
         if (source === "phase-action") changeSet = ensurePhaseRuleCoverage(changeSet, analysis);
+        else if (source === "operational-task") changeSet = ensureTaskRuleCoverage(changeSet, analysis);
+        else if (source === "force-mission") changeSet = ensureForceRuleCoverage(changeSet, analysis);
         generatedBy = "local-fallback";
       }
       const next = ensureOv6aModel({
@@ -404,12 +412,13 @@ export function applyRuleChangeSet(current = {}, changeSet = {}, changeId = "") 
   selected.forEach((change) => {
     const phaseBindings = (change.rule?.phaseRefs || []).map((phaseRef) => ({ phaseRef }));
     const taskBindings = (change.rule?.taskRefs || []).map((taskRef) => ({ taskRef, bindingStatus: "pending", constraintNote: "" }));
+    const forceBindings = (change.rule?.forceRefs || []).map((forceRef) => ({ forceRef, bindingStatus: "pending", constraintNote: "" }));
     if (change.action === "add") {
       const id = uniqueRuleId(rules, change.rule.id);
-      rules.push({ ...change.rule, id, phaseBindings, taskBindings, activityBindings: [] });
+      rules.push({ ...change.rule, id, phaseBindings, taskBindings, forceBindings, activityBindings: [] });
     } else if (change.action === "revise") {
       const index = rules.findIndex((rule) => rule.id === change.ruleId);
-      if (index >= 0) rules[index] = { ...rules[index], ...change.rule, id: rules[index].id, phaseBindings, taskBindings, activityBindings: rules[index].activityBindings || [] };
+      if (index >= 0) rules[index] = { ...rules[index], ...change.rule, id: rules[index].id, phaseBindings, taskBindings, forceBindings, activityBindings: rules[index].activityBindings || [] };
     } else if (change.action === "retire") {
       rules = rules.filter((rule) => rule.id !== change.ruleId);
     }
@@ -448,7 +457,8 @@ function normalizeRuleChangeSet(draft = {}, source, fingerprint) {
       rule: {
         ...(change?.rule || {}),
         phaseRefs: source === "phase-action" ? (change?.rule?.phaseRefs || []).map(String).filter(Boolean).slice(0, 24) : [],
-        taskRefs: source === "operational-task" ? (change?.rule?.taskRefs || []).map(String).filter(Boolean).slice(0, 48) : []
+        taskRefs: source === "operational-task" ? (change?.rule?.taskRefs || []).map(String).filter(Boolean).slice(0, 48) : [],
+        forceRefs: source === "force-mission" ? (change?.rule?.forceRefs || []).map(String).filter(Boolean).slice(0, 48) : []
       },
       rationale: String(change?.rationale || "").slice(0, 800),
       status: "pending"
@@ -465,6 +475,15 @@ function buildRuleChangeAnalysis(state, current, source) {
   const forces = (state.forceMission?.forces || []).slice(0, 36).map((force, index) => ({
     id: String(force?.id || `force-${index + 1}`), name: String(force?.name || ""), role: String(force?.role || ""), task: String(force?.task || ""), phaseIds: (force?.phaseIds || []).slice(0, 12)
   }));
+  const combatForces = (state.forceMission?.combatForces || []).slice(0, 36).map((force, index) => ({
+    id: String(force?.id || `combat-force-${index + 1}`),
+    name: String(force?.name || ""),
+    side: String(force?.side || "blue"),
+    role: String(force?.role || ""),
+    task: String(force?.task || force?.mission || ""),
+    phaseIds: (force?.phaseIds || []).slice(0, 12),
+    platforms: (force?.platforms || []).slice(0, 8)
+  }));
   const relations = (state.forceMission?.relations || []).slice(0, 48).map((item) => ({ fromForceId: String(item?.fromForceId || ""), toForceId: String(item?.toForceId || ""), type: String(item?.type || ""), note: String(item?.note || "") }));
   const tasks = (state.forceMission?.tasks || []).slice(0, 80).map((task) => ({ id: String(task?.id || ""), name: String(task?.name || ""), side: task?.side === "hostile" ? "hostile" : "friendly", missionType: String(task?.missionType || ""), objective: String(task?.objective || ""), expectedEffect: String(task?.expectedEffect || "") }));
   const phaseTransitions = (state.phaseAction?.transitions || []).slice(0, 32).map((item) => ({
@@ -473,13 +492,21 @@ function buildRuleChangeAnalysis(state, current, source) {
     condition: String(item?.condition || ""),
     note: String(item?.note || "")
   }));
-  const upstream = source === "phase-action" ? { phaseAction, phaseTransitions } : source === "operational-task" ? { tasks } : { phaseAction, phaseTransitions, forces, relations };
+  const upstream = source === "phase-action"
+    ? { phaseAction, phaseTransitions }
+    : source === "operational-task"
+      ? { tasks }
+      : { phaseAction, phaseTransitions, forces, combatForces, relations };
   return {
     source,
     currentRules: compactRules(current),
     ...upstream,
     upstreamFingerprint: JSON.stringify(upstream).slice(0, 240),
-    revisionRequest: source === "phase-action" ? "根据已确认阶段与行动提出规则变更建议" : source === "operational-task" ? "仅根据已确认作战任务提出逐任务规则建议，每条使用 taskRefs 绑定任务 ID" : "根据已确认兵力、任务与协同关系提出规则变更建议"
+    revisionRequest: source === "phase-action"
+      ? "根据已确认阶段与行动提出规则变更建议"
+      : source === "operational-task"
+        ? "仅根据已确认作战任务提出逐任务规则建议，每条使用 taskRefs 绑定任务 ID"
+        : "根据已确认作战兵力、任务与协同关系提出逐兵力规则变更建议，每条使用 forceRefs 绑定兵力 ID"
   };
 }
 
@@ -521,6 +548,81 @@ export function ensurePhaseRuleCoverage(draft = {}, analysis = {}) {
     }
   });
   return { ...draft, summary: String(draft.summary || "已按阶段分别形成进入与退出规则建议。"), changes: incoming.slice(0, 48) };
+}
+
+export function ensureTaskRuleCoverage(draft = {}, analysis = {}) {
+  const tasks = Array.isArray(analysis.tasks) ? analysis.tasks : [];
+  const taskIds = new Set(tasks.map((task) => String(task?.id || "")).filter(Boolean));
+  const incoming = (Array.isArray(draft.changes) ? draft.changes : []).map((change) => {
+    const explicit = (change?.rule?.taskRefs || []).map(String).filter((ref) => taskIds.has(ref));
+    const scope = String(change?.rule?.scope || "");
+    const inferred = tasks.map((t) => String(t?.id || "")).filter((id) => id && (scope.includes(`（${id}）`) || scope.includes(`(${id})`)));
+    return { ...change, rule: { ...(change?.rule || {}), taskRefs: [...new Set([...explicit, ...inferred])] } };
+  });
+
+  const coveredTaskIds = new Set(incoming.flatMap((c) => c.rule?.taskRefs || []));
+  tasks.forEach((task, index) => {
+    const taskId = String(task?.id || `task-${index + 1}`);
+    const taskName = String(task?.name || `作战任务 ${index + 1}`);
+    if (!coveredTaskIds.has(taskId)) {
+      incoming.push({
+        id: `task-rule-${taskId}`,
+        action: "add",
+        ruleId: "",
+        rule: {
+          id: `rule-task-${taskId}`,
+          name: `${taskName}执行与准入约束`,
+          type: "前置条件",
+          scope: `任务：${taskName}（${taskId}）`,
+          description: `执行任务“${taskName}”时，须确认${task.objective ? `任务目标“${task.objective}”明确，` : ""}预置通信与数据链路由通畅，并满足准入准出与交战规则约束。`,
+          taskRefs: [taskId]
+        },
+        rationale: `依据作战任务 ${taskId} 的目标与约束自动建立任务规则基线。`
+      });
+    }
+  });
+  return { ...draft, summary: String(draft.summary || "已按作战任务分别形成任务执行与约束规则建议。"), changes: incoming.slice(0, 48) };
+}
+
+export function ensureForceRuleCoverage(draft = {}, analysis = {}) {
+  const forceList = [
+    ...(Array.isArray(analysis.combatForces) ? analysis.combatForces : []),
+    ...(Array.isArray(analysis.forces) ? analysis.forces : [])
+  ];
+  const forceMap = new Map();
+  forceList.forEach((f, idx) => {
+    const id = String(f?.id || `force-${idx + 1}`);
+    if (!forceMap.has(id)) forceMap.set(id, f);
+  });
+  const forceIds = new Set(forceMap.keys());
+  const incoming = (Array.isArray(draft.changes) ? draft.changes : []).map((change) => {
+    const explicit = (change?.rule?.forceRefs || []).map(String).filter((ref) => forceIds.has(ref));
+    const scope = String(change?.rule?.scope || "");
+    const inferred = Array.from(forceIds).filter((id) => id && (scope.includes(`（${id}）`) || scope.includes(`(${id})`)));
+    return { ...change, rule: { ...(change?.rule || {}), forceRefs: [...new Set([...explicit, ...inferred])] } };
+  });
+
+  const coveredForceIds = new Set(incoming.flatMap((c) => c.rule?.forceRefs || []));
+  forceMap.forEach((force, forceId) => {
+    const forceName = String(force?.name || `兵力 ${forceId}`);
+    if (!coveredForceIds.has(forceId)) {
+      incoming.push({
+        id: `force-rule-${forceId}`,
+        action: "add",
+        ruleId: "",
+        rule: {
+          id: `rule-force-${forceId}`,
+          name: `${forceName}协同行动与指控约束`,
+          type: "业务规则",
+          scope: `兵力：${forceName}（${forceId}）`,
+          description: `${forceName}在执行${force.task ? `“${force.task}”` : "作战任务"}期间，须保持指定指控链条与EMCON辐射控制等级，并严格执行协同走廊与交接班准则。`,
+          forceRefs: [forceId]
+        },
+        rationale: `依据作战兵力 ${forceId} 的指控与协同要求自动建立兵力规则基线。`
+      });
+    }
+  });
+  return { ...draft, summary: String(draft.summary || "已按作战兵力分别形成指控与协同规则建议。"), changes: incoming.slice(0, 48) };
 }
 
 export function applyRuleLibraryDraft(current = {}, draft = {}) {

@@ -62,7 +62,7 @@ export function renderConceptMap(state) {
           <strong>作战概念图预览</strong>
           <span class="muted">绑定 <code>${escapeHtml(mapProjectId)}</code></span>
           <span class="muted" data-concept-map-stat="objects">${hasDocument ? `${forceCount} 对象 · ${phaseCount} 阶段` : "尚未生成初图"}</span>
-          <span class="status-tag ${confirmed ? "is-ready" : "review"}" data-concept-map-status>${confirmed ? "已确认" : "待确认"}</span>
+          <span class="status-tag ${confirmed || hasDocument ? "is-ready" : "review"}" data-concept-map-status>${confirmed || hasDocument ? "已就绪" : "待生成"}</span>
         </div>
         <div class="concept-map-toolbar-actions">
           <div class="concept-map-toolbar-group" role="group" aria-label="地图维护">

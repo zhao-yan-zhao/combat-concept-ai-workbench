@@ -23,8 +23,8 @@ export function createProjectResourceHandlers(runtime) {
   
   async function handleProjectMeta(request, response, projectId) {
     try {
-      const actor = await localIdentity.authenticate(request);
       const input = await readJson(request);
+      const actor = await localIdentity.authenticate(request);
       if ((input.archived !== undefined || input.title !== undefined || input.description !== undefined) && !actor.roles.includes("lead")) { const error = new Error("Only a lead can change project metadata or archive a project"); error.statusCode = 403; throw error; }
       sendJson(response, 200, await projectRepository.updateProject(projectId, input));
     } catch (error) {

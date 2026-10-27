@@ -118,7 +118,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         '  "transitions": [{ "fromPhaseId": "phase-1", "toPhaseId": "phase-2", "condition": "可观察的转换条件", "note": "T+时点" }],',
         '  "openQuestions": ["待确认的作战判断"], "reviewChecklist": ["复核提示"] }'
       ] : isRuleLibraryChangeSet ? [
-        '{ "summary": "变更摘要", "changes": [{ "id": "change-1", "action": "add|revise|retire", "ruleId": "既有规则 id；新增为空", "rule": { "id": "新增建议 id", "name": "规则名称", "type": "约束|前置条件|转换条件|业务规则|其他", "scope": "作用范围", "description": "可复核规则描述" }, "rationale": "来自结构化上游输入的理由" }] }'
+        '{ "summary": "变更摘要", "changes": [{ "id": "change-1", "action": "add|revise|retire", "ruleId": "既有规则 id；新增为空", "rule": { "id": "新增建议 id", "name": "规则名称", "type": "约束|前置条件|转换条件|业务规则|其他", "scope": "作用范围", "description": "可复核规则描述", "phaseRefs": ["阶段id"], "taskRefs": ["任务id"], "forceRefs": ["兵力id"] }, "rationale": "来自结构化上游输入的理由" }] }'
       ] : isRuleLibraryDraft ? [
         '{ "summary": "1-3 句中文答复（说明改了什么或回答咨询）",',
         '  "rules": [{ "id": "rule-1", "name": "规则名称（不超过20字）", "type": "约束|前置条件|转换条件|业务规则|其他", "scope": "全局|某阶段|某域", "description": "可复核的规则描述（40-160字）" }] }'
@@ -126,7 +126,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         '{ "summary": "1-3 句中文答复（说明改了什么或回答咨询）",',
         '  "sequences": [{ "id": "sequence-1", "name": "时序图名称", "diagramType": "phase|task|force|general",',
         '    "participants": [{ "id": "p1", "name": "参与方名", "refType": "phase|task|force|activity|object|other", "ref": "输入中对应类型的稳定 id" }],',
-        '    "messages": [{ "id": "event-1", "sequence": 1, "fromRef": "p1", "toRef": "p2", "name": "消息名", "type": "message|response|status|exception|timeout", "condition": "触发条件", "relatedActivityRefs": ["阶段或活动 id"] }],',
+        '    "messages": [{ "id": "event-1", "sequence": 1, "fromRef": "p1", "toRef": "p2", "name": "消息名", "type": "message|response|status|exception|timeout", "condition": "触发条件", "relatedActivityRefs": ["阶段、任务或活动 id"] }],',
         '    "fragments": [] }] }'
       ] : isStateMachineDraft ? [
         '{ "summary": "1-3 句中文说明",',
@@ -201,36 +201,39 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         "type 只能是：约束、前置条件、转换条件、业务规则、其他。语气克制，禁止空泛套话。"
       ] : []),
       ...(isRuleLibraryChangeSet ? [
-        "规则变更集要求：只输出可供人工审核的 changes，不得直接改写既有规则，也不得输出活动绑定或任何 OV 品牌字段。rule.phaseRefs 仅用于绑定已提供的阶段 ID。",
+        "规则变更集要求：只输出可供人工审核的 changes，不得直接改写既有规则，也不得输出活动绑定或任何 OV 品牌字段。",
         "仅依据 analysis.currentRules 和已提供的结构化上游输入提出新增、修订或废止；没有充分依据时返回 changes=[]。不得把同义改写当成新建议，不得臆造上游未提供的事实。",
-        "analysis.source=phase-action 时，仅围绕阶段名称/ID、进入退出条件、行动边界、衔接顺序和可观察效果提出建议；scope 必须能回指具体阶段或阶段间关系；每条规则的 phaseRefs 必须列出其直接适用的 analysis.phaseAction[].id，不得使用阶段名称代替 ID。",
+        "1. analysis.source=phase-action 时：围绕阶段名称/ID、进入退出条件、行动边界、衔接顺序和可观察效果提出建议；scope 必须能回指具体阶段或阶段间关系；每条规则的 phaseRefs 必须列出其直接适用的 analysis.phaseAction[].id，不得使用阶段名称代替 ID；taskRefs 与 forceRefs 为空；",
         "阶段规则必须按阶段分别生成，禁止把多个阶段合并成一条笼统规则。对每个包含输入内容的阶段，至少给出：1 条前置条件（依据 entryConditions）和 1 条转换条件（依据 primaryActions、exitConditions、expectedEffects）；行动存在独立边界或约束时再给出业务规则。",
         "阶段间衔接规则只能依据 analysis.phaseTransitions 中明确提供的 fromPhaseId、toPhaseId、condition 和 note 生成；禁止仅凭阶段编号臆造衔接条件。规则名称须包含阶段名称，scope 使用“阶段：名称（ID）”或明确的两个阶段名称，description 必须引用输入中的具体条件或效果，不得只写‘应确认、应校验、可观察’等空泛套话。",
-        "analysis.source=force-mission 时，仅围绕概念兵力的职责、可用性、任务交接、协同、保障及指挥授权关系提出建议；scope 必须能回指兵力或协同域。",
-        "analysis.source=force-mission 时 rule.phaseRefs 必须为空数组；不得根据兵力的 phaseIds 擅自建立规则阶段绑定。",
+        "2. analysis.source=operational-task 时：逐任务围绕 analysis.tasks 中的任务目标、类型（如 patrol/strike/recon/c2 等）、空海域任务区域边界限制（如巡逻区、交战区、禁射区、协同走廊）与任务启动/执行/转火/终止条件提出规则建议；scope 标明“任务：任务名称（ID）”；每条规则的 taskRefs 必须列出直接适用的任务 ID，phaseRefs 与 forceRefs 为空；",
+        "3. analysis.source=force-mission 时：围绕作战编成（analysis.combatForces 及 analysis.forces）的指挥层级、跨兵种信息共享协议、电磁辐射管制（EMCON）、协同防空/火力通道分配、战损重构及补给门槛提出规则建议；scope 标明“兵力：编组名称（ID）”；每条规则的 forceRefs 必须列出直接适用的兵力 ID，phaseRefs 与 taskRefs 为空；不得根据兵力携带的 phaseIds 擅自建立阶段规则绑定；",
+        "每条 rule 都必须同时包含 phaseRefs、taskRefs 与 forceRefs 三个数组字段，根据 source 分别正确填充对应的引用 ID，其余项保持为空数组 []；",
         "action=add 时 ruleId 为空；action=revise 或 retire 时 ruleId 必须匹配 analysis.currentRules 内已有 id。retire 只在输入明确显示规则不再适用或发生矛盾时使用。",
         "rationale 必须说明采用了哪些上游结构化字段。只生成领域通用、研究级、可观察可复核的规则；禁止真实坐标、武器运用细节、性能参数或输入之外的具体战术假设。"
       ] : []),
-      ...(isRuleLibraryChangeSet ? [
-        "所有 rule 都必须同时包含 phaseRefs 与 taskRefs。analysis.source=operational-task 时仅使用 analysis.tasks，每条规则的 taskRefs 必须列出直接适用的任务 ID 且 phaseRefs 为空；其他来源 taskRefs 为空。"
-      ] : []),
       ...(isSequenceDraft ? [
         "时序校验要求：用 sequences[] 表达生命线（participants）与时间向下消息（messages）。",
-        "若 analysis.requiredSequenceCoverage 存在，必须完整覆盖其中的 sideSequences 与 phaseSequences：每个推演方分别生成一幅 diagramType=force 的时序图，每个 phaseId 分别生成一幅 diagramType=phase 的时序图；禁止用一幅综合图替代逐方或逐阶段图。",
-        "逐推演方图应使用该方 force 作为主要参与方并呈现其跨阶段行动；逐阶段图必须通过 participant(refType=phase, ref=phaseId) 或 messages.relatedActivityRefs 精确回链该阶段，并同时表达该阶段内不同推演方的关键交互。",
+        "若 analysis.requiredSequenceCoverage 存在，必须完整覆盖其中指定的时序图集合：",
+        "1. 若包含 taskSequences（逐任务时序）：必须为其中每个任务分别生成一幅 diagramType=task 的时序图，生命线涵盖任务指挥控制节点、主战平台编组、态势传感器节点、打击/作业实施单元及目标对象，时间向下顺序呈现指令下达、态势共享、协同授权、实施接战与战果反馈；",
+        "2. 若包含 forceSequences（逐兵力协同时序）：必须为重点作战兵力编组分别生成一幅 diagramType=force 的多方战术协同时序图，生命线涵盖该兵力内部各作战平台、支援保障节点及指挥机构，呈现编队协同、跨域信息交互、协同探测与火控引导时序；",
+        "3. 若包含 sideSequences（推演方级时序）：每个推演方分别生成一幅 diagramType=force 的推演方总体时序图；",
+        "4. 若包含 phaseSequences（逐阶段时序）：每个 phaseId 分别生成一幅 diagramType=phase 的时序图；通过 participant(refType=phase, ref=phaseId) 或 messages.relatedActivityRefs 精确回链该阶段；",
         "若研究人员要求起草/增删改时序：必须返回非空 sequences，禁止只给文字建议。",
         "参与方表示实际发送、接收或处理消息的研究对象/兵力/系统节点，可按本轮事件关系自由确定；不得为了覆盖流程而把每个阶段强制建成参与方。",
         "participant.refType/ref 必须成对使用，并精确匹配 analysis 中提供的 phase/task/force 等稳定来源 ID；不得根据名称猜测、改写或虚构引用。没有可靠来源时 refType 与 ref 都留空。",
         "diagramType 必须匹配研究意图：phase=阶段时序图，task=任务时序图，force=兵力作战时序图，无法判断时用 general。已有图修订时保持原 diagramType，除非用户明确要求转换。",
         "phase 类型突出阶段衔接、进入/退出条件与转换；task 类型突出任务/活动的先后、触发、依赖与协同；force 类型以作战兵力/系统为参与方，突出指挥、信息、协同与状态交互。三类均使用同一 participants/messages 数据结构。",
-        "消息 fromRef/toRef 必须指向 participants.id。阶段与活动仅作为可选 relatedActivityRefs 回链，不要求逐阶段拆分消息或参与方。",
+        "消息 fromRef/toRef 必须指向 participants.id。relatedActivityRefs 用于回链关联的任务、阶段或活动 ID。",
         "消息 type 用 message|response|status|exception|timeout；name 为短作战语义名，禁止空泛套话。",
         "若仅咨询（analysis.mutationRequest=false）：sequences 可返回空数组，summary 直接回答。",
         "不要输出 OV 品牌字段；语气克制、可复核。"
       ] : []),
       ...(isStateMachineDraft ? [
-        "状态机校验要求：仅为 analysis.stateMachineSubjects 中的候选建立状态机；subjectRef 与 subjectType 必须原样匹配候选。来自阶段行动的候选 subjectType 必须为 phase（阶段机）；兵力/持续对象用 force；独立任务用 task。不要另为阶段容器再复制一台机。",
-        "必须使用 analysis.phaseAction.phases 与候选上的 timeWindow、blueActions、redActions：时窗约束进入/持续/退出条件；红方行动只作为对抗压力、异常或判定分支的上下文，不得为红方行动另建状态机。",
+        "状态机校验要求：仅为 analysis.stateMachineSubjects 中的候选建立状态机；subjectRef 与 subjectType 必须原样匹配候选。来自阶段行动的候选 subjectType 必须为 phase（阶段机）；兵力/持续对象用 force（兵力机）；独立任务用 task（任务机）。不要另为阶段容器再复制一台机。",
+        "1. 作战任务状态机（subjectType=task）：状态机必须反映该任务的完整战术执行闭环。典型战术生命周期包括：任务待命/准备就绪 -> 战术进场/阵位机动 -> 态势建立/目标捕获 -> 火力接战/作业实施 -> 战果评估/效果确认 -> 任务结束/转火撤收。确需分支时使用 decision 判定节点（如接战准入判定、战果是否达成）。",
+        "2. 作战兵力状态机（subjectType=force）：状态机必须反映兵力平台编成在战场上的战术运行生命周期。典型状态包括：集结值班/待命状态 -> 战术航渡/展开部署 -> 巡逻警戒/伴随掩护 -> 协同接战/攻防对抗 -> 战损撤退/功能重构 -> 返航归建/整备补给。状态机条件须反映平台能源、弹药、链路及威胁等级门槛。",
+        "3. 阶段行动状态机（subjectType=phase）：必须使用 analysis.phaseAction.phases 与候选上的 timeWindow、blueActions、redActions：时窗约束进入/持续/退出条件；红方行动只作为对抗压力、异常或判定分支的上下文，不得为红方行动另建状态机。",
         "每台输出 4 至 7 个节点，形成 initial → 2 至 4 个 normal/decision 中间节点 → final 的完整生命周期；禁止只有一个名为‘进行中’‘执行中’‘中间状态’的空泛中间态。",
         "normal 名称必须表示对象已经处于的、可区分且有作战语义的状态（例如‘接战准备就绪’‘航迹融合中’‘效果待确认’），不要把进入/退出条件直接当状态名，也不要用‘状态1’‘处理中’等占位名称。initial/final 分别使用‘开始’和‘结束’。",
         "主路径必须从 initial 连通到 final，且相邻中间状态不得同名。每条转换的 fromStateRef/toStateRef 必须引用本机 states.id；转换 condition 描述触发状态变化的事件或可观察门槛，不得重复状态名称。",

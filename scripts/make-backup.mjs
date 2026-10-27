@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import cp from "node:child_process";
 
-const dest = "D:/项目/_backups/combat-concept-ai-workbench-8792-20260923-p1-optimizations.zip";
+const dest = "D:/项目/_backups/combat-concept-ai-workbench-8792-20261026-task-force-ov6.zip";
 const tmpDir = "D:/项目/_backups/tmp-backup";
 
 if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });

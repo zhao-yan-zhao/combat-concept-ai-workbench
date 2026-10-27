@@ -31,12 +31,48 @@ export async function revokeKnowledgeCitationApproval(projectId, approvalId, val
   return request(`${PROJECT_API_ROOT}/${encodeURIComponent(projectId)}/knowledge/sensitivity-approvals/${encodeURIComponent(approvalId)}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value) });
 }
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
+
 async function request(path, options = {}) {
-  const response = await fetch(path, { headers: { Accept: "application/json", ...(options.headers || {}) }, ...options });
-  if (!response.ok) {
-    const error = new Error(await response.text() || `Knowledge repository request failed (${response.status})`);
-    error.status = response.status;
-    throw error;
+  const timeoutMs = Number(options.timeoutMs) || DEFAULT_REQUEST_TIMEOUT_MS;
+  const controller = new AbortController();
+  const callerSignal = options.signal;
+  let timer = null;
+
+  if (callerSignal) {
+    if (callerSignal.aborted) {
+      controller.abort();
+    } else {
+      callerSignal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
   }
-  return response.json();
+
+  if (timeoutMs > 0) {
+    timer = setTimeout(() => {
+      controller.abort(new Error(`请求超时`));
+    }, timeoutMs);
+  }
+
+  try {
+    const fetchOptions = {
+      ...options,
+      headers: { Accept: "application/json", ...(options.headers || {}) },
+      signal: controller.signal
+    };
+    delete fetchOptions.timeoutMs;
+    const response = await fetch(path, fetchOptions);
+    if (!response.ok) {
+      const error = new Error(await response.text() || `Knowledge repository request failed (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+    return await response.json();
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`知识库请求超时（${Math.round(timeoutMs / 1000)}秒内未收到响应）`);
+    }
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }

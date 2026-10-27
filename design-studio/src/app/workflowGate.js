@@ -13,7 +13,7 @@ export function currentWorkflow(state, project) {
   );
   let completed = completedWorkflowStage(workflow);
   for (let stage = 0; stage <= completed; stage += 1) {
-    if (getWorkflowStageIncompleteReasons(state, stage).length > 0) {
+    if (getWorkflowStageIncompleteReasons(state, stage, { forAdvancement: true }).length > 0) {
       return { ...workflow, completedThrough: Math.max(-1, stage - 1) };
     }
   }
@@ -87,11 +87,12 @@ export function getWorkflowStageIncompleteReasons(state, stage, { forAdvancement
     ].filter(Boolean);
   }
   if (stage === 5) {
-    return [
-      !state.conceptMap?.document?.items?.length && "概念图对象或标绘",
+    const reasons = [
+      (!state.conceptMap?.document?.items?.length && !state.conceptMap?.elements?.length) && "概念图对象或标绘",
       state.conceptMap?.reference?.status !== "confirmed" && "确认概念图研究参考",
       state.conceptMapStorage?.stale && "复核已过期的概念图"
     ].filter(Boolean);
+    return forAdvancement ? reasons.filter((r) => r !== "确认概念图研究参考") : reasons;
   }
   if (stage === 6) {
     const reasons = [];
@@ -111,6 +112,155 @@ export function canCompleteWorkflowStage(state, stage) {
 
 function stepShortLabel(view) {
   return productShortLabel(view?.id, String(view?.label || view?.id || "").slice(0, 8));
+}
+
+export function isStepGenerated(viewId, state = {}) {
+  if (!viewId) return false;
+  switch (viewId) {
+    case "brief":
+      return Boolean(state.brief?.researchIntent || state.brief?.objective);
+    case "phase-action":
+      return Boolean(state.phaseAction?.phases?.length);
+    case "ov6a":
+      return Boolean(state.ov6a?.rules?.length);
+    case "ov6b":
+      return Boolean(state.ov6b?.stateMachines?.length);
+    case "ov6c":
+      return Boolean(state.ov6c?.sequenceDiagrams?.length);
+    case "operational-task":
+      return Boolean(state.forceMission?.tasks?.length);
+    case "ov1b":
+      return Boolean(state.ov1b?.groups?.length);
+    case "force-mission":
+      return Boolean(state.forceMission?.forces?.length);
+    case "ov4":
+      return Boolean(state.ov4?.commandNodes?.length || state.ov4?.relationships?.length || state.ov4?.diagrams?.length);
+    case "ov2":
+      return Boolean(state.ov2?.exchanges?.length || state.ov2?.nodes?.length);
+    case "ov3":
+      return Boolean(state.ov3?.messages?.length || state.ov3?.exchanges?.length);
+    case "ov1":
+      return Boolean(state.conceptGraphic?.nodes?.length || state.ov1?.nodes?.length || state.ov1Candidate);
+    case "ov5a":
+      return Boolean(state.ov5?.activities?.length);
+    case "concept-map":
+      return Boolean(state.conceptMap?.document?.items?.length || state.conceptMap?.elements?.length);
+    case "scenario":
+      return Boolean(state.scenario?.entities?.length);
+    case "validate":
+      return Boolean(state.validationResult?.scores?.length);
+    default:
+      return false;
+  }
+}
+
+export function isStepStale(viewId, state = {}) {
+  if (!viewId) return false;
+  switch (viewId) {
+    case "phase-action":
+      return Boolean(state.phaseActionStorage?.stale);
+    case "operational-task":
+    case "force-mission":
+      return Boolean(state.forceMissionStorage?.stale);
+    case "ov1":
+      return Boolean(state.ov1Storage?.stale || state.conceptGraphicStorage?.stale);
+    case "concept-map":
+      return Boolean(state.conceptMapStorage?.stale);
+    case "scenario":
+      return Boolean(state.scenarioStorage?.stale || state.scenario?.stale);
+    case "validate":
+      return Boolean(state.validationStorage?.stale || isValidationStale(state.validationResult, state.ov5, state.ooda, state.scenario, state.ov1));
+    case "ov6a":
+      return Boolean((state.ov6a?.ruleChangeSet?.changes || []).some((item) => item.status === "pending"));
+    case "ov6b":
+      return Boolean(state.phaseActionStorage?.stale);
+    case "ov6c":
+      return Boolean(state.phaseActionStorage?.stale || state.forceMissionStorage?.stale);
+    case "ov4":
+    case "ov2":
+    case "ov3":
+    case "ov1b":
+      return Boolean(state.forceMissionStorage?.stale);
+    default:
+      return false;
+  }
+}
+
+export function resolveCurrentStepQuickActions(state = {}) {
+  const actions = [];
+  const viewId = state.activeView;
+
+  if (viewId === "phase-action") {
+    const phases = state.phaseAction?.phases || [];
+    if (phases.length >= 2 && state.phaseAction?.status !== "confirmed") {
+      actions.push({
+        id: "confirm-phase-action",
+        label: "一键确认阶段与行动",
+        action: "workflow-gate-quick-confirm-phase-action",
+        hint: "当前阶段方案已具备，点击即可快速确认并解锁下游"
+      });
+    }
+  } else if (viewId === "operational-task") {
+    const tasks = state.forceMission?.tasks || [];
+    if (tasks.length > 0 && !state.forceMission?.tasksConfirmedAt) {
+      actions.push({
+        id: "confirm-operational-tasks",
+        label: "一键确认作战任务",
+        action: "workflow-gate-quick-confirm-operational-tasks",
+        hint: "作战任务列表已就绪，点击即可快速确认"
+      });
+    }
+  } else if (viewId === "force-mission") {
+    const forces = state.forceMission?.forces || [];
+    if (forces.length > 0 && state.forceMission?.status !== "confirmed") {
+      actions.push({
+        id: "confirm-force-mission",
+        label: "一键确认作战兵力",
+        action: "workflow-gate-quick-confirm-force-mission",
+        hint: "兵力编成与编组方案已就绪，点击即可快速确认"
+      });
+    }
+  } else if (viewId === "ov6a") {
+    const pendingChanges = (state.ov6a?.ruleChangeSet?.changes || []).filter((item) => item.status === "pending");
+    if (pendingChanges.length > 0) {
+      actions.push({
+        id: "apply-all-rule-changes",
+        label: `采纳全部建议并覆盖 (${pendingChanges.length}项)`,
+        action: "workflow-gate-quick-apply-all-rules",
+        hint: "检测到上游输入的待审核建议，点击全部采纳并更新规则库"
+      });
+    }
+  } else if (viewId === "ov1") {
+    if ((state.ov1?.nodes?.length || state.conceptGraphic?.nodes?.length) && !state.ov1?.confirmed) {
+      actions.push({
+        id: "confirm-ov1",
+        label: "一键确认总体图",
+        action: "workflow-gate-quick-confirm-ov1",
+        hint: "总体图高层交互节点已就绪，点击快速确认并解锁概念图"
+      });
+    }
+  } else if (viewId === "concept-map") {
+    if (state.conceptMap?.reference?.status !== "confirmed" && (state.conceptMap?.document?.items?.length || state.conceptMap?.elements?.length)) {
+      actions.push({
+        id: "confirm-concept-map",
+        label: "一键确认概念图参考",
+        action: "workflow-gate-quick-confirm-concept-map",
+        hint: "概念图研究参考已满足，点击即可快速确认"
+      });
+    }
+  }
+
+  return actions;
+}
+
+function formatCapsuleAction(baseLabel, nextGenerated, nextStale) {
+  if (nextGenerated && nextStale) {
+    return `${baseLabel} (上游有更新)`;
+  }
+  if (nextGenerated) {
+    return `${baseLabel} (已生成)`;
+  }
+  return baseLabel;
 }
 
 /**
@@ -140,6 +290,7 @@ export function resolveWorkflowGateContext(state) {
     : null;
   const completing = Boolean(state.workflowCompleting);
   const open = Boolean(state.workflowGateOpen);
+  const quickActions = resolveCurrentStepQuickActions(state);
 
   if (freeMode) {
     return {
@@ -154,7 +305,8 @@ export function resolveWorkflowGateContext(state) {
       ready,
       followingPhase,
       completing,
-      open
+      open,
+      quickActions
     };
   }
 
@@ -171,7 +323,8 @@ export function resolveWorkflowGateContext(state) {
       ready: true,
       followingPhase: null,
       completing,
-      open
+      open,
+      quickActions
     };
   }
 
@@ -193,9 +346,14 @@ export function resolveWorkflowGateContext(state) {
         followingPhase,
         completing,
         open,
-        related: true
+        related: true,
+        state
       });
     }
+    const nextGenerated = isStepGenerated(nextStep.id, state);
+    const nextStale = isStepStale(nextStep.id, state);
+    const baseLabel = stepShortLabel(nextStep);
+    const capsuleAction = formatCapsuleAction(baseLabel, nextGenerated, nextStale);
     return {
       freeMode: false,
       mode: "next-step",
@@ -211,17 +369,38 @@ export function resolveWorkflowGateContext(state) {
       open,
       action: "advance-workflow-step",
       capsuleTitle: "下一步",
-      capsuleAction: stepShortLabel(nextStep),
+      capsuleAction,
+      nextGenerated,
+      nextStale,
+      isStale: nextGenerated && nextStale,
+      quickActions,
       actionLabel: `进入${nextStep.label}`,
       headLabel: "当前步骤",
       headTitle: current.label,
-      hint: `本阶段已确认，可进入「${nextStep.label}」。`,
+      hint: nextGenerated && nextStale
+        ? `上游步骤已更新，建议重新生成「${nextStep.label}」，或跳过保留旧版。`
+        : nextGenerated
+          ? `本阶段已就绪，「${nextStep.label}」已有成果，可直接跳过查看或重新生成。`
+          : `本阶段已就绪，可直接进入「${nextStep.label}」。`,
       detailHtml: `<p class="workflow-gate-detail-note">下一页：${escapeHtml(nextStep.label)}（${escapeHtml(nextStep.phase || "")}）。</p>`
     };
   }
 
   const confirmationRelatedId = contextualFlowViewIds(current.id, state)[0] || "";
   const confirmationNextLabel = confirmationRelatedId ? relatedViewLabel(confirmationRelatedId) : (followingPhase || "交付完成");
+  const targetStepId = confirmationRelatedId || nextStep?.id || "";
+  const nextGenerated = targetStepId ? isStepGenerated(targetStepId, state) : false;
+  const nextStale = targetStepId ? isStepStale(targetStepId, state) : false;
+  let baseCapsuleAction = "确认完成";
+  if (ready) {
+    baseCapsuleAction = confirmationRelatedId ? relatedViewLabel(confirmationRelatedId) : (followingPhase ? stepShortLabel(nextStep) : "确认完成");
+  } else {
+    baseCapsuleAction = `待完成 ${incompleteReasons.length}`;
+  }
+  const capsuleAction = ready && targetStepId
+    ? formatCapsuleAction(baseCapsuleAction, nextGenerated, nextStale)
+    : baseCapsuleAction;
+
   return {
     freeMode: false,
     mode: "complete-phase",
@@ -237,20 +416,32 @@ export function resolveWorkflowGateContext(state) {
     open,
     action: "complete-workflow-stage",
     capsuleTitle: current.phase || "当前步骤",
-    capsuleAction: ready ? (confirmationRelatedId ? relatedViewLabel(confirmationRelatedId) : (followingPhase ? stepShortLabel(nextStep) : "确认完成")) : `待完成 ${incompleteReasons.length}`,
+    capsuleAction,
+    nextGenerated,
+    nextStale,
+    isStale: ready && nextGenerated && nextStale,
+    quickActions,
     actionLabel: confirmationRelatedId ? `确认并进入${relatedViewLabel(confirmationRelatedId)}` : (followingPhase ? `确认并进入${followingPhase}` : "确认并完成工作流"),
     headLabel: "当前步骤",
     headTitle: current.phase || "",
     hint: ready
-      ? `当前成果已就绪，确认后进入${confirmationNextLabel}${confirmationRelatedId ? "（关联流程）" : ""}。`
-      : `尚需完成：${incompleteReasons.join("、")}。点击确认可查看提示。`,
+      ? (nextGenerated && nextStale
+        ? `当前成果已就绪，但上游曾发生调整，建议重新生成下游成果；也可跳过直接查看。`
+        : `当前成果已就绪，可直接进入${confirmationNextLabel}${confirmationRelatedId ? "（关联流程）" : ""}。`)
+      : `尚需完成：${incompleteReasons.join("、")}。`,
     detailHtml: incompleteReasons.length
       ? `<ul class="workflow-gate-detail">${incompleteReasons.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
-      : `<p class="workflow-gate-detail-note">确认后将进入${escapeHtml(confirmationNextLabel)}${confirmationRelatedId ? "（关联流程）" : ""}。</p>`
+      : `<p class="workflow-gate-detail-note">可直接进入${escapeHtml(confirmationNextLabel)}${confirmationRelatedId ? "（关联流程）" : ""}。</p>`
   };
 }
 
-function buildAdvanceContext({ freeMode, current, nextStep, phaseIndex, completedThrough, followingPhase, completing, open, related = false }) {
+function buildAdvanceContext({ freeMode, current, nextStep, phaseIndex, completedThrough, followingPhase, completing, open, related = false, state = {} }) {
+  const nextGenerated = isStepGenerated(nextStep.id, state);
+  const nextStale = isStepStale(nextStep.id, state);
+  const baseLabel = related ? relatedViewLabel(nextStep.id) : stepShortLabel(nextStep);
+  const capsuleAction = formatCapsuleAction(baseLabel, nextGenerated, nextStale);
+  const quickActions = resolveCurrentStepQuickActions(state);
+
   return {
     freeMode,
     mode: "next-step",
@@ -267,13 +458,21 @@ function buildAdvanceContext({ freeMode, current, nextStep, phaseIndex, complete
     related: Boolean(related),
     action: "advance-workflow-step",
     capsuleTitle: "下一步",
-    capsuleAction: related ? relatedViewLabel(nextStep.id) : stepShortLabel(nextStep),
+    capsuleAction,
+    nextGenerated,
+    nextStale,
+    isStale: nextGenerated && nextStale,
+    quickActions,
     actionLabel: `进入${nextStep.label}`,
     headLabel: "当前步骤",
     headTitle: current.label,
-    hint: related
-      ? `本步骤已确认，先进入关联流程“${nextStep.label}”。`
-      : `本阶段已确认，可进入“${nextStep.label}”。`,
+    hint: nextGenerated && nextStale
+      ? `上游步骤已更新，建议重新生成「${nextStep.label}」，或跳过保留旧版。`
+      : nextGenerated
+        ? `本阶段已确认，「${nextStep.label}」已有成果，可直接跳过查看或重新生成。`
+        : related
+          ? `本步骤已确认，先进入关联流程“${nextStep.label}”。`
+          : `本阶段已确认，可进入“${nextStep.label}”。`,
     detailHtml: `<p class="workflow-gate-detail-note">下一项：${escapeHtml(nextStep.label)}${related ? "（关联流程）" : ""}。</p>`
   };
 }
@@ -297,6 +496,12 @@ function resolveRelatedWorkflowGateContext(state, { freeMode, steps, completedTh
   if (!nextStep) {
     return { freeMode, mode: "complete", current: { id: state.activeView, label: currentLabel }, nextStep: null, completedThrough };
   }
+  const nextGenerated = isStepGenerated(nextStep.id, state);
+  const nextStale = isStepStale(nextStep.id, state);
+  const baseLabel = nextStep.related ? relatedViewLabel(nextStep.id) : stepShortLabel(nextStep);
+  const capsuleAction = formatCapsuleAction(baseLabel, nextGenerated, nextStale);
+  const quickActions = resolveCurrentStepQuickActions(state);
+
   return {
     freeMode,
     mode: "related-next-step",
@@ -309,15 +514,53 @@ function resolveRelatedWorkflowGateContext(state, { freeMode, steps, completedTh
     open: Boolean(state.workflowGateOpen),
     action: "advance-related-workflow",
     capsuleTitle: "下一步",
-    capsuleAction: nextStep.related ? relatedViewLabel(nextStep.id) : stepShortLabel(nextStep),
+    capsuleAction,
+    nextGenerated,
+    nextStale,
+    isStale: nextGenerated && nextStale,
+    quickActions,
     actionLabel: `进入${nextStep.label}`,
     headLabel: "当前关联步骤",
     headTitle: currentLabel,
-    hint: nextStep.related
-      ? `继续关联流程，进入“${nextStep.label}”。`
-      : `当前关联流程已走完，进入主流程“${nextStep.label}”。`,
+    hint: nextGenerated && nextStale
+      ? `上游内容有更新，建议重新生成“${nextStep.label}”，或直接跳过查看。`
+      : nextGenerated
+        ? `“${nextStep.label}”已就绪，可跳过直接查看成果，或重新生成。`
+        : nextStep.related
+          ? `继续关联流程，进入“${nextStep.label}”。`
+          : `当前关联流程已走完，进入主流程“${nextStep.label}”。`,
     detailHtml: `<p class="workflow-gate-detail-note">下一项：${escapeHtml(nextStep.label)}${nextStep.related ? "（关联流程）" : "（主流程）"}。</p>`
   };
+}
+
+function renderWorkflowGateActions(ctx, completing) {
+  if (ctx.mode === "complete-phase" && !ctx.ready) {
+    return `<button type="button" data-action="${escapeHtml(ctx.action)}" ${completing ? "disabled" : ""}>${completing ? "正在确认…" : escapeHtml(ctx.actionLabel || "继续")}</button>`;
+  }
+  if (!ctx.nextStep && ctx.mode !== "complete-phase") {
+    return `<button type="button" data-action="${escapeHtml(ctx.action)}" ${completing ? "disabled" : ""}>${completing ? "正在确认…" : escapeHtml(ctx.actionLabel || "继续")}</button>`;
+  }
+
+  const isCompletePhase = ctx.mode === "complete-phase";
+
+  if (!ctx.nextGenerated) {
+    return `<div class="workflow-gate-actions">
+      <button type="button" data-action="advance-workflow-step-ai" ${completing ? "disabled" : ""}>${isCompletePhase ? "确认并AI生成进入" : "AI生成并进入"}</button>
+      <button type="button" class="quiet-button" data-action="${escapeHtml(ctx.action)}" data-step-intent="direct" ${completing ? "disabled" : ""}>${isCompletePhase ? "确认并直接进入" : "直接进入"}</button>
+    </div>`;
+  }
+
+  if (ctx.nextGenerated && !ctx.nextStale) {
+    return `<div class="workflow-gate-actions">
+      <button type="button" data-action="${escapeHtml(ctx.action)}" data-step-intent="skip" data-action-variant="skip" ${completing ? "disabled" : ""}>${isCompletePhase ? "确认并跳过（查看成果）" : "跳过（查看已有成果）"}</button>
+      <button type="button" class="quiet-button" data-action="advance-workflow-step-regenerate" ${completing ? "disabled" : ""}>重新生成</button>
+    </div>`;
+  }
+
+  return `<div class="workflow-gate-actions">
+    <button type="button" data-action="advance-workflow-step-regenerate" ${completing ? "disabled" : ""}>重新生成（覆盖更新）</button>
+    <button type="button" class="quiet-button" data-action="${escapeHtml(ctx.action)}" data-step-intent="skip" data-action-variant="skip" ${completing ? "disabled" : ""}>${isCompletePhase ? "确认并跳过（保留旧版）" : "跳过（保留旧版）"}</button>
+  </div>`;
 }
 
 /**
@@ -341,7 +584,9 @@ export function renderWorkflowGate(state) {
   const ready = Boolean(ctx.ready);
   const open = Boolean(ctx.open);
   const completing = Boolean(ctx.completing);
-  const shellState = ctx.mode === "complete-phase" && !ready ? "is-pending" : "is-ready";
+  const shellState = ctx.mode === "complete-phase" && !ready
+    ? "is-pending"
+    : (ctx.isStale ? "is-stale" : "is-ready");
   const title = `${ctx.capsuleTitle} · ${ctx.capsuleAction}（点击展开）`;
 
   return `<div class="workflow-gate-shell ${shellState}${open ? " is-open" : ""}" data-workflow-gate-shell data-gate-mode="${escapeHtml(ctx.mode)}">
@@ -353,9 +598,26 @@ export function renderWorkflowGate(state) {
           <small class="workflow-gate-hint">${escapeHtml(ctx.hint || "")}</small>
         </div>
       </div>
+      ${ctx.quickActions && ctx.quickActions.length ? `
+        <div class="workflow-gate-quick-box" role="region" aria-label="快捷门禁">
+          <div class="workflow-gate-quick-title">⚡ 快捷门禁放行</div>
+          ${ctx.quickActions.map((qa) => `
+            <div class="workflow-gate-quick-row">
+              <button type="button" class="workflow-gate-quick-btn" data-action="${escapeHtml(qa.action)}">${escapeHtml(qa.label)}</button>
+              <span class="workflow-gate-quick-hint">${escapeHtml(qa.hint)}</span>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+      ${ctx.isStale ? `
+        <div class="workflow-gate-stale-alert" role="status">
+          <span class="workflow-gate-stale-icon">⚠️</span>
+          <span>上游步骤内容已调整，下游成果已过期</span>
+        </div>
+      ` : ""}
       ${ctx.detailHtml || ""}
       <div class="workflow-actions">
-        ${ctx.mode === "next-step" && !ctx.related ? `<div class="workflow-gate-actions"><button type="button" data-action="advance-workflow-step-ai" ${completing ? "disabled" : ""}>AI生成并进入</button><button type="button" class="quiet-button" data-action="advance-workflow-step-direct" ${completing ? "disabled" : ""}>直接进入</button></div>` : `<button type="button" data-action="${escapeHtml(ctx.action)}" ${completing ? "disabled" : ""}>${completing ? "正在确认…" : escapeHtml(ctx.actionLabel || "继续")}</button>`}
+        ${renderWorkflowGateActions(ctx, completing)}
       </div>
     </div>
     <button type="button" class="workflow-gate-capsule" data-action="toggle-workflow-gate" aria-expanded="${open ? "true" : "false"}" aria-controls="workflowGatePanel" title="${escapeHtml(title)}">

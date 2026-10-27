@@ -264,26 +264,62 @@ async function saveProjectModel(projectId, resource, { model, source, expectedRe
   });
 }
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
+
 async function request(path, options = {}) {
-  const response = await fetch(path, { headers: { Accept: "application/json", ...(options.headers || {}) }, ...options });
-  if (!response.ok) {
-    const raw = await response.text();
-    let message = raw || `Project repository request failed (${response.status})`;
-    let code = "";
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object") {
-        if (parsed.error) message = String(parsed.error);
-        if (parsed.code) code = String(parsed.code);
-      }
-    } catch {
-      /* keep raw text */
+  const timeoutMs = Number(options.timeoutMs) || DEFAULT_REQUEST_TIMEOUT_MS;
+  const controller = new AbortController();
+  const callerSignal = options.signal;
+  let timer = null;
+
+  if (callerSignal) {
+    if (callerSignal.aborted) {
+      controller.abort();
+    } else {
+      callerSignal.addEventListener("abort", () => controller.abort(), { once: true });
     }
-    const error = new Error(message);
-    error.status = response.status;
-    error.code = code;
-    error.body = raw;
-    throw error;
   }
-  return response.json();
+
+  if (timeoutMs > 0) {
+    timer = setTimeout(() => {
+      controller.abort(new Error(`网络请求超时（超过 ${timeoutMs}ms）`));
+    }, timeoutMs);
+  }
+
+  try {
+    const fetchOptions = {
+      ...options,
+      headers: { Accept: "application/json", ...(options.headers || {}) },
+      signal: controller.signal
+    };
+    delete fetchOptions.timeoutMs;
+    const response = await fetch(path, fetchOptions);
+    if (!response.ok) {
+      const raw = await response.text();
+      let message = raw || `Project repository request failed (${response.status})`;
+      let code = "";
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          if (parsed.error) message = String(parsed.error);
+          if (parsed.code) code = String(parsed.code);
+        }
+      } catch {
+        /* keep raw text */
+      }
+      const error = new Error(message);
+      error.status = response.status;
+      error.code = code;
+      error.body = raw;
+      throw error;
+    }
+    return await response.json();
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`网络请求超时（${Math.round(timeoutMs / 1000)}秒内未收到响应）`);
+    }
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }

@@ -34,6 +34,7 @@ import {
   confirmForceMissionPlan,
   confirmConceptForcePlan,
   confirmOperationalTasks,
+  addOperationalTask,
   buildOperationalTaskGenerationBatches,
   createOperationalTasksFromPhaseAction,
   createForceMissionPlanFromBrief,
@@ -119,6 +120,25 @@ export function createConceptPlanningController({
           state.forceMissionLayerTab = layer;
           render();
         }
+        return true;
+      }
+      if (action === "add-operational-task") {
+        const state = getState();
+        const phaseAction = state.phaseAction || {};
+        const phases = Array.isArray(phaseAction.phases) ? phaseAction.phases : [];
+        const currentTask = state.forceMission?.tasks?.find((task) => task.id === state.operationalTaskSelectedId);
+        const defaultPhaseId = currentTask?.phaseId || phases[0]?.id || "";
+        const defaultSide = currentTask?.side || "friendly";
+        const next = addOperationalTask(state.forceMission, {
+          phaseId: defaultPhaseId,
+          side: defaultSide
+        }, { phaseAction });
+        const created = next.tasks[next.tasks.length - 1];
+        if (created) {
+          state.operationalTaskSelectedId = created.id;
+        }
+        notify(`已新增作战任务「${created?.name || "新任务"}」，请在右侧完善属性与区域`);
+        void changeOperationalTaskPlan(next, "operational-task:add");
         return true;
       }
       if (action === "generate-operational-tasks") {
@@ -623,7 +643,7 @@ export function createConceptPlanningController({
   }
 
   async function changeOperationalTask(taskId, field, value) {
-    if (!["name", "missionType", "objective", "expectedEffect"].includes(field)) return;
+    if (!["name", "missionType", "objective", "expectedEffect", "side", "phaseId", "sourceAction"].includes(field)) return;
     const state = getState();
     await changeOperationalTaskPlan(updateOperationalTask(state.forceMission, taskId, { [field]: value }), "operational-task:edit");
   }

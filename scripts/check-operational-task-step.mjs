@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   confirmOperationalTasks,
+  addOperationalTask,
   compactForceMissionForAnalysis,
   createEmptyForceMissionPlan,
   createOperationalTasksFromPhaseAction,
@@ -93,4 +94,23 @@ const legacy = normalizeForceMissionPlan({
 });
 assert.equal(legacy.tasks.length, 1, "Existing plans should migrate embedded force tasks");
 assert.ok(legacy.tasksConfirmedAt, "Confirmed legacy plans should retain confirmed task semantics");
+let manualPlan = addOperationalTask(plan, { name: "自定义打击任务", side: "friendly", missionType: "strike" }, { phaseAction });
+assert.equal(manualPlan.tasks.length, 3, "addOperationalTask should append task");
+assert.equal(manualPlan.tasksConfirmedAt, "", "Adding task manually should invalidate confirmation");
+const addedTask = manualPlan.tasks[manualPlan.tasks.length - 1];
+assert.equal(addedTask.name, "自定义打击任务");
+assert.equal(addedTask.side, "friendly");
+assert.equal(addedTask.phaseId, "p1");
+assert.equal(addedTask.missionType, "strike");
+assert.ok(addedTask.area?.points?.length > 0, "Manual task should inherit default area points");
+
+manualPlan = updateOperationalTask(manualPlan, addedTask.id, { side: "hostile", phaseId: "p1" });
+assert.equal(manualPlan.tasks[manualPlan.tasks.length - 1].side, "hostile");
+
+const manualRendered = renderOperationalTasks({ forceMission: manualPlan, phaseAction, phaseActionStorage: {}, operationalTaskSelectedId: addedTask.id });
+assert.ok(manualRendered.includes('data-action="add-operational-task"'), "Operational tasks view must render add task action");
+assert.ok(manualRendered.includes('data-operational-task-field="side"'), "Operational task editor must allow editing side");
+assert.ok(manualRendered.includes('data-operational-task-field="phaseId"'), "Operational task editor must allow editing phaseId");
+assert.ok(operationalTaskControllerSource.includes('action === "add-operational-task"'), "Controller must handle add-operational-task action");
+
 console.log("operational task step checks passed");

@@ -198,9 +198,55 @@ export function buildConceptMapPlanFromPlanning(state = {}, aiPlan = null) {
     }))
     : [];
 
+  // Synthesize relations from state.ov1 if forceMission.relations is sparse
+  const ov1Relations = [];
+  if (!conceptRelations.length && Array.isArray(state.ov1?.edges) && Array.isArray(state.ov1?.nodes)) {
+    const nodeById = new Map(state.ov1.nodes.map((n) => [n.id, n]));
+    for (const edge of state.ov1.edges) {
+      const srcNode = nodeById.get(edge.sourceId);
+      const tgtNode = nodeById.get(edge.targetId);
+      const srcForceId = srcNode?.sourceConceptForceIds?.[0];
+      const tgtForceId = tgtNode?.sourceConceptForceIds?.[0];
+      if (srcForceId && tgtForceId && srcForceId !== tgtForceId && forceIds.has(srcForceId) && forceIds.has(tgtForceId)) {
+        ov1Relations.push({
+          fromForceId: srcForceId,
+          toForceId: tgtForceId,
+          type: edge.type === "控制流" ? "effect" : edge.type === "信息流" ? "information" : "coordination",
+          phaseId: sharedRelationPhaseId(forceById.get(srcForceId), forceById.get(tgtForceId), defaultPhaseId)
+        });
+      }
+    }
+  }
+
   const firstPhaseId = phases[0]?.phaseId || defaultPhaseId;
   const midPhaseId = phases[Math.min(1, phases.length - 1)]?.phaseId || firstPhaseId;
   const lastPhaseId = phases.at(-1)?.phaseId || firstPhaseId;
+
+  // Ingest operational task areas from Step 03
+  const taskAreas = (Array.isArray(state.forceMission?.tasks) ? state.forceMission.tasks : [])
+    .filter((task) => task.area?.name && task.area.name !== "待人工明确" && (task.area.points || []).some((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude)))
+    .slice(0, 16)
+    .map((task, index) => {
+      const validPoints = (task.area.points || []).filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude));
+      const avgLat = validPoints.reduce((acc, p) => acc + Number(p.latitude), 0) / (validPoints.length || 1);
+      const avgLon = validPoints.reduce((acc, p) => acc + Number(p.longitude), 0) / (validPoints.length || 1);
+      const phaseId = phaseIdSet.has(clean(task.phaseId, 48)) ? clean(task.phaseId, 48) : firstPhaseId;
+      return {
+        id: `task-area-${task.id}`,
+        name: clean(task.area.name, 12) || clean(task.name, 12) || `任务区${index + 1}`,
+        phaseId,
+        slot: task.side === "hostile" ? "northeast" : "southwest",
+        lat: Number.isFinite(avgLat) ? avgLat : undefined,
+        lon: Number.isFinite(avgLon) ? avgLon : undefined,
+        points: validPoints.map((p) => ({ lat: Number(p.latitude), lon: Number(p.longitude) })),
+        geometryType: task.area.geometryType || "circle",
+        radiusNm: Number(task.area.radiusNm) || 60,
+        type: task.area.type || "patrol",
+        side: task.side || "friendly",
+        note: clean(task.objective, 120) || clean(task.expectedEffect, 120) || "作战任务区域"
+      };
+    });
+
   const areas = Array.isArray(ai?.areas) && ai.areas.length
     ? ai.areas.map((area, index) => ({
       ...area,
@@ -208,28 +254,35 @@ export function buildConceptMapPlanFromPlanning(state = {}, aiPlan = null) {
         ? clean(area.phaseId, 48)
         : (index === 0 ? firstPhaseId : lastPhaseId)
     }))
-    : [
-      { id: "assessment-area", name: "概念评估区域", phaseId: firstPhaseId, slot: "north", note: clean(phases[0]?.objective, 120) || "研究级态势关注范围" },
-      { id: "action-area", name: "概念行动区域", phaseId: midPhaseId, slot: "east", note: clean(phases[Math.min(1, phases.length - 1)]?.objective, 120) || "行动关系人工修订位置" }
-    ];
+    : taskAreas.length
+      ? taskAreas
+      : [
+        { id: "assessment-area", name: "概念评估区域", phaseId: firstPhaseId, slot: "north", note: clean(phases[0]?.objective, 120) || "研究级态势关注范围" },
+        { id: "action-area", name: "概念行动区域", phaseId: midPhaseId, slot: "east", note: clean(phases[Math.min(1, phases.length - 1)]?.objective, 120) || "行动关系人工修订位置" }
+      ];
 
   const phaseCoverage = phases.map((phase) => {
     const count = forces.filter((force) => force.phaseIds.includes(phase.phaseId)).length;
     return `${phase.name}:${count}`;
   }).join(" · ");
 
+  const ov1ConceptSummary = clean(state.ov1?.concept?.mission, 120)
+    ? `总体图构想：${clean(state.ov1.concept.mission, 120)}。`
+    : "";
+  const areaSummary = taskAreas.length ? `任务空域与区域（${taskAreas.length} 处）；` : "";
+
   return {
     // Keep plan title short — long research objectives must not become map canvas text.
     title: clean(ai?.title, 24) || shortMapTitle(brief),
     summary: clean(ai?.summary, 600)
       || (forces.length
-        ? `由已确认概念兵力（${forces.length}）按 ${phases.length} 个作战阶段部署（${phaseCoverage}）；中心 ${theater.label}。`
+        ? `${ov1ConceptSummary}由已确认概念兵力（${forces.length}）按 ${phases.length} 个作战阶段部署（${phaseCoverage}）；${areaSummary}中心 ${theater.label}。`
         : "缺少已确认概念兵力；请先完成兵力与任务中的概念兵力草案。"),
     theater,
     phases,
     forces: forces.length ? forces : undefined,
     areas,
-    relations: (conceptRelations.length ? conceptRelations : synthesized),
+    relations: (conceptRelations.length ? conceptRelations : (ov1Relations.length ? ov1Relations : synthesized)),
     questions: normalizeStringList(ai?.questions, 8, 240).length
       ? normalizeStringList(ai.questions, 8, 240)
       : [
@@ -317,21 +370,31 @@ export function createInitialConceptMapDraft({ brief = {}, plan = null, previous
     }
   });
   const areaItems = normalizedPlan.areas.map((area, index) => {
-    const position = earthPoint(theater, area.slot, index + 2);
+    const hasCoord = Number.isFinite(Number(area.lon)) && Number.isFinite(Number(area.lat));
+    const position = hasCoord
+      ? { lon: Number(area.lon), lat: Number(area.lat) }
+      : earthPoint(theater, area.slot, index + 2);
+    const radiusMeters = (Number(area.radiusNm) > 0 ? Math.round(Number(area.radiusNm) * 1852) : 180000);
+    const color = area.side === "hostile" ? "#f87171" : area.side === "friendly" ? "#38bdf8" : "#fbbf24";
+    const shape = area.geometryType === "polygon" ? "polygon" : area.geometryType === "corridor" ? "corridor" : "circle";
+    const points = Array.isArray(area.points) && area.points.length >= 2
+      ? area.points.map((p) => ({ lon: Number(p.lon), lat: Number(p.lat), height: 0 }))
+      : undefined;
     return {
       id: `initial-area-${area.id}`,
       type: "area",
       name: clean(area.name, 12) || `区域${index + 1}`,
       layer: "概念区域",
-      color: "#38bdf8",
+      color,
       lon: position.lon,
       lat: position.lat,
       height: 0,
-      shape: "circle",
-      radius: 180000,
-      minorRadius: 180000,
-      width: 360000,
-      height: 360000,
+      shape,
+      ...(points ? { points } : {}),
+      radius: radiusMeters,
+      minorRadius: radiusMeters,
+      width: radiusMeters * 2,
+      height: radiusMeters * 2,
       fill: true,
       style: "solid",
       visible: true,
@@ -497,7 +560,7 @@ function normalizeInitialPlan(value, brief) {
     .filter(Boolean);
   const validForces = forces.length ? forces : fallback.forces.map((item, index) => normalizeForce(item, index, phaseIdSet, defaultPhaseId)).filter(Boolean);
   const forceIds = new Set(validForces.map((force) => force.id));
-  const areas = (Array.isArray(input.areas) ? input.areas : fallback.areas).slice(0, 8)
+  const areas = (Array.isArray(input.areas) ? input.areas : fallback.areas).slice(0, 16)
     .map((item, index) => normalizeArea(item, index, phaseIdSet, defaultPhaseId))
     .filter(Boolean);
   const relations = (Array.isArray(input.relations) ? input.relations : fallback.relations).slice(0, 24)
@@ -679,12 +742,24 @@ function normalizeArea(item, index, phaseIdSet = new Set(PHASES.map((phase) => p
   const rawPhase = clean(item?.phaseId, 48);
   const fallbackPhase = phaseIdSet.has(defaultPhaseId) ? defaultPhaseId : ([...phaseIdSet][0] || "deployment");
   const phaseId = phaseIdSet.has(rawPhase) ? rawPhase : fallbackPhase;
+  const lat = Number.isFinite(Number(item?.lat)) ? Number(item.lat) : undefined;
+  const lon = Number.isFinite(Number(item?.lon)) ? Number(item.lon) : undefined;
+  const points = Array.isArray(item?.points) && item.points.length
+    ? item.points.map((p) => ({ lat: Number(p.lat), lon: Number(p.lon) }))
+    : undefined;
   return clean(item?.name, 120)
     ? {
       id: clean(item?.id, 60).replace(/[^a-zA-Z0-9_-]+/g, "-") || `area-${index + 1}`,
       name: clean(item.name, 120),
       phaseId,
       slot: Object.hasOwn(SLOT_OFFSETS_DEG, clean(item.slot, 20)) ? clean(item.slot, 20) : "center",
+      lat,
+      lon,
+      points,
+      geometryType: clean(item?.geometryType, 30) || "circle",
+      radiusNm: Number(item?.radiusNm) || 60,
+      type: clean(item?.type, 30) || "patrol",
+      side: clean(item?.side, 20) || "friendly",
       note: clean(item.note, 240) || "研究级概念区域"
     }
     : null;

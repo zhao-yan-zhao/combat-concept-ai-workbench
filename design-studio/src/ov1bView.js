@@ -27,6 +27,7 @@ export function renderOv1b(state = {}) {
       </div>
       <div class="sm-toolbar">
         ${state.ov1bStorage ? renderProjectStorageActions(state.ov1bStorage, { refreshAction: "refresh-project-ov1b" }) : ""}
+        <button type="button" class="quiet-button" data-action="ov1b-add-group" title="新增任务组">+ 新增任务组</button>
         <button type="button" class="primary-btn" data-action="save-dodaf-ov1b">保存</button>
       </div>
     </div></header>
@@ -35,8 +36,14 @@ export function renderOv1b(state = {}) {
 
     <div class="ov1b-layout">
       <aside class="ov1b-task-panel" aria-label="任务组列表" data-grouped-list-panel="ov1b" data-grouped-list-dimensions="整理维度:dimension|状态:status" data-grouped-list-default-group="dimension">
-        <header class="sm-panel-head"><strong>任务组</strong><small>${groups.length} 组 · 顺序即建议执行顺序</small></header>
-        <div class="ov1b-side-tasks" role="listbox" data-grouped-list-items>${groups.map((group, index) => renderGroupItem(group, index, selectedId, taskById)).join("") || `<p class="ov1b-side-empty">暂无任务组，请使用工具箱新增或由 AI 整理。</p>`}</div>
+        <header class="sm-panel-head">
+          <div>
+            <strong>任务组</strong>
+            <small>${groups.length} 组 · 顺序即建议执行顺序</small>
+          </div>
+          <button type="button" class="quiet-button compact" data-action="ov1b-add-group" title="新增任务组">+ 新增组</button>
+        </header>
+        <div class="ov1b-side-tasks" role="listbox" data-grouped-list-items>${groups.map((group, index) => renderGroupItem(group, index, selectedId, taskById)).join("") || `<div class="ov1b-side-empty"><p>暂无任务组，点击上方或下方新增。</p><button type="button" class="quiet-button compact" data-action="ov1b-add-group">+ 新增任务组</button></div>`}</div>
       </aside>
       <main class="ov1b-canvas-panel">${renderGroupBoard(selected, tasks, taskById, state.ov1bEditOpen === true, phases)}</main>
     </div>
@@ -80,17 +87,23 @@ function renderGroupItem(group, index, selectedId, taskById) {
   return `<button type="button" class="ov1b-task-item ${group.id === selectedId ? "is-focused" : ""}" data-action="ov1b-select-group" data-group-id="${escapeHtml(group.id)}" data-grouped-list-item data-group-dimension="${escapeHtml(dimension)}" data-group-status="${escapeHtml(status)}" data-search="${escapeHtml([group.name, dimension, status, group.rationale].filter(Boolean).join(" "))}">
     <div class="ov1b-task-item-head">
       <b>${String(index + 1).padStart(2, "0")}</b>
-      <span>${escapeHtml(group.name || `任务组 ${index + 1}`)}</span>
+      <span title="${escapeHtml(group.name || `任务组 ${index + 1}`)}">${escapeHtml(group.name || `任务组 ${index + 1}`)}</span>
     </div>
     <div class="ov1b-task-item-meta">
       ${partyBadge}
-      <small>${refs.length} 项任务 · ${escapeHtml(dimension)}</small>
+      <small title="${refs.length} 项任务 · ${escapeHtml(dimension)}">${refs.length} 项任务 · ${escapeHtml(dimension)}</small>
     </div>
   </button>`;
 }
 
 function renderGroupBoard(group, tasks, taskById, editOpen = false, phases = []) {
-  if (!group) return `<div class="ov1b-board-empty"><strong>选择一个任务组</strong><span>这里只整理“作战任务”步骤中已有的任务，不新增或改写任务。</span></div>`;
+  if (!group) return `<div class="ov1b-board-empty">
+    <strong>选择或新增一个任务组</strong>
+    <span>这里只整理“作战任务”步骤中已有的任务，不新增或改写任务。</span>
+    <div style="margin-top:12px;">
+      <button type="button" class="primary-btn" data-action="ov1b-add-group">+ 新增任务组</button>
+    </div>
+  </div>`;
   const refs = Array.isArray(group.taskRefs) ? group.taskRefs : [];
   const selected = new Set(refs.map(String));
   const phaseObj = phases.find((p) => p.id === group.phaseRef) || null;
@@ -101,7 +114,11 @@ function renderGroupBoard(group, tasks, taskById, editOpen = false, phases = [])
         <strong>${escapeHtml(group.name || "未命名任务组")}</strong>
         <small>${refs.length} 项任务 · ${phaseObj ? `阶段时窗：${escapeHtml(phaseObj.timeWindow || "待定")}` : "可调整组内顺序与步骤模式"}</small>
       </div>
-      <span class="ov1b-status status-${escapeHtml(group.status || "pending_review")}">${escapeHtml(STATUS_LABELS[group.status] || group.status || "待复核")}</span>
+      <div class="ov1b-board-head-actions" style="display:flex; align-items:center; gap:8px;">
+        <button type="button" class="quiet-button compact" data-action="toggle-ov1b-edit">${editOpen ? "收起编辑" : "编辑任务组"}</button>
+        <button type="button" class="quiet-button compact danger" data-action="ov1b-remove-group" data-group-id="${escapeHtml(group.id)}" title="删除当前任务组">删除组</button>
+        <span class="ov1b-status status-${escapeHtml(group.status || "pending_review")}">${escapeHtml(STATUS_LABELS[group.status] || group.status || "待复核")}</span>
+      </div>
     </header>
     <div class="ov1b-board-content${editOpen ? " is-edit-open" : ""}">
       <section class="ov1b-organization-canvas">
@@ -126,7 +143,10 @@ function renderGroupBoard(group, tasks, taskById, editOpen = false, phases = [])
 
 function stateCoordinationEditor(group) {
   return `<div class="ov1b-properties-dock">
-    <header><strong>任务组属性</strong></header>
+    <header style="display:flex; justify-content:space-between; align-items:center;">
+      <strong>任务组属性</strong>
+      <button type="button" class="quiet-button compact danger" data-action="ov1b-remove-group" data-group-id="${escapeHtml(group.id)}" title="删除此任务组">删除组</button>
+    </header>
     <label><span>组名</span><input data-dodaf-field="ov1b.taskGroup.${escapeHtml(group.id)}.name" value="${escapeHtml(group.name || "")}"></label>
     <label><span>整理维度</span><select data-dodaf-field="ov1b.taskGroup.${escapeHtml(group.id)}.dimension">${Object.entries(DIMENSION_LABELS).map(([value, label]) => `<option value="${value}" ${group.dimension === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
     <label><span>阶段关联</span><input data-dodaf-field="ov1b.taskGroup.${escapeHtml(group.id)}.phaseRef" value="${escapeHtml(group.phaseRef || "")}" placeholder="可选：对齐阶段 ID，如 phase-1"></label>

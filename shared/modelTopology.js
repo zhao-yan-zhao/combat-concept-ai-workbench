@@ -50,6 +50,7 @@ const PRODUCT_DEFINITIONS = Object.freeze([
   { key: "ov3", resource: "ov3", objectId: ROOT, viewId: "ov3", label: "资源流矩阵 OV3" },
   { key: "ov5a", resource: "ov5a", objectId: ROOT, viewId: "ov5a", label: "作战活动分解 OV5a" },
   { key: "ov5", resource: "ov5", objectId: ROOT, viewId: "ov5", label: "作战活动 OV5b" },
+  { key: "ooda", resource: "ooda", objectId: ROOT, viewId: "ooda", label: "研究循环 OODA" },
   { key: "ov1c", resource: "ov1c", objectId: ROOT, viewId: "ov1c", label: "任务与活动映射 OV1c" },
   { key: "ov7", resource: "ov7", objectId: ROOT, viewId: "ov7", label: "状态与活动映射 OV7" },
   { key: "review", resource: "modelTopology", objectId: ROOT, viewId: "structure-review", label: "跨模型一致性校核" }
@@ -97,6 +98,7 @@ export function buildModelTopology(input = {}) {
     ov3: ov3.exchanges?.length || 0,
     ov5a: ov5a.decompositions?.length || 0,
     ov5: ov5.activities?.length || 0,
+    ooda: (state.ooda?.lanes || []).reduce((sum, lane) => sum + (lane.nodes?.length || 0), 0),
     ov1c: ov1c.mappings?.length || 0,
     ov7: ov7.mappings?.length || 0,
     review: 0
@@ -206,6 +208,8 @@ function addRootTopology(graph, roots) {
     [roots.ov1, roots.ov5a, derived, "总体图活动来源"],
     [roots.conceptMap, roots.ov5a, binds, "空间与阶段引用"],
     [roots.ov5a, roots.ov5, derived, "形成作战活动"],
+    [roots.ov5, roots.ooda, derived, "活动派生决策循环"],
+    [roots.ooda, roots.ov1, feedback, "循环反馈总体概念"],
     [roots.ov1b, roots.ov1c, derived, "任务侧映射输入"],
     [roots.ov5, roots.ov1c, binds, "活动侧映射输入"],
     [roots.ov6b, roots.ov7, binds, "状态侧映射输入"],
@@ -542,7 +546,7 @@ function createIndexes() {
 }
 
 function productStatus(key, state, { count, phaseAction, forceMission }) {
-  const storageKey = ({ phase: "phaseActionStorage", task: "forceMissionStorage", force: "forceMissionStorage", conceptMap: "conceptMapStorage", simulation: "scenarioStorage" })[key] || `${key}Storage`;
+  const storageKey = ({ phase: "phaseActionStorage", task: "forceMissionStorage", force: "forceMissionStorage", conceptMap: "conceptMapStorage", simulation: "scenarioStorage", ooda: "oodaStorage" })[key] || `${key}Storage`;
   if (state[storageKey]?.stale) return "stale";
   if (!count) return "empty";
   if (key === "brief") return count >= 6 ? "confirmed" : "partial";
@@ -550,6 +554,7 @@ function productStatus(key, state, { count, phaseAction, forceMission }) {
   if (key === "task") return forceMission.tasksConfirmedAt ? "confirmed" : "pending_review";
   if (key === "force") return forceMission.status === "confirmed" ? "confirmed" : "pending_review";
   if (key === "conceptMap") return state.conceptMap?.reference?.status === "confirmed" ? "confirmed" : "pending_review";
+  if (key === "ov1") return (state.ov1?.confirmed || state.ov1?.status === "confirmed") ? "confirmed" : "pending_review";
   if (state[key]?.status === "confirmed" || state[key]?.confirmedAt) return "confirmed";
   return "pending_review";
 }

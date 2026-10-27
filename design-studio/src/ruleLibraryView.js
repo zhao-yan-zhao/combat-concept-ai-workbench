@@ -81,7 +81,7 @@ function renderRuleChangeSet(changeSet, { busy = false, phaseNames = new Map() }
   const changes = Array.isArray(changeSet?.changes) ? changeSet.changes : [];
   const pending = changes.filter((change) => change.status === "pending");
   if (!pending.length) return "";
-  const sourceLabel = changeSet.source === "force-mission" ? "兵力与任务" : "阶段与行动";
+  const sourceLabel = changeSet.source === "operational-task" ? "作战任务" : changeSet.source === "force-mission" ? "作战兵力" : "阶段与行动";
   return `<section class="rule-change-set" aria-label="待审核规则变更">
     <header class="rule-change-set-head">
       <div><strong>待审核变更</strong><small>${escapeHtml(sourceLabel)}分析 · ${pending.length} 项</small></div>
@@ -90,7 +90,9 @@ function renderRuleChangeSet(changeSet, { busy = false, phaseNames = new Map() }
     ${changeSet.summary ? `<p class="planning-meta">${escapeHtml(changeSet.summary)}</p>` : ""}
     <div class="rule-change-list">${pending.map((change) => `<article class="rule-change-row">
       <div><span class="mini-tag review">${escapeHtml(change.action === "add" ? "新增" : change.action === "revise" ? "修订" : "废止")}</span> <strong>${escapeHtml(change.rule?.name || change.ruleId || "规则")}</strong>
-        ${renderPhaseBindingTags(change.rule?.phaseRefs, phaseNames, "拟绑定")}
+        ${renderPhaseBindingTags(change.rule?.phaseRefs, phaseNames, "拟绑定阶段")}
+        ${(change.rule?.taskRefs || []).length ? `<span class="mini-tag">拟绑定任务: ${(change.rule.taskRefs).join(", ")}</span>` : ""}
+        ${(change.rule?.forceRefs || []).length ? `<span class="mini-tag">拟绑定兵力: ${(change.rule.forceRefs).join(", ")}</span>` : ""}
         <p>${escapeHtml(change.rationale || change.rule?.description || "请复核此建议")}</p></div>
       <div class="rule-change-actions"><button type="button" class="quiet-button" data-action="ov6a-ignore-change" data-change-id="${escapeHtml(change.id)}" ${busy ? "disabled" : ""}>忽略</button><button type="button" class="primary-btn" data-action="ov6a-apply-change" data-change-id="${escapeHtml(change.id)}" ${busy ? "disabled" : ""}>采纳</button></div>
     </article>`).join("")}</div>
@@ -104,14 +106,14 @@ export function renderRuleLibraryChatFloatButton({ chatOpen = false, chatGenerat
     open: chatOpen,
     generating: chatGenerating,
     disabled,
-    titleOpen: "收起规则对话",
-    titleClosed: "打开规则对话",
+    titleOpen: "收起 AI 对话",
+    titleClosed: "打开 AI 对话",
     action: "toggle-rule-library-chat"
   });
 }
 
 function renderRuleLibraryChatPanel({ chat, chatGenerating, rules, model }) {
-  const footerHtml = `<div class="phase-review-chat-footer rule-review-chat-footer">
+  const footerHtml = `<div class="phase-review-chat-footer rule-review-chat-footer sm-review-chat-footer">
         <button type="button" data-action="save-dodaf-ov6a" ${chatGenerating ? "disabled" : ""}>保存规则库</button>
         <p class="planning-meta">规则 ${Array.isArray(rules) ? rules.length : 0} 条 · 阶段/任务/兵力绑定需人工复核</p>
       </div>`;
@@ -119,16 +121,16 @@ function renderRuleLibraryChatPanel({ chat, chatGenerating, rules, model }) {
     scope: "rule-library",
     session: chat,
     generating: chatGenerating,
-    title: "规则对话",
-    subtitle: "自然语言起草/修订规则本体，左侧表单即时同步。",
+    title: "规则库对话",
+    subtitle: "自然语言起草或修订规则本体、约束与前置条件，表单即时同步。",
     statusLabel: chatGenerating ? "正在修订" : "研究助手",
-    placeholder: "例如：补充关键链路可用约束；删除空泛规则",
-    emptyTitle: "开始规则对话",
-    emptyText: "例如：按简报补充约束；把第 2 条改成转换条件；删除空泛规则。",
+    placeholder: "例如：按作战任务生成约束规则；补充关键链路可用约束",
+    emptyTitle: "开始规则库对话",
+    emptyText: "例如：按任务起草规则；把第 2 条改成转换条件；删除空泛套话规则。",
     disabled: chatGenerating,
-    className: "phase-review-chat rule-review-chat",
+    className: "phase-review-chat rule-review-chat sm-review-chat",
     interactiveTopic: "revision",
-    headerActionsHtml: `<button type="button" class="phase-chat-close" data-action="close-rule-library-chat" title="收起对话" aria-label="收起对话"><span aria-hidden="true">×</span></button>`,
+    headerActionsHtml: `<button type="button" class="phase-chat-close" data-action="close-rule-library-chat" title="收起对话" aria-label="收起对话"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>`,
     footerHtml
   });
 }
@@ -152,10 +154,11 @@ function renderRuleForm(rule, ordinal, { busy = false, phaseNames = new Map(), b
 
 function renderObjectBindingEditor(rule, { busy = false, candidates = [], focus = {} } = {}) {
   const existing = [
+    ...(rule.phaseBindings || []).map((item) => ({ type: "phase", ref: item.phaseRef })),
     ...(rule.taskBindings || []).map((item) => ({ type: "task", ref: item.taskRef })),
     ...(rule.forceBindings || []).map((item) => ({ type: "force", ref: item.forceRef }))
   ];
-  const focused = ["task", "force"].includes(focus.type) && focus.ref
+  const focused = ["phase", "task", "force"].includes(focus.type) && focus.ref
     ? candidates.filter((item) => item.type === focus.type && item.ref === focus.ref)
     : candidates;
   const rows = [...focused];
@@ -165,15 +168,18 @@ function renderObjectBindingEditor(rule, { busy = false, candidates = [], focus 
     if (!rows.some((candidate) => candidate.type === item.type && candidate.ref === item.ref)) rows.push({ type: item.type, ref: item.ref, name: known ? item.ref : `${item.ref}（引用失效）`, missing: !known });
   });
   if (!rows.length) return "";
+  const typeLabel = (t) => t === "phase" ? "阶段" : t === "task" ? "任务" : "兵力";
   return `<details class="rule-object-bindings" ${focus.ref ? "open" : ""}>
-    <summary>任务 / 兵力绑定${existing.length ? ` · ${existing.length}` : ""}${focus.ref ? " · 当前对象" : ""}</summary>
+    <summary>阶段 / 任务 / 兵力绑定${existing.length ? ` · ${existing.length}` : ""}${focus.ref ? " · 当前对象" : ""}</summary>
     <div class="rule-object-binding-list">${rows.map((candidate) => {
-      const binding = candidate.type === "task"
-        ? (rule.taskBindings || []).find((item) => item.taskRef === candidate.ref)
-        : (rule.forceBindings || []).find((item) => item.forceRef === candidate.ref);
+      const binding = candidate.type === "phase"
+        ? (rule.phaseBindings || []).find((item) => item.phaseRef === candidate.ref)
+        : candidate.type === "task"
+          ? (rule.taskBindings || []).find((item) => item.taskRef === candidate.ref)
+          : (rule.forceBindings || []).find((item) => item.forceRef === candidate.ref);
       const checked = Boolean(binding);
       return `<div class="rule-object-binding-row ${candidate.missing ? "is-missing" : ""}">
-        <label><input type="checkbox" data-action="ov6a-toggle-object-binding" data-rule-id="${escapeHtml(rule.id)}" data-binding-type="${escapeHtml(candidate.type)}" data-object-ref="${escapeHtml(candidate.ref)}" ${checked ? "checked" : ""} ${busy ? "disabled" : ""}><span>${escapeHtml(candidate.type === "task" ? "任务" : "兵力")}：${escapeHtml(candidate.name)}</span></label>
+        <label><input type="checkbox" data-action="ov6a-toggle-object-binding" data-rule-id="${escapeHtml(rule.id)}" data-binding-type="${escapeHtml(candidate.type)}" data-object-ref="${escapeHtml(candidate.ref)}" ${checked ? "checked" : ""} ${busy ? "disabled" : ""}><span>${escapeHtml(typeLabel(candidate.type))}：${escapeHtml(candidate.name)}</span></label>
         ${checked ? `<select aria-label="绑定状态" data-action="ov6a-set-object-binding-status" data-rule-id="${escapeHtml(rule.id)}" data-binding-type="${escapeHtml(candidate.type)}" data-object-ref="${escapeHtml(candidate.ref)}" ${busy ? "disabled" : ""}>${renderBindingStatusOptions(binding.bindingStatus)}</select>` : ""}
       </div>`;
     }).join("")}</div>

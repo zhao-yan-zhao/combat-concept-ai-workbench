@@ -62,6 +62,11 @@ export function ensureClientStoragePurged({ force = false } = {}) {
 export function purgeProjectClientStorage(projectId) {
   try {
     if (typeof localStorage === "undefined") return [];
+    try {
+      localStorage.removeItem("combat-concept-project-conflict-drafts-v1");
+    } catch {
+      /* ignore */
+    }
     const targetScope = String(projectId || "default");
     const storages = [localStorage, typeof sessionStorage !== "undefined" ? sessionStorage : null].filter(Boolean);
     const removed = [];

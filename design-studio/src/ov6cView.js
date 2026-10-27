@@ -60,6 +60,8 @@ export function renderOv6c(state = {}) {
         </div>
         <div class="seq-toolbar">
           ${storage ? renderProjectStorageActions(storage, { refreshAction: "refresh-project-ov6c" }) : ""}
+          <button type="button" class="quiet-button" data-action="ov6c-generate-task-sequences" title="根据作战任务自动生成逐任务时序图">生成任务时序</button>
+          <button type="button" class="quiet-button" data-action="ov6c-generate-force-sequences" title="根据作战兵力与协同关系自动生成兵力协同时序图">生成兵力时序</button>
           <button type="button" class="quiet-button" data-action="ov6c-seed-phase" title="按阶段/兵力生成协同时序（仅空库时）">按阶段生成</button>
           ${sequences.length ? `<button type="button" class="quiet-button danger-quiet" data-action="ov6c-clear-all" title="清空全部时序图">清空全部</button>` : ""}
           <button type="button" class="primary-btn" data-action="save-dodaf-ov6c">保存</button>
@@ -172,7 +174,9 @@ function renderEmptyWorkbench({ toolsOpen, chatOpen, chatGenerating, chat, model
       <strong>尚无时序图</strong>
       <p>以消息为时间条、按抽象作战时间展开。可按阶段生成，或对话起草。</p>
       <div class="seq-empty-actions">
-        <button type="button" class="primary-btn" data-action="ov6c-seed-phase">按阶段生成</button>
+        <button type="button" class="primary-btn" data-action="ov6c-generate-task-sequences">生成任务时序</button>
+        <button type="button" class="primary-btn" data-action="ov6c-generate-force-sequences">生成兵力时序</button>
+        <button type="button" class="quiet-button" data-action="ov6c-seed-phase">按阶段生成</button>
         <button type="button" class="quiet-button" data-action="ov6c-add-sequence">空白时序图</button>
         <button type="button" class="quiet-button" data-action="open-sequence-chat">打开时序对话</button>
       </div>

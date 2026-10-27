@@ -693,28 +693,28 @@ function createRuleLibraryChangeSetResult(analysis = {}) {
     (analysis.phaseAction || []).forEach((phase, index) => {
       const name = String(phase?.name || `阶段 ${index + 1}`);
       const scope = `阶段：${name}`;
-      if (phase?.entryConditions?.length) changes.push({ id: `phase-entry-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-phase-entry-${index + 1}`, name: `${name}进入门槛`, type: "前置条件", scope, description: `进入该阶段前，应依据已确认的进入条件完成可观察、可复核的就绪判断。` }, rationale: "依据该阶段的进入条件。" });
-      if (phase?.exitConditions?.length || phase?.expectedEffects?.length) changes.push({ id: `phase-exit-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-phase-exit-${index + 1}`, name: `${name}转换判据`, type: "转换条件", scope, description: `阶段转换应以已确认的退出条件或预期效果为判据，并保留复核依据。` }, rationale: "依据该阶段的退出条件和预期效果。" });
+      if (phase?.entryConditions?.length) changes.push({ id: `phase-entry-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-phase-entry-${index + 1}`, name: `${name}进入门槛`, type: "前置条件", scope, description: `进入该阶段前，应依据已确认的进入条件完成可观察、可复核的就绪判断。`, phaseRefs: [phase.id], taskRefs: [], forceRefs: [] }, rationale: "依据该阶段的进入条件。" });
+      if (phase?.exitConditions?.length || phase?.expectedEffects?.length) changes.push({ id: `phase-exit-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-phase-exit-${index + 1}`, name: `${name}转换判据`, type: "转换条件", scope, description: `阶段转换应以已确认的退出条件或预期效果为判据，并保留复核依据。`, phaseRefs: [phase.id], taskRefs: [], forceRefs: [] }, rationale: "依据该阶段的退出条件和预期效果。" });
     });
   } else if (source === "operational-task") {
     (analysis.tasks || []).forEach((task, index) => {
       const name = String(task?.name || `任务 ${index + 1}`);
-      changes.push({ id: `task-rule-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-task-${index + 1}`, name: `${name}执行规则`, type: "业务规则", scope: `任务：${name}`, description: "任务执行与结束应依据已确认的任务目标和预期效果形成可观察、可复核判据。", phaseRefs: [], taskRefs: [task.id] }, rationale: "依据任务目标、类型与预期效果。" });
+      changes.push({ id: `task-rule-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-task-${index + 1}`, name: `${name}执行规则`, type: "业务规则", scope: `任务：${name}`, description: "任务执行与结束应依据已确认的任务目标和预期效果形成可观察、可复核判据。", phaseRefs: [], taskRefs: [task.id], forceRefs: [] }, rationale: "依据任务目标、类型与预期效果。" });
     });
   } else {
-    (analysis.forces || []).forEach((force, index) => {
-      const name = String(force?.name || `概念兵力 ${index + 1}`);
-      if (!force?.task) return;
-      changes.push({ id: `force-duty-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-force-duty-${index + 1}`, name: `${name}职责边界`, type: "业务规则", scope: `兵力：${name}`, description: `该兵力承担的任务应与职责边界一致；任务调整或交接时应明确责任主体与可复核依据。` }, rationale: "依据该兵力的任务与角色。" });
+    const forcesList = [...(analysis.combatForces || []), ...(analysis.forces || [])];
+    forcesList.forEach((force, index) => {
+      const name = String(force?.name || `作战兵力 ${index + 1}`);
+      changes.push({ id: `force-duty-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-force-duty-${index + 1}`, name: `${name}协同与交战规则`, type: "约束", scope: `兵力：${name}`, description: `${name}遂行任务期间，须保持指控通联与态势共享，并严格执行编组火力协同准则与退出门槛。`, phaseRefs: [], taskRefs: [], forceRefs: [force.id] }, rationale: "依据该兵力的战术任务与编组角色。" });
     });
     (analysis.relations || []).forEach((relation, index) => {
       if (!relation?.fromForceId || !relation?.toForceId) return;
-      changes.push({ id: `force-link-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-force-link-${index + 1}`, name: "协同交接可追溯", type: "业务规则", scope: "兵力协同", description: "存在协同、支援、指挥或信息关系时，应明确交接条件、责任边界和确认记录。" }, rationale: "依据已确认的兵力关系。" });
+      changes.push({ id: `force-link-${index + 1}`, action: "add", ruleId: "", rule: { id: `rule-force-link-${index + 1}`, name: "协同交接可追溯", type: "业务规则", scope: "兵力协同", description: "存在协同、支援、指挥或信息关系时，应明确交接条件、责任边界和确认记录。", phaseRefs: [], taskRefs: [], forceRefs: [relation.fromForceId, relation.toForceId] }, rationale: "依据已确认的兵力关系。" });
     });
   }
   const names = new Set(existing.map((rule) => `${rule.name}|${rule.scope}`));
-  const unique = changes.filter((change) => !names.has(`${change.rule.name}|${change.rule.scope}`)).slice(0, 24);
-  return { summary: source === "phase-action" ? "已依据已确认阶段与行动提出待审核规则建议。" : "已依据已确认兵力、任务与协同关系提出待审核规则建议。", changes: unique };
+  const unique = changes.filter((change) => !names.has(`${change.rule.name}|${change.rule.scope}`)).slice(0, 36);
+  return { summary: source === "operational-task" ? "已依据已确认作战任务提出逐任务待审核规则建议。" : source === "force-mission" ? "已依据已确认兵力编成与协同关系提出待审核规则建议。" : "已依据已确认阶段与行动提出待审核规则建议。", changes: unique };
 }
 
 function createStateMachineDraftResult(analysis) {
@@ -723,7 +723,7 @@ function createStateMachineDraftResult(analysis) {
     : (Array.isArray(analysis?.phaseAction?.phases) ? analysis.phaseAction.phases.map((phase) => ({ ...phase, subjectType: "phase" })) : []);
   const rules = Array.isArray(analysis?.rules) ? analysis.rules.filter((rule) => rule?.id) : [];
   return {
-    summary: "已为阶段行动生成阶段机，并为独立任务和持续运行对象生成分机草案。",
+    summary: "已为建模主体生成状态机生命周期草案，请在画布复核状态流转与转换条件。",
     stateMachines: subjects.map((subject, index) => {
       const subjectRef = String(subject?.id || `subject-${index + 1}`);
       const prefix = `state-machine-${subjectRef}`;
@@ -733,7 +733,21 @@ function createStateMachineDraftResult(analysis) {
       const primaryAction = actions[0] || subject?.name || "任务";
       const secondaryAction = actions.find((item) => item !== primaryAction) || "协同条件";
       const expectedEffect = String(subject?.expectedEffects?.[0] || "预期效果").trim();
-      const states = [
+      const isTask = subject?.subjectType === "task";
+      const isForce = subject?.subjectType === "force";
+      const states = isTask ? [
+        { id: `${prefix}-start`, name: "任务待命", kind: "initial", decisionExpression: "" },
+        { id: `${prefix}-ready`, name: `${primaryAction.slice(0, 32)}进场展开`, kind: "normal", decisionExpression: "" },
+        { id: `${prefix}-execute`, name: `${secondaryAction.slice(0, 32)}实施接战`, kind: "normal", decisionExpression: "" },
+        { id: `${prefix}-verify`, name: `${expectedEffect.slice(0, 32)}战果评估`, kind: "normal", decisionExpression: "" },
+        { id: `${prefix}-end`, name: "任务完成", kind: "final", decisionExpression: "" }
+      ] : isForce ? [
+        { id: `${prefix}-start`, name: "集结值班", kind: "initial", decisionExpression: "" },
+        { id: `${prefix}-deploy`, name: "战术进场展开", kind: "normal", decisionExpression: "" },
+        { id: `${prefix}-patrol`, name: "巡逻警戒与布势", kind: "normal", decisionExpression: "" },
+        { id: `${prefix}-combat`, name: "协同接战与攻防", kind: "normal", decisionExpression: "" },
+        { id: `${prefix}-end`, name: "返航归建整备", kind: "final", decisionExpression: "" }
+      ] : [
         { id: `${prefix}-start`, name: "开始", kind: "initial", decisionExpression: "" },
         { id: `${prefix}-ready`, name: `${primaryAction.slice(0, 36)}准备就绪`, kind: "normal", decisionExpression: "" },
         { id: `${prefix}-execute`, name: `${secondaryAction.slice(0, 36)}执行中`, kind: "normal", decisionExpression: "" },

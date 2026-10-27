@@ -21,7 +21,7 @@ export function createCollaborationController({ projectId = "default", getState,
         // Identity is independent of project data and must settle before project hydration.
         const session = await loadSession();
         state.collaboration = { ...state.collaboration, session };
-        render();
+        render({ skipViewRoot: true });
         const [result, audit] = await Promise.all([load(projectId), loadAudit(projectId, 16).catch(() => ({ entries: [] }))]);
         const accounts = session?.actor?.roles?.includes("lead") ? (await loadAccounts()).accounts : [];
         const securityEvents = session?.actor?.roles?.includes("lead") ? (await loadSecurityEvents()).events : [];

@@ -268,9 +268,14 @@ export function createConceptMapController({
 
       const tag = root.querySelector("[data-concept-map-status]");
       if (tag) {
-        tag.textContent = "待确认";
-        tag.classList.add("review");
-        tag.classList.remove("is-ready");
+        tag.textContent = itemCount ? "已就绪" : "待生成";
+        if (itemCount) {
+          tag.classList.remove("review");
+          tag.classList.add("is-ready");
+        } else {
+          tag.classList.add("review");
+          tag.classList.remove("is-ready");
+        }
       }
 
       const seedLabel = root.querySelector("[data-concept-map-seed-label]");

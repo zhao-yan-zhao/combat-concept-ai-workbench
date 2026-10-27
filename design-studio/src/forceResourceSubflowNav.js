@@ -67,6 +67,16 @@ export function renderForceResourceSubflowBar(state = {}, currentViewId = "force
             <span class="subflow-pill-name">资源流矩阵 OV-3</span>
             <span class="subflow-pill-meta">${ov3ExchangesCount ? `${ov3ExchangesCount} 矩阵项` : "待投影"}</span>
           </button>
+          <span class="subflow-pipeline-arrow" aria-hidden="true">|</span>
+          <button type="button" class="subflow-pipeline-pill is-ready" data-related-model="true" data-view="ov6a" title="作战兵力规则库 (OV-6a)">
+            <span class="subflow-pill-name">兵力规则 OV-6a</span>
+          </button>
+          <button type="button" class="subflow-pipeline-pill is-ready" data-related-model="true" data-view="ov6b" title="作战兵力状态机 (OV-6b)">
+            <span class="subflow-pill-name">兵力状态机 OV-6b</span>
+          </button>
+          <button type="button" class="subflow-pipeline-pill is-ready" data-related-model="true" data-view="ov6c" title="作战兵力协同时序 (OV-6c)">
+            <span class="subflow-pill-name">协同时序 OV-6c</span>
+          </button>
         </div>
         <div class="subflow-pipeline-actions">
           <button type="button" class="quiet-button subflow-pipeline-cta" data-related-model="true" data-view="${nextUnfinishedView}">
