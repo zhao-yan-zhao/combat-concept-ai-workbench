@@ -309,20 +309,24 @@ export function renderOv3(state = {}) {
       </div>
 
       <!-- Diagnostics Section -->
-      <section class="ooda-diagnostics ov2-diagnostics">
-        <div class="ov3-diagnostics-head">
-          <h3>产品诊断</h3>
-          <span class="diagnostics-sub">OV-2 投影与接口契约质量检测</span>
-        </div>
-        <div class="ooda-diagnostic-list">
-          ${diagnostics.map((item) => `
-            <div class="ooda-diagnostic ${escapeHtml(item.state)}">
-              <strong>${escapeHtml(item.label)}</strong>
-              <span>${escapeHtml(item.statusLabel || item.state)}</span>
-              <p>${escapeHtml(item.detail)}</p>
+      <section class="ooda-diagnostics ov2-diagnostics ov3-diagnostics-section">
+        <details class="ov3-diagnostics-details">
+          <summary class="ov3-diagnostics-summary">
+            <div class="ov3-diagnostics-head">
+              <h3>产品诊断</h3>
+              <span class="diagnostics-sub">OV-2 投影与接口契约质量检测 (${diagnostics.length} 项)</span>
             </div>
-          `).join("")}
-        </div>
+          </summary>
+          <div class="ooda-diagnostic-list">
+            ${diagnostics.map((item) => `
+              <div class="ooda-diagnostic ${escapeHtml(item.state)}">
+                <strong>${escapeHtml(item.label)}</strong>
+                <span>${escapeHtml(item.statusLabel || item.state)}</span>
+                <p>${escapeHtml(item.detail)}</p>
+              </div>
+            `).join("")}
+          </div>
+        </details>
       </section>
     </section>
   `;

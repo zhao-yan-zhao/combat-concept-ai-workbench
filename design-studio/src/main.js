@@ -1333,9 +1333,58 @@ async function handleAction(action, source = null) {
     setWorkflowGateOpen(!state.workflowGateOpen);
     return;
   }
+function confirmRegenerateWorkflowStep(context) {
+  if (typeof window === "undefined" || typeof window.confirm !== "function") return true;
+  const nextStep = context?.nextStep;
+  const nextLabel = nextStep?.label || "下一步";
+  const mainViewId = nextStep?.mainViewId || context?.mainViewId || "";
+
+  if (nextStep?.related || context?.mode === "related-next-step") {
+    if (mainViewId === "operational-task") {
+      if (nextStep?.id === "ov6c") {
+        return window.confirm("重新生成将更新「逐任务时序图」（保留阶段时序与兵力协同时序，不影响其他流程成果），是否继续？");
+      }
+      if (nextStep?.id === "ov6b") {
+        return window.confirm("重新生成将更新「逐任务状态机」（保留阶段状态机与兵力状态机，不影响其他流程成果），是否继续？");
+      }
+      if (nextStep?.id === "ov6a") {
+        return window.confirm("重新生成将基于作战任务更新规则建议（保留全局阶段规则与兵力规则），是否继续？");
+      }
+      if (nextStep?.id === "ov1b") {
+        return window.confirm("重新生成将基于最新任务重新编组（不影响其他模型成果），是否继续？");
+      }
+    } else if (mainViewId === "force-mission") {
+      if (nextStep?.id === "ov6c") {
+        return window.confirm("重新生成将更新「兵力协同时序图」（保留阶段时序与任务时序，不影响其他流程成果），是否继续？");
+      }
+      if (nextStep?.id === "ov6b") {
+        return window.confirm("重新生成将更新「兵力状态机」（保留阶段状态机与任务状态机，不影响其他流程成果），是否继续？");
+      }
+      if (nextStep?.id === "ov6a") {
+        return window.confirm("重新生成将基于作战兵力更新规则建议（保留全局阶段规则与任务规则），是否继续？");
+      }
+    } else if (mainViewId === "phase-action") {
+      if (nextStep?.id === "ov6c") {
+        return window.confirm("重新生成将更新「阶段时序图」（保留任务时序与兵力协同时序，不影响其他流程成果），是否继续？");
+      }
+      if (nextStep?.id === "ov6b") {
+        return window.confirm("重新生成将更新「阶段状态机」（保留任务状态机与兵力状态机，不影响其他流程成果），是否继续？");
+      }
+    }
+    return window.confirm(`重新生成将更新当前流程关联的「${nextLabel}」（保留其他流程模型），是否继续？`);
+  }
+
+  return window.confirm(`重新生成将基于最新上游上下文覆盖「${nextLabel}」当前已有成果，是否继续？`);
+}
+
   if (action === "advance-workflow-step") {
     const intent = source?.dataset?.stepIntent;
-    void advanceWorkflowStep({ generate: intent === "ai" });
+    const isRegenerate = intent === "regenerate" || source?.dataset?.actionVariant === "regenerate";
+    if (isRegenerate) {
+      const context = resolveWorkflowGateContext(state);
+      if (!confirmRegenerateWorkflowStep(context)) return;
+    }
+    void advanceWorkflowStep({ generate: intent === "ai" || isRegenerate, forceRegenerate: isRegenerate });
     return;
   }
   if (action === "advance-workflow-step-ai") {
@@ -1362,10 +1411,7 @@ async function handleAction(action, source = null) {
   }
   if (action === "advance-workflow-step-regenerate") {
     const context = resolveWorkflowGateContext(state);
-    const nextLabel = context.nextStep?.label || "下一步";
-    const confirmed = typeof window === "undefined" || typeof window.confirm !== "function"
-      || window.confirm(`重新生成将基于最新上游上下文覆盖「${nextLabel}」当前已有成果，是否继续？`);
-    if (confirmed) {
+    if (confirmRegenerateWorkflowStep(context)) {
       if (context.mode === "complete-phase") {
         void completeWorkflowStage({ generate: true, forceRegenerate: true });
       } else if (context.mode === "related-next-step") {
@@ -1689,12 +1735,22 @@ async function handleAction(action, source = null) {
   }
   if (action === "advance-related-workflow") {
     const intent = source?.dataset?.stepIntent;
-    void advanceRelatedWorkflow({ generate: intent === "ai" });
+    const isRegenerate = intent === "regenerate" || source?.dataset?.actionVariant === "regenerate";
+    if (isRegenerate) {
+      const context = resolveWorkflowGateContext(state);
+      if (!confirmRegenerateWorkflowStep(context)) return;
+    }
+    void advanceRelatedWorkflow({ generate: intent === "ai" || isRegenerate, forceRegenerate: isRegenerate });
     return;
   }
   if (action === "complete-workflow-stage") {
     const intent = source?.dataset?.stepIntent;
-    void completeWorkflowStage({ generate: intent === "ai" });
+    const isRegenerate = intent === "regenerate" || source?.dataset?.actionVariant === "regenerate";
+    if (isRegenerate) {
+      const context = resolveWorkflowGateContext(state);
+      if (!confirmRegenerateWorkflowStep(context)) return;
+    }
+    void completeWorkflowStage({ generate: intent === "ai" || isRegenerate, forceRegenerate: isRegenerate });
     return;
   }
   if (action === "toggle-project-manager") {
@@ -2874,7 +2930,11 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
   if (viewId === "ov3") {
     await dodafProductController.pregenerateOv3FromOv2({ silent: false });
   }
-  if (viewId === "force-mission" && !(state.forceMission?.forces || []).length && (state.forceMission?.tasksConfirmedAt || (state.forceMission?.tasks || []).length)) {
+  if (viewId === "force-mission" && (
+    forceRegenerate
+    || !(state.forceMission?.forces || []).length
+    || (generate && !(state.forceMission?.forces || []).length)
+  ) && (state.forceMission?.tasksConfirmedAt || (state.forceMission?.tasks || []).length)) {
     await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
   }
   if (viewId === "ov1" && (forceRegenerate || (!state.conceptGraphic?.nodes?.length && !state.ov1Candidate))) {
@@ -2938,72 +2998,95 @@ async function ensureCombatFocusOnEnterPhaseAction() {
 
 /** Revisit an already-confirmed mainline product and continue to its successor. */
 async function advanceWorkflowStep({ generate = false, forceRegenerate = false } = {}) {
-  const ctx = resolveWorkflowGateContext(state);
-  if (ctx.mode !== "next-step" || !ctx.nextStep?.id) {
-    showToast("当前没有可进入的下一步");
-    return;
+  setWorkflowGateOpen(false);
+  try {
+    const ctx = resolveWorkflowGateContext(state);
+    if (ctx.mode !== "next-step" || !ctx.nextStep?.id) {
+      showToast("当前没有可进入的下一步");
+      return;
+    }
+    if (ctx.nextStep.related) {
+      state.relatedModelReturnContext = {
+        mainViewId: ctx.nextStep.mainViewId,
+        mainLabel: getViewMeta(ctx.nextStep.mainViewId)?.label || "主步骤",
+        relatedViewId: ctx.nextStep.id,
+        scrollSnapshots: captureViewScroll($("#viewRoot"))
+      };
+    }
+    await navigateToResearchView(ctx.nextStep.id, {
+      toast: `已进入${ctx.nextStep.label}`,
+      force: true,
+      entrySource: generate ? (ctx.nextStep.mainViewId || ctx.current?.id || "default") : "default",
+      generate,
+      forceRegenerate
+    });
+  } catch (err) {
+    console.error("advanceWorkflowStep error:", err);
+    showToast(`推进失败：${err?.message || "未知错误"}`);
   }
-  if (ctx.nextStep.related) {
-    state.relatedModelReturnContext = {
-      mainViewId: ctx.nextStep.mainViewId,
-      mainLabel: getViewMeta(ctx.nextStep.mainViewId)?.label || "主步骤",
-      relatedViewId: ctx.nextStep.id,
-      scrollSnapshots: captureViewScroll($("#viewRoot"))
-    };
-  }
-  await navigateToResearchView(ctx.nextStep.id, {
-    toast: `已进入${ctx.nextStep.label}`,
-    force: true,
-    entrySource: generate ? (ctx.nextStep.mainViewId || ctx.current?.id || "default") : "default",
-    generate,
-    forceRegenerate
-  });
 }
 
 async function advanceRelatedWorkflow({ generate = false, forceRegenerate = false } = {}) {
-  const ctx = resolveWorkflowGateContext(state);
-  if (ctx.mode !== "related-next-step" || !ctx.nextStep?.id) {
-    showToast("当前没有可进入的下一步");
-    return;
-  }
-  if (state.activeView === "ov6a" && (state.ov6a?.ruleChangeSet?.changes || []).some((item) => item.status === "pending")) {
-    showToast("请先在规则库接受或忽略全部待审核建议，再生成状态机");
-    return;
-  }
-  if (ctx.nextStep.related) {
-    const current = state.relatedModelReturnContext || {};
-    state.relatedModelReturnContext = {
-      ...current,
-      mainViewId: ctx.mainViewId,
-      mainLabel: current.mainLabel || getViewMeta(ctx.mainViewId)?.label || "主步骤",
-      relatedViewId: ctx.nextStep.id
-    };
-  } else {
-    state.relatedModelReturnContext = null;
-  }
-  const completesPhaseSubflow = ctx.mainViewId === "phase-action"
-    && state.activeView === "ov6c"
-    && ctx.nextStep.id === "operational-task";
-  if (completesPhaseSubflow && state.phaseAction?.phases?.length >= 2 && state.phaseAction?.status !== "confirmed") {
-    try {
-      await conceptPlanningController.confirmPhaseAction();
-    } catch {
-      /* continue advancement */
+  setWorkflowGateOpen(false);
+  try {
+    const ctx = resolveWorkflowGateContext(state);
+    if (ctx.mode !== "related-next-step" || !ctx.nextStep?.id) {
+      showToast("当前没有可进入的下一步");
+      return;
     }
+    if (state.activeView === "ov6a" && (state.ov6a?.ruleChangeSet?.changes || []).some((item) => item.status === "pending")) {
+      showToast("请先在规则库接受或忽略全部待审核建议，再生成状态机");
+      return;
+    }
+    if (ctx.nextStep.related) {
+      const current = state.relatedModelReturnContext || {};
+      state.relatedModelReturnContext = {
+        ...current,
+        mainViewId: ctx.mainViewId,
+        mainLabel: current.mainLabel || getViewMeta(ctx.mainViewId)?.label || "主步骤",
+        relatedViewId: ctx.nextStep.id
+      };
+    } else {
+      state.relatedModelReturnContext = null;
+    }
+    const completesPhaseSubflow = ctx.mainViewId === "phase-action"
+      && state.activeView === "ov6c"
+      && ctx.nextStep.id === "operational-task";
+    if (completesPhaseSubflow && state.phaseAction?.phases?.length >= 2 && state.phaseAction?.status !== "confirmed") {
+      try {
+        await conceptPlanningController.confirmPhaseAction();
+      } catch {
+        /* continue advancement */
+      }
+    }
+    const completesTaskSubflow = (ctx.mainViewId === "operational-task" || ctx.mainViewId === "ov1b")
+      && state.activeView === "ov6c"
+      && ctx.nextStep.id === "force-mission";
+    if (completesTaskSubflow && !state.forceMission?.tasksConfirmedAt && (state.forceMission?.tasks || []).length) {
+      try {
+        await conceptPlanningController.confirmOperationalTasks();
+      } catch {
+        /* continue advancement */
+      }
+    }
+    await navigateToResearchView(ctx.nextStep.id, {
+      toast: `已进入${ctx.nextStep.label}`,
+      force: true,
+      entrySource: ctx.mainViewId,
+      completeOperationalTasks: completesPhaseSubflow,
+      generate,
+      forceRegenerate
+    });
+  } catch (err) {
+    console.error("advanceRelatedWorkflow error:", err);
+    showToast(`推进失败：${err?.message || "未知错误"}`);
   }
-  await navigateToResearchView(ctx.nextStep.id, {
-    toast: `已进入${ctx.nextStep.label}`,
-    force: true,
-    entrySource: ctx.mainViewId,
-    completeOperationalTasks: completesPhaseSubflow,
-    generate,
-    forceRegenerate
-  });
 }
 
 /** Last step of a phase: confirm and unlock the next phase. */
 async function completeWorkflowStage({ generate = false, forceRegenerate = false } = {}) {
   if (state.workflowCompleting) return;
+  setWorkflowGateOpen(false);
   const workflow = currentWorkflow();
   const ctx = resolveWorkflowGateContext(state);
   // Prefer the phase of the active last-step page; fall back to classic next-stage index.
@@ -3232,6 +3315,34 @@ function getBusyOverlayState() {
       title: "正在进入组织关系",
       detail: "AI 正在根据作战兵力生成指挥、保障与信息关系…",
       expectedMs: 90000,
+      timeoutMs: 180000
+    };
+  }
+  if (state.forceMissionGenerating) {
+    const layer = state.forceMissionGeneratingLayer || "concept";
+    if (layer === "combat") {
+      return {
+        key: "force-mission-combat",
+        title: "正在生成作战编成",
+        detail: "根据概念兵力与装备平台库，细化作战单元实体、平台挂接与编制结构…",
+        expectedMs: 60000,
+        timeoutMs: 180000
+      };
+    }
+    if (layer === "both") {
+      return {
+        key: "force-mission-both",
+        title: "正在生成作战兵力与编成",
+        detail: "根据作战任务分解，完整生成概念兵力与作战单元编成…",
+        expectedMs: 90000,
+        timeoutMs: 240000
+      };
+    }
+    return {
+      key: "force-mission-concept",
+      title: "正在生成概念兵力",
+      detail: "根据作战任务分解与阶段行动，提炼红蓝双方核心职责与概念兵力…",
+      expectedMs: 60000,
       timeoutMs: 180000
     };
   }

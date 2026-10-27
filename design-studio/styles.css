@@ -6161,7 +6161,7 @@ h3 { margin-bottom: 8px; font-size: 15px; color: #d9f3e8; }
 /* Matrix Section */
 .ov3-matrix-section {
   flex: 1 1 auto;
-  min-height: 240px;
+  min-height: 460px;
   min-width: 0;
   max-width: 100%;
   width: 100%;
@@ -6171,6 +6171,7 @@ h3 { margin-bottom: 8px; font-size: 15px; color: #d9f3e8; }
 }
 .ov3-matrix-section.is-minimized {
   flex: 0 0 auto;
+  min-height: 0;
   max-height: 140px;
   overflow: hidden;
   opacity: 0.65;
@@ -6199,12 +6200,14 @@ h3 { margin-bottom: 8px; font-size: 15px; color: #d9f3e8; }
   min-width: 0;
   max-width: 100%;
   width: 100%;
+  flex: 1 1 auto;
   overflow: auto !important;
   overflow-x: auto !important;
   overflow-y: auto !important;
   border: 1px solid var(--line);
   border-radius: 6px;
-  max-height: 520px;
+  min-height: 380px;
+  max-height: 72vh;
   background: rgba(2, 6, 23, .3);
   scrollbar-width: thin;
   scrollbar-color: #38bdf8 rgba(15, 23, 42, .8);
@@ -6486,11 +6489,37 @@ table.ov3-matrix tbody tr:hover th.matrix-row-th {
   text-align: center;
   padding: 18px 10px;
 }
+.ov3-diagnostics-section {
+  margin-top: 10px;
+  padding-top: 8px;
+}
+.ov3-diagnostics-details > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.ov3-diagnostics-details > summary::-webkit-details-marker {
+  display: none;
+}
+.ov3-diagnostics-summary {
+  display: flex;
+  align-items: center;
+}
+.ov3-diagnostics-summary::before {
+  content: "▸ ";
+  color: var(--muted);
+  font-size: 12px;
+  margin-right: 6px;
+  transition: transform .15s ease;
+}
+.ov3-diagnostics-details[open] > summary::before {
+  content: "▾ ";
+}
 .ov3-diagnostics-head {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 0;
 }
 .ov3-diagnostics-head h3 {
   margin: 0;

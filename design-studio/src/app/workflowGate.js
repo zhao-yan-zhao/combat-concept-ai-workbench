@@ -528,8 +528,8 @@ function resolveRelatedWorkflowGateContext(state, { freeMode, steps, completedTh
   if (!nextStep) {
     return { freeMode, mode: "complete", current: { id: state.activeView, label: currentLabel }, nextStep: null, completedThrough };
   }
-  const nextGenerated = isStepGenerated(nextStep.id, state, { mainViewId: nextStep.mainViewId || current?.id });
-  const nextStale = isStepStale(nextStep.id, state, { mainViewId: nextStep.mainViewId || current?.id });
+  const nextGenerated = isStepGenerated(nextStep.id, state, { mainViewId: nextStep.mainViewId || mainViewId });
+  const nextStale = isStepStale(nextStep.id, state, { mainViewId: nextStep.mainViewId || mainViewId });
   const baseLabel = nextStep.related ? relatedViewLabel(nextStep.id) : stepShortLabel(nextStep);
   const capsuleAction = formatCapsuleAction(baseLabel, nextGenerated, nextStale);
   const quickActions = resolveCurrentStepQuickActions(state);
@@ -577,7 +577,7 @@ function renderWorkflowGateActions(ctx, completing) {
 
   if (!ctx.nextGenerated) {
     return `<div class="workflow-gate-actions">
-      <button type="button" data-action="advance-workflow-step-ai" ${completing ? "disabled" : ""}>${isCompletePhase ? "确认并AI生成进入" : "AI生成并进入"}</button>
+      <button type="button" data-action="${escapeHtml(ctx.action)}" data-step-intent="ai" ${completing ? "disabled" : ""}>${isCompletePhase ? "确认并AI生成进入" : "AI生成并进入"}</button>
       <button type="button" class="quiet-button" data-action="${escapeHtml(ctx.action)}" data-step-intent="direct" ${completing ? "disabled" : ""}>${isCompletePhase ? "确认并直接进入" : "直接进入"}</button>
     </div>`;
   }
@@ -585,12 +585,12 @@ function renderWorkflowGateActions(ctx, completing) {
   if (ctx.nextGenerated && !ctx.nextStale) {
     return `<div class="workflow-gate-actions">
       <button type="button" data-action="${escapeHtml(ctx.action)}" data-step-intent="skip" data-action-variant="skip" ${completing ? "disabled" : ""}>${isCompletePhase ? "确认并跳过（查看成果）" : "跳过（查看已有成果）"}</button>
-      <button type="button" class="quiet-button" data-action="advance-workflow-step-regenerate" ${completing ? "disabled" : ""}>重新生成</button>
+      <button type="button" class="quiet-button" data-action="${escapeHtml(ctx.action)}" data-step-intent="regenerate" data-action-variant="regenerate" ${completing ? "disabled" : ""}>重新生成</button>
     </div>`;
   }
 
   return `<div class="workflow-gate-actions">
-    <button type="button" data-action="advance-workflow-step-regenerate" ${completing ? "disabled" : ""}>重新生成（覆盖更新）</button>
+    <button type="button" data-action="${escapeHtml(ctx.action)}" data-step-intent="regenerate" data-action-variant="regenerate" ${completing ? "disabled" : ""}>重新生成（覆盖更新）</button>
     <button type="button" class="quiet-button" data-action="${escapeHtml(ctx.action)}" data-step-intent="skip" data-action-variant="skip" ${completing ? "disabled" : ""}>${isCompletePhase ? "确认并跳过（保留旧版）" : "跳过（保留旧版）"}</button>
   </div>`;
 }
