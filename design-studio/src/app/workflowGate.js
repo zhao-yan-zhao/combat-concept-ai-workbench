@@ -114,23 +114,51 @@ function stepShortLabel(view) {
   return productShortLabel(view?.id, String(view?.label || view?.id || "").slice(0, 8));
 }
 
-export function isStepGenerated(viewId, state = {}) {
+export function isStepGenerated(viewId, state = {}, context = {}) {
   if (!viewId) return false;
+  const mainViewId = context?.mainViewId || state?.relatedModelReturnContext?.mainViewId || "";
   switch (viewId) {
     case "brief":
       return Boolean(state.brief?.researchIntent || state.brief?.objective);
     case "phase-action":
       return Boolean(state.phaseAction?.phases?.length);
-    case "ov6a":
+    case "ov6a": {
+      if (mainViewId === "operational-task") {
+        const hasTaskBindings = (state.ov6a?.rules || []).some((r) => (r.taskBindings || []).length);
+        const hasTaskProposal = state.ov6a?.ruleChangeSet?.source === "operational-task" && (state.ov6a?.ruleChangeSet?.changes || []).length > 0;
+        return Boolean(hasTaskBindings || hasTaskProposal);
+      }
+      if (mainViewId === "force-mission") {
+        const hasForceBindings = (state.ov6a?.rules || []).some((r) => (r.forceBindings || []).length || (r.rule?.forceRefs || []).length);
+        const hasForceProposal = state.ov6a?.ruleChangeSet?.source === "force-mission" && (state.ov6a?.ruleChangeSet?.changes || []).length > 0;
+        return Boolean(hasForceBindings || hasForceProposal);
+      }
       return Boolean(state.ov6a?.rules?.length);
-    case "ov6b":
-      return Boolean(state.ov6b?.stateMachines?.length);
-    case "ov6c":
-      return Boolean(state.ov6c?.sequenceDiagrams?.length);
+    }
+    case "ov6b": {
+      const machines = state.ov6b?.stateMachines || [];
+      if (mainViewId === "operational-task") {
+        return Boolean(machines.some((m) => m.subjectType === "task"));
+      }
+      if (mainViewId === "force-mission") {
+        return Boolean(machines.some((m) => m.subjectType === "force"));
+      }
+      return Boolean(machines.some((m) => !m.subjectType || m.subjectType === "phase") || machines.length);
+    }
+    case "ov6c": {
+      const seqs = state.ov6c?.sequences || state.ov6c?.sequenceDiagrams || [];
+      if (mainViewId === "operational-task") {
+        return Boolean(seqs.some((s) => s.diagramType === "task"));
+      }
+      if (mainViewId === "force-mission") {
+        return Boolean(seqs.some((s) => s.diagramType === "force"));
+      }
+      return Boolean(seqs.some((s) => !s.diagramType || s.diagramType === "phase") || seqs.length);
+    }
     case "operational-task":
       return Boolean(state.forceMission?.tasks?.length);
     case "ov1b":
-      return Boolean(state.ov1b?.groups?.length);
+      return Boolean(state.ov1b?.taskGroups?.length || state.ov1b?.groups?.length);
     case "force-mission":
       return Boolean(state.forceMission?.forces?.length);
     case "ov4":
@@ -154,8 +182,9 @@ export function isStepGenerated(viewId, state = {}) {
   }
 }
 
-export function isStepStale(viewId, state = {}) {
+export function isStepStale(viewId, state = {}, context = {}) {
   if (!viewId) return false;
+  const mainViewId = context?.mainViewId || state?.relatedModelReturnContext?.mainViewId || "";
   switch (viewId) {
     case "phase-action":
       return Boolean(state.phaseActionStorage?.stale);
@@ -171,9 +200,12 @@ export function isStepStale(viewId, state = {}) {
     case "validate":
       return Boolean(state.validationStorage?.stale || isValidationStale(state.validationResult, state.ov5, state.ooda, state.scenario, state.ov1));
     case "ov6a":
-      return Boolean((state.ov6a?.ruleChangeSet?.changes || []).some((item) => item.status === "pending"));
+      if (mainViewId === "operational-task" || mainViewId === "force-mission") {
+        return Boolean((state.ov6a?.ruleChangeSet?.changes || []).some((item) => item.status === "pending") || state.forceMissionStorage?.stale);
+      }
+      return Boolean((state.ov6a?.ruleChangeSet?.changes || []).some((item) => item.status === "pending") || state.phaseActionStorage?.stale);
     case "ov6b":
-      return Boolean(state.phaseActionStorage?.stale);
+      return Boolean(mainViewId === "operational-task" || mainViewId === "force-mission" ? state.forceMissionStorage?.stale : state.phaseActionStorage?.stale);
     case "ov6c":
       return Boolean(state.phaseActionStorage?.stale || state.forceMissionStorage?.stale);
     case "ov4":
@@ -350,8 +382,8 @@ export function resolveWorkflowGateContext(state) {
         state
       });
     }
-    const nextGenerated = isStepGenerated(nextStep.id, state);
-    const nextStale = isStepStale(nextStep.id, state);
+    const nextGenerated = isStepGenerated(nextStep.id, state, { mainViewId: current?.id });
+    const nextStale = isStepStale(nextStep.id, state, { mainViewId: current?.id });
     const baseLabel = stepShortLabel(nextStep);
     const capsuleAction = formatCapsuleAction(baseLabel, nextGenerated, nextStale);
     return {
@@ -389,8 +421,8 @@ export function resolveWorkflowGateContext(state) {
   const confirmationRelatedId = contextualFlowViewIds(current.id, state)[0] || "";
   const confirmationNextLabel = confirmationRelatedId ? relatedViewLabel(confirmationRelatedId) : (followingPhase || "交付完成");
   const targetStepId = confirmationRelatedId || nextStep?.id || "";
-  const nextGenerated = targetStepId ? isStepGenerated(targetStepId, state) : false;
-  const nextStale = targetStepId ? isStepStale(targetStepId, state) : false;
+  const nextGenerated = targetStepId ? isStepGenerated(targetStepId, state, { mainViewId: current?.id }) : false;
+  const nextStale = targetStepId ? isStepStale(targetStepId, state, { mainViewId: current?.id }) : false;
   let baseCapsuleAction = "确认完成";
   if (ready) {
     baseCapsuleAction = confirmationRelatedId ? relatedViewLabel(confirmationRelatedId) : (followingPhase ? stepShortLabel(nextStep) : "确认完成");
@@ -436,8 +468,8 @@ export function resolveWorkflowGateContext(state) {
 }
 
 function buildAdvanceContext({ freeMode, current, nextStep, phaseIndex, completedThrough, followingPhase, completing, open, related = false, state = {} }) {
-  const nextGenerated = isStepGenerated(nextStep.id, state);
-  const nextStale = isStepStale(nextStep.id, state);
+  const nextGenerated = isStepGenerated(nextStep.id, state, { mainViewId: nextStep.mainViewId || current?.id });
+  const nextStale = isStepStale(nextStep.id, state, { mainViewId: nextStep.mainViewId || current?.id });
   const baseLabel = related ? relatedViewLabel(nextStep.id) : stepShortLabel(nextStep);
   const capsuleAction = formatCapsuleAction(baseLabel, nextGenerated, nextStale);
   const quickActions = resolveCurrentStepQuickActions(state);
@@ -496,8 +528,8 @@ function resolveRelatedWorkflowGateContext(state, { freeMode, steps, completedTh
   if (!nextStep) {
     return { freeMode, mode: "complete", current: { id: state.activeView, label: currentLabel }, nextStep: null, completedThrough };
   }
-  const nextGenerated = isStepGenerated(nextStep.id, state);
-  const nextStale = isStepStale(nextStep.id, state);
+  const nextGenerated = isStepGenerated(nextStep.id, state, { mainViewId: nextStep.mainViewId || current?.id });
+  const nextStale = isStepStale(nextStep.id, state, { mainViewId: nextStep.mainViewId || current?.id });
   const baseLabel = nextStep.related ? relatedViewLabel(nextStep.id) : stepShortLabel(nextStep);
   const capsuleAction = formatCapsuleAction(baseLabel, nextGenerated, nextStale);
   const quickActions = resolveCurrentStepQuickActions(state);

@@ -297,16 +297,20 @@ export function createRuleLibraryChatController({
     }
   }
 
-  async function proposeChanges(source, { silent = false } = {}) {
+  async function proposeChanges(source, { silent = false, force = false } = {}) {
     const state = getState();
     if (state.ruleLibraryChangeGenerating) return { skipped: true, reason: "busy" };
     const current = ensureOv6aModel(state.ov6a && Array.isArray(state.ov6a.rules) ? state.ov6a : { rules: [] });
     const analysis = buildRuleChangeAnalysis(state, current, source);
     const existingProposal = current.ruleChangeSet;
-    if (existingProposal?.source === source
+    if (!force && existingProposal?.source === source
       && existingProposal?.upstreamFingerprint === analysis.upstreamFingerprint
       && Array.isArray(existingProposal.changes)
       && existingProposal.changes.length) {
+      if (!silent) {
+        const subject = source === "operational-task" ? "任务" : source === "phase-action" ? "阶段" : "兵力";
+        notify(`已存在 ${existingProposal.changes.length} 项${subject}规则待审核建议，可直接复核或重新生成覆盖`);
+      }
       return { skipped: true, reason: "already-generated", proposed: existingProposal.changes.length };
     }
     state.ruleLibraryChangeGenerating = true;

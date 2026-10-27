@@ -52,8 +52,18 @@ export function contextualFlowViewIds(mainViewId, state = {}) {
   }
 }
 
+export function getParentMainViewId(viewId) {
+  if (!viewId) return "";
+  if (workflowPrimaryStepIds.includes(viewId)) return viewId;
+  for (const [mainId, list] of Object.entries(RELATED_VIEWS)) {
+    if (list.includes(viewId)) return mainId;
+  }
+  return "";
+}
+
 export function inferRelatedMainViewId(relatedViewId, preferredMainViewId = "") {
-  if (preferredMainViewId && RELATED_VIEWS[preferredMainViewId]?.includes(relatedViewId)) return preferredMainViewId;
+  const resolvedPreferred = getParentMainViewId(preferredMainViewId) || preferredMainViewId;
+  if (resolvedPreferred && RELATED_VIEWS[resolvedPreferred]?.includes(relatedViewId)) return resolvedPreferred;
   return workflowPrimaryStepIds.find((mainViewId) => RELATED_VIEWS[mainViewId]?.includes(relatedViewId)) || "";
 }
 

@@ -2836,18 +2836,21 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
     return;
   }
   if (viewId === "ov6a") {
-    if (entrySource === "operational-task") {
-      await ruleLibraryChatController.proposeChanges("operational-task", { silent: false });
-    } else if (entrySource === "force-mission") {
-      await ruleLibraryChatController.proposeChanges("force-mission", { silent: false });
+    const source = (entrySource === "ov1b" || entrySource === "operational-task")
+      ? "operational-task"
+      : (entrySource === "force-mission" ? "force-mission" : entrySource);
+    if (source === "operational-task") {
+      await ruleLibraryChatController.proposeChanges("operational-task", { silent: false, force: forceRegenerate });
+    } else if (source === "force-mission") {
+      await ruleLibraryChatController.proposeChanges("force-mission", { silent: false, force: forceRegenerate });
+    } else if (source === "phase-action") {
+      if (state.phaseAction?.status === "confirmed") {
+        await ruleLibraryChatController.proposeChanges("phase-action", { silent: false, force: forceRegenerate });
+      } else {
+        await ruleLibraryChatController.pregenerateFromBrief({ silent: false });
+      }
     } else {
       await ruleLibraryChatController.pregenerateFromBrief({ silent: false });
-    }
-    // When arriving from the confirmed phase/action step, derive a reviewable
-    // rule change set from that upstream model. Brief pre-generation above only
-    // creates the initial library and intentionally skips non-empty libraries.
-    if (entrySource === "phase-action" && state.phaseAction?.status === "confirmed") {
-      await ruleLibraryChatController.proposeChanges("phase-action", { silent: false });
     }
   }
   // Task decomposition is generated from its toolbox action, after the canvas is visible.
@@ -2855,12 +2858,12 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
     await ensureCombatFocusOnEnterPhaseAction();
   }
   if (viewId === "ov6b") {
-    const contextType = entrySource === "operational-task" ? "task" : entrySource === "force-mission" ? "force" : "phase";
-    await dodafProductController.pregenerateOv6bFromPhaseAction({ silent: false, contextType });
+    const contextType = (entrySource === "operational-task" || entrySource === "ov1b") ? "task" : entrySource === "force-mission" ? "force" : "phase";
+    await dodafProductController.pregenerateOv6bFromPhaseAction({ silent: false, contextType, force: forceRegenerate });
   }
   if (viewId === "ov6c") {
-    const contextType = entrySource === "operational-task" ? "task" : entrySource === "force-mission" ? "force" : "phase";
-    await dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType });
+    const contextType = (entrySource === "operational-task" || entrySource === "ov1b") ? "task" : entrySource === "force-mission" ? "force" : "phase";
+    await dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType, force: forceRegenerate });
   }
   if (viewId === "ov4") {
     await dodafProductController.pregenerateOv4FromForceMission({ silent: false });
