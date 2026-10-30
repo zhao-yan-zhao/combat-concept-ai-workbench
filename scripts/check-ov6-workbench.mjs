@@ -442,14 +442,14 @@ const copied = duplicateOv6cMessage(ov6c, ov6c.sequences[0].id, ov6c.sequences[0
 assert(copied.sequences[0].messages.length === 2 && copied.sequences[0].messages[1].name.includes("副本"), "Sequence message duplicate failed");
 
 const seeded = seedOv6cFromPhase({ sequences: [] }, state);
-assert((seeded.sequences || []).length === 4, "Sequence seed must create one diagram per side and one per phase");
-assert(seeded.sequences.filter((item) => item.diagramType === "force").length === 2, "Sequence seed must create separate friendly and hostile diagrams");
+assert((seeded.sequences || []).length === state.phaseAction.phases.length, "Sequence seed must create one diagram per phase");
+assert(seeded.sequences.filter((item) => item.diagramType === "force").length === 0, "Phase sequence seed must not contain force diagrams");
 assert(seeded.sequences.filter((item) => item.diagramType === "phase").length === state.phaseAction.phases.length, "Every phase must receive its own sequence diagram");
 assert(seeded.sequences.every((item) => (item.messages || []).length >= 1), "Every required sequence must contain messages");
 const sequenceAnalysis = buildSequenceGenerationAnalysis(state);
-assert(sequenceAnalysis.requiredSequenceCoverage.sideSequences.length === 2 && sequenceAnalysis.requiredSequenceCoverage.phaseSequences.length === 2, "AI sequence analysis must explicitly require side and phase coverage");
+assert(sequenceAnalysis.requiredSequenceCoverage.phaseSequences.length === 2, "AI sequence analysis must explicitly require phase coverage");
 const completedCoverage = ensureRequiredSequenceCoverage({ sequences: [seeded.sequences[0]] }, state, sequenceAnalysis);
-assert(completedCoverage.sequences.length === 4, "AI sequence output must be supplemented when required side or phase diagrams are missing");
+assert(completedCoverage.sequences.length === 2, "AI sequence output must be supplemented when required phase diagrams are missing");
 
 const generatedSequence = generateMockOutput({
   workflow: { id: "sequence-check", title: "时序校验", outputSchema: "SequenceDraft" },

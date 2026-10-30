@@ -51,11 +51,33 @@ D:\项目\combat-concept-ai-workbench
 - `archive/`：已退役代码、截图与一次性产物
 - `references/`：仅说明；大体量开源参考在 `D:\项目\_references\combat-concept-ai-workbench-open-source`
 
+## 参考文档优先级（防误导准则）
+
+本项目历史迭代沉淀较多 Markdown 文档，进入开发或排查时**必须严格遵守以下优先级**，严禁以历史规划覆盖当前真实代码契约：
+
+1. **第一级：绝对当前基线（最高权威，开发与排查必读）**
+   - **`AGENTS.md`**：开发铁律、改动防退化、端口（8792）、提示词管理与 codegraph 规范。
+   - **`project-context.md`**：当前唯一的真实交接状态、已落地功能与当前待办基线。
+   - **`INTERFACE_GUIDE.md`**：真实后端 HTTP 路由、数据契约与权限边界。
+   - **`README.md`**：项目启动方式与系统概览。
+
+2. **第二级：领域业务参考（针对特定模块设计时按需查阅）**
+   - **`plans/WORKFLOW_MAINLINE_MODEL_TOPOLOGY.md`**：七步主线、关联模型拓扑与流转设计。
+   - **`plans/FORCE_MISSION_CMO.md`**：兵力与任务双层编组、CMO DB3 装备库与平台推荐。
+   - **`plans/AI_RESEARCH_CHAT.md`**：AI 研讨对话通用壳与流式交互规范。
+   - **`SOFTWARE_DESIGN.md`**：系统整体架构与已实现映射关系。
+
+3. **第三级：历史归档与远期参考（仅作需求追溯，严禁作为现状依据）**
+   - **`plans/historical/*`**：早期分会话规划（`PLAN-01`~`04` 等）与旧静态 Demo，已退役。
+   - **`plans/PROJECT_STORAGE_MIGRATION.md`**：PostgreSQL 远期方案（当前为原生 SQLite：`data/projects.sqlite`，严禁假设 PG 环境）。
+   - **`plans/OIDC_DEPLOYMENT.md`**：OIDC 远期接入方案（当前浏览器令牌流未启用）。
+   - **`archive/*`**：历史快照与废弃代码，不得用于验收入口。
+
 ## 服务与目录确认
 
 - `http://127.0.0.1:8792/` 是当前配置真实 AI 的工作台根入口；`/design-studio/` 保留为兼容路径。`8791` 仅保留为旧的本地降级服务，不作为验收或开发目标。
 - 端口号不代表代码版本。开始修改前必须确认当前目录为 `D:\项目\combat-concept-ai-workbench`，并以 `GET /api/health` 的服务状态确认验收目标。
-- 当前 8792 源码备份归档位于 `D:\项目\_backups\combat-concept-ai-workbench-8792-20261026-task-force-ov6.zip`。备份仅用于恢复，不在其中直接开发或启动服务；每次实质功能批次完成后更新此路径。
+- 当前 8792 源码备份归档位于 `D:\项目\_backups\combat-concept-ai-workbench-8792-20261027-ov5-ooda-workflow-restructuring.zip`。备份仅用于恢复，不在其中直接开发或启动服务；每次实质功能批次完成后更新此路径。
 
 ## 常用本地运行方式
 

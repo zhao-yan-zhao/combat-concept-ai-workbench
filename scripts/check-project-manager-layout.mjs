@@ -18,6 +18,8 @@ assert(html.includes("\u5df2\u5f52\u6863") && html.includes("\u6062\u590d"), "Ar
 assert(html.includes("data-project-switch=\"archived-research\""), "Non-active project switch action is missing");
 assert(html.includes("data-project-delete=\"archived-research\""), "Archived non-active project lacks the delete action");
 assert(!html.includes("data-project-delete=\"current-research\""), "Current project should not be deletable from the project panel");
+assert(!html.includes("data-project-archive=\"current-research\""), "Current active project should not be archivable from the project panel");
+assert(html.includes("data-project-archive=\"archived-research\""), "Non-active archived project should have restore action");
 assert(!html.includes("<unsafe-project>"), "Project title was inserted without HTML escaping");
 console.log("Project-manager layout acceptance passed.");
 

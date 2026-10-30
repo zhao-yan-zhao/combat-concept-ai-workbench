@@ -114,7 +114,11 @@ export function createConceptPlanningController({
         return true;
       }
       if (action === "select-force-mission-layer") {
-        const layer = source?.dataset?.layer === "combat" ? "combat" : "concept";
+        const layer = source?.dataset?.layer === "combat"
+          ? "combat"
+          : source?.dataset?.layer === "concept"
+            ? "concept"
+            : "task";
         const state = getState();
         if (state.forceMissionLayerTab !== layer) {
           state.forceMissionLayerTab = layer;
@@ -672,7 +676,8 @@ export function createConceptPlanningController({
     try {
       state.forceMission = persistForceMission(confirmOperationalTasks(state.forceMission), projectId);
       await syncForceMission(state.forceMission, { source: "operational-task:confirm" });
-      notify("作战任务已确认，进入作战兵力");
+      notify("作战任务已确认，进入概念兵力设计");
+      state.forceMissionLayerTab = "concept";
       await onOperationalTasksConfirmed?.(state.forceMission);
       render();
     } catch {

@@ -1056,7 +1056,7 @@ export function replaceOv6cSequenceContent(model, sequenceId, nextSequence = {})
   return normalizeDodafOv6c(next);
 }
 
-/** Seed required side and per-phase sequences when the sequence product is empty. */
+/** Seed required per-phase sequences when the sequence product is empty. */
 export function seedOv6cFromPhase(model, state = {}) {
   let next = ensureOv6cModel(model);
   if ((next.sequences || []).length) return next;
@@ -1065,34 +1065,6 @@ export function seedOv6cFromPhase(model, state = {}) {
     ...(Array.isArray(state.forceMission?.combatForces) ? state.forceMission.combatForces : [])
   ];
   const phases = Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : [];
-  const sides = [
-    { id: "friendly", label: "蓝方", actionKey: "blueActions", fallbackKey: "primaryActions" },
-    { id: "hostile", label: "红方", actionKey: "redActions", fallbackKey: "secondaryActions" }
-  ].filter((side) => forces.some((force) => force?.side === side.id)
-    || phases.some((phase) => (phase?.[side.actionKey] || phase?.[side.fallbackKey] || []).length));
-
-  sides.forEach((side) => {
-    const sideForces = forces.filter((force) => force?.side === side.id).slice(0, 8);
-    const participants = ensureSequenceParticipants(sideForces.map((force, index) => forceParticipant(force, `${side.id}-${index + 1}`)), side.label);
-    const messages = phases.slice(0, 12).flatMap((phase, phaseIndex) => {
-      const actions = (phase?.[side.actionKey] || phase?.[side.fallbackKey] || []).filter(Boolean).slice(0, 4);
-      return (actions.length ? actions : [phase?.objective || phase?.name || `${side.label}阶段行动`]).map((action, actionIndex) => sequenceMessage({
-        id: `event-${side.id}-${phaseIndex + 1}-${actionIndex + 1}`,
-        index: phaseIndex * 4 + actionIndex,
-        participants,
-        name: action,
-        phase,
-        condition: phase?.entryConditions?.[0] || phase?.exitConditions?.[0] || ""
-      }));
-    });
-    next = addOv6cSequence(next, {
-      id: `sequence-side-${side.id}`,
-      name: `${side.label}推演时序`,
-      diagramType: "force",
-      participants,
-      messages
-    });
-  });
 
   phases.slice(0, 24).forEach((phase, phaseIndex) => {
     const phaseId = String(phase?.id || `phase-${phaseIndex + 1}`);

@@ -78,7 +78,7 @@ export function buildModelTopology(input = {}) {
   const ov6b = safeNormalize(normalizeDodafOv6b, state.ov6b, { stateMachines: [], states: [], transitions: [] });
   const ov6c = safeNormalize(normalizeDodafOv6c, state.ov6c, { sequences: [], events: [] });
   const ov7 = safeNormalize(normalizeDodafOv7, state.ov7, { mappings: [] });
-  const graph = createGraph();
+  const graph = createGraph(state);
   const rootIds = {};
 
   const counts = {
@@ -141,7 +141,102 @@ export function buildModelTopology(input = {}) {
   return graph.finish(rootIds);
 }
 
-export function getModelContextStatus(topology, { focusType = "", focusId = "", targetViewId = "" } = {}) {
+function getMainlineContextStatus(graph, targetViewId, mainViewId, targetRoot) {
+  const state = graph._state || {};
+  if (targetViewId === "ov6a") {
+    const changeSet = state.ov6a?.ruleChangeSet;
+    const hasPendingChange = changeSet?.source === mainViewId && (changeSet.changes || []).some((c) => c.status === "pending");
+    if (hasPendingChange) {
+      const count = changeSet.changes.length;
+      return contextResult("pending_review", count, targetRoot.count || count, []);
+    }
+
+    const ruleNodes = graph.nodes.filter((node) => node.kind === "rule");
+    let matchedCount = 0;
+
+    if (mainViewId === "operational-task") {
+      const taskLinks = new Set(graph.links
+        .filter((link) => {
+          const srcNode = graph.nodes.find((n) => n.id === link.sourceNodeId);
+          const tgtNode = graph.nodes.find((n) => n.id === link.targetNodeId);
+          return (srcNode?.kind === "task" && tgtNode?.kind === "rule") || (tgtNode?.kind === "task" && srcNode?.kind === "rule");
+        })
+        .map((link) => link.sourceNodeId.startsWith("ov6a:") ? link.sourceNodeId : link.targetNodeId));
+
+      matchedCount = ruleNodes.filter((node) => taskLinks.has(node.id)).length;
+      if (!matchedCount && state.ov6a?.rules) {
+        matchedCount = (state.ov6a.rules || []).filter((r) => (r.taskBindings || []).length || (r.rule?.taskRefs || []).length).length;
+      }
+    } else if (mainViewId === "force-mission") {
+      const forceLinks = new Set(graph.links
+        .filter((link) => {
+          const srcNode = graph.nodes.find((n) => n.id === link.sourceNodeId);
+          const tgtNode = graph.nodes.find((n) => n.id === link.targetNodeId);
+          return (srcNode?.kind === "force" && tgtNode?.kind === "rule") || (tgtNode?.kind === "force" && srcNode?.kind === "rule");
+        })
+        .map((link) => link.sourceNodeId.startsWith("ov6a:") ? link.sourceNodeId : link.targetNodeId));
+
+      matchedCount = ruleNodes.filter((node) => forceLinks.has(node.id)).length;
+      if (!matchedCount && state.ov6a?.rules) {
+        matchedCount = (state.ov6a.rules || []).filter((r) => (r.forceBindings || []).length || (r.rule?.forceRefs || []).length).length;
+      }
+    } else if (mainViewId === "phase-action") {
+      const nonPhaseRuleIds = new Set(graph.links
+        .filter((link) => {
+          const srcNode = graph.nodes.find((n) => n.id === link.sourceNodeId);
+          const tgtNode = graph.nodes.find((n) => n.id === link.targetNodeId);
+          const otherKind = srcNode?.kind === "rule" ? tgtNode?.kind : srcNode?.kind;
+          return otherKind === "task" || otherKind === "force";
+        })
+        .map((link) => link.sourceNodeId.startsWith("ov6a:") ? link.sourceNodeId : link.targetNodeId));
+
+      matchedCount = ruleNodes.filter((node) => !nonPhaseRuleIds.has(node.id)).length;
+      if (!matchedCount && state.ov6a?.rules) {
+        matchedCount = (state.ov6a.rules || []).filter((r) => !(r.taskBindings || []).length && !(r.forceBindings || []).length).length;
+      }
+    }
+
+    if (!matchedCount) return contextResult("empty", 0, 0, []);
+    const status = targetRoot.status === "confirmed" ? "confirmed" : "pending_review";
+    return contextResult(status, matchedCount, targetRoot.count || matchedCount, []);
+  }
+
+  if (targetViewId === "ov6b") {
+    const machines = state.ov6b?.stateMachines || [];
+    let matchedCount = 0;
+    if (mainViewId === "operational-task") {
+      matchedCount = machines.filter((m) => m.subjectType === "task").length;
+    } else if (mainViewId === "force-mission") {
+      matchedCount = machines.filter((m) => m.subjectType === "force" || m.subjectType === "task").length;
+    } else if (mainViewId === "phase-action") {
+      matchedCount = machines.filter((m) => !m.subjectType || m.subjectType === "phase").length;
+    }
+
+    if (!matchedCount) return contextResult("empty", 0, 0, []);
+    const status = targetRoot.status === "confirmed" ? "confirmed" : "pending_review";
+    return contextResult(status, matchedCount, targetRoot.count || matchedCount, []);
+  }
+
+  if (targetViewId === "ov6c") {
+    const seqs = state.ov6c?.sequences || state.ov6c?.sequenceDiagrams || [];
+    let matchedCount = 0;
+    if (mainViewId === "operational-task") {
+      matchedCount = seqs.filter((s) => s.diagramType === "task").length;
+    } else if (mainViewId === "force-mission") {
+      matchedCount = seqs.filter((s) => (s.diagramType === "force" || s.diagramType === "task") && !String(s.id || "").startsWith("sequence-side-")).length;
+    } else if (mainViewId === "phase-action") {
+      matchedCount = seqs.filter((s) => !s.diagramType || s.diagramType === "phase").length;
+    }
+
+    if (!matchedCount) return contextResult("empty", 0, 0, []);
+    const status = targetRoot.status === "confirmed" ? "confirmed" : "pending_review";
+    return contextResult(status, matchedCount, targetRoot.count || matchedCount, []);
+  }
+
+  return contextResult(targetRoot.status, targetRoot.count || 0, targetRoot.count || 0, []);
+}
+
+export function getModelContextStatus(topology, { focusType = "", focusId = "", targetViewId = "", mainViewId = "" } = {}) {
   const graph = topology && typeof topology === "object" ? topology : { nodes: [], links: [], diagnostics: [] };
   const targetKey = VIEW_TO_PRODUCT_KEY[targetViewId] || targetViewId;
   const targetDefinition = PRODUCT_DEFINITIONS.find((item) => item.key === targetKey || item.resource === targetKey);
@@ -149,7 +244,12 @@ export function getModelContextStatus(topology, { focusType = "", focusId = "", 
   const targetRootId = modelNodeId(targetDefinition.resource, targetDefinition.objectId);
   const targetRoot = graph.nodes.find((node) => node.id === targetRootId);
   if (!targetRoot) return contextResult("not_applicable", 0, 0, []);
-  if (!focusType || !focusId) return contextResult(targetRoot.status, targetRoot.count || 0, targetRoot.count || 0, []);
+  if (!focusType || !focusId) {
+    if (mainViewId && ["ov6a", "ov6b", "ov6c"].includes(targetViewId)) {
+      return getMainlineContextStatus(graph, targetViewId, mainViewId, targetRoot);
+    }
+    return contextResult(targetRoot.status, targetRoot.count || 0, targetRoot.count || 0, []);
+  }
 
   const focusNodes = graph.nodes.filter((node) => node.kind === focusType && node.objectId === focusId);
   if (!focusNodes.length) return contextResult("not_applicable", 0, targetRoot.count || 0, []);
@@ -190,6 +290,11 @@ function addRootTopology(graph, roots) {
     [roots.brief, roots.phase, derived, "形成阶段行动"],
     [roots.phase, roots.task, derived, "形成作战任务"],
     [roots.task, roots.force, derived, "编成作战兵力"],
+    [roots.task, roots.ov5a, derived, "任务活动分解"],
+    [roots.force, roots.ov5, binds, "兵力执行活动"],
+    [roots.ov5a, roots.ov5, derived, "形成作战活动"],
+    [roots.ov5, roots.ooda, derived, "活动派生闭环诊断"],
+    [roots.ov5, roots.ov1, derived, "活动网络提炼总体图"],
     [roots.force, roots.ov1, derived, "形成总体构想"],
     [roots.ov1, roots.conceptMap, derived, "空间化表达"],
     [roots.conceptMap, roots.simulation, derived, "编译仿真输入"],
@@ -204,12 +309,7 @@ function addRootTopology(graph, roots) {
     [roots.ov4, roots.ov2, derived, "组织间资源交换"],
     [roots.ov2, roots.ov3, derived, "矩阵投影"],
     [roots.phase, roots.ov5a, derived, "阶段活动分解"],
-    [roots.task, roots.ov5a, derived, "任务活动分解"],
-    [roots.ov1, roots.ov5a, derived, "总体图活动来源"],
     [roots.conceptMap, roots.ov5a, binds, "空间与阶段引用"],
-    [roots.ov5a, roots.ov5, derived, "形成作战活动"],
-    [roots.ov5, roots.ooda, derived, "活动派生决策循环"],
-    [roots.ooda, roots.ov1, feedback, "循环反馈总体概念"],
     [roots.ov1b, roots.ov1c, derived, "任务侧映射输入"],
     [roots.ov5, roots.ov1c, binds, "活动侧映射输入"],
     [roots.ov6b, roots.ov7, binds, "状态侧映射输入"],
@@ -310,7 +410,7 @@ function addRuleNodes(graph, indexes, ov6a, roots) {
 
 function addStateMachineNodes(graph, indexes, ov6b, roots) {
   (ov6b.stateMachines || []).forEach((machine) => {
-    const machineNodeId = graph.addNode({ resource: "ov6b", objectId: machine.id, kind: "state-machine", viewId: "ov6b", label: machine.name || machine.id, status: machine.states?.length && machine.transitions?.length ? "pending_review" : "partial" });
+    const machineNodeId = graph.addNode({ resource: "ov6b", objectId: machine.id, kind: "state-machine", viewId: "ov6b", label: machine.name || machine.id, status: machine.states?.length && machine.transitions?.length ? "pending_review" : "partial", subjectType: clean(machine.subjectType) });
     indexes.machine.set(machine.id, machineNodeId);
     graph.addLink({ sourceNodeId: roots.ov6b, targetNodeId: machineNodeId, relationType: MODEL_RELATION_TYPES.DERIVED_FROM, semantic: "状态机" });
     if (machine.subjectRef) indexes.pendingRefs.push({ sourceKind: subjectKind(machine.subjectType), sourceRef: machine.subjectRef, targetNodeId: machineNodeId, relationType: MODEL_RELATION_TYPES.DERIVED_FROM, semantic: `${machine.subjectType || "对象"}状态机`, required: true });
@@ -332,7 +432,7 @@ function addStateMachineNodes(graph, indexes, ov6b, roots) {
 
 function addSequenceNodes(graph, indexes, ov6c, roots) {
   (ov6c.sequences || []).forEach((sequence) => {
-    const sequenceNodeId = graph.addNode({ resource: "ov6c", objectId: sequence.id, kind: "sequence", viewId: "ov6c", label: sequence.name || sequence.id, status: sequence.messages?.length ? "pending_review" : "partial" });
+    const sequenceNodeId = graph.addNode({ resource: "ov6c", objectId: sequence.id, kind: "sequence", viewId: "ov6c", label: sequence.name || sequence.id, status: sequence.messages?.length ? "pending_review" : "partial", diagramType: clean(sequence.diagramType) });
     indexes.sequence.set(sequence.id, sequenceNodeId);
     graph.addLink({ sourceNodeId: roots.ov6c, targetNodeId: sequenceNodeId, relationType: MODEL_RELATION_TYPES.DERIVED_FROM, semantic: "时序图" });
     (sequence.participants || []).forEach((participant) => {
@@ -480,7 +580,7 @@ function compileExplicitReferences(graph, indexes) {
   }
 }
 
-function createGraph() {
+function createGraph(state = {}) {
   const nodes = [];
   const links = [];
   const diagnostics = [];
@@ -493,7 +593,7 @@ function createGraph() {
       const objectId = clean(node.objectId) || ROOT;
       const id = modelNodeId(resource, objectId);
       if (!nodeById.has(id)) {
-        const normalized = { id, resource, objectId, kind: clean(node.kind) || "object", viewId: clean(node.viewId), label: clean(node.label) || objectId, status: normalizeContextStatus(node.status), count: Number(node.count) || 0 };
+        const normalized = { id, resource, objectId, kind: clean(node.kind) || "object", viewId: clean(node.viewId), label: clean(node.label) || objectId, status: normalizeContextStatus(node.status), count: Number(node.count) || 0, subjectType: clean(node.subjectType), diagramType: clean(node.diagramType) };
         nodeById.set(id, normalized);
         nodes.push(normalized);
       }
@@ -532,7 +632,8 @@ function createGraph() {
           feedbackCount: links.filter((item) => item.relationType === MODEL_RELATION_TYPES.FEEDBACK_TO).length,
           errorCount: diagnostics.filter((item) => item.severity === "error").length,
           warningCount: diagnostics.filter((item) => item.severity === "warning").length
-        }
+        },
+        _state: state
       };
     }
   };

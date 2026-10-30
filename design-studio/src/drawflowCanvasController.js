@@ -90,7 +90,17 @@ function ov1NodeHtml(node) {
 }
 
 function ov5NodeHtml(node) {
-  return `<div class="drawflow-card ov5"><span>${escapeHtml(node.type)}</span><strong>${escapeHtml(node.title)}</strong><small>${escapeHtml(node.duration || "待估算")}</small></div>`;
+  const isStandard = String(node.type || "").toLowerCase().includes("standard") || String(node.type || "").includes("标准");
+  const stereotype = isStandard ? "&laquo;StandardOperationalActivity&raquo;" : "&laquo;OperationalActivity&raquo;";
+  const performer = node.performer || node.role || node.node || "";
+  return `<div class="drawflow-card ov5 dodaf-activity-card">
+    <div class="ov5-card-header">
+      <span class="ov5-card-stereotype">${stereotype}</span>
+      ${node.duration ? `<small class="ov5-card-duration">${escapeHtml(node.duration)}</small>` : ""}
+    </div>
+    <strong class="ov5-card-title">${escapeHtml(node.title)}</strong>
+    ${performer ? `<div class="ov5-card-performer"><span class="performer-tag">&laquo;Node&raquo; ${escapeHtml(performer)}</span></div>` : ""}
+  </div>`;
 }
 
 function edgeTone(type) {

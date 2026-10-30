@@ -60,7 +60,7 @@ export function getWorkflowStageIncompleteReasons(state, stage, { forAdvancement
       ["主要风险", state.brief?.risk]
     ].filter(([, value]) => !isCompletedValue(value)).map(([label]) => label);
   }
-  // 关联模型只提供提示与诊断，不参与七步主线强门禁。
+  // 关联模型只提供提示与诊断，不参与六步主线强门禁。
   if (stage === 1) {
     const reasons = [
       ...phaseActionConceptIncompleteReasons(state.phaseAction, state.phaseActionStorage)
@@ -68,33 +68,33 @@ export function getWorkflowStageIncompleteReasons(state, stage, { forAdvancement
     return forAdvancement ? reasons.filter((r) => r !== "确认阶段与行动") : reasons;
   }
   if (stage === 2) {
-    const reasons = [
-      ...operationalTaskPlanIncompleteReasons(state.forceMission, state.forceMissionStorage)
-    ].filter(Boolean);
-    return forAdvancement ? reasons.filter((r) => r !== "确认作战任务") : reasons;
+    const taskReasons = operationalTaskPlanIncompleteReasons(state.forceMission, state.forceMissionStorage);
+    const forceReasons = combatForcePlanIncompleteReasons(state.forceMission, state.forceMissionStorage);
+    const reasons = [...taskReasons, ...forceReasons].filter(Boolean);
+    return forAdvancement ? reasons.filter((r) => r !== "确认作战任务" && r !== "确认作战兵力") : reasons;
   }
   if (stage === 3) {
-    const reasons = [
-      ...combatForcePlanIncompleteReasons(state.forceMission, state.forceMissionStorage)
+    return [
+      state.ov5Storage?.stale && "复核已过期的作战活动",
+      !state.ov5?.activities?.length && "作战活动节点",
+      !state.ov5?.edges?.length && "作战活动因果关系"
     ].filter(Boolean);
-    return forAdvancement ? reasons.filter((r) => r !== "确认作战兵力") : reasons;
   }
   if (stage === 4) {
-    return [
+    const reasons = [
       state.ov1Storage?.stale && "复核已过期的总体图",
       !state.ov1?.nodes?.length && "总体图节点",
       !state.ov1?.edges?.length && "总体图关系"
-    ].filter(Boolean);
+    ];
+    if (state.conceptMap && (state.conceptMap.document?.items?.length || state.conceptMap.elements?.length || state.conceptMap.reference)) {
+      if (state.conceptMapStorage?.stale) reasons.push("复核已过期的概念图");
+      if (state.conceptMap.reference?.status !== "confirmed" && !forAdvancement) {
+        reasons.push("确认概念图研究参考");
+      }
+    }
+    return reasons.filter(Boolean);
   }
   if (stage === 5) {
-    const reasons = [
-      (!state.conceptMap?.document?.items?.length && !state.conceptMap?.elements?.length) && "概念图对象或标绘",
-      state.conceptMap?.reference?.status !== "confirmed" && "确认概念图研究参考",
-      state.conceptMapStorage?.stale && "复核已过期的概念图"
-    ].filter(Boolean);
-    return forAdvancement ? reasons.filter((r) => r !== "确认概念图研究参考") : reasons;
-  }
-  if (stage === 6) {
     const reasons = [];
     if (!state.scenario?.entities?.length) reasons.push("自动想定");
     if (!state.validationResult?.scores?.length) reasons.push("设计验证");
@@ -129,9 +129,10 @@ export function isStepGenerated(viewId, state = {}, context = {}) {
         return Boolean(hasTaskBindings || hasTaskProposal);
       }
       if (mainViewId === "force-mission") {
+        const hasTaskBindings = (state.ov6a?.rules || []).some((r) => (r.taskBindings || []).length);
         const hasForceBindings = (state.ov6a?.rules || []).some((r) => (r.forceBindings || []).length || (r.rule?.forceRefs || []).length);
-        const hasForceProposal = state.ov6a?.ruleChangeSet?.source === "force-mission" && (state.ov6a?.ruleChangeSet?.changes || []).length > 0;
-        return Boolean(hasForceBindings || hasForceProposal);
+        const hasProposal = (state.ov6a?.ruleChangeSet?.source === "force-mission" || state.ov6a?.ruleChangeSet?.source === "operational-task") && (state.ov6a?.ruleChangeSet?.changes || []).length > 0;
+        return Boolean(hasTaskBindings || hasForceBindings || hasProposal);
       }
       return Boolean(state.ov6a?.rules?.length);
     }
@@ -141,7 +142,7 @@ export function isStepGenerated(viewId, state = {}, context = {}) {
         return Boolean(machines.some((m) => m.subjectType === "task"));
       }
       if (mainViewId === "force-mission") {
-        return Boolean(machines.some((m) => m.subjectType === "force"));
+        return Boolean(machines.some((m) => m.subjectType === "force" || m.subjectType === "task"));
       }
       return Boolean(machines.some((m) => !m.subjectType || m.subjectType === "phase") || machines.length);
     }
@@ -151,7 +152,7 @@ export function isStepGenerated(viewId, state = {}, context = {}) {
         return Boolean(seqs.some((s) => s.diagramType === "task"));
       }
       if (mainViewId === "force-mission") {
-        return Boolean(seqs.some((s) => s.diagramType === "force"));
+        return Boolean(seqs.some((s) => (s.diagramType === "force" && !String(s.id || "").startsWith("sequence-side-")) || s.diagramType === "task"));
       }
       return Boolean(seqs.some((s) => !s.diagramType || s.diagramType === "phase") || seqs.length);
     }
@@ -160,15 +161,21 @@ export function isStepGenerated(viewId, state = {}, context = {}) {
     case "ov1b":
       return Boolean(state.ov1b?.taskGroups?.length || state.ov1b?.groups?.length);
     case "force-mission":
-      return Boolean(state.forceMission?.forces?.length);
+      // 主流程「任务与兵力」第一子步骤为作战任务；若在阶段行动中核验下一步，首要检查作战任务是否已生成
+      if (mainViewId === "phase-action") {
+        return Boolean(state.forceMission?.tasks?.length);
+      }
+      return Boolean(state.forceMission?.forces?.length || state.forceMission?.tasks?.length);
     case "ov4":
-      return Boolean(state.ov4?.commandNodes?.length || state.ov4?.relationships?.length || state.ov4?.diagrams?.length);
+      return Boolean(state.ov4?.roles?.length || state.ov4?.relations?.length || state.ov4?.commandNodes?.length || state.ov4?.relationships?.length || state.ov4?.diagrams?.length);
     case "ov2":
       return Boolean(state.ov2?.exchanges?.length || state.ov2?.nodes?.length);
     case "ov3":
-      return Boolean(state.ov3?.messages?.length || state.ov3?.exchanges?.length);
+      return Boolean(state.ov3?.exchanges?.length || state.ov3?.messages?.length);
     case "ov1":
       return Boolean(state.conceptGraphic?.nodes?.length || state.ov1?.nodes?.length || state.ov1Candidate);
+    case "ov5":
+      return Boolean(state.ov5?.activities?.length && state.ov5?.edges?.length);
     case "ov5a":
       return Boolean(state.ov5?.activities?.length);
     case "concept-map":
@@ -184,13 +191,15 @@ export function isStepGenerated(viewId, state = {}, context = {}) {
 
 export function isStepStale(viewId, state = {}, context = {}) {
   if (!viewId) return false;
-  const mainViewId = context?.mainViewId || state?.relatedModelReturnContext?.mainViewId || "";
+  const mainViewId = context?.mainViewId || context?.activeMainViewId || state?.relatedModelReturnContext?.mainViewId || state?.activeMainViewId || "";
   switch (viewId) {
     case "phase-action":
       return Boolean(state.phaseActionStorage?.stale);
     case "operational-task":
     case "force-mission":
       return Boolean(state.forceMissionStorage?.stale);
+    case "ov5":
+      return Boolean(state.ov5Storage?.stale);
     case "ov1":
       return Boolean(state.ov1Storage?.stale || state.conceptGraphicStorage?.stale);
     case "concept-map":
@@ -207,7 +216,10 @@ export function isStepStale(viewId, state = {}, context = {}) {
     case "ov6b":
       return Boolean(mainViewId === "operational-task" || mainViewId === "force-mission" ? state.forceMissionStorage?.stale : state.phaseActionStorage?.stale);
     case "ov6c":
-      return Boolean(state.phaseActionStorage?.stale || state.forceMissionStorage?.stale);
+      if (mainViewId === "operational-task" || mainViewId === "force-mission") {
+        return Boolean(state.forceMissionStorage?.stale);
+      }
+      return Boolean(state.phaseActionStorage?.stale);
     case "ov4":
     case "ov2":
     case "ov3":
@@ -232,7 +244,7 @@ export function resolveCurrentStepQuickActions(state = {}) {
         hint: "当前阶段方案已具备，点击即可快速确认并解锁下游"
       });
     }
-  } else if (viewId === "operational-task") {
+  } else if (viewId === "force-mission") {
     const tasks = state.forceMission?.tasks || [];
     if (tasks.length > 0 && !state.forceMission?.tasksConfirmedAt) {
       actions.push({
@@ -242,7 +254,6 @@ export function resolveCurrentStepQuickActions(state = {}) {
         hint: "作战任务列表已就绪，点击即可快速确认"
       });
     }
-  } else if (viewId === "force-mission") {
     const forces = state.forceMission?.forces || [];
     if (forces.length > 0 && state.forceMission?.status !== "confirmed") {
       actions.push({

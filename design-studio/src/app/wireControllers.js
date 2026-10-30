@@ -107,6 +107,8 @@ export function wireControllers({
   downloadArtifact,
   invalidateDerivedArtifacts,
   invalidateConceptMapDependents,
+  invalidatePhaseActionDependents,
+  invalidateForceMissionDependents,
   invalidateValidation,
   invalidateRedTeam,
   applyRemoteBrief,
@@ -593,22 +595,25 @@ export function wireControllers({
     syncConceptGraphic: (...args) => projectConceptGraphicSyncController.sync(...args),
     onPhaseActionGenerated: (plan) => {
       phaseActionChatController.seedFromPlan(plan);
-      // First draft after generate: open chat once for discovery (same spirit as OV-1 tools).
       state.phaseActionChatOpen = true;
+      invalidatePhaseActionDependents?.();
     },
     onForceMissionGenerated: (plan) => {
       forceMissionChatController.seedFromPlan(plan);
       state.forceMissionChatOpen = true;
+      invalidateForceMissionDependents?.();
     },
     onOperationalTasksConfirmed: async () => {
+      invalidateForceMissionDependents?.();
       await completeCurrentWorkflowStage?.();
     },
     onPhaseActionConfirmed: async () => {
+      invalidatePhaseActionDependents?.();
       await ruleLibraryChatController.proposeChanges("phase-action", { silent: true });
       await completeCurrentWorkflowStage?.();
     },
     onForceMissionConfirmed: async () => {
-      await ruleLibraryChatController.proposeChanges("force-mission", { silent: true });
+      invalidateForceMissionDependents?.();
       const seeded = saveOv1Model(createAiOv1Draft({
         brief: state.brief,
         direction: state.direction,

@@ -10,7 +10,12 @@ import { mergeProductsIntoArchitecture } from "../../shared/dodaf/architectureWr
 import { applyOv5aToOv5b, applyOv5bToOv5a, setOv5aParent, syncOv5ActivityPair } from "../../shared/dodaf/ov5ActivitySync.js";
 import { persistOv5Model } from "./ov5Store.js";
 import { compactForceMissionForAnalysis } from "../../shared/conceptPlanning.js";
-import { applyOrganizationRelationshipDraft, buildOv4ForceFingerprint } from "./ov4Builder.js";
+import {
+  applyOrganizationRelationshipDraft,
+  buildOrganizationRelationshipBatches,
+  buildOv4ForceFingerprint,
+  mergeOrganizationRelationshipDrafts
+} from "./ov4Builder.js";
 import { applyResourceFlowDraft, buildOv2ForceFingerprint } from "./ov2Builder.js";
 import { buildOv3Model } from "./ov3Builder.js";
 import { OV4_ECHELON_CATEGORIES, OV4_ORGANIZATION_CATEGORIES, OV4_RELATION_CATEGORIES } from "../../shared/dodaf/ov4Taxonomy.js";
@@ -332,7 +337,7 @@ export function buildSequenceGenerationAnalysis(state = {}) {
     })),
     tasks: (state.forceMission?.tasks || []).slice(0, 80).map((task) => ({ id: String(task.id || ""), name: String(task.name || ""), side: task.side === "hostile" ? "hostile" : "friendly", objective: String(task.objective || ""), expectedEffect: String(task.expectedEffect || "") })),
     requiredSequenceCoverage: {
-      sideSequences: sideRequirements.map(({ id, label }) => ({ side: id, label, diagramType: "force" })),
+      sideSequences: [],
       phaseSequences: phases.slice(0, 24).map((phase, index) => ({
         phaseId: String(phase?.id || `phase-${index + 1}`),
         phaseName: String(phase?.name || `阶段 ${index + 1}`),
@@ -354,10 +359,15 @@ export function ensureRequiredSequenceCoverage(model = {}, state = {}, analysis 
   const next = normalizeDodafOv6c(model);
   const baseline = seedOv6cFromPhase({ sequences: [] }, state);
   const forceSideById = new Map((analysis.forces || []).map((force) => [String(force.id), force.side]));
-  const hasPhaseSequence = (phaseId) => (next.sequences || []).some((sequence) => (
+  const hasPhaseSequence = (phaseId, phaseName = "") => (next.sequences || []).some((sequence) => (
     sequence.diagramType === "phase"
-    && ((sequence.participants || []).some((item) => item.refType === "phase" && item.ref === phaseId)
-      || (sequence.messages || []).some((item) => (item.relatedActivityRefs || []).includes(phaseId)))
+    && (
+      sequence.id === `sequence-phase-${phaseId}`
+      || (phaseName && String(sequence.name || "").includes(phaseName))
+      || String(sequence.id || "").includes(phaseId)
+      || (sequence.participants || []).some((item) => (item.refType === "phase" && item.ref === phaseId) || item.ref === phaseId)
+      || (sequence.messages || []).some((item) => (item.relatedActivityRefs || []).includes(phaseId))
+    )
   ));
   const hasSideSequence = (side, label) => (next.sequences || []).some((sequence) => {
     if (sequence.diagramType !== "force") return false;
@@ -367,13 +377,8 @@ export function ensureRequiredSequenceCoverage(model = {}, state = {}, analysis 
     return participantSides.includes(side) || String(sequence.name || "").includes(label);
   });
   const additions = [];
-  (analysis.requiredSequenceCoverage?.sideSequences || []).forEach(({ side, label }) => {
-    if (hasSideSequence(side, label)) return;
-    const fallback = (baseline.sequences || []).find((sequence) => sequence.id === `sequence-side-${side}`);
-    if (fallback) additions.push(fallback);
-  });
-  (analysis.requiredSequenceCoverage?.phaseSequences || []).forEach(({ phaseId }) => {
-    if (hasPhaseSequence(phaseId)) return;
+  (analysis.requiredSequenceCoverage?.phaseSequences || []).forEach(({ phaseId, phaseName }) => {
+    if (hasPhaseSequence(phaseId, phaseName)) return;
     const fallback = (baseline.sequences || []).find((sequence) => sequence.id === `sequence-phase-${phaseId}`);
     if (fallback) additions.push(fallback);
   });
@@ -583,7 +588,13 @@ export function createDodafProductController({
 
   function persistOv6(resource, model, toast = "") {
     const state = getState();
-    state[resource] = saveLocalDodafProduct(resource, model, projectId);
+    const modelToSave = { ...model };
+    const hasPending = (modelToSave.ruleChangeSet?.changes || []).some((item) => item.status === "pending");
+    if (!hasPending && (modelToSave.rules?.length || modelToSave.stateMachines?.length || modelToSave.sequences?.length || modelToSave.taskGroups?.length)) {
+      modelToSave.status = "confirmed";
+      modelToSave.confirmedAt = modelToSave.confirmedAt || new Date().toISOString();
+    }
+    state[resource] = saveLocalDodafProduct(resource, modelToSave, projectId);
     void syncControllers[resource].sync(state[resource], { source: "manual-edit" }).then(() => writebackArchitecture("manual-edit"));
     if (toast) notify(toast);
     render();
@@ -592,6 +603,13 @@ export function createDodafProductController({
   function handleOv6WorkbenchAction(action, el) {
     const state = getState();
     const ds = el?.dataset || {};
+
+    if (action === "toggle-ov5a-view-mode") {
+      const mode = ds.mode || "tree";
+      state.ov5aViewMode = mode;
+      render();
+      return true;
+    }
 
     if (action === "ov1b-select-group") {
       const groupId = ds.groupId || "";
@@ -831,6 +849,11 @@ export function createDodafProductController({
     if (action === "ov6a-apply-change" || action === "ov6a-apply-all-changes") {
       const model = resolveDodafProduct(state, "ov6a").model;
       const next = applyRuleChangeSet(model, model.ruleChangeSet, action === "ov6a-apply-change" ? ds.changeId : "");
+      const hasPending = (next.ruleChangeSet?.changes || []).some((item) => item.status === "pending");
+      if (!hasPending && Array.isArray(next.rules) && next.rules.length > 0) {
+        next.status = "confirmed";
+        next.confirmedAt = next.confirmedAt || new Date().toISOString();
+      }
       persistOv6("ov6a", next, action === "ov6a-apply-change" ? "已采纳规则变更" : "已采纳全部待审核规则变更");
       return true;
     }
@@ -1269,13 +1292,18 @@ export function createDodafProductController({
     }
     if (action === "ov6c-seed-phase") {
       const model = resolveDodafProduct(state, "ov6c").model;
-      if ((model.sequences || []).length) {
-        notify("已有时序图，未覆盖。可对话修订或手动编辑。");
-        return true;
+      const hasPhaseSeq = (model.sequences || []).some((s) => s.diagramType === "phase");
+      if (hasPhaseSeq && typeof window !== "undefined" && typeof window.confirm === "function") {
+        if (!window.confirm("重新生成阶段时序底料将覆盖既有阶段时序图，是否继续？")) return true;
       }
-      const next = seedOv6cFromPhase(model, state);
+      const nonPhaseSeqs = (model.sequences || []).filter((s) => s.diagramType !== "phase");
+      const seeded = seedOv6cFromPhase({ ...model, sequences: [] }, state);
+      const next = normalizeDodafOv6c({
+        ...model,
+        sequences: [...nonPhaseSeqs, ...(seeded.sequences || [])]
+      });
       if (next.sequences?.[0]?.id) state.ov6cSelectedSequenceId = next.sequences[0].id;
-      persistOv6("ov6c", next, next.sequences?.length ? "已按阶段/兵力生成时序草案" : "未能生成时序（缺少阶段/兵力）");
+      persistOv6("ov6c", next, seeded.sequences?.length ? "已刷新阶段时序底料" : "未能生成时序（缺少阶段）");
       return true;
     }
     if (action === "ov6c-add-sequence") {
@@ -1297,20 +1325,16 @@ export function createDodafProductController({
       persistOv6("ov6c", next, "已删除时序图");
       return true;
     }
-    if (action === "ov6b-generate-task-machines") {
-      void api.pregenerateOv6bFromPhaseAction({ silent: false, contextType: "task", force: true });
+    if (action === "ov6b-generate-task-force-machines" || action === "ov6b-generate-task-machines" || action === "ov6b-generate-force-machines") {
+      void api.pregenerateOv6bFromPhaseAction({ silent: false, contextType: "force-mission", force: true });
       return true;
     }
-    if (action === "ov6b-generate-force-machines") {
-      void api.pregenerateOv6bFromPhaseAction({ silent: false, contextType: "force", force: true });
+    if (action === "ov6c-generate-phase-sequences") {
+      void api.pregenerateOv6cFromPhase({ silent: false, contextType: "phase", force: true });
       return true;
     }
-    if (action === "ov6c-generate-task-sequences") {
-      void api.pregenerateOv6cFromPhase({ silent: false, contextType: "task", force: true });
-      return true;
-    }
-    if (action === "ov6c-generate-force-sequences") {
-      void api.pregenerateOv6cFromPhase({ silent: false, contextType: "force", force: true });
+    if (action === "ov6c-generate-task-force-sequences" || action === "ov6c-generate-task-sequences" || action === "ov6c-generate-force-sequences") {
+      void api.pregenerateOv6cFromPhase({ silent: false, contextType: "force-mission", force: true });
       return true;
     }
     if (action === "ov6c-clear-all") {
@@ -1656,16 +1680,26 @@ export function createDodafProductController({
       const current = state.ov6b && typeof state.ov6b === "object"
         ? normalizeDodafOv6b(state.ov6b)
         : normalizeDodafOv6b({ stateMachines: [] });
-      const existingForContext = (current.stateMachines || []).filter((item) => item.subjectType === contextType);
+      const existingForContext = (current.stateMachines || []).filter((item) => {
+        if (contextType === "force-mission") return item.subjectType === "task" || item.subjectType === "force";
+        return item.subjectType === contextType;
+      });
       if (!force && existingForContext.length) return { skipped: true, reason: "has-context-machines", count: existingForContext.length };
       const analysis = buildStateMachineGenerationAnalysis(state);
-      analysis.stateMachineSubjects = analysis.stateMachineSubjects.filter((item) => item.subjectType === contextType);
-      if (contextType === "task") {
+      if (contextType === "force-mission") {
+        analysis.stateMachineSubjects = analysis.stateMachineSubjects.filter((item) => item.subjectType === "task" || item.subjectType === "force");
+        analysis.rules = analysis.rules.filter((rule) => (state.ov6a?.rules || []).some((source) => source.id === rule.id && ((source.taskBindings || []).length || (source.forceBindings || []).length || (source.rule?.forceRefs || []).length || (source.rule?.taskRefs || []).length)));
+        analysis.generationRequest = "为作战任务生成全生命周期状态机草案，并为作战兵力实体生成动态执勤与作战行动状态机草案。";
+      } else if (contextType === "task") {
+        analysis.stateMachineSubjects = analysis.stateMachineSubjects.filter((item) => item.subjectType === "task");
         analysis.rules = analysis.rules.filter((rule) => (state.ov6a?.rules || []).some((source) => source.id === rule.id && (source.taskBindings || []).length));
         analysis.generationRequest = "为作战任务生成执行全生命周期状态机草案（任务就绪、进场展开、态势建立、火力接战/作业、战果评估、任务完成）。";
       } else if (contextType === "force") {
+        analysis.stateMachineSubjects = analysis.stateMachineSubjects.filter((item) => item.subjectType === "force");
         analysis.rules = analysis.rules.filter((rule) => (state.ov6a?.rules || []).some((source) => source.id === rule.id && ((source.forceBindings || []).length || (source.rule?.forceRefs || []).length)));
         analysis.generationRequest = "为作战兵力实体生成动态执勤与作战行动状态机草案（集结值班、战术进场、巡逻布势、协同接战、战损重构、返航归建）。";
+      } else {
+        analysis.stateMachineSubjects = analysis.stateMachineSubjects.filter((item) => item.subjectType === contextType);
       }
       if (!analysis.stateMachineSubjects.length) return { skipped: true, reason: "no-subjects" };
 
@@ -1680,7 +1714,7 @@ export function createDodafProductController({
         }
       });
       const startedAt = Date.now();
-      const workflowTitle = contextType === "task" ? "作战任务状态机分析" : contextType === "force" ? "作战兵力状态机分析" : "阶段行动状态机分析";
+      const workflowTitle = contextType === "force-mission" ? "作战任务与兵力状态机联合分析" : contextType === "task" ? "作战任务状态机分析" : contextType === "force" ? "作战兵力状态机分析" : "阶段行动状态机分析";
       try {
         let draft = null;
         let source = "ai";
@@ -1705,7 +1739,16 @@ export function createDodafProductController({
         }
 
         const generated = applyStateMachineDraft(draft, analysis);
-        const next = normalizeDodafOv6b({ ...current, stateMachines: [...(current.stateMachines || []).filter((item) => item.subjectType !== contextType), ...(generated.stateMachines || [])] });
+        const next = normalizeDodafOv6b({
+          ...current,
+          stateMachines: [
+            ...(current.stateMachines || []).filter((item) => {
+              if (contextType === "force-mission") return item.subjectType !== "task" && item.subjectType !== "force";
+              return item.subjectType !== contextType;
+            }),
+            ...(generated.stateMachines || [])
+          ]
+        });
         if (!next.stateMachines.length) throw new Error("state machine draft produced no machines");
         state.ov6b = saveLocalDodafProduct("ov6b", next, projectId);
         state.ov6bSelectedMachineId = next.stateMachines[0]?.id || "";
@@ -1716,7 +1759,7 @@ export function createDodafProductController({
         const elapsed = Date.now() - startedAt;
         if (elapsed < 600) await new Promise((resolve) => setTimeout(resolve, 600 - elapsed));
         if (!silent) {
-          const subjectName = contextType === "task" ? "作战任务" : contextType === "force" ? "作战兵力" : "阶段与行动";
+          const subjectName = contextType === "force-mission" ? "作战任务与兵力" : contextType === "task" ? "作战任务" : contextType === "force" ? "作战兵力" : "阶段与行动";
           notify(source === "ai"
             ? `已根据${subjectName}生成 ${next.stateMachines.length} 台状态机，请复核状态与转换条件`
             : `AI 暂不可用，已生成 ${next.stateMachines.length} 台本地${subjectName}状态机草案，请复核`);
@@ -1738,11 +1781,23 @@ export function createDodafProductController({
       const current = state.ov6c && typeof state.ov6c === "object"
         ? normalizeDodafOv6c(state.ov6c)
         : normalizeDodafOv6c({ sequences: [] });
-      const diagramType = contextType === "task" ? "task" : contextType === "force" ? "force" : "phase";
-      const existingForContext = (current.sequences || []).filter((item) => item.diagramType === diagramType);
+      const diagramType = contextType === "task" ? "task" : contextType === "force" ? "force" : contextType === "force-mission" ? "force-mission" : "phase";
+      const existingForContext = (current.sequences || []).filter((item) => {
+        if (contextType === "force-mission") return item.diagramType === "task" || item.diagramType === "force";
+        return item.diagramType === diagramType;
+      });
       if (!force && existingForContext.length) return { skipped: true, reason: "has-context-sequences", count: existingForContext.length };
       const analysis = buildSequenceGenerationAnalysis(state);
-      if (contextType === "task") {
+      if (contextType === "force-mission") {
+        analysis.stateMachines = analysis.stateMachines.filter((item) => item.subjectType === "task" || item.subjectType === "force");
+        analysis.requiredSequenceCoverage = {
+          sideSequences: [],
+          phaseSequences: [],
+          forceSequences: analysis.forces.map((force) => ({ forceId: force.id, forceName: force.name, side: force.side, diagramType: "force" })),
+          taskSequences: analysis.tasks.map((task) => ({ taskId: task.id, taskName: task.name, diagramType: "task" }))
+        };
+        analysis.generationReason = "从作战任务与作战兵力协同关系自动联合生成任务与兵力时序图";
+      } else if (contextType === "task") {
         analysis.stateMachines = analysis.stateMachines.filter((item) => item.subjectType === "task");
         analysis.requiredSequenceCoverage = {
           sideSequences: [],
@@ -1760,15 +1815,29 @@ export function createDodafProductController({
           forceSequences: analysis.forces.map((force) => ({ forceId: force.id, forceName: force.name, side: force.side, diagramType: "force" }))
         };
         analysis.generationReason = "从作战兵力与协同关系自动生成兵力协同时序图";
+      } else if (contextType === "phase") {
+        analysis.stateMachines = (analysis.stateMachines || []).filter((item) => item.subjectType === "phase" || !item.subjectType);
+        analysis.requiredSequenceCoverage = {
+          sideSequences: [],
+          phaseSequences: (analysis.phases || []).map((phase) => ({ phaseId: phase.id, phaseName: phase.name, diagramType: "phase" })),
+          forceSequences: [],
+          taskSequences: []
+        };
+        // 阶段时序关注阶段推进与推演方协同，剔除繁杂的微观任务与底层单兵装备，避免 Prompt 膨胀超时
+        analysis.tasks = [];
+        analysis.forces = (analysis.forces || []).filter((f) => f.layer === "concept" || !f.layer).slice(0, 8);
+        analysis.generationReason = "从作战阶段行动与推演方协同关系生成各阶段协同时序图";
       }
-      const hasSources = contextType === "task"
-        ? Boolean(analysis.tasks.length)
-        : contextType === "force"
-          ? Boolean(analysis.forces.length)
-          : Boolean(analysis.requiredSequenceCoverage.phaseSequences.length || analysis.requiredSequenceCoverage.sideSequences.length);
+      const hasSources = contextType === "force-mission"
+        ? Boolean(analysis.tasks.length || analysis.forces.length)
+        : contextType === "task"
+          ? Boolean(analysis.tasks.length)
+          : contextType === "force"
+            ? Boolean(analysis.forces.length)
+            : Boolean(analysis.requiredSequenceCoverage.phaseSequences.length || analysis.requiredSequenceCoverage.sideSequences.length);
       if (!hasSources) {
         if (!silent) {
-          const missingPrompt = contextType === "task" ? "作战任务" : contextType === "force" ? "作战兵力" : "阶段行动或推演方兵力";
+          const missingPrompt = contextType === "force-mission" ? "作战任务或作战兵力" : contextType === "task" ? "作战任务" : contextType === "force" ? "作战兵力" : "阶段行动或推演方兵力";
           notify(`未能生成时序草案：请先补充${missingPrompt}`);
         }
         return { skipped: true, reason: "no-source" };
@@ -1778,11 +1847,12 @@ export function createDodafProductController({
       state.ov6GenerationContext = contextType;
       render();
       const startedAt = Date.now();
-      const workflowTitle = contextType === "task" ? "作战任务时序分析与生成" : contextType === "force" ? "作战兵力协同时序分析与生成" : "状态机到多方分阶段时序生成";
+      const workflowTitle = contextType === "force-mission" ? "作战任务与兵力时序联合分析与生成" : contextType === "task" ? "作战任务时序分析与生成" : contextType === "force" ? "作战兵力协同时序分析与生成" : "状态机到多方分阶段时序生成";
       try {
         let draft = null;
         let source = "ai";
         try {
+          // 只要远端没断，就不主动熔断：完全跟随远端连接与数据流返回
           const response = await generateWithAiStream({
             workflowId: "sequence-check",
             workflow: { id: "sequence-check", title: workflowTitle, outputSchema: "SequenceDraft" },
@@ -1793,18 +1863,38 @@ export function createDodafProductController({
             throw new Error("sequence draft empty");
           }
           draft = response.result;
-        } catch {
-          draft = { summary: "已生成时序草案。", sequences: [] };
+        } catch (fetchErr) {
+          console.warn("[ov6c] 远端连接异常中断或失败，使用确定性本地规则生成保底时序：", fetchErr);
+          const mockOutput = generateMockOutput({
+            workflow: { id: "sequence-check", title: workflowTitle, outputSchema: "SequenceDraft" },
+            analysis,
+            evidence: []
+          });
+          draft = mockOutput?.result || { summary: "已生成时序草案。", sequences: [] };
           source = "local-fallback";
         }
 
         const generated = applySequenceDraft({ sequences: [] }, draft, { mutation: true }).model || normalizeDodafOv6c({ sequences: [] });
-        const covered = contextType === "task"
-          ? ensureTaskSequenceCoverage(generated, analysis)
-          : contextType === "force"
-            ? ensureForceSequenceCoverage(generated, analysis)
-            : ensureRequiredSequenceCoverage(generated, state, analysis);
-        const next = normalizeDodafOv6c({ ...current, sequences: [...(current.sequences || []).filter((item) => item.diagramType !== diagramType), ...(covered.sequences || [])] });
+        let covered = generated;
+        if (contextType === "force-mission") {
+          covered = ensureForceSequenceCoverage(ensureTaskSequenceCoverage(generated, analysis), analysis);
+        } else if (contextType === "task") {
+          covered = ensureTaskSequenceCoverage(generated, analysis);
+        } else if (contextType === "force") {
+          covered = ensureForceSequenceCoverage(generated, analysis);
+        } else {
+          covered = ensureRequiredSequenceCoverage(generated, state, analysis);
+        }
+        const next = normalizeDodafOv6c({
+          ...current,
+          sequences: [
+            ...(current.sequences || []).filter((item) => {
+              if (contextType === "force-mission") return item.diagramType !== "task" && item.diagramType !== "force";
+              return item.diagramType !== diagramType;
+            }),
+            ...(covered.sequences || [])
+          ]
+        });
         if (!Array.isArray(next.sequences) || !next.sequences.length) throw new Error("sequence coverage empty");
         state.ov6c = saveLocalDodafProduct("ov6c", next, projectId);
         state.ov6cSelectedSequenceId = next.sequences[0]?.id || "";
@@ -1815,10 +1905,14 @@ export function createDodafProductController({
         const elapsed = Date.now() - startedAt;
         if (elapsed < 600) await new Promise((resolve) => setTimeout(resolve, 600 - elapsed));
         if (!silent) {
-          const subjectName = contextType === "task" ? "作战任务" : contextType === "force" ? "作战兵力协同" : "推演方/阶段";
+          const taskSeqCount = next.sequences.filter((s) => s.diagramType === "task").length;
+          const forceSeqCount = next.sequences.filter((s) => s.diagramType === "force").length;
+          const countDetail = contextType === "force-mission"
+            ? `${taskSeqCount} 幅任务时序与 ${forceSeqCount} 幅兵力协同时序`
+            : `${next.sequences.length} 幅${contextType === "task" ? "作战任务" : contextType === "force" ? "作战兵力协同" : "推演方/阶段"}`;
           notify(source === "ai"
-            ? `AI 已自动生成 ${next.sequences.length} 幅${subjectName}时序图，请复核参与方、消息与时间`
-            : `AI 暂不可用，已生成 ${next.sequences.length} 幅本地${subjectName}时序草案，请复核`);
+            ? `AI 已自动生成 ${countDetail}图，请在左侧列表切换复核`
+            : `AI 暂不可用，已生成 ${countDetail}草案，请复核`);
         }
         return { applied: next.sequences.length, source, skipped: false };
       } catch (error) {
@@ -2024,7 +2118,13 @@ export function createDodafProductController({
       return;
     }
     const resolved = resolveDodafProduct(state, resource);
-    state[resource] = saveLocalDodafProduct(resource, resolved.model, projectId);
+    const modelToSave = { ...resolved.model };
+    const hasPending = (modelToSave.ruleChangeSet?.changes || []).some((item) => item.status === "pending");
+    if (!hasPending) {
+      modelToSave.status = "confirmed";
+      modelToSave.confirmedAt = modelToSave.confirmedAt || new Date().toISOString();
+    }
+    state[resource] = saveLocalDodafProduct(resource, modelToSave, projectId);
     await syncControllers[resource].sync(state[resource], { source: "manual" });
     await writebackArchitecture("manual");
     if (resource === "ov2") {
@@ -2037,7 +2137,10 @@ export function createDodafProductController({
   async function syncOv5aIntoOv5b(source) {
     const state = getState();
     const resolved = resolveDodafProduct(state, "ov5a");
-    const pair = syncOv5ActivityPair({ ov5: state.ov5, ov5a: resolved.model, source: "ov5a" });
+    const ov5aModel = { ...resolved.model, status: "confirmed", confirmedAt: resolved.model?.confirmedAt || new Date().toISOString() };
+    const pair = syncOv5ActivityPair({ ov5: state.ov5, ov5a: ov5aModel, source: "ov5a" });
+    pair.ov5a.status = "confirmed";
+    pair.ov5a.confirmedAt = pair.ov5a.confirmedAt || new Date().toISOString();
     state.ov5 = persistOv5Model(pair.ov5);
     state.ov5a = saveLocalDodafProduct("ov5a", pair.ov5a, projectId);
     if (syncOv5) await syncOv5(state.ov5, { source: `${source}-ov5a-sync` });

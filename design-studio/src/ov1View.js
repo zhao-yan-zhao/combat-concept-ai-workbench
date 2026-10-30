@@ -72,6 +72,9 @@ export function renderOv1(state) {
           </p>
         </div>
         <div class="ov1-toolbar-actions">
+          <button type="button" class="quiet-button" data-action="extract-ov1-from-ov5" ${generating || !state.ov5?.activities?.length ? "disabled" : ""} title="自底向上从 Step 04 作战活动网络提炼高层总体概念节点与协同闭环">
+            从活动机理提炼
+          </button>
           <button type="button" class="quiet-button" data-action="seed-ov1-from-planning" title="基于上游兵力与任务规划生成/重置总体图骨架" ${generating || !upstreamReady ? "disabled" : ""}>
             ${nodeCount ? "从兵力规划重建" : "从兵力规划生成"}
           </button>
@@ -348,8 +351,7 @@ function renderNextStep(model, state) {
   const nodeCount = model.nodes?.length || 0;
   const busy = Boolean(state.ov5Generating || state.ov1Generating);
   const confirmed = Boolean(model.confirmed || state.ov1Storage?.confirmed);
-  const activityCount = state.ov5?.activities?.length || 0;
-  const oodaCount = (state.ooda?.lanes || []).reduce((sum, lane) => sum + (lane.nodes?.length || 0), 0);
+  const hasOv5Activities = Boolean(state.ov5?.activities?.length);
 
   if (!nodeCount) {
     const upstreamReady = Boolean(
@@ -359,10 +361,11 @@ function renderNextStep(model, state) {
     return `<aside class="ov1-next-step is-empty" aria-label="总体图待生成">
         <div class="ov1-next-step-copy">
           <strong>总体图待生成</strong>
-          <p>${upstreamReady ? "上游阶段行动与兵力规划已就绪。点击下方「从兵力规划生成」快速映射高层节点，或使用 AI 综合推导高层交互关系。" : "请先在前面的「阶段行动」与「作战兵力」中完成规划，再生成总体图。"}</p>
+          <p>${hasOv5Activities ? "Step 04 作战活动网络已就绪。点击下方「从活动机理提炼」快速自底向上抽取高层概念节点，或使用 AI 综合推导高层交互关系。" : upstreamReady ? "上游阶段行动与兵力规划已就绪。可点击下方「从活动机理提炼」或「从兵力规划生成」生成总体图。" : "请先在前面的「阶段行动」与「任务与兵力」中完成规划，或在「活动机理」中建立活动网络。"}</p>
         </div>
         <div class="ov1-next-step-actions">
-          <button class="primary-btn" type="button" data-action="seed-ov1-from-planning" ${busy || !upstreamReady ? "disabled" : ""}>从兵力规划生成</button>
+          <button class="primary-btn" type="button" data-action="extract-ov1-from-ov5" ${busy || !hasOv5Activities ? "disabled" : ""}>从活动机理提炼</button>
+          <button class="quiet-button" type="button" data-action="seed-ov1-from-planning" ${busy || !upstreamReady ? "disabled" : ""}>从兵力规划生成</button>
           <button class="quiet-button" type="button" data-action="generate-ov1" ${busy ? "disabled" : ""}>AI 一键生成</button>
         </div>
       </aside>`;
@@ -370,22 +373,29 @@ function renderNextStep(model, state) {
 
   const ready = confirmed || Boolean(state.ov1?.nodes?.length || state.conceptGraphic?.nodes?.length);
   const hint = ready
-    ? "总体图已就绪。可直接进入主线下一步「概念图」，在真实地理态势中展开兵力部署与任务空域；或沿子流程深入推演活动分解与决策循环。"
+    ? "总体图已就绪。可直接进入主线下一步「概念图」，在真实地理态势中展开兵力部署与任务空域；或继续进入「仿真推演」。"
     : "总体图尚未生成。请先生成节点与关系。";
 
   return `<aside class="ov1-next-step" aria-label="总体图下一步">
       <div class="ov1-next-step-copy">
-        <strong>总体图已就绪 · 下一步</strong>
+        <strong>总体概念表达已就绪 · 下一步</strong>
         <p>${escapeHtml(hint)}</p>
       </div>
       <div class="ov1-next-step-actions">
+        <button class="quiet-button" type="button" data-action="extract-ov1-from-ov5" ${busy || !hasOv5Activities ? "disabled" : ""} title="从活动模型重新自底向上抽取">
+          从活动机理重抽
+        </button>
+        <button class="quiet-button" type="button" data-view="ov5" data-related-model="true" title="返回作战活动与机理">
+          回看活动机理 (Step 04)
+        </button>
         <button class="quiet-button" type="button" data-view="ov5a" data-related-model="true" title="展开作战活动分解树 (OV-5a)">
           活动分解 OV-5a
         </button>
-        <button class="quiet-button" type="button" data-action="continue-to-ov5" ${busy ? "disabled" : ""}>进入 OV-5</button>
-        <button class="quiet-button" type="button" data-action="generate-ov5-from-ov1" ${busy ? "disabled" : ""}>${state.ov5Generating ? "正在生成 OV-5" : "基于当前概念生成活动模型候选"}</button>
         <button class="quiet-button" type="button" data-view="ooda" data-related-model="true" title="展开决策循环 (OODA)">
-          决策循环 OODA${oodaCount ? ` (${oodaCount})` : ""}
+          决策循环 OODA
+        </button>
+        <button class="quiet-button" type="button" data-view="scenario" title="前往仿真推演">
+          前往仿真推演 (Step 06)
         </button>
         <button class="primary-btn" type="button" data-action="advance-to-concept-map" ${busy ? "disabled" : ""}>
           进入概念图 →

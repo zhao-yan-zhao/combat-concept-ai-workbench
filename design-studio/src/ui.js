@@ -17,7 +17,8 @@ import { renderOv1, renderOv1Inspector, selectionForOv1 } from "./ov1View.js";
 import { renderModelSnapshotPanel } from "./modelSnapshotView.js";
 import { renderProjectStorageState } from "./projectStorageView.js";
 import { buildTraceability, getTraceTargets } from "./traceabilityBuilder.js";
-import { getAssignableParentActivities } from "./ov5Store.js";
+import { getActivityHierarchy, getAssignableParentActivities } from "./ov5Store.js";
+import { evaluateOodaLoopHealth } from "./oodaStore.js";
 import { renderOv5ActivityGraph } from "./ov5GraphView.js";
 import { renderStructureReview } from "./structureReviewView.js";
 import { renderConceptMap } from "./conceptMapView.js";
@@ -41,18 +42,21 @@ export function renderTree(activeView, workflow = {}, state = {}) {
   const viewById = new Map(views.map((view) => [view.id, view]));
   const steps = [];
 
+  const relatedMainViewId = state.relatedModelReturnContext?.mainViewId || "";
+  const currentViewObj = viewById.get(activeView) || (relatedMainViewId ? viewById.get(relatedMainViewId) : null);
+  const currentPhaseIndex = currentViewObj ? workflowPhases.indexOf(currentViewObj.phase) : -1;
+
   workflowTracks.forEach((track) => {
     track.viewIds.map((id) => viewById.get(id)).filter(Boolean).forEach((view) => {
       const phaseIndex = workflowPhases.indexOf(view.phase);
-      const locked = !freeMode && phaseIndex > completedThrough + 1;
+      const isPastOrCurrentPhase = currentPhaseIndex >= 0 && phaseIndex <= currentPhaseIndex;
+      const locked = !freeMode && !isPastOrCurrentPhase && phaseIndex > completedThrough + 1;
       const done = phaseIndex <= completedThrough;
       const active = view.id === activeView;
       const nodeState = locked ? "pending" : done ? "done" : active ? "active" : "ready";
       steps.push({ view, locked, done, active, nodeState, trackId: track.id, trackLabel: track.label });
     });
   });
-
-  const relatedMainViewId = state.relatedModelReturnContext?.mainViewId || "";
   const activeTrack = steps.find((item) => item.active || item.view.id === relatedMainViewId)?.trackId || "";
   const items = steps.map((item, index) => {
     const short = stepShortLabel(item.view);
@@ -105,8 +109,7 @@ function stepIntroBlurb(view, trackLabel) {
 function stepShortLabel(view) {
   const map = {
     brief: "简报",
-    "operational-task": "作战任务",
-    "force-mission": "作战兵力",
+    "force-mission": "任务与兵力",
     "phase-action": "阶段行动",
     "concept-map": "概念图",
     ov1: "总体图",
@@ -355,22 +358,155 @@ function displayDirectionTitle(title) {
     .trim();
 }
 
-function renderOv5(state) {
-  const model = state.ov5;
-  const activityById = new Map(model.activities.map((item) => [item.id, item]));
-  const provenance = model.provenance?.mode === "ai" ? "AI 草案" : model.provenance?.mode === "local" ? "本地草案" : "人工维护";
+export function renderOv5(state) {
+  const model = state.ov5 || { activities: [], edges: [] };
+  const activityById = new Map((model.activities || []).map((item) => [item.id, item]));
+  const provenance = model.provenance?.mode === "ai" ? "AI 草案" : model.provenance?.mode === "local" ? "本地草案" : model.provenance?.mode === "derived" ? "任务派生" : "人工维护";
   const evidenceSelection = formatEvidenceSelection(model.provenance?.evidenceSelection);
+  const oodaHealth = evaluateOodaLoopHealth(model);
+  const stats = oodaHealth.stats || {
+    observeCount: oodaHealth.categorized?.observe?.length || 0,
+    orientCount: oodaHealth.categorized?.orient?.length || 0,
+    decideCount: oodaHealth.categorized?.decide?.length || 0,
+    actCount: oodaHealth.categorized?.act?.length || 0,
+    feedbackCount: oodaHealth.categorized?.feedback?.length || 0
+  };
+  const hierarchy = getActivityHierarchy(model);
+  const hasMissingFeedback = oodaHealth.diagnostics.some((d) => d.code === "NO_FEEDBACK_LOOP");
+  const scoreClass = oodaHealth.healthScore >= 80 ? "ready" : oodaHealth.healthScore >= 60 ? "review" : "danger";
+
   return `
     <section class="surface surface-pad">
-      <div class="section-heading"><div><h2>作战活动模型</h2><p>活动、信息、资源与触发关系构成概念设计骨架。</p></div><div class="activity-toolbar"><span class="mini-tag ${state.ov5Generating ? "review" : ""}">${state.ov5Generating ? "生成中" : provenance}</span>${evidenceSelection ? `<span class="mini-tag">${escapeHtml(evidenceSelection)}</span>` : ""}<span class="mini-tag">${model.activities.length} 个活动 · ${model.edges.length} 条关联</span><button class="quiet-button" data-action="attach-ov1-sources" ${state.ov5Generating ? "disabled" : ""}>补挂总体图来源</button><button class="quiet-button" data-action="apply-mapping-quality" ${state.ov5Generating ? "disabled" : ""} title="补全空 I/O 与浅层父活动，不覆盖已有正文">补全映射质量</button><button class="quiet-button" data-action="open-structure-review">结构核对</button><button class="quiet-button" data-action="add-activity" ${state.ov5Generating ? "disabled" : ""}>新增活动</button><button type="button" data-action="generate-ov5" ${state.ov5Generating ? "disabled" : ""}>${state.ov5Generating ? "正在生成" : "AI 重建 OV-5"}</button></div></div>
+      <div class="section-heading">
+        <div>
+          <h2>作战活动与机理 (OV-5 & OODA)</h2>
+          <p>以作战活动网络为核心事实源，左侧层级结构分解，右侧 OODA 动态闭环诊断。</p>
+        </div>
+        <div class="activity-toolbar">
+          <span class="mini-tag ${state.ov5Generating ? "review" : ""}">${state.ov5Generating ? "生成中" : provenance}</span>
+          ${evidenceSelection ? `<span class="mini-tag">${escapeHtml(evidenceSelection)}</span>` : ""}
+          <span class="mini-tag">${model.activities.length} 个活动 · ${model.edges.length} 条关联</span>
+          <span class="mini-tag ${scoreClass}">OODA健康度 ${oodaHealth.healthScore}分</span>
+          <button class="quiet-button" data-action="derive-activities-from-tasks" ${state.ov5Generating ? "disabled" : ""} title="由上游已确认任务自动派生初始作战活动网">从任务派生活动网</button>
+          <button class="quiet-button" data-action="apply-mapping-quality" ${state.ov5Generating ? "disabled" : ""} title="补全空 I/O 与浅层父活动，不覆盖已有正文">补全映射质量</button>
+          <button class="quiet-button" data-action="auto-fix-feedback-loop" ${state.ov5Generating || !hasMissingFeedback ? "disabled" : ""} title="在末端行动与感知/决策节点间自动建立反馈弧">一键修复闭环</button>
+          <button class="quiet-button" data-action="open-structure-review">结构核对</button>
+          <button class="quiet-button" data-action="add-activity" ${state.ov5Generating ? "disabled" : ""}>新增活动</button>
+          <button type="button" data-action="generate-ov5" ${state.ov5Generating ? "disabled" : ""}>${state.ov5Generating ? "正在生成" : "AI 重建活动网"}</button>
+          ${model.activities.length > 0 ? `<button class="quiet-button" type="button" data-view="ov1" title="进入总体概念表达阶段">提炼总体图 (Step 05) →</button>` : ""}
+        </div>
+      </div>
       ${renderProjectStorageState(state.ov5Storage, { refreshAction: "refresh-project-ov5" })}
-      ${renderOv5ActivityGraph(model, state.selection?.id)}
-    </section>
-    <section class="surface surface-pad">
-      <div class="section-heading"><div><h2>活动关联</h2><p>关系可在选中活动后的右侧面板维护。</p></div></div>
-      <div class="relation-list">${model.edges.map((edge) => `<div class="relation-row"><span>${activityById.get(edge.sourceId)?.title || "未知活动"}</span><b>${edge.type}</b><span>${activityById.get(edge.targetId)?.title || "未知活动"}</span><button class="relation-remove" data-edge-remove="${edge.id}" title="移除关联" aria-label="移除关联">×</button></div>`).join("") || `<p class="empty-relations">尚未建立活动关联。</p>`}</div>
+
+      <div class="ov5-workbench-layout">
+        <aside class="ov5-tree-panel" aria-label="活动结构分解">
+          <div class="panel-heading">
+            <h3>活动结构 (OV-5a)</h3>
+            <small>${hierarchy.totalCount} 项活动 · ${hierarchy.rootCount} 顶层</small>
+          </div>
+          <div class="ov5-tree-list">
+            ${renderOv5HierarchyNodes(hierarchy.roots, state.selection?.id)}
+          </div>
+          <button type="button" class="quiet-button" data-action="add-activity">+ 新增顶层活动</button>
+        </aside>
+
+        <div class="ov5-center-panel">
+          ${renderOv5ActivityGraph(model, state.selection?.id)}
+          <div class="ov5-relation-box">
+            <div class="panel-heading">
+              <h3>活动关联与流转 (${model.edges.length})</h3>
+              <small>连线可在选中活动后在右侧检查面板维护，或在上方画布连线</small>
+            </div>
+            <div class="relation-list">
+              ${model.edges.map((edge) => `
+                <div class="relation-row">
+                  <span>${escapeHtml(activityById.get(edge.sourceId)?.title || "未知活动")}</span>
+                  <b>${escapeHtml(edge.type)}</b>
+                  <span>${escapeHtml(activityById.get(edge.targetId)?.title || "未知活动")}</span>
+                  <button class="relation-remove" data-edge-remove="${escapeHtml(edge.id)}" title="移除关联" aria-label="移除关联">×</button>
+                </div>
+              `).join("") || `<p class="empty-relations">尚未建立活动关联。可选择活动建立输出到下游的因果弧。</p>`}
+            </div>
+          </div>
+        </div>
+
+        <aside class="ov5-ooda-panel" aria-label="OODA 闭环健康度透镜">
+          <div class="panel-heading">
+            <h3>OODA 闭环诊断</h3>
+            <span class="ooda-score-tag ${scoreClass}">${oodaHealth.healthScore} 分</span>
+          </div>
+          <small class="ooda-lens-sub">伴生活动流动态评估 · 无需重复填报</small>
+
+          ${oodaHealth.diagnostics.length ? `
+            <div class="ooda-diagnostics-list">
+              ${oodaHealth.diagnostics.map((d) => `
+                <div class="ooda-diag-alert ${d.level}">
+                  <div class="diag-msg"><strong>${d.level === "critical_gap" ? "关键断环" : d.level === "error" ? "要素缺失" : "建议"}</strong>: ${escapeHtml(d.message)}</div>
+                  ${d.code === "NO_FEEDBACK_LOOP" ? `<button type="button" class="quiet-button ooda-fix-btn" data-action="auto-fix-feedback-loop">一键补全闭环</button>` : ""}
+                </div>
+              `).join("")}
+            </div>
+          ` : `
+            <div class="ooda-diag-clean">链路要素完整，因果闭环畅通</div>
+          `}
+
+          <div class="ooda-phase-cards">
+            <div class="ooda-phase-card">
+              <div class="ooda-phase-title"><strong>Observe 观测</strong><span>${stats.observeCount} 项</span></div>
+              <div class="ooda-phase-items">${formatPhaseActivities(oodaHealth.categorized.observe)}</div>
+            </div>
+            <div class="ooda-phase-card">
+              <div class="ooda-phase-title"><strong>Orient 判决</strong><span>${stats.orientCount} 项</span></div>
+              <div class="ooda-phase-items">${formatPhaseActivities(oodaHealth.categorized.orient)}</div>
+            </div>
+            <div class="ooda-phase-card">
+              <div class="ooda-phase-title"><strong>Decide 决策</strong><span>${stats.decideCount} 项</span></div>
+              <div class="ooda-phase-items">${formatPhaseActivities(oodaHealth.categorized.decide)}</div>
+            </div>
+            <div class="ooda-phase-card">
+              <div class="ooda-phase-title"><strong>Act 行动</strong><span>${stats.actCount} 项</span></div>
+              <div class="ooda-phase-items">${formatPhaseActivities(oodaHealth.categorized.act)}</div>
+            </div>
+            <div class="ooda-phase-card">
+              <div class="ooda-phase-title"><strong>Feedback 反馈</strong><span>${stats.feedbackCount} 项</span></div>
+              <div class="ooda-phase-items">${formatPhaseActivities(oodaHealth.categorized.feedback)}</div>
+            </div>
+          </div>
+        </aside>
+      </div>
     </section>
   `;
+}
+
+function renderOv5HierarchyNodes(nodes = [], selectedId = "", depth = 0) {
+  if (!nodes || !nodes.length) {
+    return depth === 0 ? `<p class="empty-hint">暂无活动，可点击上方「从任务派生活动网」</p>` : "";
+  }
+  return nodes.map((node) => {
+    const isSelected = node.id === selectedId;
+    const isChild = depth > 0;
+    const childrenHtml = node.children && node.children.length
+      ? renderOv5HierarchyNodes(node.children, selectedId, depth + 1)
+      : "";
+
+    return `
+      <div class="ov5-tree-node-wrap">
+        <button type="button" class="ov5-tree-item ${isSelected ? "selected" : ""} ${isChild ? "is-child" : ""}" data-activity="${escapeHtml(node.id)}" title="${escapeHtml(node.text || node.title)}">
+          <div class="ov5-tree-header">
+            <strong>${escapeHtml(node.title)}</strong>
+            <span class="ov5-tree-badge">${escapeHtml(node.type || "活动")}</span>
+          </div>
+          ${node.sourceTaskId ? `<span class="ov5-tree-meta">来源任务: ${escapeHtml(node.sourceTaskId)}</span>` : ""}
+        </button>
+        ${childrenHtml}
+      </div>
+    `;
+  }).join("");
+}
+
+function formatPhaseActivities(activities = []) {
+  if (!activities || !activities.length) return `<span class="empty-lane">（未包含）</span>`;
+  return activities.slice(0, 4).map((a) => escapeHtml(a.title || a.id)).join("、") + (activities.length > 4 ? ` 等 ${activities.length} 项` : "");
 }
 
 function renderReport(state) {

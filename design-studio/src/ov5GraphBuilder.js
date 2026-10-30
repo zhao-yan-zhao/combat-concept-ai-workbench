@@ -50,9 +50,12 @@ function calculateLayers(activities, edges) {
 function positionNode(activity, layer, layers, rowsByLayer) {
   const row = rowsByLayer.get(layer) || [];
   const index = row.findIndex((item) => item.id === activity.id);
+  const totalLayers = Math.max(1, layers.length);
+  const totalRows = Math.max(1, row.length);
+
   return {
     ...activity,
-    x: layers.length <= 1 ? 50 : 8 + (84 * layers.indexOf(layer)) / (layers.length - 1),
-    y: row.length <= 1 ? 50 : 10 + (80 * Math.max(0, index)) / (row.length - 1)
+    x: totalLayers <= 1 ? 50 : 10 + (80 * layers.indexOf(layer)) / (totalLayers - 1),
+    y: totalRows <= 1 ? 50 : 15 + (70 * (index + 0.5)) / totalRows
   };
 }

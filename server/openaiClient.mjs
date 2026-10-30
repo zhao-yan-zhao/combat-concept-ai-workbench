@@ -25,6 +25,8 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
 
   /** Structured planning drafts need more wall time than short chat replies. */
   function generationTimeoutMs(input) {
+    const customTimeout = Number(process.env.AI_GENERATION_TIMEOUT_MS);
+    if (customTimeout > 0) return customTimeout;
     const schema = String(input?.workflow?.outputSchema || input?.outputSchema || "");
     const longSchemas = new Set([
       "PhaseActionConcept",
@@ -43,8 +45,9 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       "SequenceDraft",
       "ScenarioDraft"
     ]);
-    if (longSchemas.has(schema)) return 180000;
-    return 90000;
+    // 远端大模型深度思考与复杂时序生成需充裕窗口（默认 10 分钟），只要远端连接未断就持续等待并流式传输
+    if (longSchemas.has(schema)) return 600000;
+    return 180000;
   }
 
   function normalizeUpstreamError(error, timeoutMs = 45000) {
@@ -649,7 +652,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
   async function* streamOpenAi(input, base) {
     const isResearchChat = input.workflow?.title === "研究对话直接答复";
     const payload = makeGenerationRequest(input, base, true);
-    const timeoutMs = Math.max(generationTimeoutMs(input), 180000);
+    const timeoutMs = Math.max(generationTimeoutMs(input), 600000);
     const primaryUrl = resolveApiUrl(getConfig().baseUrl, undefined, isResearchChat);
     let apiResponse;
     try {
@@ -1397,7 +1400,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       properties: {
         summary: { type: "string", maxLength: 1000 },
         sequences: {
-          type: "array", maxItems: 24,
+          type: "array", maxItems: 96,
           items: {
             type: "object", additionalProperties: false,
             required: ["id", "name", "diagramType", "participants", "messages", "fragments"],

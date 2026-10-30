@@ -1,7 +1,7 @@
 import { directions, project, views, workflowPhases } from "./data.js";
 import { createInitialWorkbenchState } from "./app/createInitialState.js";
 import { workflowPrimaryStepIds } from "./data.js";
-import { $, downloadArtifact as downloadArtifactHelper, downloadBlob, escapeHtml, showToast, writePrintableReport as writePrintableReportHelper } from "./app/domUtils.js";
+import { $, downloadArtifact as downloadArtifactHelper, downloadBlob, escapeHtml, initNotificationCapsule, setBackgroundTaskState, showToast, writePrintableReport as writePrintableReportHelper } from "./app/domUtils.js";
 import { completedWorkflowStage, currentProjectTitle as currentProjectTitleFor, currentWorkflow as currentWorkflowFor, getWorkflowStageIncompleteReasons, nextWorkflowStage, renderWorkflowGate as renderWorkflowGateFor, resolveWorkflowGateContext } from "./app/workflowGate.js";
 import { wireControllers } from "./app/wireControllers.js";
 import { deriveOodaFromOv5, getOodaDuration, persistOodaModel } from "./oodaStore.js";
@@ -53,6 +53,7 @@ const { state, projectBriefSeed, activeProjectId } = createInitialWorkbenchState
 let busyOverlayTimer = 0;
 let busyOverlayKey = "";
 let busyOverlayStartedAt = 0;
+let busyOverlayMinimized = false;
 
 const {
   oodaController,
@@ -117,6 +118,8 @@ const {
   downloadArtifact,
   invalidateDerivedArtifacts,
   invalidateConceptMapDependents,
+  invalidatePhaseActionDependents,
+  invalidateForceMissionDependents,
   invalidateValidation,
   invalidateRedTeam,
   applyRemoteBrief,
@@ -691,6 +694,7 @@ function addEventListenerOnce(element, type, handler, key = type, options) {
 }
 
 function bindDynamicEvents() {
+  initNotificationCapsule();
   document.querySelectorAll(".brief-sidebar-editor textarea").forEach((textarea) => {
     addEventListenerOnce(textarea, "input", () => fitBriefTextarea(textarea), "brief-editor:input");
   });
@@ -735,12 +739,11 @@ function bindDynamicEvents() {
       }
       closeMenubarMenus();
       // Left floating step rail and menus: same entry path as workflow gate.
-      const fromPhaseSubflow = (state.activeView === "phase-action" || state.activeView === "ov6c" || state.activeView === "ov6b" || state.activeView === "ov6a");
+      const activeMainViewId = state.relatedModelReturnContext?.mainViewId || "";
       const calculatedEntrySource = button.dataset.relatedModel === "true"
-        ? (resolveRelatedMainViewId(state.activeView, viewId, state.relatedModelReturnContext) || state.activeView)
-        : (fromPhaseSubflow ? "phase-action" : (state.activeView || "default"));
-      const completeOperationalTasks = fromPhaseSubflow && viewId === "operational-task";
-      void navigateToResearchView(viewId, { entrySource: calculatedEntrySource, completeOperationalTasks });
+        ? (resolveRelatedMainViewId(state.activeView, viewId, state.relatedModelReturnContext) || activeMainViewId || state.activeView)
+        : (activeMainViewId || (state.activeView === "phase-action" ? "phase-action" : state.activeView || "default"));
+      void navigateToResearchView(viewId, { entrySource: calculatedEntrySource });
     });
   });
 
@@ -854,6 +857,30 @@ function bindDynamicEvents() {
     });
   });
   const matrixWrap = document.querySelector(".ov3-matrix-wrap");
+  if (matrixWrap && !matrixWrap.dataset.boundHover) {
+    matrixWrap.dataset.boundHover = "true";
+    matrixWrap.addEventListener("mouseover", (e) => {
+      const td = e.target.closest("td.ov3-matrix-cell, td.ov3-matrix-empty");
+      if (!td) return;
+      const colIndex = td.cellIndex;
+      const tr = td.parentElement;
+      tr.classList.add("is-row-hovered");
+      const rows = matrixWrap.querySelectorAll(".ov3-matrix tbody tr");
+      rows.forEach((r) => {
+        if (r.children[colIndex]) {
+          r.children[colIndex].classList.add("is-col-hovered");
+        }
+      });
+      const thCol = matrixWrap.querySelector(`.ov3-matrix thead th:nth-child(${colIndex + 1})`);
+      if (thCol) thCol.classList.add("is-col-hovered");
+    });
+    matrixWrap.addEventListener("mouseout", (e) => {
+      const td = e.target.closest("td.ov3-matrix-cell, td.ov3-matrix-empty");
+      if (!td) return;
+      matrixWrap.querySelectorAll(".is-row-hovered").forEach((el) => el.classList.remove("is-row-hovered"));
+      matrixWrap.querySelectorAll(".is-col-hovered").forEach((el) => el.classList.remove("is-col-hovered"));
+    });
+  }
   if (matrixWrap && !matrixWrap.dataset.boundWheel) {
     matrixWrap.dataset.boundWheel = "true";
     matrixWrap.addEventListener("wheel", (e) => {
@@ -903,7 +930,18 @@ function bindDynamicEvents() {
   });
   document.querySelectorAll("[data-project-switch]").forEach((button) => button.addEventListener("click", () => switchProject(button.dataset.projectSwitch)));
   document.querySelectorAll("[data-project-archive]").forEach((button) => button.addEventListener("click", async () => {
-    try { await updateProject(button.dataset.projectArchive, { archived: button.dataset.projectArchived === "true" }); await hydrateProjectDirectory(); } catch { showToast("项目状态更新失败，请确认负责人身份"); }
+    const targetProjectId = button.dataset.projectArchive;
+    const shouldArchive = button.dataset.projectArchived === "true";
+    if (shouldArchive && targetProjectId === state.activeProjectId) {
+      showToast("当前正在使用的项目不可归档，请切换至其他项目后再试");
+      return;
+    }
+    try {
+      await updateProject(targetProjectId, { archived: shouldArchive });
+      await hydrateProjectDirectory();
+    } catch {
+      showToast("项目状态更新失败，请确认负责人身份");
+    }
   }));
   document.querySelectorAll("[data-project-delete]").forEach((button) => button.addEventListener("click", async () => {
     const title = button.dataset.projectTitle || button.dataset.projectDelete;
@@ -1101,6 +1139,12 @@ async function handleAction(action, source = null) {
     void setWorkflowMode(currentWorkflow().mode === "free" ? "gated" : "free");
     return;
   }
+  if (action === "minimize-busy-overlay") {
+    busyOverlayMinimized = true;
+    updateBusyOverlay();
+    showToast("AI 生成已转入后台运行，可在右下角消息胶囊实时查看进度");
+    return;
+  }
   if (action === "force-dismiss-busy-overlay") {
     forceDismissStuckOverlay(getBusyOverlayState());
     return;
@@ -1165,28 +1209,20 @@ async function handleAction(action, source = null) {
     render();
     return;
   }
-  if (action === "ov6a-analyze-task-rules") {
-    await ruleLibraryChatController.proposeChanges("operational-task", { silent: false });
-    return;
-  }
-  if (action === "ov6a-analyze-force-rules") {
+  if (action === "ov6a-analyze-task-force-rules" || action === "ov6a-analyze-force-rules") {
     await ruleLibraryChatController.proposeChanges("force-mission", { silent: false });
     return;
   }
-  if (action === "ov6b-generate-task-machines") {
-    await dodafProductController.pregenerateOv6bFromPhaseAction({ silent: false, contextType: "task", force: true });
+  if (action === "ov6b-generate-task-force-machines" || action === "ov6b-generate-task-machines" || action === "ov6b-generate-force-machines") {
+    await dodafProductController.pregenerateOv6bFromPhaseAction({ silent: false, contextType: "force-mission", force: true });
     return;
   }
-  if (action === "ov6b-generate-force-machines") {
-    await dodafProductController.pregenerateOv6bFromPhaseAction({ silent: false, contextType: "force", force: true });
+  if (action === "ov6c-generate-phase-sequences") {
+    await dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType: "phase", force: true });
     return;
   }
-  if (action === "ov6c-generate-task-sequences") {
-    await dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType: "task", force: true });
-    return;
-  }
-  if (action === "ov6c-generate-force-sequences") {
-    await dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType: "force", force: true });
+  if (action === "ov6c-generate-task-force-sequences" || action === "ov6c-generate-task-sequences" || action === "ov6c-generate-force-sequences") {
+    await dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType: "force-mission", force: true });
     return;
   }
   if (action === "go-to-related-model") {
@@ -1354,21 +1390,30 @@ function confirmRegenerateWorkflowStep(context) {
         return window.confirm("重新生成将基于最新任务重新编组（不影响其他模型成果），是否继续？");
       }
     } else if (mainViewId === "force-mission") {
+      if (nextStep?.id === "ov4") {
+        return window.confirm("重新生成将更新「组织关系图」（根据最新作战兵力重新推导指挥、保障与信息关系，不影响其他流程成果），是否继续？");
+      }
+      if (nextStep?.id === "ov2") {
+        return window.confirm("重新生成将更新「作战资源流」（根据最新作战兵力与组织关系重新推导资源流，不影响其他流程成果），是否继续？");
+      }
+      if (nextStep?.id === "ov3") {
+        return window.confirm("重新生成将更新「作战资源流矩阵」（根据最新作战资源流重新投影矩阵事实，不影响其他流程成果），是否继续？");
+      }
       if (nextStep?.id === "ov6c") {
-        return window.confirm("重新生成将更新「兵力协同时序图」（保留阶段时序与任务时序，不影响其他流程成果），是否继续？");
+        return window.confirm("重新生成将更新「任务与兵力时序图」（保留阶段时序，不影响其他流程成果），是否继续？");
       }
       if (nextStep?.id === "ov6b") {
-        return window.confirm("重新生成将更新「兵力状态机」（保留阶段状态机与任务状态机，不影响其他流程成果），是否继续？");
+        return window.confirm("重新生成将更新「任务与兵力状态机」（保留阶段状态机，不影响其他流程成果），是否继续？");
       }
       if (nextStep?.id === "ov6a") {
-        return window.confirm("重新生成将基于作战兵力更新规则建议（保留全局阶段规则与任务规则），是否继续？");
+        return window.confirm("重新生成将基于作战任务与作战兵力更新规则建议（保留全局阶段规则），是否继续？");
       }
     } else if (mainViewId === "phase-action") {
       if (nextStep?.id === "ov6c") {
-        return window.confirm("重新生成将更新「阶段时序图」（保留任务时序与兵力协同时序，不影响其他流程成果），是否继续？");
+        return window.confirm("重新生成将更新「阶段时序图」（保留任务与兵力时序，不影响其他流程成果），是否继续？");
       }
       if (nextStep?.id === "ov6b") {
-        return window.confirm("重新生成将更新「阶段状态机」（保留任务状态机与兵力状态机，不影响其他流程成果），是否继续？");
+        return window.confirm("重新生成将更新「阶段状态机」（保留任务与兵力状态机，不影响其他流程成果），是否继续？");
       }
     }
     return window.confirm(`重新生成将更新当前流程关联的「${nextLabel}」（保留其他流程模型），是否继续？`);
@@ -1457,6 +1502,11 @@ function confirmRegenerateWorkflowStep(context) {
       const resolved = dodafProductController.resolveDodafProduct(state, "ov6a");
       const model = resolved.model;
       const next = dodafProductController.applyRuleChangeSet(model, model.ruleChangeSet, "");
+      const hasPending = (next.ruleChangeSet?.changes || []).some((item) => item.status === "pending");
+      if (!hasPending && Array.isArray(next.rules) && next.rules.length > 0) {
+        next.status = "confirmed";
+        next.confirmedAt = next.confirmedAt || new Date().toISOString();
+      }
       dodafProductController.persistOv6("ov6a", next, "已采纳全部待审核规则");
       showToast("已采纳全部规则变更并覆盖");
     } catch (e) {
@@ -1488,6 +1538,23 @@ function confirmRegenerateWorkflowStep(context) {
     render();
     return;
   }
+  if (action === "view-ov6a" || action === "view-ov6b" || action === "view-ov6c") {
+    const targetView = action.replace("view-", "");
+    const mainViewId = resolveRelatedMainViewId(state.activeView, targetView, state.relatedModelReturnContext) || state.activeView;
+    const focus = resolveModelFocus(mainViewId, state);
+    state.relatedModelReturnContext = {
+      mainViewId,
+      mainLabel: getViewMeta(mainViewId)?.label || "作战任务",
+      relatedViewId: targetView,
+      focusType: focus.focusType || "",
+      focusId: focus.focusId || "",
+      focusLabel: focus.focusLabel || "",
+      selection: state.selection ? { ...state.selection } : null,
+      scrollSnapshots: captureViewScroll($("#viewRoot"))
+    };
+    void navigateToResearchView(targetView, { entrySource: mainViewId });
+    return;
+  }
   if (action === "toggle-ov1b-add") {
     state.ov1bAddOpen = state.ov1bAddOpen !== true;
     if (state.ov1bAddOpen) {
@@ -1516,6 +1583,12 @@ function confirmRegenerateWorkflowStep(context) {
     }
     if (state.activeView === "ov3") {
       void dodafProductController.pregenerateOv3FromOv2({ silent: false, force: true });
+      return;
+    }
+    if (state.activeView === "ov6c") {
+      const isPhaseSubflow = state.activeMainViewId === "phase-action";
+      const contextType = isPhaseSubflow ? "phase" : "force-mission";
+      void dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType, force: true });
       return;
     }
     showToast(`${getViewMeta(state.activeView)?.label || "当前子流程"}的 AI 工具已就绪；请先确认上游内容，再让 AI 生成或检查本页草案。`);
@@ -1643,6 +1716,14 @@ function confirmRegenerateWorkflowStep(context) {
     state.ov2EditorOpen = true;
     void dodafProductController.saveProduct("ov2");
     showToast("已新建资源流，请在右侧完善载荷与契约");
+    render();
+    return;
+  }
+  if (action === "ov3-close-drawer") {
+    state.ov3SelectedExchangeId = "";
+    if (state.selection?.kind === "ov3-exchange") {
+      state.selection = null;
+    }
     render();
     return;
   }
@@ -2746,7 +2827,12 @@ redTeamController.refreshHealth();
 aiConfigController.refresh();
 void loadTheme();
 void loadCmoCatalogStatus();
-void hydrateProjectModels();
+void initAppDirectoryAndModels();
+
+async function initAppDirectoryAndModels() {
+  await hydrateProjectDirectory({ skipRender: true });
+  await hydrateProjectModels();
+}
 
 async function loadTheme() {
   try {
@@ -2856,8 +2942,12 @@ function setWorkflowGateOpen(open) {
 
 function goToWorkflowView(viewId) {
   if (!viewId) return;
-  if (viewId !== "ov6a") state.ruleLibraryEntrySource = "default";
-  state.activeView = viewId;
+  const targetViewId = viewId === "operational-task" ? "force-mission" : viewId;
+  if (viewId === "operational-task") {
+    state.forceMissionLayerTab = "task";
+  }
+  if (targetViewId !== "ov6a") state.ruleLibraryEntrySource = "default";
+  state.activeView = targetViewId;
   state.selection = null;
   state.ov1Dialog = null;
   state.ov1PanelMode = "context";
@@ -2914,28 +3004,30 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
     await ensureCombatFocusOnEnterPhaseAction();
   }
   if (viewId === "ov6b") {
-    const contextType = (entrySource === "operational-task" || entrySource === "ov1b") ? "task" : entrySource === "force-mission" ? "force" : "phase";
+    const contextType = (entrySource === "operational-task" || entrySource === "ov1b") ? "task" : entrySource === "force-mission" ? "force-mission" : "phase";
     await dodafProductController.pregenerateOv6bFromPhaseAction({ silent: false, contextType, force: forceRegenerate });
   }
   if (viewId === "ov6c") {
-    const contextType = (entrySource === "operational-task" || entrySource === "ov1b") ? "task" : entrySource === "force-mission" ? "force" : "phase";
+    const contextType = (entrySource === "operational-task" || entrySource === "ov1b") ? "task" : entrySource === "force-mission" ? "force-mission" : "phase";
     await dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType, force: forceRegenerate });
   }
   if (viewId === "ov4") {
-    await dodafProductController.pregenerateOv4FromForceMission({ silent: false });
+    await dodafProductController.pregenerateOv4FromForceMission({ silent: false, force: forceRegenerate });
   }
   if (viewId === "ov2") {
-    await dodafProductController.pregenerateOv2FromForceAndOv4({ silent: false });
+    await dodafProductController.pregenerateOv2FromForceAndOv4({ silent: false, force: forceRegenerate });
   }
   if (viewId === "ov3") {
-    await dodafProductController.pregenerateOv3FromOv2({ silent: false });
+    await dodafProductController.pregenerateOv3FromOv2({ silent: false, force: forceRegenerate });
   }
-  if (viewId === "force-mission" && (
-    forceRegenerate
-    || !(state.forceMission?.forces || []).length
-    || (generate && !(state.forceMission?.forces || []).length)
-  ) && (state.forceMission?.tasksConfirmedAt || (state.forceMission?.tasks || []).length)) {
-    await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
+  if (viewId === "force-mission" && (generate || forceRegenerate)) {
+    // 门禁：必须先生成作战任务；若作战任务未生成或需补齐，优先生成作战任务，绝不越权生成兵力
+    if (forceRegenerate || !(state.forceMission?.tasks || []).length || operationalTasksNeedAiCompletion(state.forceMission?.tasks)) {
+      await conceptPlanningController.generateOperationalTasks({ silent: false });
+    } else if (state.forceMission?.tasksConfirmedAt && (forceRegenerate || !(state.forceMission?.forces || []).length)) {
+      // 只有在作战任务已确认的前提下，才允许生成概念兵力
+      await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
+    }
   }
   if (viewId === "ov1" && (forceRegenerate || (!state.conceptGraphic?.nodes?.length && !state.ov1Candidate))) {
     await ov1AiController.generateOv1();
@@ -2955,11 +3047,11 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
   )) {
     await conceptPlanningController.generateOperationalTasks({ silent: false });
   }
-  // Entering OV-1b from the confirmed operational-task step must immediately
-  // produce a reviewable task organization. The page remains visible while
+  // Entering OV-1b from the confirmed task step (force-mission or legacy operational-task)
+  // must immediately produce a reviewable task organization. The page remains visible while
   // generation runs so the user can see the busy state and resulting groups.
-  if (viewId === "ov1b" && entrySource === "operational-task") {
-    await dodafProductController.pregenerateOv1bFromTasks({ silent: false });
+  if (viewId === "ov1b" && (entrySource === "force-mission" || entrySource === "operational-task")) {
+    await dodafProductController.pregenerateOv1bFromTasks({ silent: false, force: forceRegenerate });
   }
 }
 
@@ -3038,6 +3130,27 @@ async function advanceRelatedWorkflow({ generate = false, forceRegenerate = fals
       showToast("请先在规则库接受或忽略全部待审核建议，再生成状态机");
       return;
     }
+    const currentSubflowView = state.activeView;
+    const SUBFLOW_VIEWS = ["ov6a", "ov6b", "ov6c", "ov1b", "ov1c", "ov2", "ov3", "ov4", "ov5a", "ov7", "ooda"];
+    if (SUBFLOW_VIEWS.includes(currentSubflowView)) {
+      const currentModel = state[currentSubflowView];
+      if (currentModel && typeof currentModel === "object") {
+        const hasPending = (currentModel.ruleChangeSet?.changes || []).some((item) => item.status === "pending");
+        if (!hasPending && currentModel.status !== "confirmed") {
+          currentModel.status = "confirmed";
+          currentModel.confirmedAt = currentModel.confirmedAt || new Date().toISOString();
+          try {
+            if (["ov1b", "ov6a", "ov6b", "ov6c"].includes(currentSubflowView)) {
+              dodafProductController.persistOv6(currentSubflowView, currentModel, "");
+            } else if (dodafProductController.saveProduct) {
+              void dodafProductController.saveProduct(currentSubflowView);
+            }
+          } catch {
+            /* continue navigation */
+          }
+        }
+      }
+    }
     if (ctx.nextStep.related) {
       const current = state.relatedModelReturnContext || {};
       state.relatedModelReturnContext = {
@@ -3051,7 +3164,7 @@ async function advanceRelatedWorkflow({ generate = false, forceRegenerate = fals
     }
     const completesPhaseSubflow = ctx.mainViewId === "phase-action"
       && state.activeView === "ov6c"
-      && ctx.nextStep.id === "operational-task";
+      && (ctx.nextStep.id === "force-mission" || ctx.nextStep.id === "operational-task");
     if (completesPhaseSubflow && state.phaseAction?.phases?.length >= 2 && state.phaseAction?.status !== "confirmed") {
       try {
         await conceptPlanningController.confirmPhaseAction();
@@ -3150,13 +3263,19 @@ async function completeWorkflowStage({ generate = false, forceRegenerate = false
     showToast(relatedViewId
       ? `当前阶段已确认，已进入关联流程${relatedViewLabel(relatedViewId)}`
       : nextView ? "当前阶段已确认，已进入下一阶段" : "工作流已确认完成");
-    if (generate && stage === 1 && nextMainView === "operational-task") {
+    if (generate && stage === 1 && (nextMainView === "force-mission" || nextMainView === "operational-task")) {
       if (forceRegenerate || !(state.forceMission?.tasks || []).length || operationalTasksNeedAiCompletion(state.forceMission?.tasks)) {
         await conceptPlanningController.generateOperationalTasks({ silent: false });
       }
     }
+    if ((nextMainView === "phase-action" || nextView === "phase-action") && (stage === 0 || generate || forceRegenerate)) {
+      await ensureCombatFocusOnEnterPhaseAction();
+    }
     if (generate && stage === 2 && nextMainView === "force-mission") {
-      await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
+      // 门禁：兵力生成必须以作战任务确认为前提
+      if (state.forceMission?.tasksConfirmedAt) {
+        await conceptPlanningController.generateForceMission({ silent: false, layer: "concept" });
+      }
     }
     if (generate && stage === 3 && nextMainView === "ov1") {
       if (!state.conceptGraphic?.nodes?.length && !state.ov1Candidate) {
@@ -3172,7 +3291,13 @@ async function completeWorkflowStage({ generate = false, forceRegenerate = false
       }
     }
     if (nextView === "ov4") {
-      await dodafProductController.pregenerateOv4FromForceMission({ silent: false });
+      await dodafProductController.pregenerateOv4FromForceMission({ silent: false, force: forceRegenerate });
+    }
+    if (nextView === "ov2") {
+      await dodafProductController.pregenerateOv2FromForceAndOv4({ silent: false, force: forceRegenerate });
+    }
+    if (nextView === "ov3") {
+      await dodafProductController.pregenerateOv3FromOv2({ silent: false, force: forceRegenerate });
     }
   } catch {
     showToast("阶段状态保存失败，请重试");
@@ -3230,7 +3355,10 @@ function forceDismissStuckOverlay(busy = null) {
   state.combatFocusGenerating = false;
   state.stateMachinePregenerating = false;
   state.sequencePregenerating = false;
-  state.ov4Pregenerating = false;
+  state.forceMissionGenerating = false;
+  state.forceMissionGeneratingLayer = "";
+  state.ov2Pregenerating = false;
+  state.ov3Pregenerating = false;
   updateBusyOverlay(null);
   render();
   showToast(`${title}已解除等待，工作台已恢复可用`);
@@ -3243,11 +3371,19 @@ function getBusyOverlayState() {
       title: "正在清空当前项目",
       detail: "正在清除全量架构模型、规划与验证数据，即将重载…",
       expectedMs: 2500,
-      timeoutMs: 12000
+      timeoutMs: 12000,
+      isAiTask: false
     };
   }
   if (state.taskDecompositionPregenerating) {
-    return { key: "task-organization-pregenerate", title: "正在整理任务", detail: "AI 正在仅依据已确认任务进行分组、排序与协同梳理…", expectedMs: 90000, timeoutMs: 180000 };
+    return {
+      key: "task-organization-pregenerate",
+      title: "正在整理任务",
+      detail: "AI 正在仅依据已确认任务进行分组、排序与协同梳理…",
+      expectedMs: 90000,
+      timeoutMs: 600000,
+      isAiTask: true
+    };
   }
   if (state.operationalTaskGenerating) {
     const progress = state.operationalTaskGenerationProgress;
@@ -3260,7 +3396,8 @@ function getBusyOverlayState() {
         ? `AI 正在生成并补全任务内容（${completed}/${total} 批）…`
         : "AI 正在依据阶段行动生成任务并补全任务区域…",
       expectedMs: 120000,
-      timeoutMs: 240000,
+      timeoutMs: 600000,
+      isAiTask: true,
       progressPercent: total > 0 ? Math.round((completed / total) * 100) : null
     };
   }
@@ -3270,7 +3407,8 @@ function getBusyOverlayState() {
       title: "正在进入阶段行动",
       detail: "根据简报生成作战规则…",
       expectedMs: 90000,
-      timeoutMs: 180000
+      timeoutMs: 600000,
+      isAiTask: true
     };
   }
   if (state.ruleLibraryChangeGenerating) {
@@ -3279,7 +3417,8 @@ function getBusyOverlayState() {
       title: "正在分析阶段规则",
       detail: "根据阶段目标、行动、进入与退出条件生成待审核规则建议…",
       expectedMs: 90000,
-      timeoutMs: 180000
+      timeoutMs: 600000,
+      isAiTask: true
     };
   }
   if (state.combatFocusGenerating) {
@@ -3288,7 +3427,8 @@ function getBusyOverlayState() {
       title: "正在进入阶段行动",
       detail: "根据简报生成 3 个作战聚焦方向…",
       expectedMs: 60000,
-      timeoutMs: 180000
+      timeoutMs: 600000,
+      isAiTask: true
     };
   }
   if (state.stateMachinePregenerating) {
@@ -3297,25 +3437,60 @@ function getBusyOverlayState() {
       title: "正在进入状态机校验",
       detail: state.ov6GenerationContext === "task" ? "根据任务规则生成逐任务状态机…" : "根据阶段与行动分析阶段状态和转换条件…",
       expectedMs: 90000,
-      timeoutMs: 180000
+      timeoutMs: 600000,
+      isAiTask: true
     };
   }
   if (state.sequencePregenerating) {
+    const progress = state.sequenceGenerationProgress;
+    const completed = Number(progress?.completed) || 0;
+    const total = Number(progress?.total) || 0;
     return {
       key: "sequence-pregenerate",
       title: "正在进入时序图",
-      detail: state.ov6GenerationContext === "task" ? "AI 正在根据任务状态机生成逐任务时序图…" : "AI 正在生成各推演方及每个阶段的时序图…",
-      expectedMs: 90000,
-      timeoutMs: 180000
+      detail: total > 0
+        ? `AI 正在并发生成任务与兵力时序（${completed}/${total} 批）…`
+        : (state.ov6GenerationContext === "force-mission" ? "AI 正在分析任务与兵力协同时序…" : state.ov6GenerationContext === "task" ? "AI 正在根据任务状态机生成逐任务时序图…" : "AI 正在生成各推演方及每个阶段的时序图…"),
+      expectedMs: 120000,
+      timeoutMs: 600000,
+      isAiTask: true,
+      progressPercent: total > 0 ? Math.round((completed / total) * 100) : null
     };
   }
   if (state.ov4Pregenerating) {
+    const progress = state.ov4GenerationProgress;
+    const completed = Number(progress?.completed) || 0;
+    const total = Number(progress?.total) || 0;
     return {
       key: "ov4-pregenerate",
       title: "正在进入组织关系",
-      detail: "AI 正在根据作战兵力生成指挥、保障与信息关系…",
-      expectedMs: 90000,
-      timeoutMs: 180000
+      detail: total > 0
+        ? `AI 正在并发生成各作战群组织与协同关系（${completed}/${total} 批）…`
+        : "AI 正在根据作战兵力生成指挥、保障与信息关系…",
+      expectedMs: 120000,
+      timeoutMs: 600000,
+      isAiTask: true,
+      progressPercent: total > 0 ? Math.round((completed / total) * 100) : null
+    };
+  }
+  if (state.ov2Pregenerating) {
+    return {
+      key: "ov2-pregenerate",
+      title: "正在进入作战资源流",
+      detail: "AI 正在根据作战兵力与组织关系生成作战节点交换流 (Needlines) 与数据契约…",
+      expectedMs: 120000,
+      timeoutMs: 600000,
+      isAiTask: true
+    };
+  }
+  if (state.ov3Pregenerating) {
+    return {
+      key: "ov3-pregenerate",
+      title: "正在投影作战资源流矩阵",
+      detail: "正在将作战资源流交换事实受控投影至 OV-3 矩阵…",
+      expectedMs: 30000,
+      timeoutMs: 120000,
+      isAiTask: false
     };
   }
   if (state.forceMissionGenerating) {
@@ -3326,7 +3501,8 @@ function getBusyOverlayState() {
         title: "正在生成作战编成",
         detail: "根据概念兵力与装备平台库，细化作战单元实体、平台挂接与编制结构…",
         expectedMs: 60000,
-        timeoutMs: 180000
+        timeoutMs: 600000,
+        isAiTask: true
       };
     }
     if (layer === "both") {
@@ -3335,7 +3511,8 @@ function getBusyOverlayState() {
         title: "正在生成作战兵力与编成",
         detail: "根据作战任务分解，完整生成概念兵力与作战单元编成…",
         expectedMs: 90000,
-        timeoutMs: 240000
+        timeoutMs: 600000,
+        isAiTask: true
       };
     }
     return {
@@ -3343,7 +3520,8 @@ function getBusyOverlayState() {
       title: "正在生成概念兵力",
       detail: "根据作战任务分解与阶段行动，提炼红蓝双方核心职责与概念兵力…",
       expectedMs: 60000,
-      timeoutMs: 180000
+      timeoutMs: 600000,
+      isAiTask: true
     };
   }
   if (state.workflowModeSwitching) {
@@ -3353,7 +3531,8 @@ function getBusyOverlayState() {
       title: testModeActive ? "正在进入测试模式" : "正在恢复阶段门禁",
       detail: testModeActive ? "所有研究阶段将可自由访问" : "工作流将按阶段门禁恢复",
       expectedMs: 1500,
-      timeoutMs: 10000
+      timeoutMs: 10000,
+      isAiTask: false
     };
   }
   if (state.reportArchiving) {
@@ -3362,93 +3541,183 @@ function getBusyOverlayState() {
       title: "正在保存报告版本",
       detail: "打包研究成果、生成校验并写入归档…",
       expectedMs: 8000,
-      timeoutMs: 30000
+      timeoutMs: 30000,
+      isAiTask: false
     };
   }
   return null;
 }
 
+// 注册全局恢复前台遮罩回调，供消息胶囊点击「恢复前台」触发
+if (typeof globalThis !== "undefined") {
+  globalThis.__resumeBusyOverlay = () => {
+    busyOverlayMinimized = false;
+    updateBusyOverlay();
+  };
+}
+
 function updateBusyOverlay(busy = getBusyOverlayState()) {
   const overlay = $("#workflowModeOverlay");
-  if (!overlay) return;
+  const backgroundBtn = $("#workflowModeOverlayBackgroundBtn");
   const title = $("#workflowModeOverlayTitle");
   const detail = $("#workflowModeOverlayDetail");
   const dismissBtn = $("#workflowModeOverlayDismissBtn");
-  if (busy) {
-    const key = busy.key || busy.title;
-    if (busyOverlayKey !== key) {
-      busyOverlayKey = key;
-      busyOverlayStartedAt = Date.now();
-      if (dismissBtn) dismissBtn.hidden = true;
+
+  if (!busy) {
+    busyOverlayMinimized = false;
+    setBackgroundTaskState(null);
+    if (busyOverlayTimer) window.clearInterval(busyOverlayTimer);
+    busyOverlayTimer = 0;
+    busyOverlayKey = "";
+    busyOverlayStartedAt = 0;
+    if (dismissBtn) dismissBtn.hidden = true;
+    if (backgroundBtn) backgroundBtn.hidden = true;
+    if (overlay) {
+      overlay.classList.remove("is-visible");
+      window.setTimeout(() => {
+        if (!getBusyOverlayState()) overlay.hidden = true;
+      }, 220);
     }
-    if (title) title.textContent = busy.title;
-    if (detail) detail.textContent = busy.detail;
-    updateBusyOverlayProgress(busy);
-    if (!busyOverlayTimer) {
-      busyOverlayTimer = window.setInterval(() => {
-        const current = getBusyOverlayState();
-        if (current) updateBusyOverlayProgress(current);
-      }, 500);
-    }
-    overlay.hidden = false;
-    requestAnimationFrame(() => overlay.classList.add("is-visible"));
     return;
   }
-  if (busyOverlayTimer) window.clearInterval(busyOverlayTimer);
-  busyOverlayTimer = 0;
-  busyOverlayKey = "";
-  busyOverlayStartedAt = 0;
-  if (dismissBtn) dismissBtn.hidden = true;
-  overlay.classList.remove("is-visible");
-  window.setTimeout(() => {
-    if (!getBusyOverlayState()) overlay.hidden = true;
-  }, 220);
+
+  // 有任务正在运行
+  const key = busy.key || busy.title;
+  if (busyOverlayKey !== key) {
+    busyOverlayKey = key;
+    busyOverlayStartedAt = Date.now();
+    busyOverlayMinimized = false;
+    if (dismissBtn) dismissBtn.hidden = true;
+  }
+
+  if (title) title.textContent = busy.title;
+  if (detail) detail.textContent = busy.detail;
+  updateBusyOverlayProgress(busy);
+
+  // 控制转入后台按钮：仅对 AI 任务展示
+  if (backgroundBtn) {
+    backgroundBtn.hidden = busy.isAiTask === false;
+  }
+
+  if (!busyOverlayTimer) {
+    busyOverlayTimer = window.setInterval(() => {
+      const current = getBusyOverlayState();
+      if (current) {
+        updateBusyOverlayProgress(current);
+      } else {
+        updateBusyOverlay(null);
+      }
+    }, 500);
+  }
+
+  if (overlay) {
+    if (busyOverlayMinimized) {
+      overlay.classList.remove("is-visible");
+      overlay.hidden = true;
+    } else {
+      overlay.hidden = false;
+      requestAnimationFrame(() => overlay.classList.add("is-visible"));
+    }
+  }
 }
 
 function updateBusyOverlayProgress(busy) {
   const elapsedMs = Math.max(0, Date.now() - busyOverlayStartedAt);
   const expectedMs = Math.max(1000, Number(busy.expectedMs) || 30000);
   const timeoutMs = Math.max(expectedMs, Number(busy.timeoutMs) || expectedMs * 2);
-  const estimatedPercent = elapsedMs <= expectedMs
-    ? Math.min(90, Math.round(8 + (elapsedMs / expectedMs) * 82))
-    : Math.min(97, Math.round(90 + ((elapsedMs - expectedMs) / Math.max(1, timeoutMs - expectedMs)) * 7));
+  const isAi = busy.isAiTask !== false;
+
+  // 平滑非线性进度推进：
+  // 1. 在预期时间内，从 10% 平滑推进到 85%；
+  // 2. 超出预期时间后，采用渐进缓动逼近 98%，避免卡死在单一数值；
+  // 3. 只要模型生成未结束，进度条始终动态演进并配合流光脉冲。
+  let estimatedPercent;
+  if (elapsedMs <= expectedMs) {
+    const ratio = elapsedMs / expectedMs;
+    // 前半段略快、后半段减速的平滑曲线
+    estimatedPercent = Math.min(85, Math.round(10 + Math.sin((ratio * Math.PI) / 2) * 75));
+  } else {
+    // 超过常见耗时后，微步对数逼近 98%
+    const extraRatio = Math.min(3, (elapsedMs - expectedMs) / Math.max(10000, expectedMs));
+    estimatedPercent = Math.min(98, Math.round(85 + (1 - Math.exp(-extraRatio * 1.2)) * 13));
+  }
+
   const reportedPercent = Number.isFinite(busy.progressPercent)
     ? Math.max(0, Math.min(100, busy.progressPercent))
     : null;
   const displayedPercent = reportedPercent === null
     ? estimatedPercent
-    : Math.max(reportedPercent, Math.min(estimatedPercent, 95));
+    : Math.max(reportedPercent, Math.min(estimatedPercent, 96));
+
+  // 同步状态至消息胶囊（无论遮罩是否最小化均保持同步）
+  if (isAi) {
+    setBackgroundTaskState({
+      title: busy.title,
+      detail: busy.detail,
+      progressPercent: displayedPercent,
+      elapsedMs
+    });
+  } else {
+    setBackgroundTaskState(null);
+  }
+
   const progress = $(".workflow-mode-progress");
   const bar = $("#workflowModeProgressBar");
   const elapsed = $("#workflowModeElapsed");
   const estimate = $("#workflowModeEstimate");
   const hint = $("#workflowModeProgressHint");
   const dismissBtn = $("#workflowModeOverlayDismissBtn");
+
   if (progress) progress.setAttribute("aria-valuenow", String(displayedPercent));
   if (bar) bar.style.width = `${displayedPercent}%`;
   if (elapsed) elapsed.textContent = `已用时 ${formatBusyDuration(elapsedMs)}`;
-  if (estimate) estimate.textContent = elapsedMs <= expectedMs
-    ? `通常 ${formatBusyDuration(expectedMs / 2)}～${formatBusyDuration(expectedMs)}`
-    : `服务超时上限 ${formatBusyDuration(timeoutMs)}`;
-  if (hint) hint.textContent = reportedPercent !== null
-    ? "进度按已完成生成批次与预计耗时综合显示"
-    : elapsedMs <= expectedMs
-    ? "进度按预计耗时估算，实际以 AI 返回为准"
-    : (elapsedMs < timeoutMs
-      ? "已超过常见耗时，服务仍在处理；到达上限后会自动结束并提示重试"
-      : "已到达超时上限，正在等待请求结束");
 
-  if (dismissBtn) {
-    if (elapsedMs >= timeoutMs || elapsedMs >= expectedMs * 1.5) {
-      dismissBtn.hidden = false;
+  if (estimate) {
+    if (isAi) {
+      estimate.textContent = elapsedMs <= expectedMs
+        ? `通常 ${formatBusyDuration(expectedMs / 2)}～${formatBusyDuration(expectedMs)}`
+        : "深度思考生成中，持续接收流式数据…";
     } else {
-      dismissBtn.hidden = true;
+      estimate.textContent = elapsedMs <= expectedMs
+        ? `通常 ${formatBusyDuration(expectedMs / 2)}～${formatBusyDuration(expectedMs)}`
+        : `服务超时上限 ${formatBusyDuration(timeoutMs)}`;
     }
   }
 
-  // Auto-dismiss stuck overlay if timeout limit exceeded by 2 seconds
-  if (elapsedMs >= timeoutMs + 2000) {
-    console.warn(`Busy overlay exceeded timeoutMs (${timeoutMs}ms) by 2s. Auto-dismissing.`, busy);
+  if (hint) {
+    if (reportedPercent !== null) {
+      hint.textContent = "已按完成批次推进，AI 正在持续处理后续分批…";
+    } else if (elapsedMs <= expectedMs) {
+      hint.textContent = isAi
+        ? "AI 正在结合上下文进行逻辑拓扑推理与推演验证…"
+        : "正在处理，请稍候…";
+    } else if (isAi) {
+      hint.textContent = "当前推理与拓扑较为复杂，远端连接保持活跃，请耐心等待；亦可随时手动解除等待在后台进行。";
+    } else if (elapsedMs < timeoutMs) {
+      hint.textContent = "操作正在处理中，稍后即将完成…";
+    } else {
+      hint.textContent = "已到达超时上限，正在等待请求结束";
+    }
+  }
+
+  // 手动解除等待按钮控制：
+  if (dismissBtn) {
+    const shouldShowDismiss = isAi
+      ? elapsedMs >= Math.min(45000, expectedMs)
+      : (elapsedMs >= timeoutMs || elapsedMs >= expectedMs * 1.5);
+    dismissBtn.hidden = !shouldShowDismiss;
+    if (isAi) {
+      dismissBtn.textContent = "解除遮罩等待（后台继续接收）";
+      dismissBtn.title = "解除前端等待遮罩，恢复工作台浏览；AI 仍将在后台继续接收与写入";
+    } else {
+      dismissBtn.textContent = "解除等待并恢复工作台";
+      dismissBtn.title = "操作耗时较长时可点击退出等待";
+    }
+  }
+
+  // 严格执行“只要远端没断，就绝不主动中断”铁律：
+  if (!isAi && elapsedMs >= timeoutMs + 2000) {
+    console.warn(`Busy overlay exceeded timeoutMs (${timeoutMs}ms) by 2s. Auto-dismissing non-AI task.`, busy);
     forceDismissStuckOverlay(busy);
   }
 }
@@ -3519,8 +3788,14 @@ function renderProjectManagerChrome() {
   });
   root.querySelectorAll("[data-project-archive]").forEach((button) => {
     button.addEventListener("click", async () => {
+      const targetProjectId = button.dataset.projectArchive;
+      const shouldArchive = button.dataset.projectArchived === "true";
+      if (shouldArchive && targetProjectId === state.activeProjectId) {
+        showToast("当前正在使用的项目不可归档，请切换至其他项目后再试");
+        return;
+      }
       try {
-        await updateProject(button.dataset.projectArchive, { archived: button.dataset.projectArchived === "true" });
+        await updateProject(targetProjectId, { archived: shouldArchive });
         await hydrateProjectDirectory();
         renderProjectManagerChrome();
       } catch {
@@ -3591,6 +3866,19 @@ function saveEdge(event) {
 
 function getModels() {
   return { ov1: state.ov1, ov5: state.ov5, ooda: state.ooda, scenario: state.scenario, validationResult: state.validationResult, knowledge: state.knowledge, knowledgeQuery: state.knowledgeQuery, conceptMap: state.conceptMap };
+}
+
+function invalidatePhaseActionDependents() {
+  state.forceMissionStorage = markStorageStale(state.forceMissionStorage, "阶段行动已更新，作战任务与兵力已过期");
+  invalidateForceMissionDependents();
+}
+
+function invalidateForceMissionDependents() {
+  state.ov1Storage = markStorageStale(state.ov1Storage, "任务或兵力已更新，总体概念图已过期");
+  state.ov4Storage = markStorageStale(state.ov4Storage, "任务或兵力已更新，组织关系图已过期");
+  state.ov2Storage = markStorageStale(state.ov2Storage, "任务或兵力已更新，作战资源流已过期");
+  state.ov3Storage = markStorageStale(state.ov3Storage, "任务或兵力已更新，作战信息流已过期");
+  invalidateDerivedArtifacts();
 }
 
 function invalidateConceptMapDependents() {

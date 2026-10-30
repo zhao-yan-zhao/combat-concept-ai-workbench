@@ -2,10 +2,13 @@ import { escapeHtml } from "./app/domUtils.js";
 
 /**
  * Renders the unified branch pipeline bar for:
- * 作战兵力 (主线) → 组织关系 (OV-4) → 资源流 (OV-2) → 资源流矩阵 (OV-3)
+ * 作战任务 (前置) → 作战兵力 (主线) → 组织关系 (OV-4) → 资源流 (OV-2) → 资源流矩阵 (OV-3)
  */
 export function renderForceResourceSubflowBar(state = {}, currentViewId = "force-mission") {
   const forceMission = state.forceMission || {};
+  const tasks = Array.isArray(forceMission.tasks) ? forceMission.tasks : [];
+  const tasksCount = tasks.length;
+  const tasksConfirmed = Boolean(tasksCount && forceMission.tasksConfirmedAt);
   const conceptCount = (forceMission.forces || []).length;
   const combatCount = (forceMission.combatForces || []).length;
   const totalForces = conceptCount + combatCount;
@@ -22,33 +25,43 @@ export function renderForceResourceSubflowBar(state = {}, currentViewId = "force
   const isMainline = currentViewId === "force-mission";
 
   if (isMainline) {
-    const nextUnfinishedView = !ov4RelationsCount
-      ? "ov4"
-      : !ov2ExchangesCount
-        ? "ov2"
-        : !ov3ExchangesCount
-          ? "ov3"
-          : "ov4";
-    const nextBtnLabel = !ov4RelationsCount
-      ? "进入组织关系 (OV-4) →"
-      : !ov2ExchangesCount
-        ? "进入资源流 (OV-2) →"
-        : !ov3ExchangesCount
-          ? "进入资源流矩阵 (OV-3) →"
-          : "查看体系关系与流 →";
+    const nextUnfinishedView = !tasksConfirmed
+      ? "force-mission"
+      : !ov4RelationsCount
+        ? "ov4"
+        : !ov2ExchangesCount
+          ? "ov2"
+          : !ov3ExchangesCount
+            ? "ov3"
+            : "ov4";
+    const nextBtnLabel = !tasksConfirmed
+      ? "核定作战任务 →"
+      : !ov4RelationsCount
+        ? "进入组织关系 (OV-4) →"
+        : !ov2ExchangesCount
+          ? "进入资源流 (OV-2) →"
+          : !ov3ExchangesCount
+            ? "进入资源流矩阵 (OV-3) →"
+            : "查看体系关系与流 →";
 
     return `
       <nav class="subflow-pipeline-bar is-mainline" aria-label="兵力关联体系流程">
         <div class="subflow-pipeline-lead">
-          <span class="subflow-pipeline-tag">体系关联流程</span>
-          <strong class="subflow-pipeline-title">组织关系与资源网络</strong>
+          <span class="subflow-pipeline-tag">任务与兵力流程</span>
+          <strong class="subflow-pipeline-title">任务牵引与体系网络</strong>
         </div>
         <div class="subflow-pipeline-steps">
-          <div class="subflow-pipeline-pill is-main-active" title="作战兵力（当前主线）">
-            <span class="subflow-pill-index">主</span>
-            <span class="subflow-pill-name">作战兵力</span>
+          <button type="button" class="subflow-pipeline-pill ${tasksConfirmed ? "is-ready" : tasksCount ? "is-pending" : "is-warn"}" data-action="select-force-mission-layer" data-layer="task" title="作战任务分解与区域核定（兵力牵引前置）">
+            <span class="subflow-pill-index">前置</span>
+            <span class="subflow-pill-name">作战任务</span>
+            <span class="subflow-pill-meta">${tasksConfirmed ? `${tasksCount} 任务就绪` : tasksCount ? `${tasksCount} 待确认` : "待分解"}</span>
+          </button>
+          <span class="subflow-pipeline-arrow" aria-hidden="true">→</span>
+          <button type="button" class="subflow-pipeline-pill is-main-active" data-action="select-force-mission-layer" data-layer="${tasksConfirmed ? "concept" : "task"}" title="概念与作战兵力编成（当前主工作台）">
+            <span class="subflow-pill-index">承接</span>
+            <span class="subflow-pill-name">兵力编成</span>
             <span class="subflow-pill-meta">${totalForces} 兵力</span>
-          </div>
+          </button>
           <span class="subflow-pipeline-arrow" aria-hidden="true">→</span>
           <button type="button" class="subflow-pipeline-pill ${ov4RelationsCount ? "is-ready" : "is-pending"}" data-related-model="true" data-view="ov4" title="组织关系图 (OV-4)">
             <span class="subflow-pill-index">1</span>

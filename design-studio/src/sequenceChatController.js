@@ -277,7 +277,7 @@ function createLocalSequenceDraft(question, current, state) {
   const seeded = seedOv6cFromPhase(current, state);
   if ((seeded.sequences || []).length && !(current.sequences || []).length) {
     return {
-      summary: "已按阶段/兵力生成本地协同时序草案。",
+      summary: "已按阶段生成本地时序草案。",
       sequences: seeded.sequences
     };
   }

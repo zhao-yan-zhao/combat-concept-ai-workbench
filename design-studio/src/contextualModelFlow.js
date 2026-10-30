@@ -4,26 +4,24 @@ import { workflowPrimaryStepIds } from "./data.js";
 
 export const RELATED_VIEWS = Object.freeze({
   "phase-action": ["ov6a", "ov6b", "ov6c"],
-  "operational-task": ["ov1b", "ov6a", "ov6b", "ov6c"],
-  "force-mission": ["ov4", "ov2", "ov3", "ov6a", "ov6b", "ov6c"],
-  ov1: ["ov5a", "ov5", "ooda"],
-  "concept-map": ["ov5a", "ov5", "ooda"],
-  scenario: ["ov1c", "ov7", "structure-review"]
+  "force-mission": ["ov1b", "ov6a", "ov6b", "ov6c", "ov4", "ov2", "ov3"],
+  ov5: ["ov5a", "ooda", "ov1c", "ov7"],
+  ov1: ["concept-map"],
+  "concept-map": ["ov1"],
+  scenario: ["structure-review"]
 });
 
 const MAIN_LABELS = Object.freeze({
   "phase-action": "阶段行动",
-  "operational-task": "作战任务",
-  "force-mission": "作战兵力",
-  ov1: "总体图（OV1a）",
-  "concept-map": "概念图",
-  scenario: "仿真演示"
+  "force-mission": "任务与兵力",
+  ov5: "活动机理",
+  ov1: "总体概念",
+  "concept-map": "作战概念图",
+  scenario: "仿真推演"
 });
 
 const RELATED_LABELS = Object.freeze({
-  ov6a: "规则库 OV6a",
-  ov6b: "状态机 OV6b",
-  ov6c: "时序图",
+  "operational-task": "作战任务",
   ov1b: "任务整理 OV1b",
   ov4: "组织关系 OV4",
   ov2: "资源流 OV2",
@@ -33,7 +31,15 @@ const RELATED_LABELS = Object.freeze({
   ooda: "研究循环 OODA",
   ov1c: "任务与活动映射 OV1c",
   ov7: "状态与活动映射 OV7",
-  "structure-review": "跨模型校核"
+  ov6a: "规则库 OV6a",
+  ov6b: "状态机 OV6b",
+  ov6c: "时序图",
+  "concept-map": "作战概念图",
+  validate: "设计验证",
+  "structure-review": "跨模型校核",
+  scenario: "自动想定",
+  collaboration: "协同审阅",
+  report: "成果报告"
 });
 
 export function relatedViewLabel(viewId) {
@@ -43,7 +49,7 @@ export function relatedViewLabel(viewId) {
 export function contextualFlowViewIds(mainViewId, state = {}) {
   const targetViewIds = RELATED_VIEWS[mainViewId] || [];
   if (!targetViewIds.length) return [];
-  const context = resolveModelFocus(mainViewId, state);
+  const context = { ...resolveModelFocus(mainViewId, state), mainViewId };
   try {
     const statuses = getRelatedModelStatuses(buildModelTopology(state), context, targetViewIds);
     return targetViewIds.filter((viewId) => statuses[viewId]?.status !== "not_applicable" && AVAILABLE_VIEWS.has(viewId));
@@ -62,6 +68,7 @@ export function getParentMainViewId(viewId) {
 }
 
 export function inferRelatedMainViewId(relatedViewId, preferredMainViewId = "") {
+  if (preferredMainViewId && RELATED_VIEWS[preferredMainViewId]?.includes(relatedViewId)) return preferredMainViewId;
   const resolvedPreferred = getParentMainViewId(preferredMainViewId) || preferredMainViewId;
   if (resolvedPreferred && RELATED_VIEWS[resolvedPreferred]?.includes(relatedViewId)) return resolvedPreferred;
   return workflowPrimaryStepIds.find((mainViewId) => RELATED_VIEWS[mainViewId]?.includes(relatedViewId)) || "";
@@ -73,7 +80,13 @@ export function resolveRelatedMainViewId(activeViewId, relatedViewId, currentCon
     || (workflowPrimaryStepIds.includes(activeViewId) ? activeViewId : "");
 }
 
-const AVAILABLE_VIEWS = new Set(["ov1b", "ov1c", "ov6a", "ov6b", "ov6c", "ov7", "ov4", "ov2", "ov3", "ov5a", "ov5", "ooda", "structure-review"]);
+const AVAILABLE_VIEWS = new Set([
+  "operational-task", "ov1b", "ov1c",
+  "ov4", "ov2", "ov3",
+  "ov5a", "ov5", "ooda", "ov7",
+  "ov6a", "ov6b", "ov6c",
+  "concept-map", "validate", "structure-review", "scenario", "collaboration", "report"
+]);
 
 const STATUS_LABELS = Object.freeze({
   empty: "未生成",
@@ -104,7 +117,7 @@ export function relatedFlowNumber(viewId, index = 0) {
 export function renderRailContextualModelFlow(viewId, state = {}) {
   const targetViewIds = RELATED_VIEWS[viewId] || [];
   if (!targetViewIds.length) return "";
-  const context = resolveModelFocus(viewId, state);
+  const context = { ...resolveModelFocus(viewId, state), mainViewId: viewId };
   let statuses = [];
   try {
     statuses = Object.entries(getRelatedModelStatuses(buildModelTopology(state), context, targetViewIds))
@@ -158,23 +171,24 @@ export function mountRelatedModelReturn(root, html) {
 }
 
 export function resolveModelFocus(viewId, state = {}) {
+  const base = { mainViewId: viewId || "" };
   if (viewId === "phase-action") {
     const focusId = String(state.phaseActionFocusId || "");
     const item = (state.phaseAction?.phases || []).find((phase) => phase.id === focusId);
-    return item ? { focusType: "phase", focusId, focusLabel: item.name || focusId } : {};
+    return item ? { ...base, focusType: "phase", focusId, focusLabel: item.name || focusId } : base;
   }
   if (viewId === "operational-task") {
     const focusId = String(state.operationalTaskSelectedId || "");
     const item = (state.forceMission?.tasks || []).find((task) => task.id === focusId);
-    return item ? { focusType: "task", focusId, focusLabel: item.name || focusId } : {};
+    return item ? { ...base, focusType: "task", focusId, focusLabel: item.name || focusId } : base;
   }
   if (viewId === "force-mission") {
     const focusId = String(state.forcePlatformPicker?.forceId || "");
     const forces = [...(state.forceMission?.forces || []), ...(state.forceMission?.combatForces || [])];
     const item = forces.find((force) => force.id === focusId);
-    return item ? { focusType: "force", focusId, focusLabel: item.name || focusId } : {};
+    return item ? { ...base, focusType: "force", focusId, focusLabel: item.name || focusId } : base;
   }
-  return {};
+  return base;
 }
 
 function renderRelatedNode(item, context, { mainViewId = "", sourceLabel = "", focusCopy = "", index = 0, activeViewId = "" } = {}) {

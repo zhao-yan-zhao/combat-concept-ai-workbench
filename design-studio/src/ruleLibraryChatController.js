@@ -308,7 +308,7 @@ export function createRuleLibraryChatController({
       && Array.isArray(existingProposal.changes)
       && existingProposal.changes.length) {
       if (!silent) {
-        const subject = source === "operational-task" ? "任务" : source === "phase-action" ? "阶段" : "兵力";
+        const subject = source === "operational-task" ? "任务" : source === "phase-action" ? "阶段" : "任务与兵力";
         notify(`已存在 ${existingProposal.changes.length} 项${subject}规则待审核建议，可直接复核或重新生成覆盖`);
       }
       return { skipped: true, reason: "already-generated", proposed: existingProposal.changes.length };
@@ -348,7 +348,7 @@ export function createRuleLibraryChatController({
         } else if (source === "operational-task") {
           changeSet = ensureTaskRuleCoverage(response.result, analysis);
         } else if (source === "force-mission") {
-          changeSet = ensureForceRuleCoverage(response.result, analysis);
+          changeSet = ensureTaskAndForceRuleCoverage(response.result, analysis);
         } else {
           changeSet = response.result;
         }
@@ -360,7 +360,7 @@ export function createRuleLibraryChatController({
         }).result;
         if (source === "phase-action") changeSet = ensurePhaseRuleCoverage(changeSet, analysis);
         else if (source === "operational-task") changeSet = ensureTaskRuleCoverage(changeSet, analysis);
-        else if (source === "force-mission") changeSet = ensureForceRuleCoverage(changeSet, analysis);
+        else if (source === "force-mission") changeSet = ensureTaskAndForceRuleCoverage(changeSet, analysis);
         generatedBy = "local-fallback";
       }
       const next = ensureOv6aModel({
@@ -371,7 +371,7 @@ export function createRuleLibraryChatController({
       await syncOv6a(state.ov6a, { source: `rule-library:proposal-${source}` });
       const proposed = next.ruleChangeSet?.changes?.length || 0;
       if (!silent) {
-        const subject = source === "operational-task" ? "任务" : source === "phase-action" ? "阶段" : "兵力";
+        const subject = source === "operational-task" ? "任务" : source === "phase-action" ? "阶段" : "任务与兵力";
         notify(proposed
           ? (generatedBy === "ai" ? `已生成 ${proposed} 项${subject}规则建议，请到规则库审核` : `AI 暂不可用，已生成 ${proposed} 项本地${subject}规则建议，请审核`)
           : `已完成${subject}规则分析，本轮无需补充规则`);
@@ -461,7 +461,7 @@ function normalizeRuleChangeSet(draft = {}, source, fingerprint) {
       rule: {
         ...(change?.rule || {}),
         phaseRefs: source === "phase-action" ? (change?.rule?.phaseRefs || []).map(String).filter(Boolean).slice(0, 24) : [],
-        taskRefs: source === "operational-task" ? (change?.rule?.taskRefs || []).map(String).filter(Boolean).slice(0, 48) : [],
+        taskRefs: (source === "operational-task" || source === "force-mission") ? (change?.rule?.taskRefs || []).map(String).filter(Boolean).slice(0, 48) : [],
         forceRefs: source === "force-mission" ? (change?.rule?.forceRefs || []).map(String).filter(Boolean).slice(0, 48) : []
       },
       rationale: String(change?.rationale || "").slice(0, 800),
@@ -500,7 +500,7 @@ function buildRuleChangeAnalysis(state, current, source) {
     ? { phaseAction, phaseTransitions }
     : source === "operational-task"
       ? { tasks }
-      : { phaseAction, phaseTransitions, forces, combatForces, relations };
+      : { phaseAction, phaseTransitions, tasks, forces, combatForces, relations };
   return {
     source,
     currentRules: compactRules(current),
@@ -510,7 +510,7 @@ function buildRuleChangeAnalysis(state, current, source) {
       ? "根据已确认阶段与行动提出规则变更建议"
       : source === "operational-task"
         ? "仅根据已确认作战任务提出逐任务规则建议，每条使用 taskRefs 绑定任务 ID"
-        : "根据已确认作战兵力、任务与协同关系提出逐兵力规则变更建议，每条使用 forceRefs 绑定兵力 ID"
+        : "根据已确认作战任务、作战兵力与协同关系联合提出规则变更建议，任务相关规则使用 taskRefs 绑定任务 ID，兵力相关规则使用 forceRefs 绑定兵力 ID"
   };
 }
 
@@ -627,6 +627,16 @@ export function ensureForceRuleCoverage(draft = {}, analysis = {}) {
     }
   });
   return { ...draft, summary: String(draft.summary || "已按作战兵力分别形成指控与协同规则建议。"), changes: incoming.slice(0, 48) };
+}
+
+export function ensureTaskAndForceRuleCoverage(draft = {}, analysis = {}) {
+  const taskCovered = ensureTaskRuleCoverage(draft, analysis);
+  const combinedCovered = ensureForceRuleCoverage(taskCovered, analysis);
+  return {
+    ...combinedCovered,
+    summary: String(draft.summary || "已按作战任务与作战兵力联合形成规则建议。"),
+    changes: combinedCovered.changes.slice(0, 64)
+  };
 }
 
 export function applyRuleLibraryDraft(current = {}, draft = {}) {

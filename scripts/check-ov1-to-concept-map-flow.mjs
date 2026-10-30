@@ -198,15 +198,24 @@ assert(mapArea.lat === 22.5 && mapArea.lon === 121.8, "Map area item must use ex
 assert(mapArea.radius === 80 * 1852, "Map area item radius must convert nautical miles to meters");
 
 // 6. Test Subflow Topology & Related Views
-assert(RELATED_VIEWS.ov1.includes("ov5a") && RELATED_VIEWS.ov1.includes("ov5") && RELATED_VIEWS.ov1.includes("ooda"), "OV-1 related views must include OV-5a, OV-5, and OODA");
-assert(RELATED_VIEWS["concept-map"].includes("ooda"), "Concept map related views must include OODA");
+assert(RELATED_VIEWS.ov1.includes("concept-map"), "OV-1 related views must include concept-map");
+assert(RELATED_VIEWS.ov5.includes("ov5a") && RELATED_VIEWS.ov5.includes("ooda"), "OV-5 related views must include OV-5a and OODA");
+assert(RELATED_VIEWS["force-mission"].includes("operational-task"), "force-mission related views must include operational-task");
 
 const topology = buildModelTopology(stateWithOv1);
 const oodaNode = topology.nodes.find((n) => n.resource === "ooda");
 assert(oodaNode && oodaNode.label.includes("OODA"), "Model topology must register OODA decision cycle product");
 
 const ov1RailFlow = renderContextualModelFlow("ov1", stateWithOv1);
-assert(ov1RailFlow.includes("作战活动分解 OV5a") && ov1RailFlow.includes("作战活动 OV5b") && ov1RailFlow.includes("研究循环 OODA"), "OV-1 left rail must expose complete subflow nodes including OODA");
+assert(ov1RailFlow.includes("作战概念图"), "OV-1 left rail must expose concept-map with proper label");
+assert(!ov1RailFlow.includes("待建设"), "OV-1 subflow must not contain '待建设'");
+
+const forceRailFlow = renderContextualModelFlow("force-mission", stateWithOv1);
+assert(forceRailFlow.includes("作战任务"), "force-mission left rail must expose operational-task with proper label");
+assert(!forceRailFlow.includes("待建设"), "force-mission subflow must not contain '待建设'");
+
+const ov5RailFlow = renderContextualModelFlow("ov5", stateWithOv1);
+assert(ov5RailFlow.includes("作战活动分解 OV5a") && ov5RailFlow.includes("研究循环 OODA"), "OV-5 left rail must expose complete subflow nodes including OODA");
 
 // 7. Test Workflow Gates
 assert(isStepGenerated("ov1", stateWithOv1), "OV-1 step must be recognized as generated");

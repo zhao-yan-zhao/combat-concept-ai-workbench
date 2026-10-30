@@ -130,6 +130,24 @@ assert(openAiSource.includes("以“项目标题”为默认研究引子"), "Res
 assert(openAiSource.includes("研究进程已就绪"), "Research-chat server prompt lost empty-template ban");
 const wireSource = readFileSync(new URL("../design-studio/src/app/wireControllers.js", import.meta.url), "utf8");
 assert(wireSource.includes("getProjectTitle"), "Inspiration advice controller is not wired with project title");
+assert(adviceControllerSource.includes("detectResearchChatBriefFields"), "Inspiration advice controller does not use detectResearchChatBriefFields for multi-field detection");
+
+// Multi-field extraction from user prompt in screenshot
+const screenPrompt = "聚焦我们现在的构想设计一下核心思路、关键假设、预期效果与主要风险";
+const screenResult = deriveResearchChatBriefUpdate({
+  brief,
+  question: screenPrompt,
+  result: {
+    briefUpdate: {
+      approach: "空间多轴向波次注入与时序预测",
+      assumptions: "敌防空阵地遵循保要地优先级规则",
+      expectedEffects: "实现雷达开机照射稳定截断",
+      risk: "敌防空系统采取分层保镖策略"
+    }
+  }
+});
+assert(screenResult.fields.length === 4, "Screenshot multi-field question did not populate all 4 fields");
+assert(screenResult.patch.approach && screenResult.patch.assumptions && screenResult.patch.expectedEffects && screenResult.patch.risk, "Screenshot fields missing from patch");
 
 console.log("Research chat brief update acceptance passed.");
 function assert(condition, message) { if (!condition) throw new Error(message); }

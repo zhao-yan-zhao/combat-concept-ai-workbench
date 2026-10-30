@@ -6,7 +6,19 @@ import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js"
  * The AI entry is intentionally first and cannot be omitted from a subflow.
  */
 const SUBFLOW_TOOLS = Object.freeze({
-  "operational-task": { label: "作战任务工具箱", ai: ["generate-operational-tasks", "AI 生成任务"], items: [["add-operational-task", "新增作战任务", "plus"], ["confirm-operational-tasks", "确认任务", "check"], ["open-context-panel", "查看上游依据", "doc"]] },
+  "operational-task": {
+    label: "作战任务工具箱",
+    ai: ["generate-operational-tasks", "AI 生成任务"],
+    items: [
+      ["add-operational-task", "新增作战任务", "plus"],
+      ["confirm-operational-tasks", "确认任务", "check"],
+      ["view-ov6a", "任务规则库 OV-6a", "relations"],
+      ["view-ov6b", "任务状态机 OV-6b", "state"],
+      ["view-ov6c", "任务时序图 OV-6c", "transition"],
+      ["open-context-panel", "查看上游依据", "doc"],
+      ["clear-all-operational-tasks", "清空全部作战任务", "trash"]
+    ]
+  },
   "phase-action": { label: "阶段行动工具箱", ai: ["generate-phase-action", "AI 生成阶段"], items: [["toggle-phase-action-chat", "阶段行动对话", "chat"], ["confirm-phase-action", "确认阶段行动", "check"]] },
   ov1b: { label: "任务分解工具箱", ai: ["generate-task-decomposition", "AI 生成任务分解"], items: [["toggle-ov1b-edit", "编辑任务分解", "relations"], ["ov1b-review-current", "确认/撤回当前任务组", "check"], ["ov1b-add-group", "新增任务组", "plus"], ["seed-dodaf-ov1b", "刷新任务来源", "refresh"]] },
   ov1c: { label: "任务活动映射工具箱", ai: ["open-subflow-ai", "AI 检查映射"], items: [["seed-dodaf-ov1c", "刷新来源", "refresh"], ["save-dodaf-ov1c", "保存映射", "check"]] },

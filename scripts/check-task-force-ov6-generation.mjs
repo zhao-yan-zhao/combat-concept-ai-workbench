@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { generateMockOutput } from "../shared/generator.js";
 import { createOpenAiClient } from "../server/openaiClient.mjs";
-import { ensureTaskRuleCoverage, ensureForceRuleCoverage, applyRuleChangeSet } from "../design-studio/src/ruleLibraryChatController.js";
+import { ensureTaskRuleCoverage, ensureForceRuleCoverage, ensureTaskAndForceRuleCoverage, applyRuleChangeSet } from "../design-studio/src/ruleLibraryChatController.js";
 import { ensureTaskSequenceCoverage, ensureForceSequenceCoverage, buildSequenceGenerationAnalysis, buildStateMachineGenerationAnalysis } from "../design-studio/src/dodafProductController.js";
 
 console.log("Starting check-task-force-ov6-generation test suite...");
@@ -71,6 +71,23 @@ assert.ok(mockForceRuleResult.changes.some((c) => (c.rule?.forceRefs || []).leng
 const coveredForceRules = ensureForceRuleCoverage({ changes: [] }, forceAnalysis);
 assert.equal(coveredForceRules.changes.length, 2, "ensureForceRuleCoverage must cover all combat forces");
 assert.ok(coveredForceRules.changes.every((c) => (c.rule?.forceRefs || []).length > 0), "Every generated force rule must have forceRefs");
+
+// 3.1 Test Joint (Task + Force) Rule Coverage
+const combinedAnalysis = {
+  source: "force-mission",
+  tasks: taskAnalysis.tasks,
+  combatForces: forceAnalysis.combatForces,
+  forces: []
+};
+const coveredCombinedRules = ensureTaskAndForceRuleCoverage({ changes: [] }, combinedAnalysis);
+assert.equal(coveredCombinedRules.changes.length, 4, "ensureTaskAndForceRuleCoverage must cover both 2 tasks and 2 combat forces");
+assert.ok(coveredCombinedRules.changes.some((c) => (c.rule?.taskRefs || []).includes("task-strike-1")), "Combined rules must contain task rules");
+assert.ok(coveredCombinedRules.changes.some((c) => (c.rule?.forceRefs || []).includes("combat-force-1")), "Combined rules must contain force rules");
+const appliedCombinedModel = applyRuleChangeSet({ rules: [], ruleChangeSet: coveredCombinedRules }, coveredCombinedRules);
+assert.equal(appliedCombinedModel.rules.length, 4, "Applying combined changeSet must insert 4 rules into model");
+assert.ok(appliedCombinedModel.rules.some((r) => r.taskBindings?.length > 0), "Inserted rules must have taskBindings");
+assert.ok(appliedCombinedModel.rules.some((r) => r.forceBindings?.length > 0), "Inserted rules must have forceBindings");
+console.log("✓ Joint Task & Force rule generation, coverage, and binding application verified");
 
 // Verify applying force rule creates forceBindings
 const appliedModel = applyRuleChangeSet({ rules: [], ruleChangeSet: coveredForceRules }, coveredForceRules);

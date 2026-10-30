@@ -20,6 +20,112 @@ const DEFAULT_EDGES = [
   { id: 'ov1-edge-assess-sense', sourceId: 'assess', targetId: 'sense', type: '反馈' }
 ];
 
+export function extractOv1FromOv5(ov5, { brief = {}, direction = "", forceMission = null } = {}) {
+  const activities = Array.isArray(ov5?.activities) ? ov5.activities : [];
+  const edges = Array.isArray(ov5?.edges) ? ov5.edges : [];
+
+  if (!activities.length) {
+    return createLocalOv1Draft({ brief, direction, forceMission });
+  }
+
+  const buckets = {
+    sense: [],
+    decide: [],
+    control: [],
+    opponent: [],
+    assess: []
+  };
+
+  activities.forEach((act) => {
+    const t = String(act.type || "");
+    const title = String(act.title || "");
+    const text = String(act.text || "");
+    const combined = `${t} ${title} ${text}`;
+
+    if (combined.includes("红方") || combined.includes("敌方") || combined.includes("对抗") || combined.includes("外部")) {
+      buckets.opponent.push(act);
+    } else if (t.includes("感知") || combined.includes("侦察") || combined.includes("探测") || combined.includes("搜索") || combined.includes("预警") || combined.includes("监视")) {
+      buckets.sense.push(act);
+    } else if (t.includes("决策") || combined.includes("指挥") || combined.includes("指控") || combined.includes("协调") || combined.includes("任务分配") || combined.includes("决策")) {
+      buckets.decide.push(act);
+    } else if (t.includes("评估") || combined.includes("战损") || combined.includes("毁伤") || combined.includes("反馈") || combined.includes("态势更新")) {
+      buckets.assess.push(act);
+    } else {
+      buckets.control.push(act);
+    }
+  });
+
+  const labels = {
+    sense: buckets.sense.length
+      ? (buckets.sense[0].title.length <= 16 ? buckets.sense[0].title : "综合态势感知体系")
+      : DEFAULT_LABELS.sense,
+    decide: buckets.decide.length
+      ? (buckets.decide[0].title.length <= 16 ? buckets.decide[0].title : "联合指挥控制中心")
+      : DEFAULT_LABELS.decide,
+    control: buckets.control.length
+      ? (buckets.control[0].title.length <= 16 ? buckets.control[0].title : "联合任务行动群")
+      : DEFAULT_LABELS.control,
+    opponent: buckets.opponent.length
+      ? (buckets.opponent[0].title.length <= 16 ? buckets.opponent[0].title : "外部对抗与态势影响")
+      : DEFAULT_LABELS.opponent,
+    assess: buckets.assess.length
+      ? (buckets.assess[0].title.length <= 16 ? buckets.assess[0].title : "任务效果与战损评估")
+      : DEFAULT_LABELS.assess
+  };
+
+  const details = {
+    sense: buckets.sense.length
+      ? `整合 ${buckets.sense.map((a) => a.title).join("、")}。输入：${buckets.sense.map((a) => a.input).filter(Boolean).slice(0, 2).join("；") || "环境与传感器数据"}；输出：${buckets.sense.map((a) => a.output).filter(Boolean).slice(0, 2).join("；") || "态势目标包"}。`
+      : `围绕“${brief.objective || "作战目标"}”获取多源战场态势，持续支撑决策分配。`,
+    decide: buckets.decide.length
+      ? `包含 ${buckets.decide.map((a) => a.title).join("、")}。形成协同指挥判断与授权控制，下达行动指令。`
+      : `依据作战意图形成分布式协同决策与任务控制规则。`,
+    control: buckets.control.length
+      ? `执行 ${buckets.control.map((a) => a.title).join("、")}。输入：${buckets.control.map((a) => a.input).filter(Boolean).slice(0, 2).join("；") || "协同打击指令"}；输出：${buckets.control.map((a) => a.output).filter(Boolean).slice(0, 2).join("；") || "突击行动结果"}。`
+      : `聚合关键打击、干扰与作战机动实体，达成战役战术效果。`,
+    opponent: buckets.opponent.length
+      ? `对应 ${buckets.opponent.map((a) => a.title).join("、")}。表征敌方兵力威胁与动态对抗反应。`
+      : `外部复杂电磁环境与假想敌对抗态势，驱动我方决策调整。`,
+    assess: buckets.assess.length
+      ? `实施 ${buckets.assess.map((a) => a.title).join("、")}。评估行动毁伤与终态达成度，向感知与决策闭环反哺。`
+      : `对作战行动进行毁伤与态势评估，形成闭环反哺循环。预期效果：${brief.expectedEffects || "达成战役预期目的"}。`
+  };
+
+  const nodes = ROLE_ORDER.map((id) => {
+    return {
+      id,
+      label: textOf(labels[id], 60) || DEFAULT_LABELS[id],
+      detail: textOf(details[id], 800),
+      kind: id === "sense" ? "equipment" : id === "decide" ? "command" : id === "control" ? "action" : id === "opponent" ? "external" : "effect",
+      className: id === "opponent" ? "blue" : id === "assess" ? "gold" : "",
+      sourceOv5ActivityIds: buckets[id].map((a) => a.id)
+    };
+  });
+
+  const concept = {
+    mission: textOf(brief?.objective, 28) || "总体作战概念图",
+    objective: textOf(brief?.objective, 500) || "达成预定作战构想与效果",
+    scope: textOf(brief?.assumptions, 300) || "战役战术战区范围",
+    phase: textOf(brief?.approach, 160) || "多阶段全过程闭环",
+    expectedEffects: textOf(brief?.expectedEffects, 500),
+    constraints: textOf(brief?.risk, 500)
+  };
+
+  const model = {
+    version: 1,
+    provenance: {
+      mode: "derived",
+      note: `自底向上从 Step 04 作战活动网络（${activities.length} 个活动、${edges.length} 条关联）提炼生成的高层总体概念图。`,
+      generatedAt: new Date().toISOString()
+    },
+    concept,
+    nodes: layoutOv1Nodes(nodes, DEFAULT_EDGES),
+    edges: DEFAULT_EDGES.map((e) => ({ ...e }))
+  };
+
+  return asDm2Ov1(model);
+}
+
 export function createAiOv1Draft({ brief, direction, draft, forceMission }) {
   const forceSeed = forceMission?.forces?.length ? conceptForcesToOv1Draft(forceMission, brief) : null;
   const forceNodes = new Map(Array.isArray(forceSeed?.nodes) ? forceSeed.nodes.map((node) => [node?.id, node]) : []);

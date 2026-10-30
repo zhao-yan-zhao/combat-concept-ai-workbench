@@ -81,7 +81,7 @@ function renderRuleChangeSet(changeSet, { busy = false, phaseNames = new Map() }
   const changes = Array.isArray(changeSet?.changes) ? changeSet.changes : [];
   const pending = changes.filter((change) => change.status === "pending");
   if (!pending.length) return "";
-  const sourceLabel = changeSet.source === "operational-task" ? "作战任务" : changeSet.source === "force-mission" ? "作战兵力" : "阶段与行动";
+  const sourceLabel = changeSet.source === "operational-task" ? "作战任务" : changeSet.source === "force-mission" ? "任务与兵力" : "阶段与行动";
   return `<section class="rule-change-set" aria-label="待审核规则变更">
     <header class="rule-change-set-head">
       <div><strong>待审核变更</strong><small>${escapeHtml(sourceLabel)}分析 · ${pending.length} 项</small></div>

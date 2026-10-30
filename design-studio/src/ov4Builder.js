@@ -1,8 +1,8 @@
 import { normalizeForceMissionPlan } from "../../shared/conceptPlanning.js";
 import { inferOv4EchelonCategory, inferOv4OrganizationCategory, inferOv4RelationCategory, OV4_RELATION_CATEGORIES } from "../../shared/dodaf/ov4Taxonomy.js";
 
-const MAX_ROLES = 48;
-const MAX_RELATIONSHIPS = 160;
+const MAX_ROLES = 128;
+const MAX_RELATIONSHIPS = 320;
 const RELATION_TYPES = new Set(["command", "support", "coordination", "information"]);
 
 export function buildOv4Model({ forceMission, ov1, ov5, ooda, scenario } = {}) {
@@ -312,3 +312,149 @@ function coverageSummary(total, unresolved) { const covered = Math.max(0, total 
 function unique(values) { return [...new Set((Array.isArray(values) ? values : []).map((value) => String(value || "").trim()).filter(Boolean))]; }
 function clean(value, limit) { return String(value || "").replace(/\s+/g, " ").trim().slice(0, limit); }
 function stableId(value) { let hash = 5381; for (const character of String(value)) hash = ((hash << 5) + hash) ^ character.charCodeAt(0); return (hash >>> 0).toString(36); }
+
+/**
+ * 将 OV-4 组织关系生成分析切分为小批次（宏观骨干网 + 各作战群战术协同网）
+ * 防止一次性向大模型发送全部兵力导致长 token 生成超时（3分钟门禁）
+ */
+export function buildOrganizationRelationshipBatches(analysis = {}, maxForcesPerBatch = 8) {
+  const forces = Array.isArray(analysis?.forces) ? analysis.forces : [];
+  const combatForces = Array.isArray(analysis?.combatForces) ? analysis.combatForces : [];
+  const totalCount = forces.length + combatForces.length;
+
+  if (totalCount <= 10) {
+    return [{
+      id: "batch-all",
+      title: "全部兵力组织关系",
+      type: "all",
+      analysis: { ...analysis },
+      expectedRelationCount: Math.min(24, Math.max(4, totalCount * 2))
+    }];
+  }
+
+  const batches = [];
+
+  // 1. 宏观骨干批次（概念兵力 / 各作战群顶层指控机构）
+  if (forces.length) {
+    const forceIdSet = new Set(forces.map((f) => f.id));
+    const backboneExisting = (analysis.existingRelations || []).filter(
+      (rel) => forceIdSet.has(rel.fromForceId) && forceIdSet.has(rel.toForceId)
+    );
+    batches.push({
+      id: "batch-backbone",
+      title: "宏观指挥控制网络",
+      type: "backbone",
+      analysis: {
+        ...analysis,
+        forces,
+        combatForces: [],
+        existingRelations: backboneExisting,
+        batchScope: "backbone",
+        generationConstraint: "本批仅推导概念兵力/作战群顶层之间的宏观指挥(command)、支援(support)与协同(coordination)网络，直接返回 JSON。"
+      },
+      expectedRelationCount: Math.min(20, Math.max(4, forces.length * 2))
+    });
+  }
+
+  // 2. 作战群内部协同批次（按所属概念兵力 conceptForceId 聚类）
+  if (combatForces.length) {
+    const clusterMap = new Map();
+    combatForces.forEach((cf) => {
+      const parentId = String(cf.conceptForceId || cf.side || "other").trim();
+      if (!clusterMap.has(parentId)) clusterMap.set(parentId, []);
+      clusterMap.get(parentId).push(cf);
+    });
+
+    // 将 cluster 聚合成合适大小的批次（4～8个实体）
+    let currentBatchForces = [];
+    let currentParentIds = new Set();
+    let clusterIndex = 1;
+
+    const flushClusterBatch = () => {
+      if (!currentBatchForces.length) return;
+      const relatedForces = forces.filter((f) => currentParentIds.has(f.id));
+      const batchForceIdSet = new Set([...relatedForces.map((f) => f.id), ...currentBatchForces.map((f) => f.id)]);
+      const clusterExisting = (analysis.existingRelations || []).filter(
+        (rel) => batchForceIdSet.has(rel.fromForceId) && batchForceIdSet.has(rel.toForceId)
+      );
+      batches.push({
+        id: `batch-cluster-${clusterIndex}`,
+        title: `作战群协同网（第 ${clusterIndex} 组）`,
+        type: "cluster",
+        analysis: {
+          ...analysis,
+          forces: relatedForces,
+          combatForces: currentBatchForces,
+          existingRelations: clusterExisting,
+          batchScope: "cluster",
+          generationConstraint: "本批仅推导该作战群内各实体之间以及与所属群指控节点之间的战术协同(coordination)、火力支援(support)、信息分发(information)关系，直接返回 JSON。"
+        },
+        expectedRelationCount: Math.min(24, Math.max(4, currentBatchForces.length * 2))
+      });
+      clusterIndex += 1;
+      currentBatchForces = [];
+      currentParentIds = new Set();
+    };
+
+    clusterMap.forEach((members, parentId) => {
+      if (currentBatchForces.length + members.length > maxForcesPerBatch && currentBatchForces.length > 0) {
+        flushClusterBatch();
+      }
+      currentBatchForces.push(...members);
+      if (parentId) currentParentIds.add(parentId);
+      if (currentBatchForces.length >= maxForcesPerBatch) {
+        flushClusterBatch();
+      }
+    });
+
+    flushClusterBatch();
+  }
+
+  return batches.length ? batches : [{
+    id: "batch-all",
+    title: "全部兵力组织关系",
+    type: "all",
+    analysis: { ...analysis },
+    expectedRelationCount: 16
+  }];
+}
+
+/**
+ * 合并多个批次生成的组织关系草案，进行去重和规整
+ */
+export function mergeOrganizationRelationshipDrafts(drafts = [], analysis = {}) {
+  const validDrafts = (Array.isArray(drafts) ? drafts : []).filter(Boolean);
+  if (!validDrafts.length) return { summary: "未生成有效组织关系草案。", relations: [], diagrams: [] };
+
+  const seen = new Set();
+  const mergedRelations = [];
+  const mergedDiagrams = [];
+  const summaryParts = [];
+
+  validDrafts.forEach((draft) => {
+    if (draft.summary && !summaryParts.includes(draft.summary)) {
+      summaryParts.push(draft.summary);
+    }
+    (Array.isArray(draft.relations) ? draft.relations : []).forEach((rel) => {
+      const from = String(rel.fromForceId || rel.sourceRoleId || "").trim();
+      const to = String(rel.toForceId || rel.targetRoleId || "").trim();
+      const type = String(rel.type || "coordination").trim();
+      if (!from || !to || from === to) return;
+      const key = `${from}:${to}:${type}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      mergedRelations.push(rel);
+    });
+    (Array.isArray(draft.diagrams) ? draft.diagrams : []).forEach((diag) => {
+      if (diag.name && !mergedDiagrams.some((d) => d.name === diag.name)) {
+        mergedDiagrams.push(diag);
+      }
+    });
+  });
+
+  return {
+    summary: summaryParts.join(" ") || "已分批完成组织关系与指挥协同链推导。",
+    relations: mergedRelations,
+    diagrams: mergedDiagrams
+  };
+}

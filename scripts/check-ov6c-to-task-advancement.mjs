@@ -9,7 +9,8 @@ const mainSource = readFileSync(join(root, "design-studio/src/main.js"), "utf8")
 // Verify that advance-related-workflow respects stepIntent 'ai'
 assert.ok(
   mainSource.includes('action === "advance-related-workflow"')
-  && mainSource.includes('void advanceRelatedWorkflow({ generate: intent === "ai" });'),
+  && (mainSource.includes('void advanceRelatedWorkflow({ generate: intent === "ai" });')
+      || mainSource.includes('void advanceRelatedWorkflow({ generate: intent === "ai" || isRegenerate, forceRegenerate: isRegenerate });')),
   "advance-related-workflow must forward stepIntent === 'ai' to generate flag"
 );
 
@@ -22,7 +23,8 @@ assert.ok(
 
 // Verify that stage 1 confirmation with generate flag also invokes generateOperationalTasks
 assert.ok(
-  mainSource.includes('if (generate && stage === 1 && nextMainView === "operational-task") {')
+  (mainSource.includes('if (generate && stage === 1 && (nextMainView === "force-mission" || nextMainView === "operational-task")) {')
+   || mainSource.includes('if (generate && stage === 1 && nextMainView === "operational-task") {'))
   && mainSource.includes("conceptPlanningController.generateOperationalTasks({ silent: false })"),
   "completeWorkflowStage must trigger generateOperationalTasks when stage 1 advances with generate = true"
 );

@@ -7,8 +7,7 @@
 export const productLabels = Object.freeze({
   brief: "简报",
   "phase-action": "阶段与行动",
-  "operational-task": "作战任务",
-  "force-mission": "作战兵力",
+  "force-mission": "任务与兵力",
   "concept-map": "概念图",
   ov1: "总体图（OV1a）",
   ov1b: "任务分解（OV1b）",
@@ -16,13 +15,13 @@ export const productLabels = Object.freeze({
   ov2: "作战资源流描述",
   ov3: "作战资源流矩阵",
   ov4: "作战组织关系图",
-  ov5: "作战活动（OV5b）",
+  ov5: "作战活动与机理（OV5b）",
   ov5a: "作战活动分解（OV5a）",
   ov6a: "规则库",
   ov6b: "状态机校验",
   ov6c: "时序图",
   ov7: "状态与活动映射（OV7）",
-  ooda: "研究辅助循环",
+  ooda: "研究辅助循环（OODA）",
   "structure-review": "结构核对台",
   scenario: "仿真演示",
   validate: "设计验证",
@@ -32,15 +31,14 @@ export const productLabels = Object.freeze({
 
 export const productShortLabels = Object.freeze({
   brief: "简报",
-  "operational-task": "作战任务",
-  "force-mission": "作战兵力",
+  "force-mission": "任务与兵力",
   "phase-action": "阶段行动",
   "concept-map": "概念图",
   ov1: "总体图",
   ov1b: "任务分解",
   ov1c: "任务活动映射",
-  ov5: "活动",
-  ooda: "循环",
+  ov5: "活动机理",
+  ooda: "OODA透镜",
   "structure-review": "核对台",
   ov5a: "活动分解",
   ov2: "资源流",
@@ -65,18 +63,17 @@ export const workflowStepRoles = Object.freeze({
   ov6b: "check",
   ov6c: "check",
   ov7: "check",
-  "operational-task": "write",
   ov1b: "check",
   ov1c: "check",
   "force-mission": "write",
   ov4: "check",
   ov2: "check",
   ov3: "check",
-  "concept-map": "write",
+  "concept-map": "check",
   ov1: "write",
   ov5: "write",
   ov5a: "check",
-  ooda: "write",
+  ooda: "check",
   "structure-review": "check",
   scenario: "write",
   validate: "write",
@@ -90,8 +87,9 @@ export const workflowStepRoles = Object.freeze({
 export const workflowOrder = [
   "brief",
   "phase-action", "ov6a", "ov6b", "ov6c",
-  "operational-task", "ov1b", "force-mission", "ov4", "ov2", "ov3",
-  "ov1", "ov5a", "ov5", "ov1c", "ooda", "concept-map", "ov7",
+  "force-mission", "ov1b", "ov4", "ov2", "ov3",
+  "ov5", "ov5a", "ooda", "ov1c", "ov7",
+  "ov1", "concept-map",
   "scenario", "validate", "structure-review", "collaboration", "report"
 ];
 
@@ -103,18 +101,17 @@ export const views = workflowOrder.map((id) => {
     ov6b: { subtitle: "分机状态 · 回改阶段", status: "ready" },
     ov6c: { subtitle: "跨对象时序 · 回改阶段", status: "ready" },
     ov7: { subtitle: "状态 · 转换 · 活动语义", status: "ready" },
-    "operational-task": { subtitle: "阶段 · 阵营 · 任务 · 效果", status: "ready" },
+    "force-mission": { subtitle: "任务承接 · 兵力编成 · 装备平台", status: "ready" },
     ov1b: { subtitle: "任务分组 · 组内排序 · 协同梳理", status: "ready" },
     ov1c: { subtitle: "任务 · 活动 · 覆盖判定", status: "ready" },
-    "force-mission": { subtitle: "兵力编成 · 任务承接 · 平台", status: "ready" },
     ov4: { subtitle: "组织 · 责任 · 协同", status: "ready" },
     ov2: { subtitle: "节点与资源交换", status: "ready" },
     ov3: { subtitle: "接口 · 频率 · 完整性", status: "ready" },
-    "concept-map": { subtitle: "阶段兵力空间表达", status: "ready" },
-    ov1: { subtitle: "总体概念是否闭合", status: "done" },
-    ov5: { subtitle: "横向活动关系", status: "ready" },
+    ov5: { subtitle: "活动流 · I/O依赖 · 闭环机理", status: "ready" },
     ov5a: { subtitle: "活动层级与覆盖", status: "ready" },
-    ooda: { subtitle: "行为综合视角", status: "ready" },
+    ooda: { subtitle: "闭环健康度与断点诊断", status: "ready" },
+    ov1: { subtitle: "总体概念表达与高层协同闭合", status: "done" },
+    "concept-map": { subtitle: "阶段兵力空间表达", status: "ready" },
     "structure-review": { subtitle: "反查并定位回改", status: "ready" },
     scenario: { subtitle: "推演输入", status: "ready" },
     validate: { subtitle: "规划是否可成立", status: "ready" },
@@ -132,10 +129,16 @@ export const views = workflowOrder.map((id) => {
 });
 
 /**
- * Seven authoritative mainline products. Associated models reuse an anchor phase
- * for context, but never become numbered steps.
+ * Six authoritative mainline products (restructured from legacy seven steps).
  */
-export const workflowPhases = ["简报", "阶段行动", "作战任务", "作战兵力", "总体图", "概念图", "仿真演示"];
+export const workflowPhases = [
+  "简报",
+  "阶段行动",
+  "任务与兵力",
+  "活动机理",
+  "总体概念",
+  "仿真推演"
+];
 
 const workflowPhaseById = {
   brief: "简报",
@@ -143,48 +146,45 @@ const workflowPhaseById = {
   "phase-action": "阶段行动",
   ov6b: "阶段行动",
   ov6c: "阶段行动",
-  ov7: "仿真演示",
-  "operational-task": "作战任务",
-  ov1b: "作战任务",
-  ov1c: "仿真演示",
-  "force-mission": "作战兵力",
-  ov4: "作战兵力",
-  ov2: "作战兵力",
-  ov3: "作战兵力",
-  ov1: "总体图",
-  ov5: "总体图",
-  ov5a: "总体图",
-  ooda: "总体图",
-  "concept-map": "概念图",
-  "structure-review": "仿真演示",
-  scenario: "仿真演示",
-  validate: "仿真演示",
-  collaboration: "仿真演示",
-  report: "仿真演示"
+  "force-mission": "任务与兵力",
+  ov1b: "任务与兵力",
+  ov4: "任务与兵力",
+  ov2: "任务与兵力",
+  ov3: "任务与兵力",
+  ov5: "活动机理",
+  ov5a: "活动机理",
+  ooda: "活动机理",
+  ov1c: "活动机理",
+  ov7: "活动机理",
+  ov1: "总体概念",
+  "concept-map": "总体概念",
+  "structure-review": "仿真推演",
+  scenario: "仿真推演",
+  validate: "仿真推演",
+  collaboration: "仿真推演",
+  report: "仿真推演"
 };
 
 /**
- * Linear seven-step mainline for navigation and gate progression.
+ * Linear six-step mainline for navigation and gate progression.
  */
 export const workflowPrimaryStepIds = [
   "brief",
   "phase-action",
-  "operational-task",
   "force-mission",
+  "ov5",
   "ov1",
-  "concept-map",
   "scenario"
 ];
 
-/** Left rail contains only the seven authoritative mainline products. */
+/** Left rail contains the six authoritative mainline products. */
 export const workflowTracks = [
   { id: "brief", label: "简报", summary: "目标 · 边界 · 假设 · 效果", viewIds: ["brief"], defaultOpen: true },
   { id: "phase", label: "阶段行动", summary: "阶段 · 行动 · 进入退出", viewIds: ["phase-action"], defaultOpen: false },
-  { id: "task", label: "作战任务", summary: "阵营 · 类型 · 区域 · 效果", viewIds: ["operational-task"], defaultOpen: false },
-  { id: "force", label: "作战兵力", summary: "编成 · 任务承接 · 平台", viewIds: ["force-mission"], defaultOpen: false },
-  { id: "overall", label: "总体图", summary: "OV1a · 主体 · 关系 · 闭环", viewIds: ["ov1"], defaultOpen: false },
-  { id: "map", label: "概念图", summary: "空间化表达 · 研究参考", viewIds: ["concept-map"], defaultOpen: false },
-  { id: "simulation", label: "仿真演示", summary: "输入 · 运行 · 结果校核", viewIds: ["scenario"], defaultOpen: false }
+  { id: "force", label: "任务与兵力", summary: "任务 · 编成 · 平台承接", viewIds: ["force-mission"], defaultOpen: false },
+  { id: "activity", label: "活动机理", summary: "活动网络 · I/O · OODA闭环", viewIds: ["ov5"], defaultOpen: false },
+  { id: "overall", label: "总体概念", summary: "高层协同 · 空间态势", viewIds: ["ov1"], defaultOpen: false },
+  { id: "simulation", label: "仿真推演", summary: "输入 · 运行 · 结果校核", viewIds: ["scenario"], defaultOpen: false }
 ];
 
 views.forEach((view) => { view.phase = workflowPhaseById[view.id] || "其他"; });

@@ -15,6 +15,130 @@ export function hasPersistedOodaModel() {
   }
 }
 
+/**
+ * 动态 OODA 闭环健康度诊断引擎（只读透镜）
+ * 根据 OV-5b 活动流拓扑与语义，实时评估杀伤网与决策闭环的完整度与因果闭合性。
+ * @param {object} ov5Model OV-5 作战活动模型 (含 activities 和 edges)
+ * @returns {{ categorized: object, diagnostics: Array<object>, healthScore: number, loopClosed: boolean, feedbackEdges: Array<object> }}
+ */
+export function evaluateOodaLoopHealth(ov5Model = {}) {
+  const activities = Array.isArray(ov5Model?.activities) ? ov5Model.activities : [];
+  const edges = Array.isArray(ov5Model?.edges) ? ov5Model.edges : [];
+  const activityMap = new Map(activities.map((a) => [a.id, a]));
+
+  const matchKeywords = (activity, keywords) => {
+    const text = [
+      activity.type,
+      activity.title,
+      activity.text,
+      activity.input,
+      activity.output
+    ].filter(Boolean).join(" ");
+    return keywords.some((kw) => text.includes(kw));
+  };
+
+  const categorized = {
+    observe: activities.filter((a) => matchKeywords(a, ["感知", "侦察", "监视", "探测", "预警", "巡逻", "搜潜", "雷达"])),
+    orient: activities.filter((a) => matchKeywords(a, ["识别", "融合", "评估", "判断", "分析", "分批", "跟踪", "解算", "判决"])),
+    decide: activities.filter((a) => matchKeywords(a, ["决策", "协同", "规划", "任务分配", "指挥", "授权", "下达", "指控"])),
+    act: activities.filter((a) => matchKeywords(a, ["打击", "干扰", "机动", "发射", "防护", "拦截", "突击", "压制", "控制", "行动"])),
+    feedback: activities.filter((a) => matchKeywords(a, ["战损评估", "战果确认", "态势更新", "回传", "毁伤", "效果评估", "反馈", "重组"]))
+  };
+
+  const diagnostics = [];
+
+  // 1. 检查各环基础活动覆盖
+  if (!categorized.observe.length) {
+    diagnostics.push({
+      level: "error",
+      code: "NO_OBSERVE",
+      label: "缺少感知活动 (Observe)",
+      message: "活动网络中未检测到侦察预警或态势感知活动，决策链缺乏源头输入。"
+    });
+  }
+  if (!categorized.decide.length) {
+    diagnostics.push({
+      level: "warn",
+      code: "NO_DECIDE",
+      label: "缺少决策节点 (Decide)",
+      message: "活动网络中缺少明确的指挥协同或任务分配决策活动，易受单点断链影响。"
+    });
+  }
+  if (!categorized.act.length) {
+    diagnostics.push({
+      level: "error",
+      code: "NO_ACT",
+      label: "缺少行动节点 (Act)",
+      message: "活动网络中缺少实质作战行动（打击、干扰、防护等），作战能力无法闭合。"
+    });
+  }
+
+  // 2. 检查反哺闭环 (Feedback Loop)
+  const actAndFeedbackIds = new Set([
+    ...categorized.act.map((a) => a.id),
+    ...categorized.feedback.map((a) => a.id)
+  ]);
+  const observeAndDecideIds = new Set([
+    ...categorized.observe.map((a) => a.id),
+    ...categorized.orient.map((a) => a.id),
+    ...categorized.decide.map((a) => a.id)
+  ]);
+
+  const feedbackEdges = edges.filter((edge) => {
+    const srcId = edge.sourceId;
+    const tgtId = edge.targetId;
+    return actAndFeedbackIds.has(srcId) && observeAndDecideIds.has(tgtId);
+  });
+
+  const loopClosed = feedbackEdges.length > 0;
+  if (!loopClosed && activities.length >= 3) {
+    diagnostics.push({
+      level: "critical_gap",
+      code: "NO_FEEDBACK_LOOP",
+      label: "未形成自适应闭环 (No Feedback)",
+      message: "行动/打击后缺少向感知或决策层回传的反馈边，未形成闭合的 OODA 自适应作战循环。",
+      quickFixAction: "recommend-feedback-activity"
+    });
+  }
+
+  // 3. 检查孤立节点
+  const connectedNodeIds = new Set(edges.flatMap((e) => [e.sourceId, e.targetId]));
+  const orphanActivities = activities.filter((a) => !connectedNodeIds.has(a.id));
+  if (orphanActivities.length > 0 && activities.length > 1) {
+    diagnostics.push({
+      level: "warn",
+      code: "ORPHAN_ACTIVITIES",
+      label: `存在 ${orphanActivities.length} 个未连接活动`,
+      message: `活动 [${orphanActivities.slice(0, 3).map((a) => a.title).join(", ")}${orphanActivities.length > 3 ? "..." : ""}] 尚未配置前后置信息流或控制流。`
+    });
+  }
+
+  // 4. 计算综合健康度得分 (0 - 100)
+  let score = 100;
+  for (const d of diagnostics) {
+    if (d.level === "critical_gap") score -= 30;
+    else if (d.level === "error") score -= 20;
+    else if (d.level === "warn") score -= 10;
+  }
+  if (!activities.length) score = 0;
+  const healthScore = Math.max(0, Math.min(100, score));
+
+  return {
+    categorized,
+    diagnostics,
+    healthScore,
+    loopClosed,
+    feedbackEdges,
+    stats: {
+      observeCount: categorized.observe.length,
+      orientCount: categorized.orient.length,
+      decideCount: categorized.decide.length,
+      actCount: categorized.act.length,
+      feedbackCount: categorized.feedback.length
+    }
+  };
+}
+
 export function loadOodaModel(ov5Model) {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -113,7 +237,11 @@ export function getOodaFreshness(oodaModel, ov5Model) {
 }
 
 export function persistOodaModel(model) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(model));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(model));
+  } catch {
+    // Node environment fallback
+  }
 }
 
 export function addOodaNode(model, laneId) {

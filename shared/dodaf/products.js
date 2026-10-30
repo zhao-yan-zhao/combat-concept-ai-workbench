@@ -43,6 +43,8 @@ export function normalizeDodafOv1(value) {
       kind,
       dm2Type: OV1_KIND_TO_DM2[kind] || "Performer",
       evidenceRefs: normalizeStringList(node?.evidenceRefs, 12, 240),
+      sourceConceptForceIds: normalizeStringList(node?.sourceConceptForceIds, 30, 240),
+      sourceOv5ActivityIds: normalizeStringList(node?.sourceOv5ActivityIds, 30, 240),
       className: ["", "blue", "gold"].includes(className) ? className : "",
       x: clean(node?.x, 80),
       y: clean(node?.y, 80)
@@ -632,6 +634,16 @@ export function normalizeDodafOv2(value) {
     return entityIds.has(needline.sourceId) && entityIds.has(needline.targetId) ? [needline] : [];
   });
 
+  const explicitStatus = clean(value?.status, 40);
+  const status = ["pending_review", "confirmed", "stale", "conflict"].includes(explicitStatus)
+    ? explicitStatus
+    : exchanges.length > 0
+      ? "confirmed"
+      : value?.confirmedAt
+        ? "confirmed"
+        : "pending_review";
+  const confirmedAt = clean(value?.confirmedAt, 80) || (status === "confirmed" ? (clean(value?.confirmedAt, 80) || nowIso(value?.updatedAt || value?.generatedAt)) : "");
+
   return createProductEnvelope({
     product: "OV-2",
     architectureId: value?.architectureId,
@@ -643,6 +655,8 @@ export function normalizeDodafOv2(value) {
     extra: {
       version: 1,
       kind: "persisted-ov2-operational-exchange",
+      status,
+      confirmedAt,
       generatedAt: nowIso(value?.generatedAt),
       source: normalizeSourceSummary(value?.source),
       nodes,
@@ -696,6 +710,16 @@ export function normalizeDodafOv3(value) {
       properties: { exchangeId: exchange.id, exchangeType: exchange.exchangeType, compatibility: exchange.compatibility }
     }));
 
+  const explicitStatus = clean(value?.status, 40);
+  const status = ["pending_review", "confirmed", "stale", "conflict"].includes(explicitStatus)
+    ? explicitStatus
+    : exchanges.length > 0
+      ? "confirmed"
+      : value?.confirmedAt
+        ? "confirmed"
+        : "pending_review";
+  const confirmedAt = clean(value?.confirmedAt, 80) || (status === "confirmed" ? (clean(value?.confirmedAt, 80) || nowIso(value?.updatedAt || value?.generatedAt)) : "");
+
   return createProductEnvelope({
     product: "OV-3",
     architectureId: value?.architectureId,
@@ -707,6 +731,8 @@ export function normalizeDodafOv3(value) {
     extra: {
       version: 1,
       kind: "persisted-ov3-resource-exchange",
+      status,
+      confirmedAt,
       generatedAt: nowIso(value?.generatedAt),
       source: normalizeSourceSummary(value?.source),
       activities,
@@ -796,6 +822,16 @@ export function normalizeDodafOv4(value) {
       properties: relation
     }));
 
+  const explicitStatus = clean(value?.status, 40);
+  const status = ["pending_review", "confirmed", "stale", "conflict"].includes(explicitStatus)
+    ? explicitStatus
+    : (roles.length > 0 || relations.length > 0)
+      ? "confirmed"
+      : value?.confirmedAt
+        ? "confirmed"
+        : "pending_review";
+  const confirmedAt = clean(value?.confirmedAt, 80) || (status === "confirmed" ? (clean(value?.confirmedAt, 80) || nowIso(value?.updatedAt || value?.generatedAt)) : "");
+
   return createProductEnvelope({
     product: "OV-4",
     architectureId: value?.architectureId,
@@ -807,6 +843,8 @@ export function normalizeDodafOv4(value) {
     extra: {
       version: 1,
       kind: "persisted-ov4-abstract-responsibility",
+      status,
+      confirmedAt,
       generatedAt: nowIso(value?.generatedAt),
       roles,
       relations,
@@ -852,6 +890,16 @@ export function normalizeDodafOv5a(value) {
     name: "part-of",
     properties: { status: item.status, sourceRefs: item.sourceRefs }
   }));
+  const explicitStatus = clean(value?.status, 40);
+  const status = ["pending_review", "confirmed", "stale", "conflict"].includes(explicitStatus)
+    ? explicitStatus
+    : decompositions.length > 0
+      ? "confirmed"
+      : value?.confirmedAt
+        ? "confirmed"
+        : "pending_review";
+  const confirmedAt = clean(value?.confirmedAt, 80) || (status === "confirmed" ? (clean(value?.confirmedAt, 80) || nowIso(value?.updatedAt || value?.generatedAt)) : "");
+
   return createProductEnvelope({
     product: "OV-5a",
     architectureId: value?.architectureId,
@@ -863,6 +911,8 @@ export function normalizeDodafOv5a(value) {
     extra: {
       version: 2,
       kind: "persisted-ov5a-operational-activity-decomposition",
+      status,
+      confirmedAt,
       generatedAt: nowIso(value?.generatedAt),
       decompositions,
       diagnostics: normalizeDiagnostics(value?.diagnostics)
@@ -1053,6 +1103,18 @@ export function normalizeDodafOv6a(value) {
     .filter((item) => item.sourceId && item.targetId)
     .slice(0, 480);
 
+  const ruleChangeSet = normalizeRuleChangeSet(value?.ruleChangeSet);
+  const hasPending = Boolean(ruleChangeSet?.changes?.some((change) => change.status === "pending"));
+  const explicitStatus = clean(value?.status, 40);
+  const status = ["pending_review", "confirmed", "stale", "conflict"].includes(explicitStatus)
+    ? explicitStatus
+    : (rules.length > 0 && !hasPending)
+      ? "confirmed"
+      : value?.confirmedAt
+        ? "confirmed"
+        : "pending_review";
+  const confirmedAt = clean(value?.confirmedAt, 80) || (status === "confirmed" ? (clean(value?.confirmedAt, 80) || nowIso(value?.updatedAt || value?.generatedAt)) : "");
+
   return createProductEnvelope({
     product: "OV-6a",
     architectureId: value?.architectureId,
@@ -1064,9 +1126,11 @@ export function normalizeDodafOv6a(value) {
     extra: {
       version: 2,
       kind: "persisted-ov6a-operational-rules",
+      status,
+      confirmedAt,
       generatedAt: nowIso(value?.generatedAt),
       rules,
-      ruleChangeSet: normalizeRuleChangeSet(value?.ruleChangeSet),
+      ruleChangeSet,
       diagnostics: buildOv6aDiagnostics(rules, value?.diagnostics)
     }
   });
@@ -1332,6 +1396,16 @@ export function normalizeDodafOv6b(value) {
     });
   }
 
+  const explicitStatus = clean(value?.status, 40);
+  const status = ["pending_review", "confirmed", "stale", "conflict"].includes(explicitStatus)
+    ? explicitStatus
+    : stateMachines.length > 0
+      ? "confirmed"
+      : value?.confirmedAt
+        ? "confirmed"
+        : "pending_review";
+  const confirmedAt = clean(value?.confirmedAt, 80) || (status === "confirmed" ? (clean(value?.confirmedAt, 80) || nowIso(value?.updatedAt || value?.generatedAt)) : "");
+
   return createProductEnvelope({
     product: "OV-6b",
     architectureId: value?.architectureId,
@@ -1343,6 +1417,8 @@ export function normalizeDodafOv6b(value) {
     extra: {
       version: 2,
       kind: "persisted-ov6b-state-transition",
+      status,
+      confirmedAt,
       generatedAt: nowIso(value?.generatedAt),
       stateMachines,
       states,
@@ -1480,7 +1556,7 @@ export function normalizeDodafOv6c(value) {
   const rawSequences = Array.isArray(value?.sequences)
     ? value.sequences
     : legacyEventsToSequences(value);
-  const sequences = rawSequences.slice(0, 24).map((sequence, index) => normalizeOv6cSequence(sequence, index));
+  const sequences = rawSequences.slice(0, 96).map((sequence, index) => normalizeOv6cSequence(sequence, index));
 
   // Flatten messages → events for current table UI / diagnostics.
   const events = [];
@@ -1534,6 +1610,16 @@ export function normalizeDodafOv6c(value) {
     ? value.unresolved
     : { unscheduledNodeIds: [], orphanTimelineIds: [], outOfOrderIds: [] };
 
+  const explicitStatus = clean(value?.status, 40);
+  const status = ["pending_review", "confirmed", "stale", "conflict"].includes(explicitStatus)
+    ? explicitStatus
+    : sequences.length > 0
+      ? "confirmed"
+      : value?.confirmedAt
+        ? "confirmed"
+        : "pending_review";
+  const confirmedAt = clean(value?.confirmedAt, 80) || (status === "confirmed" ? (clean(value?.confirmedAt, 80) || nowIso(value?.updatedAt || value?.generatedAt)) : "");
+
   return createProductEnvelope({
     product: "OV-6c",
     architectureId: value?.architectureId,
@@ -1545,6 +1631,8 @@ export function normalizeDodafOv6c(value) {
     extra: {
       version: 2,
       kind: "persisted-ov6c-event-trace",
+      status,
+      confirmedAt,
       generatedAt: nowIso(value?.generatedAt),
       source: normalizeSourceSummary(value?.source),
       sequences,

@@ -82,6 +82,27 @@
           <div class="sync-state" id="projectStorageState"><span></span> 正在检查</div>
         </div>
 
+                <!-- 顶部消息通知中心与历史抽屉 (方案一) -->
+        <div class="notification-capsule-wrap" id="notificationCapsuleWrap">
+          <button class="notification-capsule-btn" id="notificationCapsuleBtn" type="button" title="点击查看消息记录与后台任务" aria-expanded="false">
+            <span class="capsule-bell">🔔</span>
+            <span class="capsule-label">消息</span>
+            <span class="capsule-badge" id="capsuleBadge" hidden>0</span>
+          </button>
+          <div class="notification-drawer" id="notificationDrawer" hidden aria-label="消息历史面板">
+            <div class="notification-drawer-head">
+              <div class="drawer-title"><span class="drawer-icon">🔔</span><strong>消息中心</strong><span class="drawer-count" id="drawerMsgCount">0</span></div>
+              <div class="drawer-actions">
+                <button class="quiet-button danger-quiet" id="clearNotificationsBtn" type="button" title="清空历史记录">清空</button>
+                <button class="quiet-button" id="closeNotificationDrawerBtn" type="button" title="收起面板">收起</button>
+              </div>
+            </div>
+            <div class="notification-drawer-body" id="notificationDrawerBody">
+              <div class="notification-empty">暂无历史消息</div>
+            </div>
+          </div>
+        </div>
+
         <div class="menubar-actions">
           <button id="workflowTestModeBtn" class="workflow-test-mode-toggle" type="button" role="switch" data-action="toggle-workflow-test-mode" aria-checked="false" title="启用测试模式，所有阶段可自由访问"><span class="workflow-test-mode-track" aria-hidden="true"></span><span>测试模式</span></button>
           <button id="collaborationIdentityBtn" class="quiet-button collaboration-identity-button" type="button" data-action="open-account-management">账号管理</button>
@@ -102,9 +123,14 @@
             <span id="workflowModeEstimate">通常少于 1 分钟</span>
           </div>
           <small id="workflowModeProgressHint">进度按预计耗时估算，实际以 AI 返回为准</small>
-          <button id="workflowModeOverlayDismissBtn" class="workflow-mode-overlay-dismiss" type="button" data-action="force-dismiss-busy-overlay" hidden title="操作耗时较长时可点击退出等待">
-            解除等待并恢复工作台
-          </button>
+          <div class="workflow-overlay-action-row">
+            <button id="workflowModeOverlayBackgroundBtn" class="workflow-mode-overlay-background-btn" type="button" data-action="minimize-busy-overlay" title="转入后台运行，可在顶部消息中心实时查看进度">
+              转入后台运行
+            </button>
+            <button id="workflowModeOverlayDismissBtn" class="workflow-mode-overlay-dismiss" type="button" data-action="force-dismiss-busy-overlay" hidden title="操作耗时较长时可点击退出等待">
+              解除等待并恢复工作台
+            </button>
+          </div>
         </div>
       </div>
 
@@ -168,6 +194,6 @@
     <div class="toast" id="toast" role="status"></div>
     <input id="knowledgeVaultInput" type="file" accept=".md,.markdown,.txt" webkitdirectory directory multiple hidden>
     <script src="./vendor/drawflow-0.0.60.min.js"></script>
-    <script type="module" src="./src/main.js?v=0.68-task-group"></script>
+    <script type="module" src="./src/main.js?v=1793343541207"></script>
   </body>
 </html>
