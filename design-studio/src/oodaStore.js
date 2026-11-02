@@ -123,6 +123,12 @@ export function evaluateOodaLoopHealth(ov5Model = {}) {
   if (!activities.length) score = 0;
   const healthScore = Math.max(0, Math.min(100, score));
 
+  // 5. 深度动力学测算：时延预算、单点脆弱性(SPOF)与自主等级评估
+  const latencyBudget = calculateLatencyBudget(activities, edges);
+  const bottlenecks = findSinglePointsOfFailure(activities, edges);
+  const autonomyStats = calculateAutonomyStats(activities);
+  const domainCoverage = [...new Set(activities.map((a) => a.domain || "综合").filter(Boolean))];
+
   return {
     categorized,
     diagnostics,
@@ -135,8 +141,80 @@ export function evaluateOodaLoopHealth(ov5Model = {}) {
       decideCount: categorized.decide.length,
       actCount: categorized.act.length,
       feedbackCount: categorized.feedback.length
-    }
+    },
+    latencyBudget,
+    bottlenecks,
+    autonomyStats,
+    domainCoverage
   };
+}
+
+function calculateLatencyBudget(activities = [], edges = []) {
+  let totalSeconds = 0;
+  const parseSeconds = (durationStr) => {
+    const text = String(durationStr || "").trim().toLowerCase();
+    if (!text || text === "待估算" || text === "持续") return 60;
+    const minMatch = text.match(/(\d+)(?:-(\d+))?\s*(?:m|min|分钟)/i);
+    if (minMatch) {
+      const min = Number(minMatch[2] || minMatch[1]);
+      return min * 60;
+    }
+    const secMatch = text.match(/(\d+)(?:-(\d+))?\s*(?:s|sec|秒)/i);
+    if (secMatch) {
+      return Number(secMatch[2] || secMatch[1]);
+    }
+    const hourMatch = text.match(/(\d+)(?:-(\d+))?\s*(?:h|hour|小时)/i);
+    if (hourMatch) {
+      return Number(hourMatch[2] || hourMatch[1]) * 3600;
+    }
+    return 120;
+  };
+
+  activities.forEach((act) => {
+    totalSeconds += parseSeconds(act.duration || act.timingWindow);
+  });
+
+  const formattedTotal = totalSeconds >= 3600
+    ? `${(totalSeconds / 3600).toFixed(1)} 小时`
+    : totalSeconds >= 60
+      ? `${Math.round(totalSeconds / 60)} 分钟`
+      : `${totalSeconds} 秒`;
+
+  return {
+    totalSeconds,
+    formattedTotal,
+    exceedsBudget: totalSeconds > 7200
+  };
+}
+
+function findSinglePointsOfFailure(activities = [], edges = []) {
+  if (activities.length < 3) return [];
+  const inDegree = new Map(activities.map((a) => [a.id, 0]));
+  const outDegree = new Map(activities.map((a) => [a.id, 0]));
+  edges.forEach((e) => {
+    inDegree.set(e.targetId, (inDegree.get(e.targetId) || 0) + 1);
+    outDegree.set(e.sourceId, (outDegree.get(e.sourceId) || 0) + 1);
+  });
+
+  return activities.filter((a) => {
+    const isMidpoint = (inDegree.get(a.id) || 0) >= 1 && (outDegree.get(a.id) || 0) >= 1;
+    const isCrucial = String(a.type).includes("决策") || String(a.type).includes("控制") || String(a.title).includes("中继");
+    const hasNoFallback = !a.resilienceFallback;
+    return isMidpoint && isCrucial && hasNoFallback;
+  });
+}
+
+function calculateAutonomyStats(activities = []) {
+  let hitl = 0;
+  let hotl = 0;
+  let hootl = 0;
+  activities.forEach((a) => {
+    const auto = String(a.autonomy || "").toUpperCase();
+    if (auto === "HITL" || auto.includes("人在回路")) hitl += 1;
+    else if (auto === "HOOTL" || auto.includes("全自主") || auto.includes("人外")) hootl += 1;
+    else hotl += 1;
+  });
+  return { hitl, hotl, hootl, total: activities.length };
 }
 
 export function loadOodaModel(ov5Model) {

@@ -15,6 +15,7 @@ export function renderOv2(state) {
   const viewMode = state.ov2ViewMode || "canvas"; // 'canvas' | 'table'
   const flowFilter = state.ov2FlowFilter || "all"; // 'all' | 'control' | 'information' | 'resource'
   const helpOpen = state.ov2HelpOpen === true;
+  const sidebarCollapsed = state.ov2SidebarCollapsed === true;
   const editorOpen = state.ov2EditorOpen !== false && Boolean(selectedExchangeId || selectedNodeId);
 
   const nodes = model.nodes || [];
@@ -66,12 +67,11 @@ export function renderOv2(state) {
           <div class="ov2-title-row">
             <h2>作战资源流描述</h2>
             <span class="mini-tag ${source === "persisted" ? "is-persisted" : "is-seed"}">${source === "persisted" ? "已持久化" : "草稿/种子"} · DM2</span>
-            <span class="ov2-stats-pill">${nodes.length} 个节点 · ${exchanges.length} 条资源流</span>
-            <button type="button" class="quiet-button ov2-help-pill-btn ${helpOpen ? "is-active" : ""}" data-action="ov2-toggle-help" title="点击展开/收起规范定位与背景种子说明">
-              ℹ️ 规范与种子语义 ${helpOpen ? "▲" : "▼"}
+            <span class="ov2-stats-pill">${nodes.length} 个执行者 · ${exchanges.length} 条资源流</span>
+            <button type="button" class="quiet-button ov2-help-pill-btn ${helpOpen ? "is-active" : ""}" data-action="ov2-toggle-help" title="点击展开/收起规范定位与背景种子说明（交换事实由 OV-2 拥有）">
+              ℹ️ 规范说明 ${helpOpen ? "▲" : "▼"}
             </button>
           </div>
-          <p class="ov2-subtitle">DoDAF 2.02 / DM2 交换事实（Needline / ResourceFlow），刻画执行者间的控制、信息与物资流转契约。</p>
         </div>
         <div class="ov2-header-actions">
           ${renderProjectStorageState(storage, { refreshAction: "refresh-project-ov2" })}
@@ -99,7 +99,7 @@ export function renderOv2(state) {
       </div>
 
       <!-- Main 3-panel workbench -->
-      <div class="ov2-workbench ${editorOpen ? "is-editor-open" : ""}">
+      <div class="ov2-workbench ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${editorOpen ? "is-editor-open" : ""}">
         <!-- Left Panel: Nodes / Performers (grouped-list compliant) -->
         <aside class="ov2-node-panel" data-grouped-list-panel="ov2" data-grouped-list-dimensions="层级:level|类型:type|状态:status" data-grouped-list-default-group="level">
           <div class="ov2-panel-head">
@@ -107,11 +107,18 @@ export function renderOv2(state) {
               <h3>作战执行者 (Performer)</h3>
               <span class="ov2-badge">${nodes.length}</span>
             </div>
-            ${selectedNodeId ? `
-              <button type="button" class="quiet-button ov2-clear-filter-btn" data-action="clear-ov2-node-filter" title="清除节点聚焦">
-                清除聚焦 ✕
+            <div class="ov2-panel-head-actions">
+              ${selectedNodeId ? `
+                <button type="button" class="quiet-button ov2-clear-filter-btn" data-action="clear-ov2-node-filter" title="清除节点聚焦">
+                  清除 ✕
+                </button>
+              ` : ""}
+              <button type="button" class="ov2-panel-btn" data-action="ov2-toggle-sidebar" title="收起左侧执行者列表，最大化画布空间" aria-label="收起左侧列表">
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M11 4L7 8l4 4M4 4v8"></path>
+                </svg>
               </button>
-            ` : ""}
+            </div>
           </div>
           <div class="ov2-node-list" data-grouped-list-items>
             ${nodes.map((node) => {
@@ -145,13 +152,24 @@ export function renderOv2(state) {
         <!-- Center Main Panel: Dual-mode Topology Canvas / Structured Table -->
         <main class="ov2-main-panel">
           <header class="ov2-canvas-head">
-            <!-- Flow type filters -->
-            <div class="ov2-flow-filter-group" aria-label="资源流类型过滤">
-              <span class="ov2-filter-label">流过滤:</span>
-              <button type="button" class="ov2-filter-btn ${flowFilter === "all" ? "is-active" : ""}" data-action="ov2-filter-flow" data-flow="all">全部 (${exchanges.length})</button>
-              <button type="button" class="ov2-filter-btn flow-control ${flowFilter === "control" ? "is-active" : ""}" data-action="ov2-filter-flow" data-flow="control"><i class="dot control"></i>控制流 (${controlCount})</button>
-              <button type="button" class="ov2-filter-btn flow-information ${flowFilter === "information" ? "is-active" : ""}" data-action="ov2-filter-flow" data-flow="information"><i class="dot information"></i>信息流 (${infoCount})</button>
-              <button type="button" class="ov2-filter-btn flow-resource ${flowFilter === "resource" ? "is-active" : ""}" data-action="ov2-filter-flow" data-flow="resource"><i class="dot resource"></i>物资流 (${resourceCount})</button>
+            <div class="ov2-canvas-head-left">
+              ${sidebarCollapsed ? `
+                <button type="button" class="ov2-expand-sidebar-btn" data-action="ov2-toggle-sidebar" title="展开左侧执行者列表" aria-label="展开左侧列表">
+                  <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 4h10M3 8h10M3 12h6"></path><path d="M11 10l2 2-2 2"></path>
+                  </svg>
+                  <span>执行者列表</span>
+                </button>
+              ` : ""}
+
+              <!-- Flow type filters -->
+              <div class="ov2-flow-filter-group" aria-label="资源流类型过滤">
+                <span class="ov2-filter-label">流过滤:</span>
+                <button type="button" class="ov2-filter-btn ${flowFilter === "all" ? "is-active" : ""}" data-action="ov2-filter-flow" data-flow="all">全部 (${exchanges.length})</button>
+                <button type="button" class="ov2-filter-btn flow-control ${flowFilter === "control" ? "is-active" : ""}" data-action="ov2-filter-flow" data-flow="control"><i class="dot control"></i>控制流 (${controlCount})</button>
+                <button type="button" class="ov2-filter-btn flow-information ${flowFilter === "information" ? "is-active" : ""}" data-action="ov2-filter-flow" data-flow="information"><i class="dot information"></i>信息流 (${infoCount})</button>
+                <button type="button" class="ov2-filter-btn flow-resource ${flowFilter === "resource" ? "is-active" : ""}" data-action="ov2-filter-flow" data-flow="resource"><i class="dot resource"></i>物资流 (${resourceCount})</button>
+              </div>
             </div>
 
             <!-- View mode switch -->

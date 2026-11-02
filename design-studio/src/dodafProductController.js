@@ -9,6 +9,14 @@ import { createProjectModelSyncController } from "./projectModelSyncController.j
 import { mergeProductsIntoArchitecture } from "../../shared/dodaf/architectureWriteback.js";
 import { applyOv5aToOv5b, applyOv5bToOv5a, setOv5aParent, syncOv5ActivityPair } from "../../shared/dodaf/ov5ActivitySync.js";
 import { persistOv5Model } from "./ov5Store.js";
+import {
+  applyTemplateToActivity,
+  applyGlobalTemplate,
+  generateLocalDecomposition,
+  autoOrganizeOv5aHierarchy,
+  getOv5aTemplates
+} from "./ov5aTemplates.js";
+import { generateWithAi } from "../../shared/aiClient.js";
 import { compactForceMissionForAnalysis } from "../../shared/conceptPlanning.js";
 import {
   applyOrganizationRelationshipDraft,
@@ -100,7 +108,7 @@ import {
 } from "./ov4DiagramStore.js";
 import { generateWithAiStream, isAiOutput } from "../../shared/aiClient.js";
 import { generateMockOutput } from "../../shared/generator.js";
-import { normalizeDodafOv1b, normalizeDodafOv2, normalizeDodafOv3, normalizeDodafOv4, normalizeDodafOv6b, normalizeDodafOv6c } from "../../shared/dodaf/products.js";
+import { normalizeDodafOv1b, normalizeDodafOv1c, normalizeDodafOv2, normalizeDodafOv3, normalizeDodafOv4, normalizeDodafOv5a, normalizeDodafOv6b, normalizeDodafOv6c, normalizeDodafOv7 } from "../../shared/dodaf/products.js";
 import { applySequenceDraft } from "./sequenceChatController.js";
 import { addOv1bTaskGroup, moveOv1bTaskStep, removeOv1bTaskGroup, setOv1bStepMode, updateOv1bTaskGroup } from "./ov1bStore.js";
 import { buildOv1cModel, buildOv7Model, updateMappingProduct } from "./mappingProductStore.js";
@@ -1924,6 +1932,191 @@ export function createDodafProductController({
       }
     },
 
+    async pregenerateOv5a({ silent = false, force = false } = {}) {
+      const state = getState();
+      if (state.ov5aPregenerating) return { skipped: true, reason: "busy" };
+      const current = state.ov5a && typeof state.ov5a === "object"
+        ? normalizeDodafOv5a(state.ov5a)
+        : null;
+      if (!force && current && (current.decomposition?.length || current.activities?.length)) {
+        return { skipped: true, reason: "has-ov5a" };
+      }
+      const ov5 = state.ov5;
+      const activities = Array.isArray(ov5?.activities) ? ov5.activities : [];
+      if (!activities.length) {
+        if (!silent) notify("未能生成活动分解：请先在 OV-5 建立作战活动网络");
+        return { skipped: true, reason: "no-ov5-activities" };
+      }
+
+      state.ov5aPregenerating = true;
+      render();
+      try {
+        const pair = syncOv5ActivityPair({ ov5, ov5a: force ? null : state.ov5a, source: "ov5" });
+        const ov5aModel = {
+          ...pair.ov5a,
+          status: "confirmed",
+          confirmedAt: pair.ov5a.confirmedAt || new Date().toISOString()
+        };
+        state.ov5a = saveLocalDodafProduct("ov5a", ov5aModel, projectId);
+        if (syncOv5) await syncOv5(state.ov5, { source: "ov5a:pregenerate" });
+        await syncControllers.ov5a.sync(state.ov5a, { source: "ov5a:pregenerate" });
+        await writebackArchitecture("ov5a:pregenerate");
+        if (!silent) {
+          notify(`已根据当前作战活动网络生成活动分解树 (OV-5a)，包含 ${ov5aModel.decomposition?.length || 0} 个活动节点`);
+        }
+        return { applied: ov5aModel.decomposition?.length || 0, skipped: false };
+      } catch (error) {
+        if (!silent) notify("作战活动分解生成失败，请在 OV-5a 页面重试");
+        return { skipped: true, reason: "error", error: error instanceof Error ? error.message : String(error || "") };
+      } finally {
+        state.ov5aPregenerating = false;
+        render();
+      }
+    },
+
+    async pregenerateOv1c({ silent = false, force = false } = {}) {
+      const state = getState();
+      if (state.ov1cPregenerating) return { skipped: true, reason: "busy" };
+      const current = state.ov1c && typeof state.ov1c === "object"
+        ? normalizeDodafOv1c(state.ov1c)
+        : null;
+      if (!force && current && (current.mappings || []).length > 0 && current.mappings.some((m) => (m.activityRefs || []).length > 0)) {
+        return { skipped: true, reason: "has-ov1c" };
+      }
+
+      state.ov1cPregenerating = true;
+      render();
+      try {
+        const rawModel = buildOv1cModel(state);
+        const activities = Array.isArray(state.ov5?.activities) ? state.ov5.activities : [];
+        const tasks = Array.isArray(state.forceMission?.tasks) ? state.forceMission.tasks : (state.forceMissionPlan?.tasks || []);
+
+        const mappings = (rawModel.mappings || []).map((mapping) => {
+          if ((mapping.activityRefs || []).length > 0) return mapping;
+          const task = tasks.find((t) => t.id === mapping.taskRef);
+          if (!task) return mapping;
+
+          let matched = activities.filter((act) => act.sourceTaskId === task.id).map((a) => a.id);
+          if (!matched.length) {
+            const taskName = String(task.name || "").toLowerCase();
+            const missionType = String(task.missionType || "").toLowerCase();
+            matched = activities.filter((act) => {
+              const actTitle = String(act.title || "").toLowerCase();
+              const actType = String(act.type || "").toLowerCase();
+              if (taskName && actTitle.includes(taskName)) return true;
+              if (missionType.includes("recon") && (actType.includes("感知") || actType.includes("识别"))) return true;
+              if (missionType.includes("strike") && (actType.includes("行动") || actType.includes("控制"))) return true;
+              if (missionType.includes("c2") && (actType.includes("决策") || actType.includes("控制"))) return true;
+              return false;
+            }).map((a) => a.id);
+          }
+          if (matched.length) {
+            return {
+              ...mapping,
+              activityRefs: matched,
+              coverageStatus: "covered",
+              judgment: "accepted",
+              status: "confirmed"
+            };
+          }
+          return mapping;
+        });
+
+        const next = normalizeDodafOv1c({
+          ...rawModel,
+          mappings,
+          status: "confirmed",
+          confirmedAt: new Date().toISOString()
+        });
+
+        state.ov1c = saveLocalDodafProduct("ov1c", next, projectId);
+        await syncControllers.ov1c.sync(state.ov1c, { source: "ov1c:pregenerate" });
+        await writebackArchitecture("ov1c:pregenerate");
+        if (!silent) {
+          const coveredCount = next.mappings.filter((m) => (m.activityRefs || []).length > 0).length;
+          notify(`已生成任务与作战活动映射 (OV-1c)，覆盖 ${coveredCount}/${next.mappings.length} 项作战任务`);
+        }
+        return { applied: next.mappings.length, skipped: false };
+      } catch (error) {
+        if (!silent) notify("任务与活动映射生成失败，请在 OV-1c 页面重试");
+        return { skipped: true, reason: "error", error: error instanceof Error ? error.message : String(error || "") };
+      } finally {
+        state.ov1cPregenerating = false;
+        render();
+      }
+    },
+
+    async pregenerateOv7({ silent = false, force = false } = {}) {
+      const state = getState();
+      if (state.ov7Pregenerating) return { skipped: true, reason: "busy" };
+      const current = state.ov7 && typeof state.ov7 === "object"
+        ? normalizeDodafOv7(state.ov7)
+        : null;
+      if (!force && current && (current.mappings || []).length > 0 && current.mappings.some((m) => (m.activityRefs || []).length > 0)) {
+        return { skipped: true, reason: "has-ov7" };
+      }
+
+      state.ov7Pregenerating = true;
+      render();
+      try {
+        const rawModel = buildOv7Model(state);
+        const activities = Array.isArray(state.ov5?.activities) ? state.ov5.activities : [];
+
+        const mappings = (rawModel.mappings || []).map((mapping) => {
+          if ((mapping.activityRefs || []).length > 0) return mapping;
+          const ref = String(mapping.sourceRef || "").toLowerCase();
+          const matched = activities.filter((act) => {
+            const title = String(act.title || "").toLowerCase();
+            const type = String(act.type || "").toLowerCase();
+            if (ref.includes("sense") || ref.includes("recon") || ref.includes("侦察") || ref.includes("态势")) {
+              return type.includes("感知") || type.includes("识别");
+            }
+            if (ref.includes("strike") || ref.includes("attack") || ref.includes("打击") || ref.includes("交战")) {
+              return type.includes("行动") || type.includes("控制");
+            }
+            if (ref.includes("c2") || ref.includes("command") || ref.includes("指挥") || ref.includes("决策")) {
+              return type.includes("决策");
+            }
+            if (ref.includes("assess") || ref.includes("评估") || ref.includes("回收")) {
+              return type.includes("评估");
+            }
+            return false;
+          }).map((a) => a.id);
+
+          if (matched.length) {
+            return {
+              ...mapping,
+              activityRefs: matched,
+              judgment: "accepted",
+              status: "confirmed"
+            };
+          }
+          return mapping;
+        });
+
+        const next = normalizeDodafOv7({
+          ...rawModel,
+          mappings,
+          status: "confirmed",
+          confirmedAt: new Date().toISOString()
+        });
+
+        state.ov7 = saveLocalDodafProduct("ov7", next, projectId);
+        await syncControllers.ov7.sync(state.ov7, { source: "ov7:pregenerate" });
+        await writebackArchitecture("ov7:pregenerate");
+        if (!silent) {
+          notify(`已生成状态与作战活动映射关系 (OV-7)，包含 ${next.mappings.length} 组状态因果绑定`);
+        }
+        return { applied: next.mappings.length, skipped: false };
+      } catch (error) {
+        if (!silent) notify("状态与活动映射生成失败，请在 OV-7 页面重试");
+        return { skipped: true, reason: "error", error: error instanceof Error ? error.message : String(error || "") };
+      } finally {
+        state.ov7Pregenerating = false;
+        render();
+      }
+    },
+
     async hydrateAll({ silent = false } = {}) {
       await Promise.all(DODAF_PRODUCT_KEYS.map((resource) => syncControllers[resource].hydrate({ silent })));
       try {
@@ -1995,6 +2188,8 @@ export function createDodafProductController({
       return fileInput;
     },
 
+
+
     handleAction(action, el = null) {
       for (const resource of DODAF_PRODUCT_KEYS) {
         if (syncControllers[resource].handleAction(action)) return true;
@@ -2015,6 +2210,7 @@ export function createDodafProductController({
       }
 
       if (handleOv6WorkbenchAction(action, el)) return true;
+      if (handleOv5aWorkbenchAction(action, el)) return true;
 
       if (action === "sync-ov5a-from-ov5b") {
         void api.syncFromOv5b({ source: "manual-sync" }).then(() => {
@@ -2082,6 +2278,383 @@ export function createDodafProductController({
 
   return api;
 
+function handleOv5aWorkbenchAction(action, el) {
+  if (!action || (!action.startsWith("ov5a-") && action !== "select-ov5a-activity" && action !== "close-ov5a-inspector")) {
+    return false;
+  }
+  const state = getState();
+  const ds = el?.dataset || {};
+
+  if (action === "select-ov5a-activity") {
+    state.ov5aSelectedActivityId = ds.activityId || "";
+    render();
+    return true;
+  }
+
+  if (action === "close-ov5a-inspector") {
+    state.ov5aSelectedActivityId = null;
+    render();
+    return true;
+  }
+
+  if (action === "ov5a-filter-query") {
+    state.ov5aFilter = state.ov5aFilter || {};
+    state.ov5aFilter.query = el ? el.value : "";
+    render();
+    return true;
+  }
+
+  if (action === "ov5a-filter-clear-query") {
+    state.ov5aFilter = state.ov5aFilter || {};
+    state.ov5aFilter.query = "";
+    render();
+    return true;
+  }
+
+  if (action === "ov5a-filter-domain") {
+    state.ov5aFilter = state.ov5aFilter || {};
+    state.ov5aFilter.domain = ds.domain || "";
+    render();
+    return true;
+  }
+
+  if (action === "ov5a-filter-autonomy") {
+    state.ov5aFilter = state.ov5aFilter || {};
+    state.ov5aFilter.autonomy = ds.autonomy || "";
+    render();
+    return true;
+  }
+
+  if (action === "ov5a-filter-level") {
+    state.ov5aFilter = state.ov5aFilter || {};
+    state.ov5aFilter.level = ds.level || "";
+    render();
+    return true;
+  }
+
+  if (action === "ov5a-filter-clear") {
+    state.ov5aFilter = { query: "", domain: "", autonomy: "", level: "" };
+    render();
+    return true;
+  }
+
+  if (action === "ov5a-open-add-activity") {
+    state.ov5aModal = "add-activity";
+    state.ov5aModalContext = { parentId: "" };
+    render();
+    return true;
+  }
+
+  if (action === "ov5a-open-add-child") {
+    state.ov5aModal = "add-activity";
+    state.ov5aModalContext = { parentId: ds.parentId || "" };
+    render();
+    return true;
+  }
+
+  if (action === "ov5a-close-modal") {
+    state.ov5aModal = null;
+    state.ov5aModalContext = null;
+    render();
+    return true;
+  }
+
+  if (action === "ov5a-open-template-picker") {
+    state.ov5aModal = "template-picker";
+    state.ov5aModalContext = { targetId: ds.targetId || "" };
+    render();
+    return true;
+  }
+
+  if (action === "ov5a-submit-add-activity") {
+    const titleEl = document.getElementById("ov5a-add-title");
+    const title = titleEl ? titleEl.value.trim() : "";
+    if (!title) {
+      notify("请输入活动名称");
+      return true;
+    }
+    const parentIdEl = document.getElementById("ov5a-add-parent");
+    const parentId = parentIdEl ? parentIdEl.value.trim() : "";
+    const domainEl = document.getElementById("ov5a-add-domain");
+    const domain = domainEl ? domainEl.value : "综合";
+    const autonomyEl = document.getElementById("ov5a-add-autonomy");
+    const autonomy = autonomyEl ? autonomyEl.value : "HOTL";
+    const performerEl = document.getElementById("ov5a-add-performer");
+    const performer = performerEl ? performerEl.value.trim() : "";
+    const timingEl = document.getElementById("ov5a-add-timing");
+    const timing = timingEl ? timingEl.value.trim() : "";
+    const inputEl = document.getElementById("ov5a-add-input");
+    const input = inputEl ? inputEl.value.trim() : "";
+    const outputEl = document.getElementById("ov5a-add-output");
+    const output = outputEl ? outputEl.value.trim() : "";
+
+    const newId = `act-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const newAct = {
+      id: newId,
+      title,
+      type: "作战活动",
+      domain,
+      autonomy,
+      performer,
+      timingWindow: timing,
+      input,
+      output,
+      parentId: parentId || "",
+      text: `作战活动：${title}`
+    };
+
+    const nextActivities = [...(state.ov5?.activities || []), newAct];
+    let nextDecompositions = [...(state.ov5a?.decompositions || [])];
+    if (parentId) {
+      nextDecompositions.push({
+        parentActivityRef: parentId,
+        childActivityRef: newId,
+        rationale: "手工分解新增子活动",
+        status: "confirmed",
+        confirmedAt: new Date().toISOString()
+      });
+    }
+    const pair = syncOv5ActivityPair({
+      ov5: { ...state.ov5, activities: nextActivities },
+      ov5a: { ...state.ov5a, decompositions: nextDecompositions },
+      source: "ov5a"
+    });
+    state.ov5 = persistOv5Model(pair.ov5);
+    state.ov5a = saveLocalDodafProduct("ov5a", pair.ov5a, projectId);
+    state.ov5aModal = null;
+    state.ov5aModalContext = null;
+    state.ov5aSelectedActivityId = newId;
+
+    void (async () => {
+      if (syncOv5) await syncOv5(state.ov5, { source: "ov5a-add" });
+      await syncControllers.ov5a.sync(state.ov5a, { source: "ov5a-add" });
+      await writebackArchitecture("ov5a-add");
+      notify(`已成功新增活动「${title}」`);
+      render();
+    })();
+    return true;
+  }
+
+  if (action === "ov5a-save-activity-edit") {
+    const inspectIdEl = document.getElementById("ov5a-inspect-id");
+    const inspectId = inspectIdEl ? inspectIdEl.value.trim() : "";
+    if (!inspectId) return true;
+
+    const titleEl = document.getElementById("ov5a-inspect-title");
+    const title = titleEl ? titleEl.value.trim() : "";
+    if (!title) {
+      notify("活动名称不能为空");
+      return true;
+    }
+    const domainEl = document.getElementById("ov5a-inspect-domain");
+    const domain = domainEl ? domainEl.value : "综合";
+    const autonomyEl = document.getElementById("ov5a-inspect-autonomy");
+    const autonomy = autonomyEl ? autonomyEl.value : "HOTL";
+    const performerEl = document.getElementById("ov5a-inspect-performer");
+    const performer = performerEl ? performerEl.value.trim() : "";
+    const timingEl = document.getElementById("ov5a-inspect-timing");
+    const timing = timingEl ? timingEl.value.trim() : "";
+    const parentEl = document.getElementById("ov5a-inspect-parent");
+    const parentRef = parentEl ? parentEl.value.trim() : "";
+    const inputEl = document.getElementById("ov5a-inspect-input");
+    const input = inputEl ? inputEl.value.trim() : "";
+    const outputEl = document.getElementById("ov5a-inspect-output");
+    const output = outputEl ? outputEl.value.trim() : "";
+    const textEl = document.getElementById("ov5a-inspect-text");
+    const text = textEl ? textEl.value.trim() : "";
+
+    const activities = (state.ov5?.activities || []).map((act) => {
+      if (String(act.id) !== inspectId) return act;
+      return {
+        ...act,
+        title,
+        domain,
+        autonomy,
+        performer,
+        timingWindow: timing,
+        input,
+        output,
+        text: text || act.text || `作战活动：${title}`
+      };
+    });
+
+    const nextOv5 = { ...state.ov5, activities };
+    const nextOv5a = setOv5aParent(state.ov5a, inspectId, parentRef);
+    const pair = syncOv5ActivityPair({ ov5: nextOv5, ov5a: nextOv5a, source: "ov5a" });
+    state.ov5 = persistOv5Model(pair.ov5);
+    state.ov5a = saveLocalDodafProduct("ov5a", pair.ov5a, projectId);
+
+    void (async () => {
+      if (syncOv5) await syncOv5(state.ov5, { source: "ov5a-edit" });
+      await syncControllers.ov5a.sync(state.ov5a, { source: "ov5a-edit" });
+      await writebackArchitecture("ov5a-edit");
+      notify(`已保存活动「${title}」属性变更`);
+      render();
+    })();
+    return true;
+  }
+
+  if (action === "ov5a-promote-root") {
+    const actId = ds.activityId;
+    if (!actId) return true;
+    state.ov5a = setOv5aParent(state.ov5a, actId, "");
+    void syncOv5aIntoOv5b("promote-root").then(() => {
+      notify("已将该活动提升为顶层根活动");
+      render();
+    });
+    return true;
+  }
+
+  if (action === "ov5a-delete-activity") {
+    const actId = ds.activityId;
+    if (!actId) return true;
+    if (typeof window !== "undefined" && window.confirm && !window.confirm("确定要删除此作战活动及其从属关系吗？")) {
+      return true;
+    }
+    const nextActivities = (state.ov5?.activities || []).filter((a) => String(a.id) !== String(actId));
+    const nextDecompositions = (state.ov5a?.decompositions || []).filter((d) => String(d.childActivityRef) !== String(actId) && String(d.parentActivityRef) !== String(actId));
+    const pair = syncOv5ActivityPair({
+      ov5: { ...state.ov5, activities: nextActivities },
+      ov5a: { ...state.ov5a, decompositions: nextDecompositions },
+      source: "ov5a"
+    });
+    state.ov5 = persistOv5Model(pair.ov5);
+    state.ov5a = saveLocalDodafProduct("ov5a", pair.ov5a, projectId);
+    if (state.ov5aSelectedActivityId === actId) state.ov5aSelectedActivityId = null;
+
+    void (async () => {
+      if (syncOv5) await syncOv5(state.ov5, { source: "ov5a-delete" });
+      await syncControllers.ov5a.sync(state.ov5a, { source: "ov5a-delete" });
+      await writebackArchitecture("ov5a-delete");
+      notify("已删除作战活动");
+      render();
+    })();
+    return true;
+  }
+
+  if (action === "ov5a-apply-template") {
+    const tplId = ds.templateId;
+    const targetId = ds.targetId;
+    let res;
+    if (targetId) {
+      res = applyTemplateToActivity({ ov5: state.ov5, ov5a: state.ov5a, parentActivityId: targetId, templateId: tplId });
+    } else {
+      res = applyGlobalTemplate({ ov5: state.ov5, ov5a: state.ov5a, templateId: tplId });
+    }
+    state.ov5 = persistOv5Model(res.nextOv5);
+    state.ov5a = saveLocalDodafProduct("ov5a", res.nextOv5a, projectId);
+    state.ov5aModal = null;
+    state.ov5aModalContext = null;
+
+    void (async () => {
+      if (syncOv5) await syncOv5(state.ov5, { source: "ov5a-template" });
+      await syncControllers.ov5a.sync(state.ov5a, { source: "ov5a-template" });
+      await writebackArchitecture("ov5a-template");
+      notify(`已应用范式模板，新增/规整 ${res.addedActivities?.length || 0} 项动作`);
+      render();
+    })();
+    return true;
+  }
+
+  if (action === "ov5a-auto-organize") {
+    const res = autoOrganizeOv5aHierarchy({ ov5: state.ov5, ov5a: state.ov5a });
+    state.ov5 = persistOv5Model(res.nextOv5);
+    state.ov5a = saveLocalDodafProduct("ov5a", res.nextOv5a, projectId);
+
+    void (async () => {
+      if (syncOv5) await syncOv5(state.ov5, { source: "ov5a-auto-organize" });
+      await syncControllers.ov5a.sync(state.ov5a, { source: "ov5a-auto-organize" });
+      await writebackArchitecture("ov5a-auto-organize");
+      notify(`自动层级规整完成：修复 ${res.repairedCount} 处断链，共规整 ${res.totalDecompositions} 项父子关系`);
+      render();
+    })();
+    return true;
+  }
+
+  if (action === "ov5a-ai-decompose-node") {
+    const actId = ds.activityId;
+    const act = (state.ov5?.activities || []).find((a) => String(a.id) === String(actId));
+    notify(`正在调用 AI 智能纵向分解「${act?.title || actId}」...`);
+
+    void (async () => {
+      try {
+        const aiRes = await generateWithAi({
+          workflow: "activity-decomposition",
+          scope: "ov5a",
+          projectId,
+          targetActivity: act,
+          conceptBrief: state.conceptBrief || {},
+          parentActivities: state.ov5?.activities || []
+        });
+        const steps = aiRes?.output?.activities || aiRes?.activities || [];
+        const res = generateLocalDecomposition({
+          ov5: state.ov5,
+          ov5a: state.ov5a,
+          targetActivityId: actId,
+          aiResponseSteps: steps.length > 0 ? steps : null
+        });
+        state.ov5 = persistOv5Model(res.nextOv5);
+        state.ov5a = saveLocalDodafProduct("ov5a", res.nextOv5a, projectId);
+        if (syncOv5) await syncOv5(state.ov5, { source: "ov5a-ai" });
+        await syncControllers.ov5a.sync(state.ov5a, { source: "ov5a-ai" });
+        await writebackArchitecture("ov5a-ai");
+        notify(`AI 纵向分解完成：为「${act?.title || actId}」新增 ${res.addedActivities.length} 项子动作`);
+      } catch (err) {
+        console.warn("AI generate failed, fallback to local heuristic:", err);
+        const res = generateLocalDecomposition({
+          ov5: state.ov5,
+          ov5a: state.ov5a,
+          targetActivityId: actId,
+          aiResponseSteps: null
+        });
+        state.ov5 = persistOv5Model(res.nextOv5);
+        state.ov5a = saveLocalDodafProduct("ov5a", res.nextOv5a, projectId);
+        if (syncOv5) await syncOv5(state.ov5, { source: "ov5a-ai-fallback" });
+        await syncControllers.ov5a.sync(state.ov5a, { source: "ov5a-ai-fallback" });
+        await writebackArchitecture("ov5a-ai-fallback");
+        notify(`启发式分解完成：为「${act?.title || actId}」生成 ${res.addedActivities.length} 项子活动`);
+      }
+      render();
+    })();
+    return true;
+  }
+
+  if (action === "ov5a-ai-decompose-all") {
+    notify("正在进行全流程作战活动体系化分解...");
+    void (async () => {
+      const rootActs = (state.ov5?.activities || []).filter((a) => !a.parentId);
+      if (!rootActs.length) {
+        const res = applyGlobalTemplate({ ov5: state.ov5, ov5a: state.ov5a, templateId: "f2t2ea" });
+        state.ov5 = persistOv5Model(res.nextOv5);
+        state.ov5a = saveLocalDodafProduct("ov5a", res.nextOv5a, projectId);
+        if (syncOv5) await syncOv5(state.ov5, { source: "ov5a-ai-all" });
+        await syncControllers.ov5a.sync(state.ov5a, { source: "ov5a-ai-all" });
+        await writebackArchitecture("ov5a-ai-all");
+        notify("已基于作战概念初始化标准 F2T2EA 杀伤链全流程作战活动");
+        render();
+        return;
+      }
+      for (const r of rootActs) {
+        const res = generateLocalDecomposition({ ov5: state.ov5, ov5a: state.ov5a, targetActivityId: r.id });
+        state.ov5 = res.nextOv5;
+        state.ov5a = res.nextOv5a;
+      }
+      const pair = syncOv5ActivityPair({ ov5: state.ov5, ov5a: state.ov5a, source: "ov5a" });
+      state.ov5 = persistOv5Model(pair.ov5);
+      state.ov5a = saveLocalDodafProduct("ov5a", pair.ov5a, projectId);
+      if (syncOv5) await syncOv5(state.ov5, { source: "ov5a-ai-all" });
+      await syncControllers.ov5a.sync(state.ov5a, { source: "ov5a-ai-all" });
+      await writebackArchitecture("ov5a-ai-all");
+      notify(`全流程分解完成：已对 ${rootActs.length} 项顶层活动完成纵向深化分解`);
+      render();
+    })();
+    return true;
+  }
+
+  return false;
+}
+
+
   async function seedAndSave(resource) {
     const state = getState();
     if (state[resource] && !window.confirm(`重新种子将覆盖当前 ${LABELS[resource]} 手改内容。是否继续？`)) return;
@@ -2098,11 +2671,18 @@ export function createDodafProductController({
       return;
     }
     if (resource === "ov5a") {
-      const pair = syncOv5ActivityPair({ ov5: state.ov5, ov5a: null, source: "ov5" });
-      state.ov5a = saveLocalDodafProduct("ov5a", pair.ov5a, projectId);
-    } else {
-      state[resource] = saveLocalDodafProduct(resource, seedDodafProduct(resource, state), projectId);
+      await api.pregenerateOv5a({ silent: false, force: true });
+      return;
     }
+    if (resource === "ov1c") {
+      await api.pregenerateOv1c({ silent: false, force: true });
+      return;
+    }
+    if (resource === "ov7") {
+      await api.pregenerateOv7({ silent: false, force: true });
+      return;
+    }
+    state[resource] = saveLocalDodafProduct(resource, seedDodafProduct(resource, state), projectId);
     await syncControllers[resource].sync(state[resource], { source: "seed" });
     await writebackArchitecture("seed");
     notify(`已从上游生成 ${LABELS[resource]} 种子并提交保存`);

@@ -78,6 +78,17 @@ function renderMappingPage({ resource, product, eyebrow, title, description, sou
       <button type="button" class="ghost-btn" data-action="seed-dodaf-${resource}">刷新来源</button>
       <button type="button" class="primary-btn" data-action="save-dodaf-${resource}">保存映射</button>
     </div>
+    ${(resource === "ov1c" ? state.ov1cPregenerating : state.ov7Pregenerating) ? `
+      <div class="rule-form-empty is-pregenerating" role="status" aria-live="polite" style="margin: 12px 0;">
+        <div class="rule-pregenerate-spinner" aria-hidden="true"></div>
+        <h3>正在生成${escapeHtml(title)}</h3>
+        <p>${resource === "ov1c" ? "系统正在智能对齐作战任务与承接活动，构建覆盖审计索引…" : "系统正在对齐状态转换与因果活动，建立因果映射关系…"}</p>
+        <div class="brief-generate-progress">
+          <span class="brief-generate-progress-bar"></span>
+          <span class="brief-generate-progress-label">正在建立因果覆盖与审计索引…</span>
+        </div>
+      </div>
+    ` : ""}
     ${renderDiagnostics(model.diagnostics)}
     <div class="mapping-table" role="table" aria-label="${escapeHtml(title)}">
       <div class="mapping-table-head" role="row"><span>${escapeHtml(sourceHeading)}</span><span>承接活动</span><span>${resource === "ov7" ? "关系语义" : "覆盖状态"}</span><span>人工判定</span><span>说明</span></div>

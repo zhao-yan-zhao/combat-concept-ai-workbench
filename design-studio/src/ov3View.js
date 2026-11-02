@@ -94,11 +94,10 @@ export function renderOv3(state = {}) {
             <h2>作战资源流矩阵</h2>
             <span class="mini-tag ${source === "persisted" ? "is-persisted" : "is-seed"}">${source === "persisted" ? "已持久化" : "种子/草稿"} · OV-2 投影</span>
             <span class="ov3-badge-controlled">受控投影</span>
-            <button type="button" class="quiet-button ov3-help-pill-btn ${helpOpen ? "is-active" : ""}" data-action="ov3-toggle-help" title="展开/收起规范定位与背景种子说明">
-              ℹ️ 规范与投影语义 ${helpOpen ? "▲" : "▼"}
+            <button type="button" class="quiet-button ov3-help-pill-btn ${helpOpen ? "is-active" : ""}" data-action="ov3-toggle-help" title="展开/收起规范定位与背景种子说明（交换事实由 OV-2 拥有）">
+              ℹ️ 规范说明 ${helpOpen ? "▲" : "▼"}
             </button>
           </div>
-          <p class="ov3-subtitle">DoDAF 2.02 / DM2 资源流矩阵。交换事实由 OV-2 拥有，本页只保存投影视图与复核状态。</p>
         </div>
         <div class="ov3-header-actions">
           ${renderProjectStorageState(storage, { refreshAction: "refresh-project-ov3" })}

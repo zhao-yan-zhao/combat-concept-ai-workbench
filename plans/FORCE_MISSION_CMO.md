@@ -180,7 +180,7 @@ Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8792/api/cmo-catalog/status
 
 ## 7. 相关文档
 
-- 流程总览：`plans/CONCEPT_PLANNING_WORKFLOW.md`  
+- 流程总览：`plans/WORKFLOW_MAINLINE_MODEL_TOPOLOGY.md`  
 - HTTP 契约：`INTERFACE_GUIDE.md`  
 - 会话交接：`project-context.md`  
 - 任务类型源：`shared/cmoMissionTypes.js`  

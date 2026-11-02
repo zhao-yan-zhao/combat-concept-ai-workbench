@@ -6,12 +6,13 @@
 
 ## 当前状态
 
-- 当前处于业务逐项试用暂停期；除基于试用发现的修复外，不扩展新功能。
-- 当前主链：`AI 灵感 -> 概念简报 -> OV-1 -> OV-5 -> OODA -> 自动想定/部署 -> 设计验证/红方 -> 成果导出`。
-- 已实现只读 OV-2、OV-3、OV-4、OV-6c 派生视图，以及版本、审计、快照、报告归档和本地协同审阅。
-- 所有空间、部署和仿真数据仅为抽象研究级百分比网格表达；重型仿真平台未接入。
-- 最近完整基线：以 `scripts/check-*.mjs` 验收脚本为准。
-- 代码布局：`server.mjs` → `server/app.mjs`；领域与 HTTP 工具在 `server/`；共享库在 `shared/`；UI 在 `design-studio/`（壳层在 `design-studio/src/app/`）。
+- **核心架构**：采用“七步主线 + 关联模型动态拓扑”：
+  - **主线**：`01 概念简报 (brief) -> 02 阶段行动 (phase-action) -> 03 作战任务 (operational-task) -> 04 作战兵力 (force-mission) -> 05 总体图 (ov1) -> 06 概念图 (concept-map) -> 07 仿真演示 (scenario/validation)`。
+  - **关联模型**：沿主线动态挂接 OV-1b（任务组整理）、OV-1c（任务-活动映射）、OV-2（作战资源流）、OV-3（资源流矩阵）、OV-4（组织层级与责任）、OV-5a（活动分解）、OV-5b（四维因果活动机理：杀伤网因果流、跨域协同同步矩阵、人机决策自主阶梯、体系抗毁推演）、OV-6a（规则库）、OV-6b（状态机）、OV-6c（分阵营与逐阶段时序图）、OV-7（状态-活动映射）。
+- **AI 提示词资产管理**：全量 21 个生产提示词统一纳入顶部菜单“工具 → AI 提示词”，支持可视化浏览、自定义编辑、动态变量说明与一键恢复默认。
+- **持久化引擎**：默认使用 Node.js 原生 SQLite 引擎：`data/projects.sqlite`（全量项目数据）与 `data/collaboration-identities.sqlite`（协同身份）。
+- **装备库参考**：集成只读 CMO（Command: Modern Operations）DB3 数据库（`data/DB3K_510.db3`），支持平台检索与装备推荐。
+- **代码布局**：`server.mjs` → `server/app.mjs`；领域与 HTTP 工具在 `server/`；共享库在 `shared/`；UI 在 `design-studio/`（壳层在 `design-studio/src/app/`）。
 
 ## 快速启动
 
@@ -78,14 +79,15 @@ Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8792/api/health
 
 | 文档 | 用途 |
 |---|---|
-| [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md) | 全部文档的状态、读者和使用顺序。 |
-| [TRIAL_GUIDE.md](TRIAL_GUIDE.md) | 业务试用步骤、边界和反馈格式。 |
-| [INTERFACE_GUIDE.md](INTERFACE_GUIDE.md) | 服务端 HTTP 接口、权限、冲突与错误处理。 |
-| [SOFTWARE_DESIGN.md](SOFTWARE_DESIGN.md) | 目标架构与当前原型映射。 |
-| [project-context.md](project-context.md) | 当前交接、暂停点、变更史与阻塞项。 |
-| [plans/PROJECT_STORAGE_MIGRATION.md](plans/PROJECT_STORAGE_MIGRATION.md) | 文件/SQLite 到生产存储的迁移准备方案。 |
-| [plans/OIDC_DEPLOYMENT.md](plans/OIDC_DEPLOYMENT.md) | OIDC 部署边界；当前未启用浏览器令牌流。 |
-| [plans/AI_RESEARCH_CHAT.md](plans/AI_RESEARCH_CHAT.md) | AI 研究对话通用壳、已挂接步骤与复用方式。 |
+| [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md) | 全量文档索引、三级权威梯队与使用指南。 |
+| [AGENTS.md](AGENTS.md) | 研发铁律、改动防退化规范与提示词约束。 |
+| [TRIAL_GUIDE.md](TRIAL_GUIDE.md) | 业务试用步骤、七步主线、OV-5 活动机理操作与反馈格式。 |
+| [INTERFACE_GUIDE.md](INTERFACE_GUIDE.md) | 服务端 HTTP 接口、DoDAF 资源读写、提示词管理与权限边界。 |
+| [SOFTWARE_DESIGN.md](SOFTWARE_DESIGN.md) | 完整架构设计与当前原型映射。 |
+| [project-context.md](project-context.md) | 当前唯一交接状态、已落地功能与变更史。 |
+| [plans/WORKFLOW_MAINLINE_MODEL_TOPOLOGY.md](plans/WORKFLOW_MAINLINE_MODEL_TOPOLOGY.md) | 七步主线与关联模型拓扑开发规范。 |
+| [plans/FORCE_MISSION_CMO.md](plans/FORCE_MISSION_CMO.md) | 兵力任务双层编组与 CMO 装备库集成说明。 |
+| [plans/AI_RESEARCH_CHAT.md](plans/AI_RESEARCH_CHAT.md) | AI 研究对话通用壳与流式适配规范。 |
 
 ## 试用限制
 

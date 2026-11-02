@@ -68,7 +68,7 @@ D:\项目\combat-concept-ai-workbench
    - **`SOFTWARE_DESIGN.md`**：系统整体架构与已实现映射关系。
 
 3. **第三级：历史归档与远期参考（仅作需求追溯，严禁作为现状依据）**
-   - **`plans/historical/*`**：早期分会话规划（`PLAN-01`~`04` 等）与旧静态 Demo，已退役。
+   - **`plans/RESEARCH_WORKFLOW_18.md`**：早期 18 步线性流程与门禁记录，已退役。
    - **`plans/PROJECT_STORAGE_MIGRATION.md`**：PostgreSQL 远期方案（当前为原生 SQLite：`data/projects.sqlite`，严禁假设 PG 环境）。
    - **`plans/OIDC_DEPLOYMENT.md`**：OIDC 远期接入方案（当前浏览器令牌流未启用）。
    - **`archive/*`**：历史快照与废弃代码，不得用于验收入口。

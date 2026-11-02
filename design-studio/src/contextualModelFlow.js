@@ -4,8 +4,8 @@ import { workflowPrimaryStepIds } from "./data.js";
 
 export const RELATED_VIEWS = Object.freeze({
   "phase-action": ["ov6a", "ov6b", "ov6c"],
-  "force-mission": ["ov1b", "ov6a", "ov6b", "ov6c", "ov4", "ov2", "ov3"],
-  ov5: ["ov5a", "ooda", "ov1c", "ov7"],
+  "force-mission": ["operational-task", "ov1b", "ov6a", "ov6b", "ov6c", "ov4", "ov2", "ov3"],
+  ov5: ["ov5a", "ov1c", "ov7"],
   ov1: ["concept-map"],
   "concept-map": ["ov1"],
   scenario: ["structure-review"]

@@ -177,7 +177,11 @@ export function isStepGenerated(viewId, state = {}, context = {}) {
     case "ov5":
       return Boolean(state.ov5?.activities?.length && state.ov5?.edges?.length);
     case "ov5a":
-      return Boolean(state.ov5?.activities?.length);
+      return Boolean(state.ov5a?.decomposition?.length || state.ov5?.activities?.length);
+    case "ov1c":
+      return Boolean(state.ov1c?.mappings?.length);
+    case "ov7":
+      return Boolean(state.ov7?.mappings?.length);
     case "concept-map":
       return Boolean(state.conceptMap?.document?.items?.length || state.conceptMap?.elements?.length);
     case "scenario":
@@ -225,6 +229,12 @@ export function isStepStale(viewId, state = {}, context = {}) {
     case "ov3":
     case "ov1b":
       return Boolean(state.forceMissionStorage?.stale);
+    case "ov5a":
+      return Boolean(state.ov5Storage?.stale);
+    case "ov1c":
+      return Boolean(state.forceMissionStorage?.stale || state.ov5Storage?.stale);
+    case "ov7":
+      return Boolean(state.ov5Storage?.stale || state.ov6bStorage?.stale);
     default:
       return false;
   }
@@ -553,7 +563,7 @@ function resolveRelatedWorkflowGateContext(state, { freeMode, steps, completedTh
     mainViewId,
     completedThrough,
     ready: true,
-    completing: false,
+    completing: Boolean(state.workflowCompleting),
     open: Boolean(state.workflowGateOpen),
     action: "advance-related-workflow",
     capsuleTitle: "下一步",
@@ -627,12 +637,13 @@ export function renderWorkflowGate(state) {
   const ready = Boolean(ctx.ready);
   const open = Boolean(ctx.open);
   const completing = Boolean(ctx.completing);
+  const isBusy = Boolean(completing || state.ov5Generating || state.ov5aPregenerating || state.ov1cPregenerating || state.ov7Pregenerating);
   const shellState = ctx.mode === "complete-phase" && !ready
     ? "is-pending"
     : (ctx.isStale ? "is-stale" : "is-ready");
-  const title = `${ctx.capsuleTitle} · ${ctx.capsuleAction}（点击展开）`;
+  const title = isBusy ? "正在推进与AI生成中…" : `${ctx.capsuleTitle} · ${ctx.capsuleAction}（点击展开）`;
 
-  return `<div class="workflow-gate-shell ${shellState}${open ? " is-open" : ""}" data-workflow-gate-shell data-gate-mode="${escapeHtml(ctx.mode)}">
+  return `<div class="workflow-gate-shell ${shellState}${open ? " is-open" : ""}${isBusy ? " is-advancing" : ""}" data-workflow-gate-shell data-gate-mode="${escapeHtml(ctx.mode)}">
     <div class="workflow-gate-panel" role="region" aria-label="工作流推进" id="workflowGatePanel"${open ? "" : " inert"}${open ? "" : ' aria-hidden="true"'}>
       <div class="workflow-gate-panel-head">
         <div class="workflow-gate-copy">
@@ -665,7 +676,7 @@ export function renderWorkflowGate(state) {
     </div>
     <button type="button" class="workflow-gate-capsule" data-action="toggle-workflow-gate" aria-expanded="${open ? "true" : "false"}" aria-controls="workflowGatePanel" title="${escapeHtml(title)}">
       <span class="workflow-gate-capsule-dot" aria-hidden="true"></span>
-      <span class="workflow-gate-capsule-text"><b>${escapeHtml(ctx.capsuleTitle)}</b><em>${escapeHtml(ctx.capsuleAction)}</em></span>
+      <span class="workflow-gate-capsule-text"><b>${escapeHtml(ctx.capsuleTitle)}</b><em>${escapeHtml(isBusy ? "AI 生成推进中…" : ctx.capsuleAction)}</em></span>
       <span class="workflow-gate-capsule-chevron" aria-hidden="true"></span>
     </button>
   </div>`;

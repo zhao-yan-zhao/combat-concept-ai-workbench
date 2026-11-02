@@ -52,7 +52,7 @@ export function renderPhaseAction(state) {
   const showResearchBench = phases.length > 0;
   const statusLabel = `${status}${focusGenerating ? " · 聚焦生成中" : chatGenerating ? " · 对话修订中" : generating ? " · 阶段生成中" : ""}`;
 
-  return `<section class="planning-page phase-action-page phase-action-page--bench ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}">
+  return `<section class="planning-page phase-action-page phase-action-page--bench ${showResearchBench ? "is-populated" : "is-empty"} ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}">
     ${renderPlanningMigrationBanner(state)}
 
     ${renderCombatFocusBlock({

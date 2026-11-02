@@ -1,6 +1,6 @@
 import { computeExchangeCurve } from "./ov2Canvas.js";
 
-const MIN_ZOOM = 0.35;
+const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2.2;
 const ZOOM_STEP = 0.12;
 const DRAG_THRESHOLD = 4;
@@ -29,14 +29,16 @@ export function createOv2CanvasController({ getState, render } = {}) {
     const worldWidth = Number.parseFloat(world.style.width) || world.offsetWidth || 1200;
     const worldHeight = Number.parseFloat(world.style.height) || world.offsetHeight || 800;
 
-    const pad = 36;
+    const pad = 32;
     const zoomX = (stageWidth - pad * 2) / worldWidth;
     const zoomY = (stageHeight - pad * 2) / worldHeight;
-    const zoom = clamp(Math.min(zoomX, zoomY), MIN_ZOOM, 1.15);
+    // Prefer fitting width or comfortable readable scale (>= 0.65) so cards remain clear
+    const naturalZoom = Math.min(zoomX, zoomY);
+    const zoom = clamp(Math.max(naturalZoom, stageWidth < 1000 ? 0.55 : 0.68), MIN_ZOOM, 1.15);
 
     camera.zoom = Math.round(zoom * 100) / 100;
     camera.x = Math.round((stageWidth - worldWidth * camera.zoom) / 2);
-    camera.y = Math.round(Math.max(16, (stageHeight - worldHeight * camera.zoom) / 2));
+    camera.y = Math.round(Math.max(20, (stageHeight - worldHeight * camera.zoom) / 2));
     applyCamera(world, zoomLabel);
   }
 

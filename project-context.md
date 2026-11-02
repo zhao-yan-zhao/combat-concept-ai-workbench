@@ -1,5 +1,258 @@
 # project-context.md
 
+## Unified AI Generation Transition Animations Across Workbench (2026-10-30)
+
+- Goal: Align AI generation transition animations in Step 04 (OV-5 Activity Mechanisms, OV-5a Decomposition, OV-1c Task Mapping, and OV-7 State Mapping) strictly with the workbench's unified AI generating motion design language, addressing user feedback ("过渡动画要和其他的Ai生成过渡动画保持一致").
+- Unified Motion Design Alignment:
+  1. Standard Progress Bar & Shimmer:
+     - Replaced custom radar sweep skeleton with the workbench's canonical `.brief-generate-progress` container, `.brief-generate-progress-bar` (gradient shimmer `brief-progress-shimmer`), and `.brief-generate-progress-label`.
+     - In dark sci-tech workspace mode, unified glowing cyan/sky-blue border, deep navy backdrop, and pulse animation.
+  2. Standard Pre-generation Container & Spinner:
+     - Reused `.rule-form-empty.is-pregenerating` container and `.rule-pregenerate-spinner` (canonical 28px rotating ring with cyan glow) identical to Rule Library (OV-6a) and Automated Scenario generation.
+  3. Applied Across All Step 04 Products:
+     - `ov5MechanismView.js`: Renders `renderOv5GeneratingProgress` when `state.ov5Generating` is true.
+     - `dodafOperationalViews.js`: Displays unified pregeneration progress card in OV-5a when `state.ov5aPregenerating` is true.
+     - `mappingProductView.js`: Displays unified pregeneration progress card in OV-1c and OV-7 when `state.ov1cPregenerating` or `state.ov7Pregenerating` is true.
+- Changed files:
+  - `design-studio/src/ov5MechanismView.js`
+  - `design-studio/src/dodafOperationalViews.js`
+  - `design-studio/src/mappingProductView.js`
+  - `design-studio/styles.css`
+  - `scripts/check-view-transition-animation.mjs`
+  - `project-context.md`
+- Verification:
+  - `scripts/check-view-transition-animation.mjs` passed 100%.
+  - Full regression suite (`check-capsule-advance-ov5-generation.mjs`, `check-ov5-mechanism-restructuring.mjs`, `check-ov5a-decomposition-restructuring.mjs`, `check-ov1-to-concept-map-flow.mjs`, `check-dodaf-operational-views.mjs`, `check-design-studio-workflow.mjs`) passed 100%.
+  - Server health check `GET /api/health` returned HTTP 200.
+
+## OV-5 Left Panel Transformation into Dedicated Activity & Force Binding Editor (2026-10-30)
+
+- Goal: Address user feedback ("也加一个编辑功能吧，左侧的就是列表吧，我感觉比较鸡肋"). Transform the static and redundant left tree list into a high-productivity dual-mode "Activity Attributes & Force Binding Editor" with direct card inline editing controls.
+- Core Implementations:
+  1. Left Panel Dual-Mode Transformation (`renderOv5LeftPanel`):
+     - Active Editing Mode: When an activity is selected, the left panel automatically transforms into a dedicated Activity Editor (`is-editor-panel`).
+     - Force & Platform Binding: Added prominent highlighted input field (`performer-input`) for explicit binding of physical units, weapon systems, and platforms (e.g., "歼-20伴随无人侦察机", "战区指控所", "驱逐舰雷达").
+     - Full Contract Modification: Title, domain dropdown, autonomy level (HITL/HOTL/HOOTL), timing budget, input/output contracts, resilience fallback bypass, parent activity, and tactical notes.
+     - Direct Downstream Causal Linking (`ov5EdgeForm`): Integrated downstream edge builder directly inside the editor, supporting information, control, and resource flows with exchange payloads.
+     - Tree Mode & Quick Switch: Users can toggle between the architecture tree (`🌲 架构树`) and the editor at any time.
+  2. Prominent Card Inline Editing (`card-inline-edit-btn`):
+     - Added explicit `[✏️ 编辑]` button on every activity card across all 4 perspectives (Kill-Web, Sync-Matrix, Autonomy Ladder, Resilience Stress-Test).
+     - Distinct Performer Status Display: When a performer is bound, displays `主体: 平台名` with one-click click-to-edit; when unassigned, displays a dashed interactive badge (`+ 绑定执行主体`), immediately guiding the user to bind entities.
+  3. Interactive Synchronization & Controller Handlers:
+     - In `design-studio/src/main.js`, clicking any `[data-activity]` card or edit button in OV-5 automatically selects the activity, activates `ov5LeftMode = "editor"`, and re-renders the workbench.
+     - Handled `edit-activity`, `toggle-ov5-left-mode`, and `close-ov5-activity-editor` in `ov5AiController.js`.
+     - Preserved seamless synchronization with `saveActivity` and SQLite persistence.
+- Changed files:
+  - `design-studio/src/ov5MechanismView.js`
+  - `design-studio/src/ov5AiController.js`
+  - `design-studio/src/main.js`
+  - `design-studio/styles.css`
+  - `scripts/check-ov5-mechanism-restructuring.mjs`
+  - `project-context.md`
+- Verification:
+  - `scripts/check-ov5-mechanism-restructuring.mjs` passed 100% (including editor panel and inline button assertions).
+  - `scripts/check-ov5a-comprehensive-workbench.mjs` passed 100%.
+  - `scripts/check-ov5-activity-graph.mjs` passed 100%.
+  - `scripts/check-ooda-ov5-restructuring.mjs` passed 100%.
+  - `scripts/check-design-studio-workflow.mjs` passed 100%.
+  - `scripts/check-dodaf-operational-views.mjs` passed 100%.
+  - Service health check `GET /api/health` returned HTTP 200.
+
+## Integrated Smooth Transition Animations & View Transitions API (2026-10-30)
+
+- Goal: Address user feedback regarding abrupt view switching without transition animations ("没有过渡动画") when advancing from Resource Flow Matrix (OV-3) to Operational Activities (OV-5) and across subflows.
+- Core Implementations:
+  1. Modern Document View Transitions API Integration:
+     - In `design-studio/src/main.js` (`renderViewRoot`), implemented progressive enhancement with `document.startViewTransition`. When supported and user has no `prefers-reduced-motion`, view switching runs through native GPU-accelerated cross-fade transitions.
+     - In `design-studio/styles.css`, added `::view-transition-old(root)` (gentle 0.22s fade-out & lift) and `::view-transition-new(root)` (smooth 0.28s enter & settlement with `cubic-bezier(0.16, 1, 0.3, 1)`).
+     - Upgraded the CSS fallback animation (`workbench-view-fade`) from a brief 0.18s flicker to an elegant 0.28s subtle slide-up & blur fade-in.
+  2. Workflow Capsule Advancing Pulse Motion:
+     - In `design-studio/src/app/workflowGate.js`, dynamically added `.is-advancing` shell class when `completing` or generating.
+     - Active pulsing dot (`capsule-dot-ping`) and breathing outline (`capsule-advancing-pulse`) with live status feedback ("AI 生成推进中…").
+  3. OV-5 Generating Skeleton Transition:
+     - In `design-studio/src/ov5MechanismView.js`, rendered high-tech military research skeleton layout (`renderOv5GeneratingSkeleton`) when `state.ov5Generating` is true.
+     - Features rotating radar sweep (`radar-sweep-spin`), multi-lane kill-web skeleton cards, and dynamic shimmer wave (`shimmer-swipe`) while AI builds activities, avoiding blank screen flashes.
+- Changed files:
+  - `design-studio/src/main.js`
+  - `design-studio/src/ov5MechanismView.js`
+  - `design-studio/src/app/workflowGate.js`
+  - `design-studio/styles.css`
+  - `scripts/check-view-transition-animation.mjs`
+  - `project-context.md`
+- Verification:
+  - `scripts/check-view-transition-animation.mjs` passed 100%.
+  - Full regression suite (`check-capsule-advance-ov5-generation.mjs`, `check-ov5-mechanism-restructuring.mjs`, `check-ov5a-decomposition-restructuring.mjs`, `check-ov1-to-concept-map-flow.mjs`, `check-dodaf-operational-views.mjs`, `check-design-studio-workflow.mjs`) passed 100%.
+  - Server health check `GET /api/health` returned HTTP 200.
+
+## OV-3 to OV-5 Capsule Advancement & Upstream Context Engineering (2026-10-30)
+
+- Goal: Fix inactive AI generation buttons on the top-right workflow capsule when advancing from Resource Flow Matrix (OV-3) to Operational Activities & Mechanisms (OV-5), and across OV-5 subflow steps (OV-5a, OV-1c, OV-7); replace incorrect downstream OV-1 reference extraction with authoritative upstream operational tasks, combat forces, resource flows, and execution phases.
+- Root Cause & Fixes:
+  1. Mainline Capsule Dispatch Routing Fix:
+     - In `design-studio/src/main.js` (`navigateToResearchView`), added dispatch branches for `viewId === "ov5"`, `"ov5a"`, `"ov1c"`, and `"ov7"` when `generate` or `forceRegenerate` is requested. Clicking "AI生成并进入" or "重新生成" now reliably invokes corresponding product generation routines.
+  2. Upstream Context Engineering for OV-5 (`summarizeUpstreamContextForOv5`):
+     - Completely decoupled OV-5 generation from downstream ungenerated `ov1` concept nodes.
+     - Extracted authoritative immediate upstream context:
+       - Operational Tasks (`tasks`): Name, missionType, area, objective, and expected effects.
+       - Combat Forces & Platforms (`forces`): Force units, domains (air/sea/land/space/cyber), platform equipment, sensors, and weapons.
+       - Resource Flow Matrix & Exchanges (`exchanges`): Producer/consumer nodes, payload elements, and timing/latency constraints.
+       - Operational Phases (`phases`): Phase IDs, names, timing windows, and core actions.
+       - Operational Nodes (`nodes`): Action nodes allocated from forces.
+     - Injected into AI `analysis` for `ConceptPlan` generation and local fallback synthesis (`ov5DraftStore.js`), ensuring generated activities automatically bind upstream `sourceTaskId` and performers.
+  3. Pre-generation & Alignment Controllers for Subflow:
+     - Implemented `pregenerateOv5a`: Automatically syncs wholePart composition tree from OV-5 activity network via `syncOv5ActivityPair`.
+     - Implemented `pregenerateOv1c`: Automatically maps upstream tasks to operational activities using `sourceTaskId` and mission type semantic heuristics, auto-marking coverage and confirmed status.
+     - Implemented `pregenerateOv7`: Automatically maps state machines (OV-6b states & transitions) to operational activities, auto-binding execution/trigger semantics.
+  4. Unified AI Prompt Catalog Compliance:
+     - In `server/openaiClient.mjs`, registered `ConceptPlan` in prompt catalog as `ai.generate.ov5-concept-plan` ("作战活动与机理") with stable ID, clear variable specifications, and temperature configuration, strictly adhering to AGENTS.md rules.
+  5. Workflow Gate Status Recognition:
+     - In `design-studio/src/app/workflowGate.js`, added generation status and staleness tracking for `ov1c` and `ov7`.
+- Changed files:
+  - `server/openaiClient.mjs`
+  - `design-studio/src/ov5AiController.js`
+  - `design-studio/src/ov5DraftStore.js`
+  - `design-studio/src/dodafProductController.js`
+  - `design-studio/src/app/workflowGate.js`
+  - `design-studio/src/main.js`
+  - `scripts/check-capsule-advance-ov5-generation.mjs`
+  - `project-context.md`
+- Verification:
+  - `scripts/check-capsule-advance-ov5-generation.mjs` passed 100%.
+  - Regression suite (`check-ov5-mechanism-restructuring.mjs`, `check-ov5a-decomposition-restructuring.mjs`, `check-ov1-to-concept-map-flow.mjs`, `check-dodaf-operational-views.mjs`, `check-design-studio-workflow.mjs`) passed 100%.
+  - Service health check `GET /api/health` returned HTTP 200.
+
+## Retired Duplicate 042 (OODA Subflow) Step from Navigation (2026-10-30)
+
+- Goal: Clean up redundant workflow steps. Since the mainline Step 04 (作战活动与机理 / OV-5b) completely incorporates OODA dynamics across Perspective 1 (Kill-Web & OODA 5-Lane Causal Flow) and the right-hand Mechanism Diagnostics Lens (OODA loop health score, latency budget breakdown, and SPOF diagnostics), the standalone subflow step 042 (研究循环 OODA) was 100% duplicative and inferior in capability.
+- Modifications:
+  - Removed `ooda` from `RELATED_VIEWS.ov5` in `design-studio/src/contextualModelFlow.js`.
+  - Step 04 contextual subflow in the left navigation rail is now streamlined to:
+    - `041 作战活动分解 (OV-5a)`
+    - `042 任务与活动映射 (OV-1c)`
+    - `043 状态与活动映射 (OV-7)`
+  - Maintained full underlying backward compatibility: `state.ooda` remains durably generated and synchronized in the background for downstream validation, simulation export, and report compilation without UI bloat.
+  - Updated test assertions in `scripts/check-ov1-to-concept-map-flow.mjs`.
+- Verification:
+  - `scripts/check-ov1-to-concept-map-flow.mjs` passed 100%.
+  - Full regression suite (`check-ov5-mechanism-restructuring.mjs`, `check-ov5a-decomposition-restructuring.mjs`, `check-ov5a-ov5b-architecture-sync.mjs`, `check-ooda-ov5-restructuring.mjs`, `check-design-studio-workflow.mjs`, `check-dodaf-operational-views.mjs`) passed 100%.
+  - Service health check `GET /api/health` returned HTTP 200.
+
+## Deepened 4 Multi-Perspective Causal Dynamics Mechanisms in OV-5 (2026-10-30)
+
+- Goal: Deepen the four analytical perspectives (Kill-Web, Sync-Matrix, Autonomy Ladder, Resilience Stress-Test) from baseline displays into fully interconnected, interactive, and militarily grounded engineering instruments.
+- Perspective Deepening Implementations:
+  1. ⚡ 杀伤网与 OODA 因果流视 (Kill-Web & OODA Causal Trace):
+     - Added focused causal link tracing banner (`.kw-trace-banner`): when an activity card is selected, shows immediate upstream source and downstream driven target counts.
+     - Direct upstream nodes highlighted in sky-blue (`.is-upstream`), direct downstream targets highlighted in neon-green (`.is-downstream`), with I/O flow pills (`↑N ↓M`), rendering clear causal propagation paths across swimlanes.
+  2. 🌐 跨域协同同步矩阵视 (Cross-Domain Sync-Matrix):
+     - Deep dynamic binding with Step 2 Phase & Action: dynamically extracts custom operational phases from `state.phaseAction.phases` (with phase timing windows and names).
+     - Renders custom column grids (`grid-template-columns: 120px repeat(N, minmax(140px, 1fr))`) and link badge (`🔗 已深度联动 Step 2 自定义作战阶段`), falling back smoothly to standard templates when unconfigured.
+     - Enhanced activity-to-phase allocation heuristics by phaseId and operational activity semantic role.
+  3. 🤖 人机决策与自主阶梯视 (C2 & Autonomy Ladder):
+     - Added Ethics Guard: detects whether lethal weapon employment or kinetic strike activities (with type "行动/控制" or title containing "打击/突击/摧毁/压制/发射") are configured as HOOTL (completely out-of-the-loop).
+     - Displays military ethics & ROE audit warning (`.autonomy-ethics-alert`) and card violation badges (`.violation-badge`) advising elevation to HITL for commander authorization.
+     - Added inline autonomy level switcher buttons (`change-activity-autonomy` for HITL / HOTL / HOOTL) on each ladder card with model persistence.
+  4. 🛡️ 体系抗毁对抗推演视 (Resilience & Stress-Testing):
+     - Added preset battle disruption scenarios: Space domain blinding (`preset-stress-domain`, "天基全盲"), Full-spectrum electronic jamming (`preset-stress-domain`, "电磁强压制"), and C2 command post decapitation (`preset-stress-type`, "指挥所瘫痪").
+     - Added dynamic Resilience Health Meter (`.resilience-meter-strip`): computes live resilience grade (Resilient / Degraded / Fragile), resilience score (0~100), disrupted source, cascade impact counts, fallback recovery counts, and fatal disconnected risks.
+- Changed files:
+  - `design-studio/src/ov5MechanismView.js`
+  - `design-studio/src/ov5AiController.js`
+  - `design-studio/styles.css`
+  - `scripts/check-ov5-mechanism-restructuring.mjs`
+  - `project-context.md`
+- Verification:
+  - `scripts/check-ov5-mechanism-restructuring.mjs` passed 100% across all 4 deepened perspectives and ethics rules.
+  - Full regression suite (`check-ov5a-decomposition-restructuring.mjs`, `check-ov5a-ov5b-architecture-sync.mjs`, `check-ooda-ov5-restructuring.mjs`, `check-design-studio-workflow.mjs`, `check-dodaf-operational-views.mjs`) passed 100%.
+  - Server health check at port 8792 returned HTTP 200.
+
+## OV-5 Mechanism Layout Optimization: Compact Header & Collapsible Drawer (2026-10-30)
+
+- Goal: Address user feedback where the OV-5 workbench header was overly tall (~170px) with buttons breaking into vertical lines, and the bottom '活动因果流转与契约' section was overly prominent and distracting from the core 4 analysis perspectives.
+- Layout & Component Refinements:
+  1. Compact 2-Tier Header (`.ov5-compact-header`):
+     - Tier 1 (`.ov5-header-main-row`): View title `作战活动与机理 (OV-5b & 动力学闭环)` on left alongside compact inline status badges (activity & edge counts, OODA health score, latency budget, autonomy stats); primary action buttons (`AI 重建活动网`, `提炼总体图 →`) on right.
+     - Tier 2 (`.ov5-header-sub-row`): Concise single-line summary on left; horizontal compact utility buttons on right (`从任务派生`, `补全映射`, `一键修复闭环`, `红方质询`, `结构核对`, `+ 新增活动`).
+     - Applied `white-space: nowrap !important;`, compact height 26px, and padding `2px 9px`, preventing characters from wrapping into vertical tall blocks and reducing top header height by >55% (saving ~100px vertical space).
+     - Inline slim storage strip (`.ov5-storage-strip`) for revision tracking and conflict recovery.
+  2. Low-Profile Collapsible Relation Drawer (`<details class="ov5-relation-drawer">`):
+     - Replaced the large uncollapsible relation block with a native collapsible drawer, collapsed by default when connections exist.
+     - Summary bar (`.ov5-relation-summary`): 32px slim bar showing `🔗 活动因果流转与契约 (N条关联) · 选定活动在右侧面板补充下游交互，展开查看契约明细与移除失效关联` and `展开/折叠明细 ▾`.
+     - Drawer content (`.compact-drawer-content`): Contains `.compact-relation-list` with max-height 180px and compact 28px relation rows, keeping downstream contract inspection and removal handy while eliminating visual dominance.
+     - Retained 100% backward compatibility and test contracts (`.ov5-relation-box`, `.relation-list`, `.relation-row`, `data-edge-remove`, `.is-feedback-edge`).
+- Changed files:
+  - `design-studio/src/ov5MechanismView.js`
+  - `design-studio/styles.css`
+  - `project-context.md`
+- Verification:
+  - `scripts/check-ov5-mechanism-restructuring.mjs` passed 100%.
+  - `scripts/check-ov5a-decomposition-restructuring.mjs` passed 100%.
+  - `scripts/check-ov5a-ov5b-architecture-sync.mjs` passed 100%.
+  - `scripts/check-ooda-ov5-restructuring.mjs` passed 100%.
+  - `scripts/check-design-studio-workflow.mjs` passed 100%.
+  - `scripts/check-dodaf-operational-views.mjs` passed 100%.
+  - Server health check `GET /api/health` returned HTTP 200.
+
+## Complete restructuring of OV-5a Operational Activity Decomposition (2026-10-30)
+
+- Goal: Completely restructure the "作战活动分解" (DoDAF OV-5a Operational Activity Decomposition) product from a shallow, single-level baby-blue diagram into an enterprise-grade multi-perspective hierarchy engineering workbench.
+- Multi-Perspective Decomposition Workbench:
+  1. DoDAF / SysML 经典递归构造型树视 (`diagram`):
+     - Upgraded from 1-tier flat display to arbitrary-depth recursive composition tree (`renderOv5aRecursiveBranch`).
+     - Standard UML composition semantics: wholePart solid diamonds, stems, branching lines, and multi-tier sub-branches.
+     - Rich node cards: stereotypes (`«OperationalActivity»`, `«StandardOperationalActivity»`), domain badges, autonomy pills (HITL/HOTL/HOOTL), `«Node» Performs` tags, timing windows, and upstream task tracking.
+  2. WBS 作战工序分解树视 (`wbs`):
+     - Hierarchical indented work breakdown outline (1.0, 1.1, 1.1.1) with visual depth bars.
+     - Displays leaf execution action indicators, children counts, I/O interface deliveries, and performer allocations.
+  3. 关系配置矩阵表 (`table`):
+     - Preserves full backward compatibility and strict test contracts (`ov5a-decomposition-table`, `活动分解清单`, `data-dodaf-field="ov5a.decomposition.${id}.parentActivityRef"`).
+     - Upgraded to sleek dark sci-tech table styling with depth badges (L1, L2, L3...), parent activity dropdowns, domain/autonomy tags, and conflict row warnings.
+- Decomposition Hierarchy Analytics & Quality Guard:
+  - Added `calculateOv5aMetrics` & `renderOv5aMetricsStrip`:
+    - Decomposition health score (100-point rating)
+    - Total activity count, root vs. leaf distribution
+    - Tree depth monitoring (recommended 2~4 layers, warning on over-deep chains)
+    - Autonomy allocation breakdown across the hierarchy
+    - Broken reference / orphan conflict detection
+- Sci-Tech Military Dark Theme:
+  - Replaced legacy `#73b3e8` / `#f8faf9` / `#d5dfdc` palette with dark workbench navy `rgba(11, 20, 36, .85)`, `rgba(15, 29, 50, .92)`, cyan/sky-blue glowing diamonds, and crisp text `#f8fafc`.
+- Changed files:
+  - `design-studio/src/dodafOperationalViews.js`, `design-studio/styles.css`, `scripts/check-ov5a-decomposition-restructuring.mjs`.
+- Verification:
+  - `scripts/check-ov5a-decomposition-restructuring.mjs` passed 100% across all 3 view modes, recursive branch rendering, and conflict handling.
+  - Regression test suite (`check-ov5a-ov5b-architecture-sync.mjs`, `check-dodaf-operational-views.mjs`, `check-ov5-mechanism-restructuring.mjs`, `check-ooda-ov5-restructuring.mjs`, `check-design-studio-workflow.mjs`, `check-subflow-toolboxes.mjs`) all passed.
+  - Server health check at `8792` verified HTTP 200.
+
+## Complete restructuring of OV-5 Activity Mechanism step (2026-10-30)
+
+- Goal: Completely restructure the "活动机理" (Activity Mechanism / OV-5b & OODA) step from a static activity flowchart into a multidimensional causal dynamics workbench.
+- Data & Ontology Enhancement:
+  - Enriched DoDAF OV-5 `activities` with `performer`, `domain` (太空/空中/水面/水下/陆基/电磁/网络/综合), `autonomy` (HITL/HOTL/HOOTL), `timingWindow`, `resilienceFallback`, and `sourceTaskId`.
+  - Enriched `edges` with `flowSemantic` (cue, authorization, hand_off, feedback), `latencySec`, and `isFeedback`.
+  - Maintained 100% backward compatibility for existing DoDAF normalization, seeds, and persistence.
+- Deep Graph Dynamics & Causal Diagnostic Engine:
+  - Upgraded `evaluateOodaLoopHealth` in `oodaStore.js`: added latency budget summation (`latencyBudget`), single-point-of-failure (`bottlenecks`), autonomy distribution (`autonomyStats`), cross-domain coverage, and feedback closed-loop validation.
+- Multidimensional Workbench Workspace:
+  - Added `ov5MechanismView.js` featuring 4 distinct analytical perspectives:
+    1. 杀伤网与 OODA 因果流视 (`kill-web`): 5-swimlane causal flow with feedback badges and autonomy pills.
+    2. 跨域协同同步矩阵视 (`sync-matrix`): Domain × Phase matrix displaying cross-domain handoffs and execution windows.
+    3. 人机决策与自主阶梯视 (`autonomy`): 3-tier authority breakdown (HITL/HOTL/HOOTL) for military command and ethical compliance.
+    4. 体系抗毁对抗推演视 (`resilience`): Interactive disruption injection on critical nodes, downstream cascade impact visualization, and fallback bypass activation.
+  - Right-hand dynamic Mechanism Diagnostics Lens: latency budget progress track, SPOF alerts with auto-fill fallback button, and red-team challenge inquiry records.
+  - Complete Dark Military Sci-Tech Theme Conversion:
+    - Restyled all OV-5 workbench surfaces (`.ov5-workbench-layout`, `.ov5-tree-panel`, `.ov5-view-nav`, `.ov5-view-stage`, `.ov5-ooda-panel`, `.ov5-relation-box`), swimlanes (`.kill-web-lane`), activity cards (`.kw-activity-card`), sync matrix cells (`.matrix-cell`), autonomy blocks, resilience cards, SPOF alerts, and inspector components.
+    - Replaced all legacy `#fff` / `#fbfcfb` white card backgrounds with the workbench's slate navy base (`rgba(11, 20, 36, .85)`, `rgba(15, 29, 50, .88)`), subtle luminous borders, and electric cyan/sky-blue (`#38bdf8`, `#22d3ee`) focus glows to match the rest of the workbench interface.
+- Actions & AI Integration:
+  - Added `autoFillFallbacks` to populate resilient bypass mechanisms, and `runRedTeamChallenge` to inject adversarial inquiries.
+  - Enhanced `saveActivity` to persist all new attributes and updated inspector selection facts.
+- Changed files:
+  - `shared/dodaf/products.js`, `design-studio/src/ov5MechanismView.js`, `design-studio/src/ov5Store.js`, `design-studio/src/oodaStore.js`, `design-studio/src/ov5DraftStore.js`, `design-studio/src/ov5AiController.js`, `design-studio/src/ui.js`, `design-studio/src/main.js`, `design-studio/styles.css`, `scripts/check-ov5-mechanism-restructuring.mjs`.
+- Verification:
+  - `scripts/check-ov5-mechanism-restructuring.mjs` passed (normalization, latency budget, SPOF, derivation, 4-view HTML rendering).
+  - Existing regression test suite (`check-ooda-ov5-restructuring.mjs`, `check-ov5-activity-graph.mjs`, `check-ov5a-ov5b-architecture-sync.mjs`, `check-ooda-equipment-references.mjs`, `check-ooda-knowledge-references.mjs`, `check-design-studio-workflow.mjs`, `check-subflow-toolboxes.mjs`) all passed.
+  - Live server at `8792` verified via `GET /api/health` returning HTTP 200 with active SQLite repository mode.
+
+
 ## Project entry after login (2026-09-14)
 
 - Root visits without a project parameter show a project selection page after authentication. Active projects, explicit default-project entry, existing create-and-enter form, loading and retry states reuse project manager actions. Explicit project links keep direct navigation.

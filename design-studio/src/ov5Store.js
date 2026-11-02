@@ -8,12 +8,24 @@ function createSeedModel() {
   const raw = {
     version: 1,
     activities,
-    edges: activities.slice(0, -1).map((activity, index) => ({
-      id: `edge-${activity.id}-${activities[index + 1].id}`,
-      sourceId: activity.id,
-      targetId: activities[index + 1].id,
-      type: index === 2 ? "控制流" : "信息流"
-    }))
+    edges: [
+      ...activities.slice(0, -1).map((activity, index) => ({
+        id: `edge-${activity.id}-${activities[index + 1].id}`,
+        sourceId: activity.id,
+        targetId: activities[index + 1].id,
+        type: index === 2 ? "控制流" : "信息流"
+      })),
+      ...(activities.length >= 3 ? [{
+        id: `edge-feedback-${activities[activities.length - 1].id}-${activities[0].id}`,
+        sourceId: activities[activities.length - 1].id,
+        targetId: activities[0].id,
+        type: "信息流",
+        flowSemantic: "feedback",
+        isFeedback: true,
+        payload: "战损评估与态势更新反馈",
+        condition: "打击/行动后回传"
+      }] : [])
+    ]
   };
   try {
     return normalizeDodafOv5(raw);
@@ -190,19 +202,31 @@ export function deriveActivitiesFromTasks(tasks = [], { forceMission = null, exi
     let actType = "行动";
     let defaultInput = "协同指令、态势数据";
     let defaultOutput = "行动成果、战况反馈";
+    let domain = "空中";
+    let autonomy = "HOTL";
+    let timingWindow = "20-40m";
 
     if (missionType.includes("recon") || missionType.includes("patrol") || missionType.includes("aaw")) {
       actType = "感知";
       defaultInput = "任务区规划、传感器参数";
       defaultOutput = "目标航迹数据包、辐射源特征";
+      domain = missionType.includes("space") ? "太空" : "空中";
+      autonomy = "HOTL";
+      timingWindow = "10-20m";
     } else if (missionType.includes("strike") || missionType.includes("attack") || missionType.includes("cas")) {
       actType = "控制";
       defaultInput = "火控级目标包、发射授权";
       defaultOutput = "突击毁伤评估、拦截回传";
+      domain = missionType.includes("surface") ? "水面" : "空中";
+      autonomy = "HITL";
+      timingWindow = "15-30m";
     } else if (missionType.includes("command") || missionType.includes("c2")) {
       actType = "决策";
       defaultInput = "融合态势图、交战规则";
       defaultOutput = "协同打击清单、交战指令";
+      domain = "综合";
+      autonomy = "HITL";
+      timingWindow = "5-15m";
     }
 
     const activityId = `act-${task.id || `t${index + 1}`}`;
@@ -214,7 +238,12 @@ export function deriveActivitiesFromTasks(tasks = [], { forceMission = null, exi
       text: task.objective || `${side}围绕 ${taskName} 展开的具体作战活动。`,
       input: defaultInput,
       output: defaultOutput,
-      duration: "30-60m",
+      duration: timingWindow,
+      timingWindow,
+      performer: String(task.assignedForceId || `${side}作战单元`),
+      domain,
+      autonomy,
+      resilienceFallback: "支持通过战术数据链将控制与反哺交接至备份节点",
       parentId: "",
       resources: String(task.assignedForceId || ""),
       preconditions: "前置阶段转换条件满足",
@@ -228,11 +257,14 @@ export function deriveActivitiesFromTasks(tasks = [], { forceMission = null, exi
   for (let i = 0; i < generatedActivities.length - 1; i += 1) {
     const curr = generatedActivities[i];
     const next = generatedActivities[i + 1];
+    const semantic = curr.type === "决策" ? "authorization" : curr.type === "控制" ? "hand_off" : "cue";
     generatedEdges.push({
       id: `edge-${curr.id}-${next.id}`,
       sourceId: curr.id,
       targetId: next.id,
       type: curr.type === "决策" ? "控制流" : "信息流",
+      flowSemantic: semantic,
+      isFeedback: false,
       payload: curr.output || "数据流",
       condition: "活动完成且判据满足"
     });
@@ -248,6 +280,8 @@ export function deriveActivitiesFromTasks(tasks = [], { forceMission = null, exi
         sourceId: lastAct.id,
         targetId: firstSense.id,
         type: "信息流",
+        flowSemantic: "feedback",
+        isFeedback: true,
         payload: "战损评估与态势更新反馈",
         condition: "打击/行动后回传"
       });

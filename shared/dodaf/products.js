@@ -479,7 +479,10 @@ export function normalizeDodafOv5(value) {
       targetId,
       type: clean(edge?.type, 120) || "information",
       payload: clean(edge?.payload, 4000),
-      condition: clean(edge?.condition, 4000)
+      condition: clean(edge?.condition, 4000),
+      flowSemantic: clean(edge?.flowSemantic, 60) || inferFlowSemantic(edge),
+      latencySec: Number(edge?.latencySec) || 0,
+      isFeedback: Boolean(edge?.isFeedback || String(edge?.id || "").includes("feedback") || inferFlowSemantic(edge) === "feedback")
     }];
   });
   if (!edges.length && Array.isArray(value?.relations)) {
@@ -1723,8 +1726,43 @@ function normalizeActivity(activity, index) {
     parentId: clean(activity?.parentId, 160),
     resources: clean(activity?.resources, 4000),
     preconditions: clean(activity?.preconditions, 4000),
-    constraints: clean(activity?.constraints, 4000)
+    constraints: clean(activity?.constraints, 4000),
+    performer: clean(activity?.performer || activity?.role || activity?.performerName, 240),
+    domain: clean(activity?.domain, 80) || inferDomain(activity),
+    autonomy: clean(activity?.autonomy, 40) || inferAutonomy(activity),
+    timingWindow: clean(activity?.timingWindow || activity?.duration, 120),
+    phaseRef: clean(activity?.phaseRef || activity?.phaseId, 120),
+    sourceTaskId: clean(activity?.sourceTaskId, 160),
+    resilienceFallback: clean(activity?.resilienceFallback, 500)
   };
+}
+
+function inferDomain(activity) {
+  const text = `${activity?.title || ""} ${activity?.text || ""} ${activity?.type || ""} ${activity?.resources || ""}`;
+  if (/天基|卫星|轨道|天网|星座/.test(text)) return "太空";
+  if (/水下|潜艇|潜航|鱼雷|声呐/.test(text)) return "水下";
+  if (/水面|舰艇|驱逐|护卫|航母|两栖/.test(text)) return "水面";
+  if (/电磁|电子战|雷达|干扰|压制|辐射源|频谱/.test(text)) return "电磁";
+  if (/网系|赛博|网络|链系|数据链/.test(text)) return "网络";
+  if (/地面|岸基|发射营|导弹旅|车雷达/.test(text)) return "陆基";
+  if (/空|战机|轰炸机|无人机|巡逻|预警机|空射/.test(text)) return "空中";
+  return "综合";
+}
+
+function inferAutonomy(activity) {
+  const text = `${activity?.title || ""} ${activity?.text || ""} ${activity?.type || ""}`;
+  if (/打击|交战|突击|发射|决策|授权|方案判定|指挥/.test(text)) return "HITL";
+  if (/防撞|自卫|避障|微秒|自适应干扰/.test(text)) return "HOOTL";
+  return "HOTL";
+}
+
+function inferFlowSemantic(edge) {
+  const text = `${edge?.type || ""} ${edge?.payload || ""} ${edge?.condition || ""} ${edge?.id || ""}`;
+  if (/反馈|战损|战果|回传|更新|feedback/i.test(text)) return "feedback";
+  if (/控制|指令|授权|下达|authorization/i.test(text)) return "authorization";
+  if (/火控|交付|引导|交接|hand_off|handoff/i.test(text)) return "hand_off";
+  if (/态势|侦察|探测|引导|cue/i.test(text)) return "cue";
+  return "coordination";
 }
 
 function introducesParentCycle(activityId, parentId, activityById) {

@@ -19,13 +19,14 @@ try {
   };
   try {
     const client = createOpenAiClient({
-      getAiServiceConfig: () => ({ baseUrl: "http://example.test/v1", model: "test" }),
+      getAiServiceConfig: () => ({ baseUrl: "http://example.test/v1", model: "test", protocol: "responses" }),
       getAiApiKey: () => "not-a-real-key",
       getAiPromptOverrides: () => overrides
     });
     const items = client.listPromptDefinitions();
-    assert.equal(items.length, 20);
+    assert.equal(items.length, 23);
     assert.equal(items.find((item) => item.id === "ai.generate.generic")?.customized, true);
+    assert.equal(items.find((item) => item.id === "ai.generate.activity-decomposition")?.name, "活动分解");
     assert.equal(items.find((item) => item.id === "ai.generate.phase-action")?.variables.includes("analysis"), true);
     assert.equal(items.find((item) => item.id === "ai.generate.task-organization")?.variables.includes("analysis"), true);
     assert.equal(items.find((item) => item.id === "ai.generate.scenario")?.name, "仿真想定");

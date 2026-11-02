@@ -1,20 +1,26 @@
 # 规划文档说明
 
-更新时间：2026-08-18。当前实现状态仍以 `../project-context.md` 为准。
+更新时间：2026-10-30。当前实现状态以根目录 `../project-context.md` 为唯一绝对交接基准。
 
-## 当前可执行参考
+## 当前领域业务参考
 
-- `../project-context.md`：唯一当前交接状态。
-- `../TRIAL_GUIDE.md`：试用流程与反馈格式。
-- `../INTERFACE_GUIDE.md`：当前 HTTP 契约与权限边界。
-- `WORKFLOW_MAINLINE_MODEL_TOPOLOGY.md`：七步主线、关联模型和完整数据拓扑的下一版开发规范（目标架构，尚未实现）。
-- `FORCE_MISSION_CMO.md`：兵力与任务双层编组、CMO DB3 与平台推荐（已实现 + backlog）。
-- `AI_RESEARCH_CHAT.md`：AI 研究对话通用壳、已挂接步骤、以及仍是一次生成的 AI 入口。
-- `PROJECT_STORAGE_MIGRATION.md`：生产存储迁移准备方案。
-- `OIDC_DEPLOYMENT.md`：OIDC 部署边界与启用前置条件。
+| 文档 | 状态 | 说明 |
+|---|---|---|
+| `WORKFLOW_MAINLINE_MODEL_TOPOLOGY.md` | 已落地（核心基线） | 七步主线（简报、阶段行动、作战任务、作战兵力、总体图、概念图、仿真演示）、关联模型拓扑与失效传播机制。 |
+| `FORCE_MISSION_CMO.md` | 已落地 | 兵力与任务双层编组（概念兵力/作战兵力）、CMO DB3 装备库与平台推荐。 |
+| `AI_RESEARCH_CHAT.md` | 已落地 | AI 研究对话通用壳、流式补丁、多轮会话管理与各步骤适配规范。 |
+| `OV6_PRODUCT_MODEL.md` | 已落地 | 规则库 (OV-6a)、状态机 (OV-6b)、时序图 (OV-6c) 动态模型与多阵营/逐阶段时序。 |
 
-## 历史规划与提示词
+## 远期演进与历史基线参考
 
-`historical/` 下的 `PLAN-01` 至 `PLAN-04`、`SESSION_PROMPTS.md`、`SESSION_STATUS.md`，以及根目录迁入的早期规划文档，记录早期静态 Demo 和分会话规划。它们用于需求追溯，不代表当前功能状态、端口、接口或下一步。
+| 文档 | 类型 | 说明 |
+|---|---|---|
+| `PROJECT_STORAGE_MIGRATION.md` | 远期方案 | PostgreSQL/PostGIS 远期迁移准备与原生 SQLite 迁移命令参考；当前默认存储为原生 SQLite (`data/projects.sqlite`)。 |
+| `OIDC_DEPLOYMENT.md` | 远期方案 | 企业级 OIDC 部署边界与身份验证规范；当前浏览器令牌流未启用，默认使用本地协同身份 (`data/collaboration-identities.sqlite`)。 |
+| `RESEARCH_WORKFLOW_18.md` | 历史归档 | 早期 18 步线性流与门禁记录，仅作需求追溯，不作为当前导航与开发目标。 |
 
-后续恢复开发时，先读取当前交接与试用反馈；仅在需要回溯设计动机时再查阅历史计划。
+## 查阅原则
+
+- 进行开发与排查时，必须优先以根目录 `AGENTS.md`、`project-context.md`、`INTERFACE_GUIDE.md`、`README.md` 与实际代码为准。
+- 业务领域涉及具体七步主线、模型拓扑、CMO 目录或研究对话时，查阅对应的领域业务参考文档。
+- 历史归档与远期参考文档仅用于回溯设计动机或生产部署准备，严禁作为现状依据。

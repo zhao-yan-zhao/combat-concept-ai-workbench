@@ -30,9 +30,9 @@ const SUBFLOW_TOOLS = Object.freeze({
   ov3: { label: "资源流矩阵工具箱", ai: ["open-subflow-ai", "AI 检查矩阵"], items: [["seed-dodaf-ov3", "刷新来源", "refresh"], ["save-dodaf-ov3", "保存矩阵", "check"]] },
   ov5a: { label: "活动分解工具箱", ai: ["open-subflow-ai", "AI 检查分解"], items: [["sync-ov5a-from-ov5b", "从活动同步", "refresh"], ["sync-ov5b-from-ov5a", "应用父子关系", "relations"]] },
   ov5: { label: "作战活动工具箱", ai: ["generate-ov5", "AI 生成活动"], items: [["add-activity", "新增活动", "plus"], ["open-structure-review", "结构核对", "check"]] },
-  ov6a: { label: "规则库工具箱", ai: ["open-rule-library-chat", "打开 AI 对话"], items: [["seed-dodaf-ov6a", "刷新规则来源", "refresh"], ["save-dodaf-ov6a", "保存规则库", "check"]] },
-  ov6b: { label: "状态机工具箱", ai: ["open-state-machine-chat", "AI 分析状态机"], items: [["toggle-ov6b-tools", "状态机编辑", "state"], ["seed-dodaf-ov6b", "刷新状态来源", "refresh"]] },
-  ov6c: { label: "时序图工具箱", ai: ["open-sequence-chat", "AI 生成时序"], items: [["toggle-ov6c-tools", "时序编辑", "transition"], ["seed-dodaf-ov6c", "刷新时序来源", "refresh"]] },
+  ov6a: { label: "规则库工具箱", ai: ["open-rule-library-chat", "打开 AI 对话", "chat"], items: [["seed-dodaf-ov6a", "刷新规则来源", "refresh"], ["save-dodaf-ov6a", "保存规则库", "check"]] },
+  ov6b: { label: "状态机工具箱", ai: ["open-state-machine-chat", "AI 分析状态机", "chat"], items: [["toggle-ov6b-tools", "状态机编辑", "state"], ["seed-dodaf-ov6b", "刷新状态来源", "refresh"]] },
+  ov6c: { label: "时序图工具箱", ai: ["open-sequence-chat", "AI 生成时序", "chat"], items: [["toggle-ov6c-tools", "时序编辑", "transition"], ["seed-dodaf-ov6c", "刷新时序来源", "refresh"]] },
   ov7: { label: "状态活动映射工具箱", ai: ["open-subflow-ai", "AI 检查映射"], items: [["seed-dodaf-ov7", "刷新来源", "refresh"], ["save-dodaf-ov7", "保存映射", "check"]] },
   ooda: { label: "研究循环工具箱", ai: ["generate-ooda", "AI 完善循环"], items: [["derive-ooda", "从活动重派生", "refresh"], ["recalculate", "重新估算", "layout"]] },
   scenario: { label: "仿真演示工具箱", ai: ["generate-scenario", "AI 生成想定"], items: [["recommend-deployment", "优化部署", "concept"], ["open-deployment", "打开部署图", "layout"]] },
@@ -74,9 +74,10 @@ export function renderSubflowToolboxRail(viewId, state = {}) {
   const config = SUBFLOW_TOOLS[viewId];
   if (!config || usesNativeToolbox(viewId) || !isSubflowToolboxOpen(viewId, state)) return "";
   const busy = isBusy(viewId, state);
-  const [aiAction, aiLabel] = config.ai;
+  const [aiAction, aiLabel, aiIcon] = config.ai;
+  const resolvedIcon = aiIcon || (aiAction?.includes("chat") ? "chat" : "sparkle");
   const items = [
-    { action: aiAction, title: aiLabel, label: aiLabel, icon: "sparkle", attention: true, disabled: busy },
+    { action: aiAction, title: aiLabel, label: aiLabel, icon: resolvedIcon, attention: true, disabled: busy },
     { type: "sep" },
     ...config.items.map(([action, label, icon]) => ({
       action,

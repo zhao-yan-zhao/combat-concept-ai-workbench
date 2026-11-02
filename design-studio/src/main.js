@@ -403,28 +403,51 @@ function renderViewRoot(options = {}) {
   // Park iframe before wiping viewRoot so the node is never destroyed with innerHTML.
   parkConceptMapFrame();
 
-  viewRoot.dataset.renderedView = currentView;
-  viewRoot.dataset.renderedMarkup = newMarkup;
-  lastRenderedView = currentView;
+  const applyDomUpdate = () => {
+    viewRoot.dataset.renderedView = currentView;
+    viewRoot.dataset.renderedMarkup = newMarkup;
+    lastRenderedView = currentView;
 
-  if (isViewSwitch) {
+    viewRoot.innerHTML = newMarkup;
+    mountRelatedModelReturn(viewRoot, renderRelatedModelReturn(state));
+    mountConceptMapFrame();
+    mountGroupedLists(viewRoot);
+    restoreViewFocus(viewRoot, focusSnapshot);
+    restoreViewScroll(viewRoot, scrollSnapshots, {
+      resetInnerPhaseScroll: Boolean(options.resetInnerPhaseScroll)
+    });
+  };
+
+  // Modern Document View Transitions API for buttery smooth cross-fade page switches
+  if (isViewSwitch && typeof document !== "undefined" && typeof document.startViewTransition === "function" && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
     viewRoot.classList.add("is-view-switching");
-    window.clearTimeout(viewSwitchTimer);
-    viewSwitchTimer = window.setTimeout(() => {
-      viewRoot.classList.remove("is-view-switching");
-    }, 220);
+    try {
+      const transition = document.startViewTransition(() => {
+        applyDomUpdate();
+      });
+      if (transition && typeof transition.finished?.finally === "function") {
+        transition.finished.finally(() => {
+          viewRoot.classList.remove("is-view-switching");
+        });
+      } else {
+        window.setTimeout(() => viewRoot.classList.remove("is-view-switching"), 300);
+      }
+    } catch {
+      applyDomUpdate();
+      window.setTimeout(() => viewRoot.classList.remove("is-view-switching"), 300);
+    }
   } else {
-    viewRoot.classList.remove("is-view-switching");
+    if (isViewSwitch) {
+      viewRoot.classList.add("is-view-switching");
+      window.clearTimeout(viewSwitchTimer);
+      viewSwitchTimer = window.setTimeout(() => {
+        viewRoot.classList.remove("is-view-switching");
+      }, 300);
+    } else {
+      viewRoot.classList.remove("is-view-switching");
+    }
+    applyDomUpdate();
   }
-
-  viewRoot.innerHTML = newMarkup;
-  mountRelatedModelReturn(viewRoot, renderRelatedModelReturn(state));
-  mountConceptMapFrame();
-  mountGroupedLists(viewRoot);
-  restoreViewFocus(viewRoot, focusSnapshot);
-  restoreViewScroll(viewRoot, scrollSnapshots, {
-    resetInnerPhaseScroll: Boolean(options.resetInnerPhaseScroll)
-  });
 }
 
 function captureViewFocus(root) {
@@ -831,7 +854,13 @@ function bindDynamicEvents() {
   });
 
   document.querySelectorAll("[data-activity]").forEach((button) => {
-    button.addEventListener("click", () => select("activity", button.dataset.activity));
+    button.addEventListener("click", () => {
+      select("activity", button.dataset.activity);
+      if (state.activeView === "ov5") {
+        state.ov5LeftMode = "editor";
+        render();
+      }
+    });
   });
   document.querySelectorAll("[data-ov2-exchange]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1616,6 +1645,11 @@ function confirmRegenerateWorkflowStep(context) {
     render();
     return;
   }
+  if (action === "ov2-toggle-sidebar") {
+    state.ov2SidebarCollapsed = !state.ov2SidebarCollapsed;
+    render();
+    return;
+  }
   if (action === "ov2-set-view-mode") {
     state.ov2ViewMode = source?.dataset?.mode || "canvas";
     render();
@@ -2071,7 +2105,7 @@ function confirmRegenerateWorkflowStep(context) {
     return;
   }
   if (ov1AiController.handleAction(action)) return;
-  if (ov5AiController.handleAction(action)) return;
+  if (ov5AiController.handleAction(action, source)) return;
   if (oodaAiController.handleAction(action)) return;
   if (modelSnapshotController.handleAction(action)) return;
   if (briefController.handleAction(action)) return;
@@ -3020,6 +3054,20 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
   if (viewId === "ov3") {
     await dodafProductController.pregenerateOv3FromOv2({ silent: false, force: forceRegenerate });
   }
+  if (viewId === "ov5" && (generate || forceRegenerate)) {
+    if (forceRegenerate || !(state.ov5?.activities || []).length) {
+      await ov5AiController.generateOv5({ force: forceRegenerate, silent: false });
+    }
+  }
+  if (viewId === "ov5a" && (generate || forceRegenerate)) {
+    await dodafProductController.pregenerateOv5a({ silent: false, force: forceRegenerate });
+  }
+  if (viewId === "ov1c" && (generate || forceRegenerate)) {
+    await dodafProductController.pregenerateOv1c({ silent: false, force: forceRegenerate });
+  }
+  if (viewId === "ov7" && (generate || forceRegenerate)) {
+    await dodafProductController.pregenerateOv7({ silent: false, force: forceRegenerate });
+  }
   if (viewId === "force-mission" && (generate || forceRegenerate)) {
     // 门禁：必须先生成作战任务；若作战任务未生成或需补齐，优先生成作战任务，绝不越权生成兵力
     if (forceRegenerate || !(state.forceMission?.tasks || []).length || operationalTasksNeedAiCompletion(state.forceMission?.tasks)) {
@@ -3091,6 +3139,8 @@ async function ensureCombatFocusOnEnterPhaseAction() {
 /** Revisit an already-confirmed mainline product and continue to its successor. */
 async function advanceWorkflowStep({ generate = false, forceRegenerate = false } = {}) {
   setWorkflowGateOpen(false);
+  state.workflowCompleting = true;
+  renderWorkflowGate();
   try {
     const ctx = resolveWorkflowGateContext(state);
     if (ctx.mode !== "next-step" || !ctx.nextStep?.id) {
@@ -3115,11 +3165,16 @@ async function advanceWorkflowStep({ generate = false, forceRegenerate = false }
   } catch (err) {
     console.error("advanceWorkflowStep error:", err);
     showToast(`推进失败：${err?.message || "未知错误"}`);
+  } finally {
+    state.workflowCompleting = false;
+    renderWorkflowGate();
   }
 }
 
 async function advanceRelatedWorkflow({ generate = false, forceRegenerate = false } = {}) {
   setWorkflowGateOpen(false);
+  state.workflowCompleting = true;
+  renderWorkflowGate();
   try {
     const ctx = resolveWorkflowGateContext(state);
     if (ctx.mode !== "related-next-step" || !ctx.nextStep?.id) {
@@ -3193,6 +3248,9 @@ async function advanceRelatedWorkflow({ generate = false, forceRegenerate = fals
   } catch (err) {
     console.error("advanceRelatedWorkflow error:", err);
     showToast(`推进失败：${err?.message || "未知错误"}`);
+  } finally {
+    state.workflowCompleting = false;
+    renderWorkflowGate();
   }
 }
 
@@ -3836,6 +3894,11 @@ function saveActivity(event) {
     duration: formData.get("duration").trim() || "待估算",
     parentId: formData.get("parentId").trim(),
     resources: formData.get("resources").trim(),
+    performer: (formData.get("performer") || "").trim(),
+    domain: (formData.get("domain") || "").trim(),
+    autonomy: (formData.get("autonomy") || "").trim(),
+    timingWindow: (formData.get("timingWindow") || "").trim(),
+    resilienceFallback: (formData.get("resilienceFallback") || "").trim(),
     preconditions: formData.get("preconditions").trim(),
     constraints: formData.get("constraints").trim(),
     text: formData.get("text").trim() || "补充该活动的任务说明。",

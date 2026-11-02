@@ -80,6 +80,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     const isSequenceDraft = input.workflow?.outputSchema === "SequenceDraft";
     const isStateMachineDraft = input.workflow?.outputSchema === "StateMachineDraft";
     const isScenarioDraft = input.workflow?.outputSchema === "ScenarioDraft";
+    const isActivityDecompositionDraft = input.workflow?.outputSchema === "ActivityDecompositionDraft";
     const promptId = generationPromptId(input.workflow?.outputSchema, isResearchChat);
     const promptParts = [
       "你是作战概念研究工作台的专业研究助理。",
@@ -151,6 +152,10 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         '  "areas": [{ "id": "area-1", "label": "区域名", "type": "patrol|prosecution|support|target|exclusion", "position": [40, 50], "size": 160, "geometryType": "circle|polygon|corridor", "points": [{ "latitude": 0, "longitude": 0, "label": "点1" }] }],',
         '  "timeline": [{ "time": "T+00:10", "phase": "阶段名", "title": "事件标题", "description": "事件详细描述", "impact": "对抗或态势影响" }],',
         '  "narrative": "仿真推演总体叙述（100-300字）" }'
+      ] : isActivityDecompositionDraft ? [
+        '{ "summary": "1-3 句中文说明，概述本轮作战活动分解要点与层级规划",',
+        '  "activities": [{ "id": "act-sub-1", "title": "子活动规范名称", "type": "感知|识别|决策|行动|控制|评估|电子对抗|协同打击", "domain": "太空|空中|水面|水下|陆基|电磁|网络|综合", "autonomy": "HITL|HOTL|HOOTL", "performer": "执行责任单元/装备", "timingWindow": "时限窗口如5m", "input": "输入契约", "output": "产出契约", "parentId": "上级活动id", "text": "活动机理与执行说明" }],',
+        '  "decompositions": [{ "parentActivityRef": "上级活动id", "childActivityRef": "act-sub-1", "rationale": "分解因果与层级依据" }] }'
       ] : [
         "{",
         '  "summary": "一句话概括",',
@@ -1787,6 +1792,8 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       ["ConceptGraphicPlan", "概念图设计", "总体概念图结构计划"],
       ["ConceptMapInitialPlan", "初始概念图", "研究级兵力部署与阶段关系"],
       ["ScenarioDraft", "仿真想定", "基于阶段时序、任务区域与兵力编成生成仿真推演想定脚本"],
+      ["ActivityDecompositionDraft", "活动分解", "对作战活动进行 DoDAF OV-5a 规范化纵向分解与层级规划"],
+      ["ConceptPlan", "作战活动与机理", "基于作战阶段、任务编成与资源流矩阵生成闭环作战活动网络与 OODA 动力学机制"],
       ["GenericAiDraft", "通用生成", "未设专用分支的通用结构化生成"]
     ];
     const definitions = variants.map(([schema, name, description, researchChat]) => {
@@ -1918,7 +1925,8 @@ function generationPromptId(schema, researchChat = false) {
     OperationalTaskDraft: "operational-task", TaskOrganizationDraft: "task-organization", ForceMissionPlan: "force-mission", OrganizationRelationshipDraft: "ov4", ResourceFlowDraft: "ov2", PhaseActionConcept: "phase-action",
     RuleLibraryChangeSet: "rule-change-set", RuleLibraryDraft: "rule-library", SequenceDraft: "sequence",
     StateMachineDraft: "state-machine", ConceptGraphicPlan: "concept-graphic-plan", ConceptMapInitialPlan: "concept-map-initial",
-    ScenarioDraft: "scenario"
+    ScenarioDraft: "scenario", ActivityDecompositionDraft: "activity-decomposition",
+    ConceptPlan: "ov5-concept-plan"
   };
   return `ai.generate.${ids[schema] || "generic"}`;
 }
@@ -1932,6 +1940,7 @@ export function resolveGenerationTemperature(schema, isResearchChat = false) {
   switch (schema) {
     case "ConceptBrief":
     case "CombatFocusOptions":
+    case "ConceptPlan":
       return 0.7;
     case "ForceMissionPlan":
     case "OrganizationRelationshipDraft":
@@ -1948,6 +1957,7 @@ export function resolveGenerationTemperature(schema, isResearchChat = false) {
     case "RuleLibraryDraft":
     case "RuleLibraryChangeSet":
     case "ScenarioDraft":
+    case "ActivityDecompositionDraft":
       return 0.2;
     default:
       return 0.3;

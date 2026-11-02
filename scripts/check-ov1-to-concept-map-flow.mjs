@@ -199,7 +199,7 @@ assert(mapArea.radius === 80 * 1852, "Map area item radius must convert nautical
 
 // 6. Test Subflow Topology & Related Views
 assert(RELATED_VIEWS.ov1.includes("concept-map"), "OV-1 related views must include concept-map");
-assert(RELATED_VIEWS.ov5.includes("ov5a") && RELATED_VIEWS.ov5.includes("ooda"), "OV-5 related views must include OV-5a and OODA");
+assert(RELATED_VIEWS.ov5.includes("ov5a") && !RELATED_VIEWS.ov5.includes("ooda"), "OV-5 related views must include OV-5a and have ooda merged into mainline");
 assert(RELATED_VIEWS["force-mission"].includes("operational-task"), "force-mission related views must include operational-task");
 
 const topology = buildModelTopology(stateWithOv1);
@@ -215,7 +215,7 @@ assert(forceRailFlow.includes("作战任务"), "force-mission left rail must exp
 assert(!forceRailFlow.includes("待建设"), "force-mission subflow must not contain '待建设'");
 
 const ov5RailFlow = renderContextualModelFlow("ov5", stateWithOv1);
-assert(ov5RailFlow.includes("作战活动分解 OV5a") && ov5RailFlow.includes("研究循环 OODA"), "OV-5 left rail must expose complete subflow nodes including OODA");
+assert(ov5RailFlow.includes("作战活动分解 OV5a") && !ov5RailFlow.includes("研究循环 OODA"), "OV-5 left rail must retire duplicate OODA subflow item");
 
 // 7. Test Workflow Gates
 assert(isStepGenerated("ov1", stateWithOv1), "OV-1 step must be recognized as generated");

@@ -8,12 +8,42 @@ import { planningAnalysisForDownstream } from "./planningContext.js";
 
 export function createOv5AiController({ getState, render, notify, invalidateDerivedArtifacts, syncOv5, syncOoda }) {
   return {
-    handleAction(action) {
+    generateOv5: (options) => generateOv5(getState(), options),
+    deriveFromTasks: () => deriveFromTasks(getState()),
+    summarizeUpstreamContext: () => summarizeUpstreamContextForOv5(getState()),
+    handleAction(action, source) {
+      if (action === "set-ov5-view") {
+        const state = getState();
+        state.ov5ViewMode = source?.dataset?.mode || "kill-web";
+        render();
+        return true;
+      }
+      if (action === "toggle-ov5-stress") {
+        const state = getState();
+        const nodeId = source?.dataset?.node;
+        state.ov5StressedNodeId = state.ov5StressedNodeId === nodeId ? null : nodeId;
+        render();
+        return true;
+      }
+      if (action === "clear-ov5-stress") {
+        const state = getState();
+        state.ov5StressedNodeId = null;
+        render();
+        return true;
+      }
+      if (action === "auto-fill-fallbacks") {
+        void autoFillFallbacks(getState());
+        return true;
+      }
+      if (action === "redteam-mechanism-challenge") {
+        void runRedTeamChallenge(getState());
+        return true;
+      }
       if (action === "generate-ov5") {
         const state = getState();
         if (state.ov5Generating) return true;
-        if (state.ov5?.activities?.length && typeof window !== "undefined" && typeof window.confirm === "function" && !window.confirm("将根据当前概念简报与已确认规划重建 OV-5，并同步派生 OODA。已有 OV-5 与 OODA 的人工编辑会被替换。是否继续？")) return true;
-        void generateOv5(state);
+        if (state.ov5?.activities?.length && typeof window !== "undefined" && typeof window.confirm === "function" && !window.confirm("将根据当前概念简报、作战任务、兵力与资源流契约重建 OV-5，并同步派生 OODA。已有 OV-5 与 OODA 的人工编辑会被替换。是否继续？")) return true;
+        void generateOv5(state, { force: true, silent: false });
         return true;
       }
       if (action === "derive-activities-from-tasks") {
@@ -24,9 +54,127 @@ export function createOv5AiController({ getState, render, notify, invalidateDeri
         void autoFixFeedbackLoop(getState());
         return true;
       }
+      if (action === "change-activity-autonomy") {
+        const state = getState();
+        const actId = source?.dataset?.activity;
+        const level = source?.dataset?.level;
+        const act = (state.ov5?.activities || []).find((a) => a.id === actId);
+        if (act && level) {
+          act.autonomy = level;
+          persistOv5Model(state.ov5);
+          state.ooda = deriveOodaFromOv5(state.ov5);
+          invalidateDerivedArtifacts();
+          void syncOv5?.(state.ov5, { source: "manual" });
+          notify(`已将「${act.title}」自主决策等级更新为 ${level}`);
+          render();
+        }
+        return true;
+      }
+      if (action === "preset-stress-domain") {
+        const state = getState();
+        const domain = source?.dataset?.domain;
+        const target = (state.ov5?.activities || []).find((a) => a.domain === domain);
+        if (target) {
+          state.ov5StressedNodeId = target.id;
+          render();
+          notify(`已注入「${domain}域」对抗压制战损场景（扰动节点：${target.title}）`);
+        } else {
+          notify(`当前活动网络中暂无归属于「${domain}域」的作战活动`);
+        }
+        return true;
+      }
+      if (action === "preset-stress-type") {
+        const state = getState();
+        const type = source?.dataset?.type;
+        const target = (state.ov5?.activities || []).find((a) => String(a.type).includes(type) || String(a.title).includes(type));
+        if (target) {
+          state.ov5StressedNodeId = target.id;
+          render();
+          notify(`已注入「${type}核心节点」战损瘫痪场景（扰动节点：${target.title}）`);
+        } else {
+          notify(`未找到「${type}」类型的核心活动`);
+        }
+        return true;
+      }
+      if (action === "edit-activity") {
+        const state = getState();
+        const actId = source?.dataset?.activity;
+        if (actId) {
+          const act = (state.ov5?.activities || []).find((a) => a.id === actId);
+          state.selection = act ? { id: act.id, kind: "activity", title: act.title } : { id: actId, kind: "activity" };
+          state.ov5LeftMode = "editor";
+          render();
+        }
+        return true;
+      }
+      if (action === "toggle-ov5-left-mode") {
+        const state = getState();
+        state.ov5LeftMode = state.ov5LeftMode === "tree" ? "editor" : "tree";
+        render();
+        return true;
+      }
+      if (action === "close-ov5-activity-editor") {
+        const state = getState();
+        state.selection = null;
+        state.ov5LeftMode = "tree";
+        render();
+        return true;
+      }
       return false;
     }
   };
+
+  async function autoFillFallbacks(state) {
+    const activities = state.ov5?.activities || [];
+    if (!activities.length) return;
+    let filled = 0;
+    activities.forEach((act) => {
+      if (!act.resilienceFallback) {
+        filled += 1;
+        const type = String(act.type || "");
+        const domain = String(act.domain || "");
+        if (type.includes("感知") || domain.includes("太空")) {
+          act.resilienceFallback = "天基受干扰时，自动降级至战区高空无人侦察机自组网接力，维持连续态势追踪。";
+        } else if (type.includes("决策") || type.includes("控制")) {
+          act.resilienceFallback = "主指控所战损时，交战授权与协同规划自适应下沉至编队浮动预备长机承接。";
+        } else if (type.includes("行动") || type.includes("突击")) {
+          act.resilienceFallback = "直连制导数据链断开时，攻击单元启动自主交战规则(ROE)，由弹载传感器末端自主寻的。";
+        } else {
+          act.resilienceFallback = "通信阻断时，通过机间战术自组网进行多跳中继，确保协同闭环不中断。";
+        }
+      }
+    });
+    persistOv5Model(state.ov5);
+    state.ooda = deriveOodaFromOv5(state.ov5);
+    invalidateDerivedArtifacts();
+    await syncOv5?.(state.ov5, { source: "manual" });
+    notify(`已为 ${filled} 项作战活动自动补齐抗毁降级自愈机制，单点断链风险已消除`);
+    render();
+  }
+
+  async function runRedTeamChallenge(state) {
+    const activities = state.ov5?.activities || [];
+    if (!activities.length) {
+      notify("暂无作战活动，无法发起红方质询");
+      return;
+    }
+    const stressedNode = activities.find((a) => a.id === state.ov5StressedNodeId);
+    const health = evaluateOodaLoopHealth(state.ov5);
+    const latency = health.latencyBudget?.formattedTotal || "待估算";
+
+    let challenge = "";
+    if (stressedNode) {
+      challenge = `【针对战损节点「${stressedNode.title}」的对抗质询】：红方通过高功率宽带微波与电子压制使该节点失效。当前下游活动依赖已受阻，蓝方降级旁路（${stressedNode.resilienceFallback || "未配置"}）是否已经过抗电磁脉冲(EMP)加固？指挥授权转移至备用节点的时间窗口是否满足战场突变要求？`;
+    } else {
+      const spof = health.bottlenecks?.[0];
+      const targetAct = spof || activities[Math.floor(activities.length / 2)];
+      challenge = `【红方关键因果质询】：全链累积时延约为 ${latency}。红方将在「${targetAct.title}」处施加分布式杂波干扰与网络欺骗。若敌防御反应窗口小于当前时延预算，该概念如何保证先敌完成“感知-打击-反哺”全闭环？是否存在非卫星中继的强突防通信手段？`;
+    }
+
+    state.ov5RedTeamChallenge = challenge;
+    notify("红方已完成机理对抗质询，见右侧透镜面板");
+    render();
+  }
 
   async function deriveFromTasks(state) {
     const tasks = state.forceMission?.tasks || state.forceMissionPlan?.tasks || [];
@@ -91,7 +239,8 @@ export function createOv5AiController({ getState, render, notify, invalidateDeri
     render();
   }
 
-  async function generateOv5(state) {
+  async function generateOv5(state, options = {}) {
+    const { force = false, silent = false } = options;
     state.ov5Generating = true;
     render();
     const evidenceSelection = await selectEvidenceForAi({
@@ -101,13 +250,10 @@ export function createOv5AiController({ getState, render, notify, invalidateDeri
       limit: 3
     });
     const evidence = evidenceSelection.items;
-    try {
-      const ov1Context = summarizeOv1ForOv5(state.ov1);
-      const planning = planningAnalysisForDownstream(state);
-      const tasksHint = Array.isArray(state.forceMission?.tasks) && state.forceMission.tasks.length
-        ? `上游已确认任务（${state.forceMission.tasks.map((t) => `${t.name || t.id}(${t.missionType || "通用"})`).join("；")}）。请严格以此为来源纵向细化为具备因果闭环的作战活动网络。`
-        : "请围绕概念简报生成覆盖感知、决策、行动、控制与评估的闭环作战活动网络。";
+    const upstream = summarizeUpstreamContextForOv5(state);
+    const planning = planningAnalysisForDownstream(state);
 
+    try {
       const response = await generateWithAi({
         workflowId: "concept",
         workflow: { id: "concept", title: "作战活动模型生成", outputSchema: "ConceptPlan" },
@@ -118,20 +264,41 @@ export function createOv5AiController({ getState, render, notify, invalidateDeri
           "主要矛盾": state.brief?.risk || "信息不确定性和资源连续性",
           ...planning,
           "概念方向": state.direction,
-          "任务约束": tasksHint,
-          "OV-1概念节点": ov1Context.nodes,
-          "OV-1高层关系": ov1Context.edges,
-          "建模要求": "以任务与兵力规划为基础，生成感知、识别、决策、行动、控制和评估六类研究级活动及信息、控制、反馈因果衔接。确保活动形成杀伤网闭环（打击后有反馈回路连接至感知/决策）；保持抽象、可审阅和可追溯；不提供具体行动步骤、目标选择、武器用法或规避建议。"
+          "作战阶段时序": upstream.phasesText,
+          "已确认作战任务": upstream.tasksText,
+          "参战兵力与平台": upstream.forcesText,
+          "资源流交换契约(OV-2/OV-3)": upstream.exchangesText,
+          "操作节点清单": upstream.nodesText,
+          "建模要求": "以已确认作战任务、参战兵力、资源流矩阵与作战阶段为直接上游输入，生成感知、识别、决策、行动、控制和评估六类研究级活动及信息、控制、反馈因果衔接。确保活动形成杀伤网闭环（打击后有反馈回路连接至感知/决策）；保持抽象、可审阅和可追溯；不提供具体行动步骤、目标选择、武器用法或规避建议。"
         },
         evidence
       });
       if (!isAiOutput(response)) throw new Error("AI OV-5 响应不完整");
-      state.ov5 = applyAiOv5Draft({ brief: state.brief, direction: state.direction, draft: response.result, evidence, evidenceSelection: evidenceSelection.provenance, ov1: state.ov1 });
+      state.ov5 = applyAiOv5Draft({
+        brief: state.brief,
+        direction: state.direction,
+        draft: response.result,
+        evidence,
+        evidenceSelection: evidenceSelection.provenance,
+        ov1: state.ov1,
+        tasks: upstream.tasks,
+        forces: upstream.forces
+      });
       const unmapped = countUnmappedOv5Activities(state.ov5, state.ov1);
-      notify(unmapped ? `AI 已重建 OV-5（${unmapped} 个活动仍待核对 OV-1 来源），并派生 OODA` : "AI 已重建 OV-5，活动已挂接 OV-1 来源，并派生待复核 OODA");
+      if (!silent) {
+        notify(unmapped ? `AI 已基于任务、兵力与资源流契约构建 OV-5（${unmapped} 个活动待核对 OV-1），并派生 OODA` : "AI 已基于任务、兵力与资源流契约构建 OV-5，并派生待复核 OODA");
+      }
     } catch {
-      state.ov5 = createLocalOv5Draft({ brief: state.brief, direction: state.direction, evidence, evidenceSelection: evidenceSelection.provenance, ov1: state.ov1 });
-      notify("AI 服务暂不可用，已生成本地 OV-5（已尝试挂接 OV-1）并派生 OODA");
+      state.ov5 = createLocalOv5Draft({
+        brief: state.brief,
+        direction: state.direction,
+        evidence,
+        evidenceSelection: evidenceSelection.provenance,
+        ov1: state.ov1,
+        tasks: upstream.tasks,
+        forces: upstream.forces
+      });
+      if (!silent) notify("已基于上游任务、兵力与资源流契约生成本地 OV-5 并派生 OODA");
     } finally {
       persistOv5Model(state.ov5);
       state.ooda = deriveOodaFromOv5(state.ov5);
@@ -145,19 +312,59 @@ export function createOv5AiController({ getState, render, notify, invalidateDeri
   }
 }
 
-function summarizeOv1ForOv5(ov1 = {}) {
-  const nodes = Array.isArray(ov1.nodes) ? ov1.nodes : [];
-  const edges = Array.isArray(ov1.edges) ? ov1.edges : [];
-  const nodeLabel = new Map(nodes.map((node) => [String(node.id), String(node.label || node.id).slice(0, 80)]));
+export function summarizeUpstreamContextForOv5(state = {}) {
+  // 1. 作战任务 Tasks
+  const tasks = state.forceMission?.tasks || state.forceMissionPlan?.tasks || [];
+  const tasksText = tasks.map((t, idx) => {
+    const areaName = t.area?.name ? `空域: ${t.area.name}` : "";
+    const effect = t.expectedEffect ? `效果: ${t.expectedEffect}` : "";
+    const obj = t.objective ? `目的: ${t.objective}` : "";
+    const extra = [areaName, effect, obj].filter(Boolean).join("，");
+    return `${idx + 1}. ${t.name || t.id}（类型: ${t.missionType || "通用"}${extra ? `，${extra}` : ""}` + `）`;
+  }).join("；\n") || "尚未定义具体作战任务";
+
+  // 2. 参战兵力与平台 Forces
+  const forces = [...(state.forceMission?.forces || state.forceMissionPlan?.forces || []), ...(state.forceMission?.combatForces || state.forceMissionPlan?.combatForces || [])];
+  const forcesText = forces.slice(0, 16).map((f) => {
+    const domain = f.domain || f.layer || "空/海/地";
+    const platform = f.platformType || f.group || "";
+    const role = f.role || "";
+    const weapon = f.weapons ? `武器: ${f.weapons}` : "";
+    const desc = [domain, role, platform, weapon].filter(Boolean).join("，");
+    return `${f.name || f.id}（${desc || "主战单元"}）`;
+  }).join("；\n") || "尚未定义参战兵力";
+
+  // 3. 资源流矩阵与交换契约 OV-2 / OV-3
+  const exchanges = state.ov3?.exchanges || state.ov2?.exchanges || [];
+  const exchangesText = exchanges.slice(0, 16).map((e) => {
+    const src = e.source || e.producer || "源主体";
+    const tgt = e.target || e.consumer || "宿主体";
+    const payload = e.payload || e.informationElement || e.resource || "态势/协同信息";
+    const freq = e.frequency || e.duration || "";
+    return `${src} -> ${tgt}（载荷: ${payload}${freq ? `，时延/频度: ${freq}` : ""}` + `）`;
+  }).join("；\n") || "尚未定义资源流交换契约";
+
+  // 4. 作战阶段 Phases
+  const phases = state.phaseAction?.phases || [];
+  const phasesText = phases.map((p, idx) => {
+    const window = p.timing || p.duration || "";
+    const act = p.coreAction || p.description || "";
+    return `阶段${idx + 1}: ${p.name || p.id}${window ? ` [${window}]` : ""}${act ? ` - ${act}` : ""}`;
+  }).join("；\n") || "尚未划分作战阶段";
+
+  // 5. 操作节点 Nodes
+  const nodes = (state.ov2?.nodes || []).map((n) => n.name || n.title || n.id).filter(Boolean).slice(0, 12);
+  const nodesText = nodes.join("、") || "操作节点沿用参战兵力划分";
+
   return {
-    nodes: nodes.slice(0, 12).map((node) => {
-      const kind = node.kind || node.category || "主体";
-      return `${String(node.label || node.id).slice(0, 80)}（${kind}）`;
-    }).join("；") || "尚未定义 OV-1 节点",
-    edges: edges.slice(0, 16).map((edge) => {
-      const source = nodeLabel.get(String(edge.sourceId)) || edge.sourceId;
-      const target = nodeLabel.get(String(edge.targetId)) || edge.targetId;
-      return `${source} -[${edge.type || "关系"}]-> ${target}`;
-    }).join("；") || "尚未定义 OV-1 关系"
+    tasks,
+    forces,
+    exchanges,
+    phases,
+    tasksText,
+    forcesText,
+    exchangesText,
+    phasesText,
+    nodesText
   };
 }
