@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { hasSubflowToolbox, renderSubflowPage, renderSubflowToolboxFloatButton, subflowToolboxConfig, usesNativeToolbox } from "../design-studio/src/subflowToolbox.js";
 import fs from "node:fs";
+import { readFullCssSync } from "./cssHelper.mjs";
 
 const expected = [
   "phase-action", "operational-task", "force-mission", "ov1", "concept-map",
@@ -36,7 +37,7 @@ assert.match(floatHost, /renderSubflowToolboxFloatButton/);
 for (const retiredAiFloat of ["renderPhaseActionChatFloatButton", "renderForceMissionChatFloatButton", "renderRuleLibraryChatFloatButton"]) assert.equal(floatHost.includes(retiredAiFloat), false, `${retiredAiFloat} must not duplicate the generic toolbox`);
 const ov4Source = fs.readFileSync(new URL("../design-studio/src/ov4View.js", import.meta.url), "utf8");
 assert.match(ov4Source, /open-subflow-ai[\s\S]*sparkle/, "native OV4 toolbox must include AI");
-const styles = fs.readFileSync(new URL("../design-studio/styles.css", import.meta.url), "utf8");
+const styles = readFullCssSync(new URL("../design-studio/styles.css", import.meta.url));
 assert.match(styles, /\.subflow-workbench-shell\.is-tools-open:has\(> \.subflow-edit-rail\)[^{]*\{[^}]*46px/s, "generic rail space must require a rendered rail and use a compact 46px track");
 assert.match(styles, /\.ov4-workbench\.is-editor-open\s*\{[^}]*320px\) 0;/s, "OV4 editor without tools must release the rail column");
 assert.match(styles, /\.sm-workbench\.is-tools-docked:has\(> \.sm-edit-rail\)/, "state-machine rail space must require a rendered rail");

@@ -1,0 +1,691 @@
+/* ==========================================================================
+   总体概念 (Step 05) 现代化工作台样式：超紧凑 2 行 Header + 三视图模式
+   ========================================================================== */
+
+.ov1-top-header {
+  padding: 4px 10px !important;
+  background: rgba(11, 20, 34, 0.75) !important;
+  border: 1px solid rgba(148, 163, 184, 0.14) !important;
+  border-radius: 6px !important;
+  margin-bottom: 6px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+}
+
+.ov1-top-header .ov1-header-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  flex-wrap: nowrap !important;
+  min-height: 32px !important;
+}
+
+.ov1-top-header .ov1-header-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex: 0 0 auto !important;
+}
+
+.ov1-top-header .ov1-header-title h2 {
+  font-size: 14px !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+  color: #f8fafc !important;
+  font-weight: 700 !important;
+}
+
+.ov1-btn-back {
+  font-size: 11px !important;
+  padding: 2px 8px !important;
+  min-height: 24px !important;
+  color: #94a3b8 !important;
+  background: rgba(30, 41, 59, 0.6) !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-radius: 4px !important;
+}
+
+.ov1-btn-back:hover {
+  color: #f8fafc !important;
+  border-color: #38bdf8 !important;
+}
+
+.ov1-top-header .ov1-view-switch {
+  display: inline-flex !important;
+  align-items: center !important;
+  background: rgba(15, 23, 42, 0.6) !important;
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+  border-radius: 6px !important;
+  padding: 2px !important;
+  gap: 2px !important;
+  margin-left: 6px !important;
+}
+
+.ov1-top-header .ov1-view-switch .view-pill {
+  padding: 2px 9px !important;
+  font-size: 11px !important;
+  min-height: 24px !important;
+  border-radius: 4px !important;
+  border: none !important;
+  background: transparent !important;
+  color: #94a3b8 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.ov1-top-header .ov1-view-switch .view-pill.active {
+  background: rgba(14, 165, 233, 0.22) !important;
+  color: #38bdf8 !important;
+  font-weight: 600 !important;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.2) !important;
+}
+
+.ov1-actions-bar {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex: 0 0 auto !important;
+}
+
+.ov1-actions-bar .primary-btn,
+.ov1-actions-bar .quiet-button {
+  padding: 3px 9px !important;
+  font-size: 11px !important;
+  min-height: 26px !important;
+}
+
+.ov1-actions-bar .ov1-action-primary {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  border-color: #38bdf8 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+.ov1-more-menu {
+  position: relative !important;
+  display: inline-block !important;
+}
+
+.ov1-more-menu summary {
+  list-style: none !important;
+  cursor: pointer !important;
+  padding: 3px 8px !important;
+  font-size: 11px !important;
+  min-height: 26px !important;
+}
+
+.ov1-more-menu summary::-webkit-details-marker {
+  display: none !important;
+}
+
+.ov1-more-dropdown {
+  position: absolute !important;
+  right: 0 !important;
+  top: calc(100% + 4px) !important;
+  background: #0f172a !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-width: 150px !important;
+  padding: 4px !important;
+  z-index: 100 !important;
+}
+
+.ov1-more-dropdown button {
+  background: transparent !important;
+  border: none !important;
+  text-align: left !important;
+  padding: 6px 10px !important;
+  font-size: 11px !important;
+  color: #cbd5e1 !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  transition: all 0.12s ease !important;
+}
+
+.ov1-more-dropdown button:hover {
+  background: rgba(56, 189, 248, 0.15) !important;
+  color: #38bdf8 !important;
+}
+
+.ov1-filter-top-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  min-height: 28px !important;
+  padding-top: 2px !important;
+  border-top: 1px solid rgba(148, 163, 184, 0.08) !important;
+}
+
+.ov1-filter-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex: 1 1 auto !important;
+}
+
+.ov1-search-input {
+  width: 220px !important;
+  height: 24px !important;
+  background: rgba(15, 23, 42, 0.6) !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-radius: 4px !important;
+  padding: 2px 8px !important;
+  font-size: 11px !important;
+  color: #f1f5f9 !important;
+}
+
+.ov1-hud-badges {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.ov1-hud-badge {
+  font-size: 10px !important;
+  padding: 1px 6px !important;
+  border-radius: 4px !important;
+  background: rgba(30, 41, 59, 0.6) !important;
+  color: #94a3b8 !important;
+  border: 1px solid rgba(148, 163, 184, 0.14) !important;
+  white-space: nowrap !important;
+}
+
+.ov1-hud-badge.is-highlight {
+  color: #38bdf8 !important;
+  background: rgba(14, 165, 233, 0.12) !important;
+  border-color: rgba(56, 189, 248, 0.3) !important;
+  font-weight: 600 !important;
+}
+
+.ov1-hud-badge.is-ready {
+  color: #34d399 !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(52, 211, 153, 0.3) !important;
+}
+
+.ov1-quick-jump-step6 {
+  font-size: 11px !important;
+  padding: 2px 8px !important;
+  min-height: 24px !important;
+  color: #38bdf8 !important;
+  border-color: rgba(56, 189, 248, 0.3) !important;
+}
+
+/* 体系概念大纲视口样式 */
+.ov1-outline-viewport {
+  padding: 12px;
+  background: rgba(11, 20, 36, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.ov1-outline-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.ov1-outline-card {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ov1-outline-card.is-full {
+  grid-column: 1 / -1;
+}
+
+.ov1-outline-card header h3 {
+  margin: 0;
+  font-size: 12.5px;
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.ov1-outline-card header small {
+  color: #94a3b8;
+  font-size: 10.5px;
+}
+
+.ov1-outline-card textarea,
+.ov1-outline-card input {
+  width: 100%;
+  background: rgba(2, 6, 23, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  color: #f8fafc;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.ov1-outline-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+
+/* ==========================================================================
+   仿真推演与验证 (Step 06) 现代化工作台样式：超紧凑 2 行 Header + 一体化推演舱
+   ========================================================================== */
+
+.scenario-top-header {
+  padding: 4px 10px !important;
+  background: rgba(11, 20, 34, 0.75) !important;
+  border: 1px solid rgba(148, 163, 184, 0.14) !important;
+  border-radius: 6px !important;
+  margin-bottom: 6px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+}
+
+.scenario-top-header .scenario-header-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  flex-wrap: nowrap !important;
+  min-height: 32px !important;
+}
+
+.scenario-top-header .scenario-header-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex: 0 0 auto !important;
+}
+
+.scenario-top-header .scenario-header-title h2 {
+  font-size: 14px !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+  color: #f8fafc !important;
+  font-weight: 700 !important;
+}
+
+.scenario-btn-back {
+  font-size: 11px !important;
+  padding: 2px 8px !important;
+  min-height: 24px !important;
+  color: #94a3b8 !important;
+  background: rgba(30, 41, 59, 0.6) !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-radius: 4px !important;
+}
+
+.scenario-btn-back:hover {
+  color: #f8fafc !important;
+  border-color: #38bdf8 !important;
+}
+
+.scenario-top-header .scenario-view-switch {
+  display: inline-flex !important;
+  align-items: center !important;
+  background: rgba(15, 23, 42, 0.6) !important;
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+  border-radius: 6px !important;
+  padding: 2px !important;
+  gap: 2px !important;
+  margin-left: 6px !important;
+}
+
+.scenario-top-header .scenario-view-switch .view-pill {
+  padding: 2px 9px !important;
+  font-size: 11px !important;
+  min-height: 24px !important;
+  border-radius: 4px !important;
+  border: none !important;
+  background: transparent !important;
+  color: #94a3b8 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.scenario-top-header .scenario-view-switch .view-pill.active {
+  background: rgba(14, 165, 233, 0.22) !important;
+  color: #38bdf8 !important;
+  font-weight: 600 !important;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.2) !important;
+}
+
+.scenario-actions-bar {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex: 0 0 auto !important;
+}
+
+.scenario-actions-bar .primary-btn,
+.scenario-actions-bar .quiet-button {
+  padding: 3px 9px !important;
+  font-size: 11px !important;
+  min-height: 26px !important;
+}
+
+.scenario-actions-bar .scenario-action-primary {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  border-color: #38bdf8 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+.scenario-more-menu {
+  position: relative !important;
+  display: inline-block !important;
+}
+
+.scenario-more-menu summary {
+  list-style: none !important;
+  cursor: pointer !important;
+  padding: 3px 8px !important;
+  font-size: 11px !important;
+  min-height: 26px !important;
+}
+
+.scenario-more-menu summary::-webkit-details-marker {
+  display: none !important;
+}
+
+.scenario-more-dropdown {
+  position: absolute !important;
+  right: 0 !important;
+  top: calc(100% + 4px) !important;
+  background: #0f172a !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-width: 150px !important;
+  padding: 4px !important;
+  z-index: 100 !important;
+}
+
+.scenario-more-dropdown button {
+  background: transparent !important;
+  border: none !important;
+  text-align: left !important;
+  padding: 6px 10px !important;
+  font-size: 11px !important;
+  color: #cbd5e1 !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  transition: all 0.12s ease !important;
+}
+
+.scenario-more-dropdown button:hover {
+  background: rgba(56, 189, 248, 0.15) !important;
+  color: #38bdf8 !important;
+}
+
+.scenario-filter-top-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  min-height: 28px !important;
+  padding-top: 2px !important;
+  border-top: 1px solid rgba(148, 163, 184, 0.08) !important;
+}
+
+.scenario-filter-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex: 1 1 auto !important;
+}
+
+.scenario-search-input {
+  width: 220px !important;
+  height: 24px !important;
+  background: rgba(15, 23, 42, 0.6) !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-radius: 4px !important;
+  padding: 2px 8px !important;
+  font-size: 11px !important;
+  color: #f1f5f9 !important;
+}
+
+.scenario-hud-badges {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.scenario-hud-badge {
+  font-size: 10px !important;
+  padding: 1px 6px !important;
+  border-radius: 4px !important;
+  background: rgba(30, 41, 59, 0.6) !important;
+  color: #94a3b8 !important;
+  border: 1px solid rgba(148, 163, 184, 0.14) !important;
+  white-space: nowrap !important;
+}
+
+.scenario-hud-badge.is-highlight {
+  color: #38bdf8 !important;
+  background: rgba(14, 165, 233, 0.12) !important;
+  border-color: rgba(56, 189, 248, 0.3) !important;
+  font-weight: 600 !important;
+}
+
+.scenario-hud-badge.is-ready {
+  color: #34d399 !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(52, 211, 153, 0.3) !important;
+}
+
+.scenario-hud-badge.is-warn {
+  color: #fbbf24 !important;
+  background: rgba(245, 158, 11, 0.12) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+.scenario-quick-jump-report {
+  font-size: 11px !important;
+  padding: 2px 8px !important;
+  min-height: 24px !important;
+  color: #38bdf8 !important;
+  border-color: rgba(56, 189, 248, 0.3) !important;
+}
+
+/* 推演舱布局 */
+.scenario-grid {
+  display: grid !important;
+  grid-template-columns: 1.15fr 1fr !important;
+  gap: 14px !important;
+  margin-top: 8px !important;
+}
+
+.scenario-left-pane,
+.scenario-right-pane {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+
+.scenario-entities-strip {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.scenario-entities-strip header {
+  font-size: 11.5px;
+  color: #cbd5e1;
+  margin-bottom: 6px;
+}
+
+.scenario-entities-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.scenario-entity-tag {
+  font-size: 10.5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+}
+
+.scenario-entity-tag.friendly {
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #7dd3fc;
+}
+
+.scenario-entity-tag.hostile {
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #fca5a5;
+}
+
+.scenario-feed-card {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.scenario-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.scenario-card-head h3 {
+  margin: 0;
+  font-size: 12.5px;
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.scenario-card-head small {
+  color: #94a3b8;
+  font-size: 10.5px;
+}
+
+.scenario-issues-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.scenario-issues-title {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.scenario-issue-item {
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scenario-issue-item.is-high {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.scenario-issue-item.is-red-team {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.red-team-badge {
+  display: inline-block;
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  margin-right: 6px;
+  font-weight: 600;
+}
+
+.scenario-issue-item .issue-main strong {
+  font-size: 12px;
+  color: #f1f5f9;
+}
+
+.scenario-issue-item .issue-main p {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.scenario-issue-item .issue-main small {
+  display: block;
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: #94a3b8;
+}
+
+/* 闭环精准回改操作栏 */
+.scenario-feedback-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.1);
+}
+
+.scenario-feedback-btn {
+  font-size: 10.5px !important;
+  padding: 1px 7px !important;
+  min-height: 22px !important;
+  background: rgba(14, 165, 233, 0.15) !important;
+  border-color: rgba(56, 189, 248, 0.35) !important;
+  color: #7dd3fc !important;
+  border-radius: 4px !important;
+}
+
+.scenario-feedback-btn:hover {
+  background: rgba(14, 165, 233, 0.3) !important;
+  color: #ffffff !important;
+}
+
+.scenario-issues-pass {
+  font-size: 11.5px;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.scenario-timeline-viewport,
+.scenario-validation-viewport {
+  padding: 6px 0;
+}

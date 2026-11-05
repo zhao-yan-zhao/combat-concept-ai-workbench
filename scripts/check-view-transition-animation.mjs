@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readFullCssSync } from "./cssHelper.mjs";
 
 import { renderOv5Workbench } from "../design-studio/src/ov5MechanismView.js";
 import { renderWorkflowGate } from "../design-studio/src/app/workflowGate.js";
@@ -12,7 +13,7 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 
 console.log("=== 1. 验证 CSS 中的现代过渡动画与统一 AI 生成进度条 ===");
-const cssContent = fs.readFileSync(path.join(projectRoot, "design-studio/styles.css"), "utf8");
+const cssContent = readFullCssSync(path.join(projectRoot, "design-studio/styles.css"));
 assert(cssContent.includes("::view-transition-old(root)"), "必须定义 ::view-transition-old(root)");
 assert(cssContent.includes("::view-transition-new(root)"), "必须定义 ::view-transition-new(root)");
 assert(cssContent.includes("workbench-view-fade"), "必须定义降级动画 workbench-view-fade");

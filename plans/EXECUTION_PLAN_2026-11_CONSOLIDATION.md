@@ -184,3 +184,15 @@
   - 定向检查全量通过：`ui-static` (15/18), `workflow` (10/11), `dodaf` (14/18), `ov5` (6/6), `force-mission` (6/6), `rules` (7/7)，与初始基线 100% 对齐无退化；
   - 服务健康检查 `GET /api/health` 返回 200，`projectRepository.mode = "sqlite"`。
 - 遗留问题：无。阶段 3 圆满完成，准备进入阶段 4（拆分 styles.css）。
+
+### 阶段 4（styles.css 模块化拆分与层叠保真，2026-11-05）：
+- 完成情况：
+  1. 将 18,758 行超大单文件 `design-studio/styles.css` 严格按原有行号区间无缝切分为 12 个领域模块存放在 `design-studio/styles/`：
+     - `base.css`、`shell.css`、`workflow.css`、`views-foundation.css`、`ov5-mechanism.css`、`dodaf-views.css`；
+     - `dodaf-components.css`、`ov5a-decomposition.css`、`ov6-rules-statemachine.css`、`transitions-modals.css`、`ov5a-enhanced.css`、`step-concept-simulation.css`；
+  2. 12 个模块拼接内容与原 `styles.css` 逐字节 100% 一致，原 `styles.css` 改为 `@import` 入口，完美保真原有选择器权重与层叠覆盖顺序（Cascade Order）；
+  3. 提供 `scripts/cssHelper.mjs`，同步维护 6 个静态读取样式的测试脚本（`check-ai-prompt-ui-fix`、`check-contextual-model-flow`、`check-production-grouped-lists`、`check-reset-button-listeners`、`check-subflow-toolboxes`、`check-view-transition-animation`）；
+- 验证结果：
+  - `ui-static` (15/18), `workflow` (10/11), `dodaf` (14/18), `ov5` (6/6), `force-mission` (6/6), `rules` (7/7), `storage` (10/10), `server` (22/23) 全量对齐基线；
+  - 静态服务经测试直接支持各子模块访问，样式层叠零退化。
+- 遗留问题：无。阶段 4 圆满完成，准备进入阶段 5（文档与仓库整理）。

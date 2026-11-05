@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { readFullCss } from "./cssHelper.mjs";
 import { relatedFlowNumber, renderContextualModelFlow, renderRelatedModelReturn, resolveModelFocus, resolveRelatedMainViewId } from "../design-studio/src/contextualModelFlow.js";
 import { renderTree } from "../design-studio/src/ui.js";
 
@@ -125,7 +126,7 @@ assert(mainSource.includes("operationalTasksNeedAiCompletion")
   && mainSource.includes("task?.expectedEffect")
   && mainSource.includes("points.length < requiredPoints"), "Automatic task completion must check task content and area geometry before preserving an existing draft");
 assert(contextualSource.includes('".seq-toolbar"') && contextualSource.includes('".sm-toolbar"') && contextualSource.includes("toolbar.prepend(returnBar)"), "Related return must mount into the page refresh/save toolbar when one exists");
-const styles = await readFile(new URL("../design-studio/styles.css", import.meta.url), "utf8");
+const styles = await readFullCss(new URL("../design-studio/styles.css", import.meta.url));
 assert(styles.includes("@keyframes step-related-line-in") && styles.includes("@keyframes step-related-sheen") && styles.includes("--related-stagger"), "Related labels must draw out from the spine with staggered main-step-style motion");
 assert(styles.includes(".project-rail:hover .step-related-button::after") && styles.includes("opacity: 0;") && styles.includes("transform: scaleX(0);"), "Collapsed related nodes must hide their horizontal connector until the rail expands");
 assert(styles.includes(".project-rail:hover .step-related-node.is-current .step-related-button::after") && !styles.includes("\n.step-related-node.is-current .step-related-button::after {") && !styles.includes(".step-related-node.is-current .step-related-copy {"), "The current related node must collapse its connector and label until the rail expands");

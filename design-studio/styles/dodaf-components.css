@@ -1,0 +1,182 @@
+/* ===== DoDAF industrial drafting component library (OV-1～OV-6c) ===== */
+.dodaf-drafting-surface { display: grid; gap: 12px; }
+.dodaf-standard-tag {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid #c5d5cf;
+  border-radius: 999px;
+  background: #f4f8f6;
+  color: #2f6a50;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+/* Industrial drafting legend: subdued glass chip, not a bright card */
+.dodaf-legend {
+  box-sizing: border-box;
+  border: 1px solid rgba(148, 163, 184, .14);
+  border-radius: 8px;
+  background:
+    linear-gradient(165deg, rgba(30, 41, 59, .55), rgba(15, 23, 42, .72));
+  padding: 8px 10px;
+  color: #94a3b8;
+  box-shadow: 0 0 0 1px rgba(2, 6, 23, .28) inset;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.dodaf-legend.is-compact,
+.dodaf-legend.compact {
+  position: absolute;
+  z-index: 4;
+  left: 12px;
+  bottom: 12px;
+  max-width: min(400px, 86%);
+  padding: 6px 8px 7px;
+  border-color: rgba(148, 163, 184, .12);
+  background:
+    linear-gradient(165deg, rgba(15, 23, 42, .62), rgba(2, 6, 23, .78));
+  box-shadow:
+    0 0 0 1px rgba(2, 6, 23, .4) inset,
+    0 10px 22px rgba(0, 0, 0, .28);
+  opacity: .92;
+  transition: opacity .15s ease, border-color .15s ease;
+}
+.dodaf-legend.is-compact:hover,
+.dodaf-legend.compact:hover {
+  opacity: 1;
+  border-color: rgba(148, 163, 184, .22);
+}
+.dodaf-legend.is-panel {
+  max-width: 100%;
+  margin: 0 0 10px;
+}
+.dodaf-legend-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  min-height: 16px;
+}
+.dodaf-legend-head strong {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+.dodaf-legend-head span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 600;
+}
+.dodaf-legend-body { display: grid; gap: 5px; }
+.dodaf-legend-group b {
+  display: none;
+}
+.dodaf-legend-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.dodaf-legend-group + .dodaf-legend-group .dodaf-legend-row {
+  padding-top: 5px;
+  border-top: 1px solid rgba(148, 163, 184, .1);
+}
+.dodaf-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #94a3b8;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.dodaf-legend-item em {
+  font-style: normal;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+.dodaf-legend-swatch {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid color-mix(in srgb, var(--dodaf-entity-color, #64748b) 55%, transparent);
+  border-left-width: 2px;
+  border-radius: 3px;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--dodaf-entity-color, #94a3b8);
+  background: color-mix(in srgb, var(--dodaf-entity-fill, #1e293b) 42%, rgba(2, 6, 23, .88));
+  box-shadow: none;
+}
+.dodaf-legend-line {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top-width: 2px;
+  border-top-style: solid;
+  border-top-color: currentColor;
+  color: #64748b;
+  opacity: .95;
+}
+.dodaf-legend-edge em { color: #94a3b8; font-weight: 600; }
+.dodaf-entity-badge,
+.dodaf-edge-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 8px 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--dodaf-entity-color, #3d6b5c) 35%, #d5dfdc);
+  border-left: 3px solid var(--dodaf-entity-color, #3d6b5c);
+  border-radius: 3px;
+  background: var(--dodaf-entity-fill, #eef6f2);
+  color: #1f3236;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  vertical-align: middle;
+}
+.dodaf-entity-badge i,
+.dodaf-edge-badge i { font-style: normal; opacity: .9; }
+.dodaf-entity-badge em,
+.dodaf-edge-badge em {
+  overflow: hidden;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dodaf-edge-badge {
+  border-color: color-mix(in srgb, var(--dodaf-edge-color, #294f63) 40%, #d5dfdc);
+  border-left-color: var(--dodaf-edge-color, #294f63);
+  background: #fff;
+  color: var(--dodaf-edge-color, #294f63);
+}
+.dodaf-edge-badge i {
+  width: 12px;
+  height: 0;
+  border-top: 2px solid currentColor;
+}
+.dodaf-entity-chip {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid #d5dfdc;
+  border-left: 4px solid var(--dodaf-entity-color, #3d6b5c);
+  border-radius: 4px;
+  background: var(--dodaf-entity-fill, #eef6f2);
+}
+.dodaf-entity-chip header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.dodaf-entity-chip header i { font-style: normal; color: var(--dodaf-entity-color, #3d6b5c); }
+.dodaf-entity-chip header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.dodaf-entity-chip header small { margin-left: auto; color: #6d7a80; font-size: 10px; white-space: nowrap; }
+.dodaf-entity-chip p { margin: 0; color: #5d6c72; font-size: 12px; line-height: 1.45; }
+.dodaf-entity-grid { display: grid; gap: 8px; }
+.dodaf-exchange-card { border-left: 3px solid var(--dodaf-edge-color, #5c4d8a); }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { readFullCss } from "./cssHelper.mjs";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const moduleSource = await read("design-studio/src/groupedListTemplate.js");
@@ -7,7 +8,7 @@ const mainSource = (await read("design-studio/src/main.js"))
   + (await read("design-studio/src/app/viewScrollFocus.js"));
 const dodafControllerSource = await read("design-studio/src/dodafProductController.js");
 const aiPromptControllerSource = await read("design-studio/src/aiPromptController.js");
-const css = await read("design-studio/styles.css");
+const css = await readFullCss(new URL("../design-studio/styles.css", import.meta.url));
 
 assert.match(mainSource, /mountGroupedLists\(viewRoot\)/);
 for (const selector of [".ai-prompt-list", ".grouped-list-items"]) {

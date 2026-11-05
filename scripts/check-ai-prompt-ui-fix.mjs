@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { readFullCss } from "./cssHelper.mjs";
 import { renderAiPromptPanel } from "../design-studio/src/aiPromptView.js";
 import { createAiPromptController } from "../design-studio/src/aiPromptController.js";
 
@@ -50,7 +51,7 @@ assert.ok(controllerSource.includes("event.key.toLowerCase() === \"s\""), "Contr
 assert.ok(controllerSource.includes("window.confirm"), "Reset action must prompt user for confirmation");
 
 // 3. Verify CSS rules
-const css = await readFile(new URL("../design-studio/styles.css", import.meta.url), "utf8");
+const css = await readFullCss(new URL("../design-studio/styles.css", import.meta.url));
 assert.ok(css.includes(".ai-prompt-editor { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow: hidden;"), "Editor must be flex column with overflow hidden");
 assert.ok(css.includes(".ai-prompt-scrollable { flex: 1 1 auto; min-height: 0; overflow-y: auto;"), "Scrollable container must have overflow-y auto and flex 1");
 assert.ok(css.includes(".ai-prompt-actions {"), "Must define .ai-prompt-actions styling");

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readFullCssSync } from "./cssHelper.mjs";
 
 console.log("1. Checking main.js source code for addEventListenerOnce & reentrancy guard...");
 const mainSrc = readFileSync("design-studio/src/main.js", "utf8");
@@ -46,7 +47,7 @@ assert.ok(
 );
 
 console.log("2. Checking styles.css for transition animations...");
-const cssSrc = readFileSync("design-studio/styles.css", "utf8");
+const cssSrc = readFullCssSync(new URL("../design-studio/styles.css", import.meta.url));
 assert.ok(
   cssSrc.includes("@keyframes workbench-view-fade"),
   "styles.css must define workbench-view-fade animation"
