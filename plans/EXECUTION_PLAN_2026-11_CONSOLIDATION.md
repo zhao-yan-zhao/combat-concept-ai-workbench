@@ -205,3 +205,13 @@
   4. 更新 `AGENTS.md`“排查与验证效能规则”，明确写入 `scripts/run-checks.mjs` 分组与执行用法。
 - 验证结果：`project-context.md` (75行) ≤ 200 行；`node scripts/check-grouped-list-test-page.mjs` 通过；无任何代码引用受损。
 - 遗留问题：无。准备进入阶段 6（产出 plans/KNOWLEDGE_CITATION.md 知识库引用溯源设计方案）。
+
+### 阶段 6（知识库引用溯源方案设计稿，2026-11-05）：
+- 完成情况：
+  1. 深入调研 `shared/knowledge.js` 切片分词权重与 `server/openaiClient.mjs` / `shared/generator.js` 提示词生成链路；
+  2. 撰写设计方案文档 `plans/KNOWLEDGE_CITATION.md`（78 行，严格控制在 ≤ 150 行标准，零业务代码改动）；
+  3. 定义核心引用数据结构 `KnowledgeCitationRef` 与向后兼容的模型挂接标准（`citations?` 数组）；
+  4. 明确涉及统一部署的 6 个标准提示词 ID（`concept-brief`、`force-mission`、`activity-decomposition`、`rule-library`、`scenario`、`research-chat`）；
+  5. 规划前端 Inspector 侧栏、卡片 Popover 与报告导出附录全格式留存呈现方案；交由人工评审立项。
+- 验证结果：文档符合行数与架构规范，未触碰任何业务代码。
+- 遗留问题：无。本执行计划全部阶段（阶段 1～6）已 100% 达成，圆满收官！
