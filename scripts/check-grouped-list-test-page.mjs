@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const html = await readFile(new URL("../design-studio/grouped-list-test.html", import.meta.url), "utf8");
-const css = await readFile(new URL("../design-studio/grouped-list-test.css", import.meta.url), "utf8");
-const js = await readFile(new URL("../design-studio/grouped-list-test.js", import.meta.url), "utf8");
+const html = await readFile(new URL("../archive/grouped-list-test.html", import.meta.url), "utf8");
+const css = await readFile(new URL("../archive/grouped-list-test.css", import.meta.url), "utf8");
+const js = await readFile(new URL("../archive/grouped-list-test.js", import.meta.url), "utf8");
 
 assert.match(html, /id="sampleSelect"/);
 assert.match(html, /id="groupSelect"/);

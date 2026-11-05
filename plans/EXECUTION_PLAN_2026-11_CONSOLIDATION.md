@@ -196,3 +196,12 @@
   - `ui-static` (15/18), `workflow` (10/11), `dodaf` (14/18), `ov5` (6/6), `force-mission` (6/6), `rules` (7/7), `storage` (10/10), `server` (22/23) 全量对齐基线；
   - 静态服务经测试直接支持各子模块访问，样式层叠零退化。
 - 遗留问题：无。阶段 4 圆满完成，准备进入阶段 5（文档与仓库整理）。
+
+### 阶段 5（文档精简与仓库整理，2026-11-05）：
+- 完成情况：
+  1. `project-context.md` 大幅瘦身至 75 行（严格控制在 ≤ 200 行标准），全量历史条目原样移入 `CHANGELOG.md` 倒序归档；
+  2. 实验残留 `design-studio/grouped-list-test.{html,js,css}` 确认后通过 git 移动至 `archive/`，同步适配 `check-grouped-list-test-page.mjs` 测试；
+  3. 盘点 `output/`、`outputs/`、`test-results/`、`prototypes/` 目录用途并沉淀至 `DOCUMENTATION_INDEX.md`，供人工业务决策；
+  4. 更新 `AGENTS.md`“排查与验证效能规则”，明确写入 `scripts/run-checks.mjs` 分组与执行用法。
+- 验证结果：`project-context.md` (75行) ≤ 200 行；`node scripts/check-grouped-list-test-page.mjs` 通过；无任何代码引用受损。
+- 遗留问题：无。准备进入阶段 6（产出 plans/KNOWLEDGE_CITATION.md 知识库引用溯源设计方案）。
