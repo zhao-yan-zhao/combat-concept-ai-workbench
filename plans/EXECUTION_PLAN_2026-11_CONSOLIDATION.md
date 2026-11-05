@@ -172,3 +172,15 @@
   4. `main.js` 精简头部未使用的导入，接入 `bindReportEvents` 与 `handleReportAction`，删除约 210 行本地实现。
 - 验证结果：`ui-static` 组 15/18，`workflow` 组 10/11，与基线完全一致，无任何新增退化。
 - 遗留问题：无。准备进行概念规划与项目管理（projectBindings）的抽离。
+
+### 阶段 3 - 步骤 8（main.js 全面拆分收官，2026-11-05）：
+- 完成情况：
+  1. 抽离 `chromeBindings.js`（顶栏菜单/工作流胶囊/AI 弹窗快捷键绑定）、`conceptPlanningBindings.js`（概念规划动作与地图 iframe 管理）、`projectBindings.js`（项目切换/删除/创建/弹窗管理）；
+  2. 抽离 `workflowActionBindings.js`（工作流推进与确认逻辑）、`inspectorBindings.js`（侧边栏检查器）、`shellRenderer.js`（顶层 Shell 骨架渲染）、`syncHandlers.js`（数据同步与冲突恢复处理器）；
+  3. 抽离 `modelInvalidation.js`（多模型联动失效机制）与 `viewScrollFocus.js`（滚动条位置与表单输入焦点保持机制）；
+  4. 同步维护受影响的规则 7 静态断言测试：`check-input-focus-preservation.mjs`、`check-ov6c-to-task-advancement.mjs`、`check-production-grouped-lists.mjs`，均在不删断言的前提下适配拆分路径；
+  5. `main.js` 行数由初始 4,538 行大幅精简至 1,980 行（成功降至 2,000 行以下目标，减少 2,558 行代码，降低幅度超过 56%）。
+- 验证结果：
+  - 定向检查全量通过：`ui-static` (15/18), `workflow` (10/11), `dodaf` (14/18), `ov5` (6/6), `force-mission` (6/6), `rules` (7/7)，与初始基线 100% 对齐无退化；
+  - 服务健康检查 `GET /api/health` 返回 200，`projectRepository.mode = "sqlite"`。
+- 遗留问题：无。阶段 3 圆满完成，准备进入阶段 4（拆分 styles.css）。

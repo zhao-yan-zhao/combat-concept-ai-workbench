@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const main = await readFile(new URL("../design-studio/src/main.js", import.meta.url), "utf8");
+const main = (await readFile(new URL("../design-studio/src/main.js", import.meta.url), "utf8"))
+  + (await readFile(new URL("../design-studio/src/app/bindings/chromeBindings.js", import.meta.url), "utf8"))
+  + (await readFile(new URL("../design-studio/src/app/viewScrollFocus.js", import.meta.url), "utf8"));
 const collaboration = await readFile(new URL("../design-studio/src/collaborationController.js", import.meta.url), "utf8");
 
 assert.match(main, /const focusSnapshot = captureViewFocus\(viewRoot\)/);

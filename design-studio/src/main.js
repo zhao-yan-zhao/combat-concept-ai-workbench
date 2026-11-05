@@ -8,17 +8,10 @@ import { deriveOodaFromOv5, getOodaDuration, persistOodaModel } from "./oodaStor
 import { addActivity, addEdge, deleteActivity, deleteEdge, persistOv5Model, updateActivity } from "./ov5Store.js";
 import { countUnmappedOv5Activities, linkOv5ActivitiesToOv1, suggestOv1SourcesForActivity } from "./ov5Ov1Linker.js";
 import { applyMappingQuality } from "./ov5MappingQuality.js";
-import { markScenarioStale, persistScenario } from "./scenarioStore.js";
-import { getViewMeta, renderBriefSidebar, renderInspector, renderTree, renderView, selectionFor } from "./ui.js";
-import { clearValidation, markValidationStale, persistValidation } from "./validationStore.js";
-import { clearRedTeamReview } from "./redTeamStore.js";
-import { renderCollaborationLoginGate } from "./collaborationView.js";
+import { getViewMeta, renderTree, renderView, selectionFor } from "./ui.js";
 import { buildExportArtifactFromPayload } from "./reportBuilder.js";
-import { deleteReportVersion, persistReportVersions, upsertReportVersion } from "./reportVersionStore.js";
 import { areConceptBriefsEqual, saveConceptBrief } from "./briefStore.js";
-import { saveInspirationSession } from "./inspirationStore.js";
-import { buildDirectionProposals, saveCustomDirections, saveSelectedDirection } from "./directionProposalStore.js";
-import { deriveResearchChatBriefUpdate } from "./researchChatBriefUpdate.js";
+import { saveCustomDirections, saveSelectedDirection } from "./directionProposalStore.js";
 import { saveOv1Model } from "./ov1Store.js";
 import { createLocalOv1Draft } from "./ov1DraftStore.js";
 import { renderOv1ToolboxFloatButton } from "./ov1View.js";
@@ -29,21 +22,12 @@ import { renderOv4ToolboxFloatButton } from "./ov4View.js";
 import { renderSubflowToolboxFloatButton } from "./subflowToolbox.js";
 import { mountGroupedLists } from "./groupedListTemplate.js";
 
-import { deleteModelSnapshot, persistModelSnapshots, upsertModelSnapshot } from "./modelSnapshotStore.js";
 import { restoreModelSnapshot } from "./modelSnapshotRestore.js";
 import { buildModelComparisonArtifact } from "./modelComparisonBuilder.js";
-import { renderAiConfigPanel } from "./aiConfigView.js";
-import { renderAiPromptPanel } from "./aiPromptView.js";
 import { getCmoCatalogStatus } from "./cmoCatalogClient.js";
 import { applyTheme, getThemeConfig } from "./themeConfigClient.js";
-import { renderProjectStorageFooter } from "./projectStorageView.js";
 import { createProject, deleteProject, loadProjects, resetProjectContent, updateProject } from "./projectBriefClient.js";
 import { ensureClientStoragePurged, purgeProjectClientStorage } from "./clientStoragePurge.js";
-import { renderProjectManager, renderProjectEntry } from "./projectManagerView.js";
-import { normalizeConceptMap, persistConceptMap } from "./conceptMapStore.js";
-import { normalizeForceMissionPlan, persistForceMission } from "./forceMissionStore.js";
-import { normalizePhaseActionConcept, persistPhaseAction } from "./phaseActionStore.js";
-import { normalizeConceptGraphicPlan, persistConceptGraphic } from "./conceptGraphicStore.js";
 
 import { createStateActions } from "./app/stateActions.js";
 import {
@@ -66,9 +50,127 @@ import {
   refreshOv1SourcePicker
 } from "./app/bindings/dodafBindings.js";
 import { bindReportEvents, handleReportAction } from "./app/bindings/reportBindings.js";
+import {
+  bindDirectionEvents,
+  resetCustomDirectionDialog,
+  openCustomDirectionDialog,
+  closeCustomDirectionDialog,
+  handleConceptPlanningAction,
+  getConceptMapFramePark,
+  parkConceptMapFrame,
+  mountConceptMapFrame
+} from "./app/bindings/conceptPlanningBindings.js";
+import {
+  switchProject,
+  handleDeleteProject,
+  renderProjectManagerChrome,
+  handleProjectAction
+} from "./app/bindings/projectBindings.js";
+import {
+  closeMenubarMenus,
+  isMenubarChromeOpen,
+  isInsideMenubarChrome,
+  isInsideOpenMenubarChrome,
+  clearMenubarIdleTimer,
+  scheduleMenubarIdleDismiss,
+  dismissMenubarChrome,
+  focusOpenMenubarChrome,
+  openMenubarMenu,
+  refreshProjectManagerUi,
+  openProjectManagerFromHover,
+  bindMenubarChrome,
+  bindWorkflowGateChrome,
+  bindAiModalsChrome
+} from "./app/bindings/chromeBindings.js";
+import { createSyncHandlers, describeProjectCreateError } from "./app/syncHandlers.js";
+import { handleWorkflowAction, confirmRegenerateWorkflowStep } from "./app/bindings/workflowActionBindings.js";
+import { renderStudioShell } from "./app/shellRenderer.js";
+import {
+  closeOv1ModalIfOpen as closeOv1ModalIfOpenImpl,
+  openOv1SidePanel as openOv1SidePanelImpl,
+  closeOv1SidePanel as closeOv1SidePanelImpl,
+  ensureOv1ToolsDocked as ensureOv1ToolsDockedImpl,
+  toggleOv1ToolsRail as toggleOv1ToolsRailImpl,
+  toggleOv1SidePanelMode as toggleOv1SidePanelModeImpl,
+  renderInspectorPanel as renderInspectorPanelImpl
+} from "./app/inspectorBindings.js";
+import { createModelInvalidators } from "./app/modelInvalidation.js";
+import {
+  VIEW_SCROLL_PRESERVE_SELECTORS,
+  VIEW_SCROLL_PHASE_RESET_SELECTORS,
+  captureViewScroll,
+  restoreViewScroll,
+  captureViewFocus,
+  restoreViewFocus
+} from "./app/viewScrollFocus.js";
 
 const { state, projectBriefSeed, activeProjectId } = createInitialWorkbenchState();
+const {
+  invalidatePhaseActionDependents,
+  invalidateForceMissionDependents,
+  invalidateConceptMapDependents,
+  invalidateDerivedArtifacts,
+  invalidateValidation,
+  markCurrentValidationStale,
+  invalidateRedTeam,
+  markStorageStale
+} = createModelInvalidators(state);
 const stateActions = createStateActions({ state, getModels: () => getModels(), render: (opt) => render(opt), showToast });
+
+function getWorkflowActionCtx() {
+  return {
+    state,
+    render,
+    showToast,
+    advanceWorkflowStep,
+    advanceRelatedWorkflow,
+    completeWorkflowStage,
+    conceptPlanningController,
+    conceptMapController,
+    dodafProductController,
+    refreshWorkflowGateUi
+  };
+}
+
+function getConceptPlanningCtx() {
+  return {
+    state,
+    showToast,
+    projectBriefSyncController,
+    render,
+    activeProjectId
+  };
+}
+
+function getProjectCtx() {
+  return {
+    state,
+    $,
+    showToast,
+    handleAction,
+    hydrateProjectDirectory,
+    renderProjectManagerChrome: () => renderProjectManagerChrome(getProjectCtx()),
+    closeMenubarMenus,
+    refreshProjectManagerUi: () => refreshProjectManagerUi(getChromeCtx()),
+    focusOpenMenubarChrome: () => focusOpenMenubarChrome(state),
+    render
+  };
+}
+
+function getChromeCtx() {
+  return {
+    state,
+    $,
+    renderProjectManagerChrome: () => renderProjectManagerChrome(getProjectCtx()),
+    render,
+    handleAction,
+    setWorkflowGateOpen,
+    getWorkflowGateLeaveSuppressedUntil: () => workflowGateLeaveSuppressedUntil,
+    getBusyOverlayState,
+    getBusyOverlayStartedAt: () => busyOverlayStartedAt,
+    forceDismissStuckOverlay
+  };
+}
 
 function getOv5Ctx() {
   return {
@@ -203,34 +305,15 @@ const {
   invalidateForceMissionDependents,
   invalidateValidation,
   invalidateRedTeam,
-  applyRemoteBrief,
-  applyRemoteForceMission,
-  applyRemotePhaseAction,
-  applyRemoteConceptMap,
-  applyRemoteConceptGraphic,
-  applyRemoteOv5,
-  applyRemoteOv1,
-  applyRemoteOoda,
-  applyRemoteScenario,
-  applyRemoteValidation,
-  applyRemoteKnowledge,
-  applyRemoteReportArchives,
-  upsertRemoteReportArchive,
-  removeRemoteReportArchive,
-  applyRemoteModelSnapshots,
-  upsertRemoteModelSnapshot,
-  removeRemoteModelSnapshot,
-  restoreLocalBriefConflictDraft,
-  restoreLocalForceMissionConflictDraft,
-  restoreLocalPhaseActionConflictDraft,
-  restoreLocalConceptMapConflictDraft,
-  restoreLocalConceptGraphicConflictDraft,
-  restoreLocalOv5ConflictDraft,
-  restoreLocalOv1ConflictDraft,
-  restoreLocalOodaConflictDraft,
-  restoreLocalScenarioConflictDraft,
-  restoreLocalValidationConflictDraft,
-  applyResearchChatBriefUpdate,
+  ...createSyncHandlers({
+    state,
+    projectBriefSeed,
+    activeProjectId,
+    currentProjectTitle,
+    invalidateDerivedArtifacts,
+    invalidateConceptMapDependents,
+    invalidateValidation
+  }),
   restoreSnapshot,
   exportModelComparison,
   hydrateProjectDirectory,
@@ -269,100 +352,16 @@ function render(options = {}) {
     conceptTreeElem.innerHTML = conceptTreeMarkup;
     conceptTreeElem.dataset.renderedMarkup = conceptTreeMarkup;
   }
-  $("#viewEyebrow").textContent = meta.subtitle;
-  $("#viewTitle").textContent = meta.label;
-  $("#viewContext").title = `${currentProjectTitle()} / ${meta.label}`;
-  const projectStorageMarkup = renderProjectStorageFooter(state.projectStorage);
-  const projectStorageElem = $("#projectStorageState");
-  if (projectStorageElem && projectStorageElem.dataset.renderedMarkup !== projectStorageMarkup) {
-    projectStorageElem.innerHTML = projectStorageMarkup;
-    projectStorageElem.dataset.renderedMarkup = projectStorageMarkup;
-  }
-  const projectManagerMarkup = renderProjectManager({ directory: state.projectDirectory, activeProjectId: state.activeProjectId, open: state.projectManagerOpen, createOpen: state.projectCreateOpen, isLead: state.collaboration?.session?.actor?.roles?.includes("lead") });
-  const projectManagerElem = $("#projectManagerRoot");
-  if (projectManagerElem && projectManagerElem.dataset.renderedMarkup !== projectManagerMarkup) {
-    projectManagerElem.innerHTML = projectManagerMarkup;
-    projectManagerElem.dataset.renderedMarkup = projectManagerMarkup;
-  }
-  const identityButton = $("#collaborationIdentityBtn");
-  const actor = state.collaboration?.session?.actor;
-  const workflowTestModeButton = $("#workflowTestModeBtn");
-  const saveVersionButton = $("#saveVersionBtn");
-  const testModeActive = currentWorkflow().mode === "free";
-  const modeSwitching = Boolean(state.workflowModeSwitching);
-  const reportArchiving = Boolean(state.reportArchiving);
-  const busyOverlay = getBusyOverlayState();
-  $("#adminEntry").hidden = !actor?.roles?.includes("lead");
-  identityButton.textContent = actor ? `账号 · ${actor.label}` : "账号管理";
-  identityButton.title = actor ? `账号管理 · ${actor.label}` : "打开协同账号管理";
-  identityButton.classList.toggle("is-authenticated", Boolean(actor));
-  workflowTestModeButton.classList.toggle("is-active", testModeActive);
-  workflowTestModeButton.classList.toggle("is-busy", modeSwitching);
-  workflowTestModeButton.setAttribute("aria-checked", String(testModeActive));
-  workflowTestModeButton.disabled = modeSwitching || reportArchiving;
-  workflowTestModeButton.title = modeSwitching
-    ? "正在切换模式…"
-    : (testModeActive ? "退出测试模式，恢复阶段门禁" : "启用测试模式，所有阶段可自由访问");
-  if (saveVersionButton) {
-    saveVersionButton.disabled = reportArchiving || modeSwitching;
-    saveVersionButton.classList.toggle("is-busy", reportArchiving);
-    saveVersionButton.textContent = reportArchiving ? "保存中…" : "保存版本";
-    saveVersionButton.title = reportArchiving ? "正在保存报告版本…" : "保存当前研究成果为报告归档版本";
-  }
-  updateBusyOverlay(busyOverlay);
-  const authenticated = Boolean(state.collaboration?.session?.authenticated);
-  const projectEntry = authenticated && state.projectEntryRequired;
-  $("#studioShell").classList.toggle("is-login-locked", !authenticated || projectEntry);
-  if (projectEntry) $("#projectManagerRoot").innerHTML = "";
-  $("#studioShell").classList.toggle("is-mode-switching", Boolean(busyOverlay));
-  $("#studioShell").classList.toggle("brief-view", state.activeView === "brief");
-  $("#studioShell").classList.toggle("ov1-view", state.activeView === "ov1");
-  $("#studioShell").classList.toggle("concept-map-focus", state.activeView === "concept-map");
-  // Legacy ov1-focus (inspector collapse) no longer used for OV-1 tools drawer.
-  $("#studioShell").classList.remove("ov1-focus");
-  const ov1Toggle = document.querySelector(".ov1-sidebar-toggle");
-  if (ov1Toggle) ov1Toggle.hidden = true;
-  const loginGate = $("#loginGate");
-  loginGate.hidden = authenticated && !projectEntry;
-  const loginMarkup = projectEntry ? renderProjectEntry({ directory: state.projectDirectory, createOpen: state.projectCreateOpen }) : authenticated ? "" : renderCollaborationLoginGate(state.collaboration);
-  if (projectEntry || loginGate.dataset.renderedMarkup !== loginMarkup) {
-    loginGate.innerHTML = loginMarkup;
-    loginGate.dataset.renderedMarkup = loginMarkup;
-  }
-  const aiConfigMarkup = renderAiConfigPanel({
-    open: state.aiConfigOpen,
-    service: state.aiConfig,
-    saving: state.aiConfigSaving,
-    fetchingModels: state.aiConfigFetchingModels,
-    fetchedModels: state.aiConfigFetchedModels,
-    modelFetchHint: state.aiConfigModelFetchHint
+  renderStudioShell({
+    state,
+    $,
+    currentWorkflow,
+    currentProjectTitle,
+    getBusyOverlayState,
+    updateBusyOverlay,
+    renderWorkflowGate,
+    renderOv1ToolboxFloatHost
   });
-  const aiConfigElem = $("#aiConfigRoot");
-  if (aiConfigElem && aiConfigElem.dataset.renderedMarkup !== aiConfigMarkup) {
-    aiConfigElem.innerHTML = aiConfigMarkup;
-    aiConfigElem.dataset.renderedMarkup = aiConfigMarkup;
-  }
-
-  const aiPromptMarkup = renderAiPromptPanel({
-    open: state.aiPromptOpen,
-    catalog: state.aiPromptCatalog,
-    selectedId: state.aiPromptSelectedId,
-    saving: state.aiPromptSaving,
-    drafts: state.aiPromptDrafts || {}
-  });
-  const aiPromptElem = $("#aiPromptRoot");
-  if (aiPromptElem && aiPromptElem.dataset.renderedMarkup !== aiPromptMarkup) {
-    aiPromptElem.innerHTML = aiPromptMarkup;
-    aiPromptElem.dataset.renderedMarkup = aiPromptMarkup;
-  }
-
-  const workflowGateMarkup = renderWorkflowGate();
-  const workflowGateElem = $("#workflowGateRoot");
-  if (workflowGateElem && workflowGateElem.dataset.renderedMarkup !== workflowGateMarkup) {
-    workflowGateElem.innerHTML = workflowGateMarkup;
-    workflowGateElem.dataset.renderedMarkup = workflowGateMarkup;
-  }
-  renderOv1ToolboxFloatHost();
   // Project picker / menubar chrome toggles must not rebuild the concept-map iframe.
   if (!skipView) {
     let renderResult = null;
@@ -382,100 +381,6 @@ function render(options = {}) {
     aiConfigController.bind(document);
     aiPromptController.bind(document);
   }
-}
-
-/**
- * Scroll containers that should not jump when the view re-renders
- * (phase switch, select force unit, chat open/close, etc.).
- */
-const VIEW_SCROLL_PRESERVE_SELECTORS = [
-  ".ai-prompt-list",
-  ".grouped-list-items",
-  ".ov1b-decomposition-scroll",
-  ".force-mission-main-stage",
-  ".force-mission-phase-list",
-  ".force-roster-list",
-  ".force-concept-detail-body",
-  ".force-composition-table-wrap",
-  ".phase-detail-body",
-  ".phase-chain-list",
-  ".phase-main-stage",
-  ".phase-chat-dock .research-chat-body",
-  ".phase-chat-dock .phase-review-chat-messages",
-  // State machine workbench: keep list/editor position when switching machines
-  ".sm-machine-list",
-  ".sm-editor",
-  ".sm-state-list",
-  ".sm-transition-list",
-  ".sm-editor-dock",
-  ".sm-chat-dock .research-chat-body",
-  ".sm-main-panel"
-];
-
-/** Inner content panes reset on phase change; outer reading position stays. */
-const VIEW_SCROLL_PHASE_RESET_SELECTORS = [
-  ".phase-detail-body",
-  ".force-roster-list",
-  ".force-composition-table-wrap"
-];
-
-function captureViewScroll(root) {
-  if (!root) return [];
-  const snapshots = [];
-  for (const selector of VIEW_SCROLL_PRESERVE_SELECTORS) {
-    root.querySelectorAll(selector).forEach((node, index) => {
-      if (!(node instanceof HTMLElement)) return;
-      if (node.scrollTop || node.scrollLeft) {
-        snapshots.push({
-          selector,
-          index,
-          top: node.scrollTop,
-          left: node.scrollLeft
-        });
-      }
-    });
-  }
-  const workspace = document.querySelector(".studio-workspace");
-  if (workspace instanceof HTMLElement && (workspace.scrollTop || workspace.scrollLeft)) {
-    snapshots.push({
-      selector: ".studio-workspace",
-      index: 0,
-      top: workspace.scrollTop,
-      left: workspace.scrollLeft,
-      global: true
-    });
-  }
-  return snapshots;
-}
-
-function restoreViewScroll(root, snapshots = [], { resetInnerPhaseScroll = false } = {}) {
-  const apply = () => {
-    for (const item of snapshots) {
-      if (resetInnerPhaseScroll && VIEW_SCROLL_PHASE_RESET_SELECTORS.includes(item.selector)) {
-        continue;
-      }
-      const scope = item.global ? document : root;
-      if (!scope) continue;
-      const nodes = scope.querySelectorAll(item.selector);
-      const node = nodes[item.index];
-      if (!(node instanceof HTMLElement)) continue;
-      node.scrollTop = item.top;
-      node.scrollLeft = item.left;
-    }
-    if (resetInnerPhaseScroll && root) {
-      for (const selector of VIEW_SCROLL_PHASE_RESET_SELECTORS) {
-        root.querySelectorAll(selector).forEach((node) => {
-          if (node instanceof HTMLElement) {
-            node.scrollTop = 0;
-            node.scrollLeft = 0;
-          }
-        });
-      }
-    }
-  };
-  apply();
-  // Second pass after layout/paint (expanded detail, dual columns).
-  requestAnimationFrame(apply);
 }
 
 let lastRenderedView = "";
@@ -510,7 +415,7 @@ function renderViewRoot(options = {}) {
 
       viewRoot.innerHTML = newMarkup;
       mountRelatedModelReturn(viewRoot, renderRelatedModelReturn(state));
-      mountConceptMapFrame();
+      mountConceptMapFrame(state);
       mountGroupedLists(viewRoot);
       restoreViewFocus(viewRoot, focusSnapshot);
       restoreViewScroll(viewRoot, scrollSnapshots, {
@@ -560,106 +465,6 @@ function renderViewRoot(options = {}) {
   }
 }
 
-function captureViewFocus(root) {
-  const active = document.activeElement;
-  if (!(active instanceof HTMLElement) || !root.contains(active)) return null;
-  if (!active.matches("input, textarea, select")) return null;
-  const scope = active.closest("form[id]") || root;
-  const controls = [...scope.querySelectorAll("input, textarea, select")];
-  const index = controls.indexOf(active);
-  if (index < 0) return null;
-  return {
-    scopeId: scope instanceof HTMLElement ? scope.id : "",
-    index,
-    tagName: active.tagName,
-    type: active.getAttribute("type") || "",
-    id: active.id || "",
-    name: active.getAttribute("name") || "",
-    value: active.value,
-    checked: "checked" in active ? active.checked : undefined,
-    selectionStart: typeof active.selectionStart === "number" ? active.selectionStart : null,
-    selectionEnd: typeof active.selectionEnd === "number" ? active.selectionEnd : null,
-    selectionDirection: active.selectionDirection || "none"
-  };
-}
-
-function restoreViewFocus(root, snapshot) {
-  if (!snapshot) return;
-  const scope = snapshot.scopeId ? root.querySelector(`#${CSS.escape(snapshot.scopeId)}`) : root;
-  if (!scope) return;
-  const controls = [...scope.querySelectorAll("input, textarea, select")];
-  let target = snapshot.id ? scope.querySelector(`#${CSS.escape(snapshot.id)}`) : null;
-  if (!target && snapshot.name) {
-    const candidates = [...scope.querySelectorAll(`[name="${CSS.escape(snapshot.name)}"]`)];
-    target = candidates.find((item) => item.tagName === snapshot.tagName && (item.getAttribute("type") || "") === snapshot.type) || null;
-  }
-  if (!target) target = controls[snapshot.index] || null;
-  if (!(target instanceof HTMLElement) || target.tagName !== snapshot.tagName) return;
-  if ("value" in target && (!state.briefDraftReveal || snapshot.scopeId !== "briefEditorForm")) {
-    target.value = snapshot.value;
-  }
-  if (snapshot.checked !== undefined && "checked" in target) target.checked = snapshot.checked;
-  target.focus({ preventScroll: true });
-  if (snapshot.selectionStart !== null && typeof target.setSelectionRange === "function") {
-    const end = Math.min(snapshot.selectionEnd ?? snapshot.selectionStart, target.value.length);
-    target.setSelectionRange(Math.min(snapshot.selectionStart, end), end, snapshot.selectionDirection);
-  }
-}
-
-function getConceptMapFramePark() {
-  return document.getElementById("conceptMapFramePark");
-}
-
-function parkConceptMapFrame() {
-  const park = getConceptMapFramePark();
-  const frame = document.getElementById("conceptMapFrame");
-  if (!park || !frame) return;
-  if (frame.parentElement !== park) park.appendChild(frame);
-  park.hidden = true;
-}
-
-/**
- * Attach (or create) the persistent concept-map iframe into the current mount.
- * Only assigns src when the bound map project id changes — never on mere re-render.
- * Moving the iframe node in-DOM does not reload; only setting .src does.
- */
-function mountConceptMapFrame() {
-  const park = getConceptMapFramePark();
-  const mount = document.getElementById("conceptMapFrameMount");
-  if (!park) return;
-
-  const isMapActive = state.activeView === "concept-map" || (state.activeView === "ov1" && state.ov1ViewMode === "map");
-  if (!isMapActive || !mount) {
-    parkConceptMapFrame();
-    return;
-  }
-
-  const desiredSrc = mount.dataset.frameSrc || "";
-  const desiredProject = mount.dataset.mapProjectId || "";
-  let frame = document.getElementById("conceptMapFrame");
-  if (!frame) {
-    frame = document.createElement("iframe");
-    frame.id = "conceptMapFrame";
-    frame.className = "concept-map-frame";
-    frame.title = "作战概念图绘制工具预览";
-    frame.referrerPolicy = "strict-origin";
-    frame.dataset.mapProjectId = "";
-  }
-
-  // Only change src when the bound research→map project changes.
-  const boundId = frame.dataset.mapProjectId || "";
-  const needsSrc = !frame.getAttribute("src") || boundId !== desiredProject;
-  if (needsSrc && desiredSrc) {
-    frame.dataset.mapProjectId = desiredProject;
-    frame.src = desiredSrc;
-  } else if (!boundId && desiredProject) {
-    frame.dataset.mapProjectId = desiredProject;
-  }
-
-  if (frame.parentElement !== mount) mount.appendChild(frame);
-  park.hidden = true;
-}
-
 function renderOv1ToolboxFloatHost() {
   const host = $("#ov1ToolboxFloatRoot");
   if (!host) return;
@@ -685,137 +490,15 @@ function fitBriefTextarea(textarea) {
   textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
 }
 
-function resetCustomDirectionDialog() {
-  const form = document.querySelector("#customDirectionForm");
-  if (!form) return;
-  form.reset();
-  delete form.dataset.editingDirection;
-  const heading = form.querySelector("h2");
-  if (heading) heading.textContent = "新增方向";
-  const submit = form.querySelector('button[type="submit"]');
-  if (submit) submit.textContent = "保存方向";
-}
-
-/** OV-1 editors now use the right slide panel; keep the legacy modal closed. */
-function closeOv1ModalIfOpen() {
-  const dialog = $("#ov1Dialog");
-  if (!dialog) return;
-  if (dialog.open) dialog.close();
-  if (dialog.innerHTML) dialog.innerHTML = "";
-}
-
-function ensureOv1ToolsDocked() {
-  state.ov1ToolsOpen = true;
-}
-
-function openOv1SidePanel(mode, nodeId = null, edgeId = null) {
-  ensureOv1ToolsDocked();
-  state.ov1Dialog = null;
-  state.ov1PanelOpen = true;
-  state.ov1InspectorCollapsed = false;
-  state.ov1PanelMode = mode;
-  state.ov1PanelNodeId = mode === "node" ? nodeId : null;
-  state.ov1PanelEdgeId = mode === "relations" ? edgeId : null;
-}
-
-function closeOv1SidePanel() {
-  state.ov1Dialog = null;
-  state.ov1PanelOpen = false;
-  state.ov1InspectorCollapsed = true;
-  state.ov1PanelMode = "context";
-  state.ov1PanelNodeId = null;
-  state.ov1PanelEdgeId = null;
-}
-
-function toggleOv1ToolsRail() {
-  if (state.ov1ToolsOpen) {
-    state.ov1ToolsOpen = false;
-    // Floating FAB only — collapse expanded panel/tools together.
-    closeOv1SidePanel();
-    return;
-  }
-  ensureOv1ToolsDocked();
-}
-
-function toggleOv1SidePanelMode(mode) {
-  ensureOv1ToolsDocked();
-  const current = state.ov1PanelMode || "context";
-  if (state.ov1PanelOpen && current === mode) {
-    closeOv1SidePanel();
-    return;
-  }
-  openOv1SidePanel(
-    mode,
-    mode === "node" ? state.ov1PanelNodeId || state.selection?.id : null,
-    mode === "relations" ? state.ov1PanelEdgeId : null
-  );
-}
+const closeOv1ModalIfOpen = () => closeOv1ModalIfOpenImpl($);
+const ensureOv1ToolsDocked = () => ensureOv1ToolsDockedImpl(state);
+const openOv1SidePanel = (mode, nodeId, edgeId) => openOv1SidePanelImpl(mode, nodeId, edgeId, state);
+const closeOv1SidePanel = () => closeOv1SidePanelImpl(state);
+const toggleOv1ToolsRail = () => toggleOv1ToolsRailImpl(state);
+const toggleOv1SidePanelMode = (mode) => toggleOv1SidePanelModeImpl(mode, state);
 
 function renderInspectorPanel() {
-  // Docked right rail: brief baseline editor; OV-1/concept-map hide the dock.
-  if (state.activeView === "brief") {
-    // Preserve direction-panel open state across full re-renders (e.g. selecting a direction).
-    const previousDirectionPanel = document.querySelector(".direction-panel");
-    if (previousDirectionPanel) state.directionPanelOpen = previousDirectionPanel.open;
-    const eyebrow = document.querySelector(".inspector-header .eyebrow");
-    if (eyebrow) eyebrow.textContent = "\u7814\u7a76\u57fa\u7ebf";
-    $("#inspectorTitle").textContent = "\u7814\u7a76\u7b80\u62a5";
-    $("#inspectorStatus").textContent = "\u53ef\u7f16\u8f91";
-    $("#inspectorStatus").className = "status-tag";
-    $("#inspectorRoot").innerHTML = renderBriefSidebar(state);
-  } else if (state.activeView === "concept-map" || state.activeView === "ov1") {
-    $("#inspectorRoot").innerHTML = "";
-  } else {
-    const inspectorSelection = state.selection;
-    const title = inspectorSelection?.title || getViewMeta(state.activeView)?.label || "上下文";
-    const eyebrow = document.querySelector(".inspector-header .eyebrow");
-    if (eyebrow) eyebrow.textContent = "\u8be6\u7ec6\u4fe1\u606f";
-    const status = inspectorSelection?.status || "建模中";
-    $("#inspectorTitle").textContent = title;
-    $("#inspectorStatus").textContent = status;
-    $("#inspectorStatus").className = `status-tag ${status.includes("问题") ? "alert" : status.includes("建模") ? "review" : ""}`;
-    try {
-      $("#inspectorRoot").innerHTML = renderInspector(inspectorSelection, { ...getModels(), activeView: state.activeView });
-    } catch (err) {
-      console.error("renderInspector error:", err);
-      $("#inspectorRoot").innerHTML = `<div class="inspector-section"><p class="muted">无法渲染检查器：${err?.message || "未知错误"}</p></div>`;
-    }
-  }
-
-  // Optional floating knowledge panel (menu). Keep separate from docked brief sidebar.
-  const dialog = $("#contextPanelDialog");
-  if (!dialog) return;
-  if (!dialog.dataset.bound) {
-    dialog.addEventListener("cancel", (event) => {
-      event.preventDefault();
-      state.contextPanelOpen = false;
-      if (dialog.open) dialog.close();
-    });
-    dialog.dataset.bound = "true";
-  }
-  if (state.contextPanelOpen) {
-    const body = $("#contextPanelBody");
-    const title = $("#contextPanelTitle");
-    const status = $("#contextPanelStatus");
-    const eyebrow = $("#contextPanelEyebrow");
-    if (eyebrow) eyebrow.textContent = "\u77e5\u8bc6\u4e0e\u4e0a\u4e0b\u6587";
-    if (title) title.textContent = getViewMeta(state.activeView)?.label || "上下文";
-    if (status) {
-      status.textContent = state.selection?.status || "查阅";
-      status.className = "status-tag";
-    }
-    if (body) {
-      body.innerHTML = renderInspector(state.activeView === "ov1" ? null : state.selection, {
-        ...getModels(),
-        activeView: state.activeView
-      });
-    }
-    dialog.hidden = false;
-    if (!dialog.open) dialog.showModal();
-  } else if (dialog.open) {
-    dialog.close();
-    dialog.hidden = true;
-  }
+  renderInspectorPanelImpl({ state, $, getModels });
 }
 
 const boundDynamicEventMap = new WeakMap();
@@ -898,77 +581,7 @@ function bindDynamicEvents() {
     });
   });
 
-  document.querySelectorAll("[data-direction]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.direction = saveSelectedDirection(button.dataset.direction);
-      showToast(`已选择“${state.direction}”方向`);
-      void projectBriefSyncController.sync(state.brief, { direction: state.direction, inspiration: state.inspiration, directions: state.customDirections, source: "direction-selection" });
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-edit-direction]").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const item = state.customDirections.find((direction) => direction.title === button.dataset.editDirection);
-      const form = document.querySelector("#customDirectionForm");
-      const dialog = document.querySelector("#customDirectionDialog");
-      if (!item || !form || !dialog) return;
-      form.dataset.editingDirection = item.title;
-      form.querySelector('[name="title"]').value = item.title;
-      form.querySelector('[name="text"]').value = item.text;
-      form.querySelector('[name="basis"]').value = item.basis;
-      const heading = form.querySelector("h2");
-      if (heading) heading.textContent = "编辑方向";
-      const submit = form.querySelector('button[type="submit"]');
-      if (submit) submit.textContent = "保存修改";
-      dialog.showModal();
-    });
-  });
-
-  document.querySelectorAll("[data-delete-direction]").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const title = button.dataset.deleteDirection;
-      state.customDirections = saveCustomDirections(state.customDirections.filter((item) => item.title !== title), { projectId: activeProjectId, defaults: directions });
-      if (state.direction === title) {
-        const proposals = buildDirectionProposals({ session: state.inspiration, fallbackDirections: directions, aiDirections: state.aiDirections, customDirections: state.customDirections });
-        state.direction = saveSelectedDirection(proposals[0]?.title || "");
-      }
-      void projectBriefSyncController.sync(state.brief, { direction: state.direction, inspiration: state.inspiration, directions: state.customDirections, source: "custom-direction" });
-      showToast(`已删除“${title}”方向`);
-      render();
-    });
-  });
-
-  document.querySelector("#customDirectionForm")?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const values = new FormData(form);
-    const title = String(values.get("title") || "").trim();
-    const text = String(values.get("text") || "").trim();
-    const basis = String(values.get("basis") || "").trim();
-    const editingTitle = form.dataset.editingDirection || "";
-    const candidate = editingTitle
-      ? state.customDirections.map((item) => (item.title === editingTitle ? { title, text, basis } : item))
-      : [...state.customDirections, { title, text, basis }];
-    const next = saveCustomDirections(candidate, { projectId: activeProjectId, defaults: directions });
-    if (next.length !== candidate.length || (!editingTitle && next.length === state.customDirections.length)) {
-      showToast("请填写名称、概述和研究依据；名称不能重复");
-      return;
-    }
-    state.customDirections = next;
-    const selected = editingTitle ? next.find((item) => item.title === title)?.title : next.at(-1)?.title;
-    if (state.direction === editingTitle || !editingTitle) state.direction = saveSelectedDirection(selected || state.direction);
-    resetCustomDirectionDialog();
-    document.querySelector("#customDirectionDialog")?.close();
-    void projectBriefSyncController.sync(state.brief, { direction: state.direction, inspiration: state.inspiration, directions: state.customDirections, source: "custom-direction" });
-    showToast(editingTitle ? `已更新“${title}”方向` : `已新增并选择“${state.direction}”方向`);
-    render();
-  });
-
+  bindDirectionEvents(getConceptPlanningCtx());
   bindOv5Events(getOv5Ctx());
   bindDodafEvents(getDodafCtx());
   bindRulesEvents({ select, addEventListenerOnce });
@@ -979,7 +592,7 @@ function bindDynamicEvents() {
   document.querySelectorAll("[data-knowledge-result]").forEach((button) => {
     addEventListenerOnce(button, "click", () => select("knowledge", button.dataset.knowledgeResult), "knowledge-result:click");
   });
-  document.querySelectorAll("[data-project-switch]").forEach((button) => addEventListenerOnce(button, "click", () => switchProject(button.dataset.projectSwitch), "project-switch:click"));
+  document.querySelectorAll("[data-project-switch]").forEach((button) => addEventListenerOnce(button, "click", () => switchProject(button.dataset.projectSwitch, getProjectCtx()), "project-switch:click"));
   document.querySelectorAll("[data-project-archive]").forEach((button) => addEventListenerOnce(button, "click", async () => {
     const targetProjectId = button.dataset.projectArchive;
     const shouldArchive = button.dataset.projectArchived === "true";
@@ -990,13 +603,14 @@ function bindDynamicEvents() {
     try {
       await updateProject(targetProjectId, { archived: shouldArchive });
       await hydrateProjectDirectory();
+      renderProjectManagerChrome(getProjectCtx());
     } catch {
       showToast("项目状态更新失败，请确认负责人身份");
     }
   }, "project-archive:click"));
   document.querySelectorAll("[data-project-delete]").forEach((button) => addEventListenerOnce(button, "click", async () => {
     const title = button.dataset.projectTitle || button.dataset.projectDelete;
-    await handleDeleteProject(button.dataset.projectDelete, title);
+    await handleDeleteProject(button.dataset.projectDelete, title, getProjectCtx());
   }, "project-delete:click"));
   document.querySelector("#projectCreateForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1007,7 +621,7 @@ function bindDynamicEvents() {
         title: values.get("title"),
         description: values.get("description")
       });
-      switchProject(result.project.id);
+      switchProject(result.project.id, getProjectCtx());
     } catch (error) {
       showToast(describeProjectCreateError(error));
     }
@@ -1189,16 +803,7 @@ async function handleAction(action, source = null) {
     source?.closest?.(".derived-provenance-dropdown")?.removeAttribute("open");
     return;
   }
-  if (action === "open-custom-direction") {
-    resetCustomDirectionDialog();
-    document.querySelector("#customDirectionDialog")?.showModal();
-    return;
-  }
-  if (action === "close-custom-direction") {
-    resetCustomDirectionDialog();
-    document.querySelector("#customDirectionDialog")?.close();
-    return;
-  }
+  if (handleConceptPlanningAction(action, source, getConceptPlanningCtx())) return;
   if (action === "open-context-panel") {
     state.contextPanelOpen = true;
     state.contextPanelFocus = source?.dataset?.contextFocus || "";
@@ -1219,230 +824,13 @@ async function handleAction(action, source = null) {
     setWorkflowGateOpen(!state.workflowGateOpen);
     return;
   }
-function confirmRegenerateWorkflowStep(context) {
-  if (typeof window === "undefined" || typeof window.confirm !== "function") return true;
-  const nextStep = context?.nextStep;
-  const nextLabel = nextStep?.label || "下一步";
-  const mainViewId = nextStep?.mainViewId || context?.mainViewId || "";
-
-  if (nextStep?.related || context?.mode === "related-next-step") {
-    if (mainViewId === "operational-task") {
-      if (nextStep?.id === "ov6c") {
-        return window.confirm("重新生成将更新「逐任务时序图」（保留阶段时序与兵力协同时序，不影响其他流程成果），是否继续？");
-      }
-      if (nextStep?.id === "ov6b") {
-        return window.confirm("重新生成将更新「逐任务状态机」（保留阶段状态机与兵力状态机，不影响其他流程成果），是否继续？");
-      }
-      if (nextStep?.id === "ov6a") {
-        return window.confirm("重新生成将基于作战任务更新规则建议（保留全局阶段规则与兵力规则），是否继续？");
-      }
-      if (nextStep?.id === "ov1b") {
-        return window.confirm("重新生成将基于最新任务重新编组（不影响其他模型成果），是否继续？");
-      }
-    } else if (mainViewId === "force-mission") {
-      if (nextStep?.id === "ov4") {
-        return window.confirm("重新生成将更新「组织关系图」（根据最新作战兵力重新推导指挥、保障与信息关系，不影响其他流程成果），是否继续？");
-      }
-      if (nextStep?.id === "ov2") {
-        return window.confirm("重新生成将更新「作战资源流」（根据最新作战兵力与组织关系重新推导资源流，不影响其他流程成果），是否继续？");
-      }
-      if (nextStep?.id === "ov3") {
-        return window.confirm("重新生成将更新「作战资源流矩阵」（根据最新作战资源流重新投影矩阵事实，不影响其他流程成果），是否继续？");
-      }
-      if (nextStep?.id === "ov6c") {
-        return window.confirm("重新生成将更新「任务与兵力时序图」（保留阶段时序，不影响其他流程成果），是否继续？");
-      }
-      if (nextStep?.id === "ov6b") {
-        return window.confirm("重新生成将更新「任务与兵力状态机」（保留阶段状态机，不影响其他流程成果），是否继续？");
-      }
-      if (nextStep?.id === "ov6a") {
-        return window.confirm("重新生成将基于作战任务与作战兵力更新规则建议（保留全局阶段规则），是否继续？");
-      }
-    } else if (mainViewId === "phase-action") {
-      if (nextStep?.id === "ov6c") {
-        return window.confirm("重新生成将更新「阶段时序图」（保留任务与兵力时序，不影响其他流程成果），是否继续？");
-      }
-      if (nextStep?.id === "ov6b") {
-        return window.confirm("重新生成将更新「阶段状态机」（保留任务与兵力状态机，不影响其他流程成果），是否继续？");
-      }
-    }
-    return window.confirm(`重新生成将更新当前流程关联的「${nextLabel}」（保留其他流程模型），是否继续？`);
-  }
-
-  return window.confirm(`重新生成将基于最新上游上下文覆盖「${nextLabel}」当前已有成果，是否继续？`);
-}
-
-  if (action === "advance-workflow-step") {
-    const intent = source?.dataset?.stepIntent;
-    const isRegenerate = intent === "regenerate" || source?.dataset?.actionVariant === "regenerate";
-    if (isRegenerate) {
-      const context = resolveWorkflowGateContext(state);
-      if (!confirmRegenerateWorkflowStep(context)) return;
-    }
-    void advanceWorkflowStep({ generate: intent === "ai" || isRegenerate, forceRegenerate: isRegenerate });
-    return;
-  }
-  if (action === "advance-workflow-step-ai") {
-    const context = resolveWorkflowGateContext(state);
-    if (context.mode === "complete-phase") {
-      void completeWorkflowStage({ generate: true });
-    } else if (context.mode === "related-next-step") {
-      void advanceRelatedWorkflow({ generate: true });
-    } else {
-      void advanceWorkflowStep({ generate: true });
-    }
-    return;
-  }
-  if (action === "advance-workflow-step-direct" || action === "advance-workflow-step-skip") {
-    const context = resolveWorkflowGateContext(state);
-    if (context.mode === "complete-phase") {
-      void completeWorkflowStage({ generate: false });
-    } else if (context.mode === "related-next-step") {
-      void advanceRelatedWorkflow({ generate: false });
-    } else {
-      void advanceWorkflowStep({ generate: false });
-    }
-    return;
-  }
-  if (action === "advance-workflow-step-regenerate") {
-    const context = resolveWorkflowGateContext(state);
-    if (confirmRegenerateWorkflowStep(context)) {
-      if (context.mode === "complete-phase") {
-        void completeWorkflowStage({ generate: true, forceRegenerate: true });
-      } else if (context.mode === "related-next-step") {
-        void advanceRelatedWorkflow({ generate: true, forceRegenerate: true });
-      } else {
-        void advanceWorkflowStep({ generate: true, forceRegenerate: true });
-      }
-    }
-    return;
-  }
-  if (action === "workflow-gate-quick-confirm-phase-action") {
-    try {
-      await conceptPlanningController.confirmPhaseAction();
-      showToast("已确认阶段与行动");
-    } catch (e) {
-      showToast(e?.message || "确认阶段与行动失败");
-    }
-    refreshWorkflowGateUi();
-    return;
-  }
-  if (action === "workflow-gate-quick-confirm-concept-map") {
-    try {
-      conceptMapController.handleAction("confirm-concept-map-step");
-      showToast("已确认概念图参考");
-    } catch (e) {
-      showToast(e?.message || "确认概念图参考失败");
-    }
-    refreshWorkflowGateUi();
-    return;
-  }
-  if (action === "advance-workflow") {
-    const context = resolveWorkflowGateContext(state);
-    void (context.mode === "related-next-step" ? advanceRelatedWorkflow({ generate: false }) : advanceWorkflowStep({ generate: false }));
-    return;
-  }
-  if (action === "toggle-subflow-toolbox") {
-    state.subflowToolboxOpen = {
-      ...(state.subflowToolboxOpen || {}),
-      [state.activeView]: state.subflowToolboxOpen?.[state.activeView] !== true
-    };
-    render();
-    return;
-  }
-  if (action === "toggle-ov1b-add") {
-    state.ov1bAddOpen = state.ov1bAddOpen !== true;
-    if (state.ov1bAddOpen) {
-      state.subflowToolboxOpen = { ...(state.subflowToolboxOpen || {}), ov1b: true };
-    }
-    render();
-    return;
-  }
-  if (action === "close-ov1b-dock") {
-    state.ov1bAddOpen = false;
-    render();
-    return;
-  }
-  if (action === "open-subflow-ai") {
-    if (state.activeView === "ov4") {
-      const hasOrganization = Boolean((state.ov4?.relations || []).length);
-      if (hasOrganization && !window.confirm("将用 AI 重新生成组织关系，覆盖当前内容。是否继续？")) return;
-      void dodafProductController.pregenerateOv4FromForceMission({ silent: false, force: true });
-      return;
-    }
-    if (state.activeView === "ov2") {
-      const hasExchanges = Boolean((state.ov2?.exchanges || []).length);
-      if (hasExchanges && !window.confirm("将用 AI 重新生成作战资源流，覆盖当前内容。是否继续？")) return;
-      void dodafProductController.pregenerateOv2FromForceAndOv4({ silent: false, force: true });
-      return;
-    }
-    if (state.activeView === "ov3") {
-      void dodafProductController.pregenerateOv3FromOv2({ silent: false, force: true });
-      return;
-    }
-    if (state.activeView === "ov6c") {
-      const isPhaseSubflow = state.activeMainViewId === "phase-action";
-      const contextType = isPhaseSubflow ? "phase" : "force-mission";
-      void dodafProductController.pregenerateOv6cFromPhase({ silent: false, contextType, force: true });
-      return;
-    }
-    showToast(`${getViewMeta(state.activeView)?.label || "当前子流程"}的 AI 工具已就绪；请先确认上游内容，再让 AI 生成或检查本页草案。`);
-    return;
-  }
-  if (action === "toggle-ov1b-edit") {
-    state.ov1bEditOpen = state.ov1bEditOpen !== true;
-    render();
-    return;
-  }
   if (action === "generate-task-decomposition") {
     if (state.activeView !== "ov1b") return;
     void dodafProductController.pregenerateOv1bFromTasks({ silent: false, force: true });
     return;
   }
-  if (action === "advance-related-workflow") {
-    const intent = source?.dataset?.stepIntent;
-    const isRegenerate = intent === "regenerate" || source?.dataset?.actionVariant === "regenerate";
-    if (isRegenerate) {
-      const context = resolveWorkflowGateContext(state);
-      if (!confirmRegenerateWorkflowStep(context)) return;
-    }
-    void advanceRelatedWorkflow({ generate: intent === "ai" || isRegenerate, forceRegenerate: isRegenerate });
-    return;
-  }
-  if (action === "complete-workflow-stage") {
-    const intent = source?.dataset?.stepIntent;
-    const isRegenerate = intent === "regenerate" || source?.dataset?.actionVariant === "regenerate";
-    if (isRegenerate) {
-      const context = resolveWorkflowGateContext(state);
-      if (!confirmRegenerateWorkflowStep(context)) return;
-    }
-    void completeWorkflowStage({ generate: intent === "ai" || isRegenerate, forceRegenerate: isRegenerate });
-    return;
-  }
-  if (action === "toggle-project-manager") {
-    const nextOpen = !state.projectManagerOpen;
-    if (nextOpen) closeMenubarMenus();
-    state.projectManagerOpen = nextOpen;
-    if (!state.projectManagerOpen) state.projectCreateOpen = false;
-    // Hover or click: never rebuild concept-map viewRoot / iframe.
-    refreshProjectManagerUi();
-    if (nextOpen) queueMicrotask(() => focusOpenMenubarChrome());
-    return;
-  }
-  if (action === "toggle-project-create") {
-    state.projectManagerOpen = true;
-    state.projectCreateOpen = !state.projectCreateOpen;
-    if (state.projectEntryRequired) { render(); return; }
-    refreshProjectManagerUi();
-    queueMicrotask(() => focusOpenMenubarChrome());
-    return;
-  }
-  if (action === "retry-project-entry") {
-    state.projectDirectory = { status: "checking", projects: [] };
-    render();
-    void hydrateProjectDirectory();
-    return;
-  }
+  if (await handleWorkflowAction(action, source, getWorkflowActionCtx())) return;
+  if (handleProjectAction(action, source, getProjectCtx())) return;
   if (action === "open-collaboration") {
     state.activeView = "collaboration";
     state.selection = null;
@@ -1584,272 +972,6 @@ async function syncRestoredModels() {
   await projectOodaSyncController.sync(state.ooda, { source: "snapshot-restore" });
   if (state.scenario) await projectScenarioSyncController.sync(state.scenario, { source: "snapshot-restore" });
   if (state.validationResult) await projectValidationSyncController.sync(state.validationResult, { source: "snapshot-restore" });
-}
-
-function restoreLocalBriefConflictDraft(draft) {
-  if (!draft?.brief) return;
-  const nextBrief = saveConceptBrief(draft.brief, projectBriefSeed);
-  const nextDirection = saveSelectedDirection(String(draft.direction || state.direction).trim() || state.direction);
-  const changed = !areConceptBriefsEqual(state.brief, nextBrief) || state.direction !== nextDirection;
-  state.brief = nextBrief;
-  state.briefIntent = nextBrief.researchIntent;
-  state.direction = nextDirection;
-  if (Array.isArray(draft.directions)) state.customDirections = saveCustomDirections(draft.directions, { projectId: activeProjectId, defaults: directions });
-  if (draft.inspiration?.messages?.length) state.inspiration = saveInspirationSession(draft.inspiration);
-  if (changed) invalidateDerivedArtifacts();
-}
-
-function restoreLocalConceptMapConflictDraft(model) {
-  if (!model?.document) return;
-  state.conceptMap = persistConceptMap(normalizeConceptMap(model), activeProjectId);
-  invalidateConceptMapDependents();
-}
-
-function applyResearchChatBriefUpdate(response, question, options = {}) {
-  const update = deriveResearchChatBriefUpdate({
-    brief: state.brief,
-    question,
-    result: response?.result || response,
-    projectTitle: options.projectTitle || currentProjectTitle()
-  });
-  if (!update.fields.length) return [];
-  const nextBrief = saveConceptBrief({ ...state.brief, ...update.patch }, projectBriefSeed);
-  if (!areConceptBriefsEqual(state.brief, nextBrief)) {
-    state.brief = nextBrief;
-    state.briefIntent = nextBrief.researchIntent;
-    state.briefDraftReveal = true;
-    invalidateDerivedArtifacts();
-    window.setTimeout(() => {
-      if (!state.briefDraftReveal) return;
-      state.briefDraftReveal = false;
-      const form = document.querySelector("#briefEditorForm");
-      form?.classList.remove("is-draft-reveal");
-    }, 1500);
-  }
-  return update.fields;
-}
-
-function restoreLocalOv5ConflictDraft(model) {
-  if (!model?.activities || !Array.isArray(model.activities)) return;
-  state.ov5 = model;
-  persistOv5Model(state.ov5);
-  state.ooda = deriveOodaFromOv5(state.ov5);
-  state.selection = null;
-  invalidateDerivedArtifacts();
-}
-
-function restoreLocalOv1ConflictDraft(model) {
-  if (!model?.nodes || !Array.isArray(model.nodes)) return;
-  state.ov1 = saveOv1Model(model);
-  state.selection = null;
-  invalidateValidation();
-}
-
-function restoreLocalOodaConflictDraft(model) {
-  if (!model?.lanes || !Array.isArray(model.lanes)) return;
-  state.ooda = model;
-  persistOodaModel(state.ooda);
-  state.selection = null;
-  invalidateDerivedArtifacts();
-}
-
-function restoreLocalScenarioConflictDraft(model) {
-  if (!model?.entities || !Array.isArray(model.entities)) return;
-  state.scenario = model;
-  persistScenario(state.scenario);
-  state.selection = null;
-  invalidateValidation();
-}
-
-function restoreLocalValidationConflictDraft(model) {
-  if (!model?.scores || !Array.isArray(model.scores)) return;
-  state.validationResult = model;
-  persistValidation(state.validationResult);
-  state.redTeamRunning = false;
-  state.selection = null;
-}
-
-function applyRemoteBrief(remote, { force = false } = {}) {
-  if (!remote?.brief) return false;
-  if (force && !window.confirm(`服务端修订 r${remote.revision} 将覆盖当前概念简报及其下游派生数据。是否继续？`)) return false;
-  const localIsSeed = areConceptBriefsEqual(state.brief, projectBriefSeed);
-  if (!force && !localIsSeed) return false;
-  const nextDirection = String(remote.direction || state.direction).trim() || state.direction;
-  const nextCustomDirections = Array.isArray(remote.directions) ? saveCustomDirections(remote.directions, { projectId: activeProjectId, defaults: directions }) : state.customDirections;
-  const changed = !areConceptBriefsEqual(state.brief, remote.brief) || state.direction !== nextDirection || JSON.stringify(state.customDirections) !== JSON.stringify(nextCustomDirections);
-  state.brief = saveConceptBrief(remote.brief, projectBriefSeed);
-  state.briefIntent = state.brief.researchIntent;
-  state.direction = saveSelectedDirection(nextDirection);
-  state.customDirections = nextCustomDirections;
-  if (remote.inspiration?.messages?.length) state.inspiration = saveInspirationSession(remote.inspiration);
-  if (changed) invalidateDerivedArtifacts();
-  return true;
-}
-
-function applyRemoteForceMission(remote, { force = false } = {}) {
-  if (!remote?.model || remote.stale) return false;
-  if (force && state.forceMission?.forces?.length && !window.confirm(`服务端兵力与任务修订 r${remote.revision} 将覆盖当前草案，是否继续？`)) return false;
-  if (!force && state.forceMissionStorage.localSaved) return false;
-  state.forceMission = persistForceMission(normalizeForceMissionPlan(remote.model), activeProjectId);
-  return true;
-}
-
-function applyRemotePhaseAction(remote, { force = false } = {}) {
-  if (!remote?.model || remote.stale) return false;
-  if (force && state.phaseAction?.phases?.length && !window.confirm(`服务端阶段与行动修订 r${remote.revision} 将覆盖当前草案，是否继续？`)) return false;
-  if (!force && state.phaseActionStorage.localSaved) return false;
-  state.phaseAction = persistPhaseAction(normalizePhaseActionConcept(remote.model), activeProjectId);
-  return true;
-}
-
-function applyRemoteConceptMap(remote, { force = false } = {}) {
-  if (!remote?.model || remote.stale) return false;
-  if (force && state.conceptMap?.document?.items?.length && !window.confirm(`服务端作战概念图修订 r${remote.revision} 将覆盖当前地图快照，是否继续？`)) return false;
-  if (!force && state.conceptMapStorage.localSaved) return false;
-  state.conceptMap = persistConceptMap(normalizeConceptMap(remote.model), activeProjectId);
-  state.selection = null;
-  invalidateConceptMapDependents();
-  return true;
-}
-
-function applyRemoteConceptGraphic(remote, { force = false } = {}) {
-  if (!remote?.model || remote.stale) return false;
-  if (force && state.conceptGraphic?.nodes?.length && !window.confirm(`服务端总体作战概念图修订 r${remote.revision} 将覆盖当前草案，是否继续？`)) return false;
-  if (!force && state.conceptGraphicStorage.localSaved) return false;
-  state.conceptGraphic = persistConceptGraphic(normalizeConceptGraphicPlan(remote.model), activeProjectId);
-  return true;
-}
-
-function restoreLocalForceMissionConflictDraft(model) {
-  state.forceMission = persistForceMission(normalizeForceMissionPlan(model), activeProjectId);
-}
-
-function restoreLocalPhaseActionConflictDraft(model) {
-  state.phaseAction = persistPhaseAction(normalizePhaseActionConcept(model), activeProjectId);
-}
-
-function restoreLocalConceptGraphicConflictDraft(model) {
-  state.conceptGraphic = persistConceptGraphic(normalizeConceptGraphicPlan(model), activeProjectId);
-}
-
-function describeProjectCreateError(error) {
-  const status = Number(error?.status || 0);
-  const message = String(error?.message || "").trim();
-  if (status === 403 || /login is required|Collaboration login/i.test(message)) {
-    return "创建项目前请先登录协同账号";
-  }
-  if (status === 409 || /already in use/i.test(message)) {
-    return "项目标识已被占用：请直接打开已有项目，或换一个新标识";
-  }
-  if (/identifier is invalid/i.test(message)) {
-    return "项目标识格式无效：使用 2–64 位小写字母、数字、下划线或连字符，且以字母/数字开头";
-  }
-  if (/title is required/i.test(message)) {
-    return "请填写项目名称";
-  }
-  if (message) return `项目创建失败：${message}`;
-  return "项目创建失败，请检查项目标识和名称";
-}
-
-function applyRemoteOv5(remote, { force = false } = {}) {
-  if (!remote?.model) return false;
-  if (force && !window.confirm(`服务端活动模型修订 r${remote.revision} 将覆盖当前活动模型并重新派生 OODA。是否继续？`)) return false;
-  if (!force && state.ov5Storage.localSaved) return false;
-  state.ov5 = remote.model;
-  persistOv5Model(state.ov5);
-  state.ooda = deriveOodaFromOv5(state.ov5);
-  state.selection = null;
-  invalidateDerivedArtifacts();
-  return true;
-}
-
-function applyRemoteOv1(remote, { force = false } = {}) {
-  if (!remote?.model || remote.stale) return false;
-  if (force && !window.confirm(`服务端高层作战概念图修订 r${remote.revision} 将覆盖当前总体概念图，并使本地验证结果失效。是否继续？`)) return false;
-  if (!force && state.ov1Storage.localSaved) return false;
-  state.ov1 = saveOv1Model(remote.model);
-  state.selection = null;
-  invalidateValidation();
-  return true;
-}
-
-function applyRemoteOoda(remote, { force = false } = {}) {
-  if (!remote?.model || remote.stale) return false;
-  if (force && !window.confirm(`服务端 OODA 修订 r${remote.revision} 将覆盖当前循环并清除下游想定和验证。是否继续？`)) return false;
-  if (!force && state.oodaStorage.localSaved) return false;
-  state.ooda = remote.model;
-  persistOodaModel(state.ooda);
-  state.selection = null;
-  invalidateDerivedArtifacts();
-  return true;
-}
-
-function applyRemoteScenario(remote, { force = false } = {}) {
-  if (!remote?.model || remote.stale) return false;
-  if (force && !window.confirm(`服务端想定修订 r${remote.revision} 将覆盖当前想定并清除本地验证。是否继续？`)) return false;
-  if (!force && state.scenarioStorage.localSaved) return false;
-  state.scenario = remote.model;
-  persistScenario(state.scenario);
-  state.selection = null;
-  invalidateValidation();
-  return true;
-}
-
-function applyRemoteValidation(remote, { force = false } = {}) {
-  if (!remote?.model || remote.stale) return false;
-  if (force && !window.confirm(`服务端验证修订 r${remote.revision} 将覆盖当前验证与红方审阅。是否继续？`)) return false;
-  if (!force && state.validationStorage.localSaved) return false;
-  state.validationResult = remote.model;
-  persistValidation(state.validationResult);
-  state.redTeamRunning = false;
-  state.selection = null;
-  return true;
-}
-
-function applyRemoteKnowledge(remote, { force = false } = {}) {
-  if (!remote?.model?.docs?.length) return false;
-  if (force && state.knowledge?.docs?.length && !window.confirm(`服务端知识库修订 r${remote.revision} 将覆盖当前本地 Vault 索引。是否继续？`)) return false;
-  if (!force && state.knowledgeStorage.localSaved) return false;
-  state.knowledge = remote.model;
-  state.knowledgeQuery = "";
-  state.knowledgeResults = null;
-  state.knowledgeSearch = { mode: "server", retrievalMode: "hybrid", includeSensitive: false, detail: "已载入服务端项目知识库，默认排除敏感片段" };
-  state.selection = null;
-  return true;
-}
-
-function applyRemoteReportArchives(items, { force = false } = {}) {
-  if (!Array.isArray(items) || !items.length) return false;
-  if (state.reportVersions.length && !force) return false;
-  if (force && state.reportVersions.length && !window.confirm(`服务端将替换当前 ${state.reportVersions.length} 份本地报告归档。是否继续？`)) return false;
-  state.reportVersions = persistReportVersions(items);
-  return true;
-}
-
-function upsertRemoteReportArchive(item) {
-  state.reportVersions = upsertReportVersion(item, state.reportVersions);
-}
-
-function removeRemoteReportArchive(itemId) {
-  state.reportVersions = deleteReportVersion(itemId, state.reportVersions);
-}
-
-function applyRemoteModelSnapshots(items, { force = false } = {}) {
-  if (!Array.isArray(items) || !items.length) return false;
-  if (state.modelSnapshots.length && !force) return false;
-  if (force && state.modelSnapshots.length && !window.confirm(`服务端将替换当前 ${state.modelSnapshots.length} 份本地模型快照。是否继续？`)) return false;
-  state.modelSnapshots = persistModelSnapshots(items);
-  state.modelComparison = null;
-  return true;
-}
-
-function upsertRemoteModelSnapshot(item) {
-  state.modelSnapshots = upsertModelSnapshot(item, state.modelSnapshots);
-}
-
-function removeRemoteModelSnapshot(itemId) {
-  state.modelSnapshots = deleteModelSnapshot(itemId, state.modelSnapshots);
-  if (state.modelComparison?.baseline.id === itemId || state.modelComparison?.candidate.id === itemId) state.modelComparison = null;
 }
 
 function exportModelComparison(type, comparison) {
@@ -2847,508 +1969,13 @@ function waitForPaint() {
   });
 }
 
-function switchProject(projectId) {
-  if (!projectId || (projectId === state.activeProjectId && !state.projectEntryRequired)) return;
-  const url = new URL(window.location.href);
-  url.searchParams.set("project", projectId);
-  window.location.assign(url);
-}
-
-async function handleDeleteProject(projectId, title = projectId) {
-  if (!window.confirm(`将永久删除项目“${title}”及其所有数据，此操作无法恢复。确定继续吗？`)) return;
-  try {
-    const isCurrentActive = projectId === state.activeProjectId;
-    await deleteProject(projectId);
-    purgeProjectClientStorage(projectId);
-    showToast("已删除项目");
-    await hydrateProjectDirectory();
-    if (isCurrentActive) {
-      const remaining = state.projectDirectory.projects || [];
-      const nextProject = remaining.find((p) => p.id !== projectId && !p.archived)?.id
-        || remaining.find((p) => p.id !== projectId)?.id
-        || "default";
-      switchProject(nextProject);
-      return;
-    }
-    renderProjectManagerChrome();
-  } catch (error) {
-    showToast(error?.status === 403 ? "只有负责人可删除项目" : "项目删除失败：请先归档并确认项目状态");
-  }
-}
-
-/** Update only the top project dropdown; leave concept-map iframe untouched. */
-function renderProjectManagerChrome() {
-  const root = $("#projectManagerRoot");
-  if (!root) return;
-  root.innerHTML = renderProjectManager({
-    directory: state.projectDirectory,
-    activeProjectId: state.activeProjectId,
-    open: state.projectManagerOpen,
-    createOpen: state.projectCreateOpen,
-    isLead: state.collaboration?.session?.actor?.roles?.includes("lead")
-  });
-  root.querySelectorAll("[data-action]").forEach((button) => {
-    button.addEventListener("click", () => handleAction(button.dataset.action, button));
-  });
-  root.querySelectorAll("[data-project-switch]").forEach((button) => {
-    button.addEventListener("click", () => switchProject(button.dataset.projectSwitch));
-  });
-  root.querySelectorAll("[data-project-archive]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const targetProjectId = button.dataset.projectArchive;
-      const shouldArchive = button.dataset.projectArchived === "true";
-      if (shouldArchive && targetProjectId === state.activeProjectId) {
-        showToast("当前正在使用的项目不可归档，请切换至其他项目后再试");
-        return;
-      }
-      try {
-        await updateProject(targetProjectId, { archived: shouldArchive });
-        await hydrateProjectDirectory();
-        renderProjectManagerChrome();
-      } catch {
-        showToast("项目状态更新失败，请确认负责人身份");
-      }
-    });
-  });
-  root.querySelectorAll("[data-project-delete]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const title = button.dataset.projectTitle || button.dataset.projectDelete;
-      await handleDeleteProject(button.dataset.projectDelete, title);
-    });
-  });
-  root.querySelector("#projectCreateForm")?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const values = new FormData(event.currentTarget);
-    try {
-      const result = await createProject({
-        id: values.get("id"),
-        title: values.get("title"),
-        description: values.get("description")
-      });
-      switchProject(result.project.id);
-    } catch {
-      showToast("项目创建失败，请检查项目标识和名称");
-    }
-  });
-}
-
 function getModels() {
   return { ov1: state.ov1, ov5: state.ov5, ooda: state.ooda, scenario: state.scenario, validationResult: state.validationResult, knowledge: state.knowledge, knowledgeQuery: state.knowledgeQuery, conceptMap: state.conceptMap };
 }
 
-function invalidatePhaseActionDependents() {
-  state.forceMissionStorage = markStorageStale(state.forceMissionStorage, "阶段行动已更新，作战任务与兵力已过期");
-  invalidateForceMissionDependents();
-}
-
-function invalidateForceMissionDependents() {
-  state.ov1Storage = markStorageStale(state.ov1Storage, "任务或兵力已更新，总体概念图已过期");
-  state.ov4Storage = markStorageStale(state.ov4Storage, "任务或兵力已更新，组织关系图已过期");
-  state.ov2Storage = markStorageStale(state.ov2Storage, "任务或兵力已更新，作战资源流已过期");
-  state.ov3Storage = markStorageStale(state.ov3Storage, "任务或兵力已更新，作战信息流已过期");
-  invalidateDerivedArtifacts();
-}
-
-function invalidateConceptMapDependents() {
-  state.ov1Storage = markStorageStale(state.ov1Storage, "Concept map changed; review or regenerate concept graphic before relying on it.");
-  state.ov5Storage = markStorageStale(state.ov5Storage, "Concept map changed; review or regenerate activity model before relying on it.");
-  invalidateDerivedArtifacts();
-}
-
-function invalidateDerivedArtifacts() {
-  // Keep scenario as a stale reference (same pattern as validation/OODA) so researchers can compare before regenerating.
-  if (state.scenario) {
-    state.scenario = markScenarioStale(state.scenario, "上游活动模型/研究循环已变更，上次想定仅供参考，请重新生成。");
-  }
-  state.lastDeploymentData = null;
-  markCurrentValidationStale("上游模型已变更，上次设计验证仅供参考，请重新运行。");
-  state.oodaStorage = markStorageStale(state.oodaStorage, "Upstream model changed; review or regenerate OODA before relying on it.");
-  state.scenarioStorage = markStorageStale(state.scenarioStorage, "Upstream model changed; the previous scenario is no longer current.");
-  state.validationStorage = markStorageStale(state.validationStorage, "Upstream model changed; the previous validation is no longer current.");
-  state.redTeamRunning = false;
-  state.deployment.open = false;
-  state.deployment.status = "等待生成";
-}
-
-function invalidateValidation() {
-  markCurrentValidationStale("想定或行为模型已变更，上次设计验证仅供参考，请重新运行。");
-  state.validationStorage = markStorageStale(state.validationStorage, "Scenario or behavior model changed; run validation again.");
-  state.redTeamRunning = false;
-}
-
-function markCurrentValidationStale(reason) {
-  if (!state.validationResult) {
-    clearValidation();
-    return;
-  }
-  state.validationResult = markValidationStale(state.validationResult, reason);
-  persistValidation(state.validationResult);
-}
-
-function invalidateRedTeam() {
-  state.redTeamRunning = false;
-  if (state.validationResult) clearRedTeamReview(state.validationResult);
-}
-
-function markStorageStale(storage, detail) {
-  if (!storage || storage.status === "checking") return storage;
-  return {
-    ...storage,
-    status: "stale",
-    mode: "local",
-    detail,
-    stale: true
-  };
-}
-
-// Hover-nav convention: short enough to feel responsive, long enough to cross trigger→panel.
-const MENUBAR_IDLE_DISMISS_MS = 300;
-let menubarIdleTimer = null;
-let menubarPointerInside = false;
-
-function closeMenubarMenus(except = null) {
-  document.querySelectorAll(".menubar-menu[open]").forEach((menu) => {
-    if (menu !== except) menu.open = false;
-  });
-}
-
-function isMenubarChromeOpen() {
-  return Boolean(document.querySelector(".menubar-menu[open]")) || Boolean(state.projectManagerOpen);
-}
-
-function isInsideMenubarChrome(node) {
-  if (!(node instanceof Element)) return false;
-  return Boolean(node.closest(".menubar-menu, .project-manager-root"));
-}
-
-function isInsideOpenMenubarChrome(node) {
-  if (!(node instanceof Element)) return false;
-  if (node.closest(".menubar-menu[open]")) return true;
-  if (state.projectManagerOpen && node.closest(".project-manager-root")) return true;
-  return false;
-}
-
-function clearMenubarIdleTimer() {
-  if (!menubarIdleTimer) return;
-  clearTimeout(menubarIdleTimer);
-  menubarIdleTimer = null;
-}
-
-/**
- * Start 3s idle dismiss after pointer leaves the open surface.
- * Do not gate on document.activeElement: open menus keep focus on <summary>,
- * which would permanently block dismiss after hover-open.
- */
-function scheduleMenubarIdleDismiss() {
-  clearMenubarIdleTimer();
-  if (!isMenubarChromeOpen()) return;
-  menubarIdleTimer = window.setTimeout(() => {
-    menubarIdleTimer = null;
-    if (menubarPointerInside) return;
-    const active = document.activeElement;
-    if (active instanceof HTMLElement && active.closest("#projectCreateForm")) return;
-    dismissMenubarChrome();
-  }, MENUBAR_IDLE_DISMISS_MS);
-}
-
-/** Close research/tool/knowledge menus and the project switcher. */
-function dismissMenubarChrome() {
-  clearMenubarIdleTimer();
-  menubarPointerInside = false;
-  const active = document.activeElement;
-  if (active instanceof HTMLElement && isInsideOpenMenubarChrome(active)) {
-    active.blur();
-  }
-  const hadMenus = Boolean(document.querySelector(".menubar-menu[open]"));
-  const hadProject = Boolean(state.projectManagerOpen);
-  closeMenubarMenus();
-  if (!hadProject) return hadMenus;
-  state.projectManagerOpen = false;
-  state.projectCreateOpen = false;
-  // Never full-render on concept-map — that reloads the embedded map tool.
-  refreshProjectManagerUi();
-  return true;
-}
-
-function focusOpenMenubarChrome() {
-  if (!state.projectManagerOpen) return;
-  if (state.projectCreateOpen) {
-    const titleInput = document.querySelector('#projectCreateForm input[name="title"]');
-    if (titleInput instanceof HTMLElement) {
-      titleInput.focus({ preventScroll: true });
-      return;
-    }
-  }
-  const panel = document.querySelector(".project-manager-panel");
-  if (panel instanceof HTMLElement) panel.focus({ preventScroll: true });
-}
-
-function openMenubarMenu(menu) {
-  if (!(menu instanceof HTMLDetailsElement)) return;
-  if (menu.open) {
-    clearMenubarIdleTimer();
-    return;
-  }
-  menu.open = true;
-}
-
-/**
- * Open/close project switcher without rebuilding viewRoot.
- * Hover on the top project control must not reload the concept-map iframe.
- */
-function refreshProjectManagerUi() {
-  if (state.activeView === "concept-map") {
-    renderProjectManagerChrome();
-    return;
-  }
-  render();
-}
-
-function openProjectManagerFromHover() {
-  if (state.projectManagerOpen) {
-    clearMenubarIdleTimer();
-    return;
-  }
-  closeMenubarMenus();
-  state.projectManagerOpen = true;
-  refreshProjectManagerUi();
-  queueMicrotask(() => focusOpenMenubarChrome());
-}
-
-/**
- * Top menubar policy:
- * - hover button → open / keep open
- * - pointer stays in menu or panel → stay open
- * - leave the area → auto close after 3s
- * - re-enter within 3s → cancel close
- * - pointer outside click / Escape → close immediately
- * - only one chrome surface open at a time
- */
-function bindMenubarChrome() {
-  if (bindMenubarChrome.bound) return;
-  bindMenubarChrome.bound = true;
-
-  document.querySelectorAll(".menubar-menu").forEach((menu) => {
-    menu.addEventListener("toggle", () => {
-      if (!menu.open) {
-        if (!isMenubarChromeOpen()) clearMenubarIdleTimer();
-        return;
-      }
-      closeMenubarMenus(menu);
-      clearMenubarIdleTimer();
-      if (state.projectManagerOpen) {
-        state.projectManagerOpen = false;
-        state.projectCreateOpen = false;
-        refreshProjectManagerUi();
-      }
-      // Do not force-focus summary on open: that kept activeElement inside the menu
-      // and blocked idle dismiss after the pointer left.
-    });
-  });
-
-  // Hover open + keep-alive while pointer is over any menubar surface.
-  document.addEventListener("pointerover", (event) => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-
-    const menu = target.closest(".menubar-menu");
-    const projectRoot = target.closest(".project-manager-root");
-    if (!menu && !projectRoot) return;
-
-    menubarPointerInside = true;
-    clearMenubarIdleTimer();
-
-    if (menu) {
-      openMenubarMenu(menu);
-      return;
-    }
-
-    // Project trigger / open panel: hover keeps or opens the switcher.
-    if (projectRoot && (target.closest(".project-manager-trigger") || state.projectManagerOpen)) {
-      if (target.closest(".project-manager-trigger") || projectRoot.classList.contains("is-open")) {
-        openProjectManagerFromHover();
-      }
-    }
-  });
-
-  document.addEventListener("pointerout", (event) => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    if (!isInsideMenubarChrome(target)) return;
-
-    const related = event.relatedTarget;
-    if (related instanceof Element && isInsideMenubarChrome(related)) {
-      // Moving between summary ↔ panel, or menu ↔ project, still counts as inside chrome.
-      menubarPointerInside = true;
-      clearMenubarIdleTimer();
-      return;
-    }
-
-    menubarPointerInside = false;
-    if (isMenubarChromeOpen()) scheduleMenubarIdleDismiss();
-  });
-
-  // Hard dismiss on outside press (do not wait the idle timer).
-  document.addEventListener("pointerdown", (event) => {
-    if (!isMenubarChromeOpen()) return;
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    if (isInsideOpenMenubarChrome(target) || isInsideMenubarChrome(target)) {
-      clearMenubarIdleTimer();
-      return;
-    }
-    if (target.closest('[data-action="toggle-project-manager"]')) {
-      closeMenubarMenus();
-      clearMenubarIdleTimer();
-      return;
-    }
-    dismissMenubarChrome();
-  }, true);
-
-  document.addEventListener("pointerdown", (event) => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    document.querySelectorAll(".derived-provenance-dropdown[open]").forEach((details) => {
-      if (!details.contains(target)) {
-        details.removeAttribute("open");
-      }
-    });
-  });
-
-  // Focus left open surface: same 3s grace unless pointer is still inside.
-  document.addEventListener("focusout", (event) => {
-    if (!isMenubarChromeOpen()) return;
-    const from = event.target;
-    if (!(from instanceof Element) || !isInsideOpenMenubarChrome(from)) return;
-    const next = event.relatedTarget;
-    if (next instanceof Element && isInsideOpenMenubarChrome(next)) return;
-    requestAnimationFrame(() => {
-      if (!isMenubarChromeOpen()) return;
-      if (menubarPointerInside) {
-        clearMenubarIdleTimer();
-        return;
-      }
-      scheduleMenubarIdleDismiss();
-    });
-  });
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || !isMenubarChromeOpen()) return;
-    event.preventDefault();
-    dismissMenubarChrome();
-  });
-}
-
-/** Capsule: click to expand; auto-collapse when pointer leaves the capsule region. */
-function bindWorkflowGateChrome() {
-  const root = document.getElementById("workflowGateRoot");
-  // Delegate clicks on the permanent root so rebuilds keep working.
-  if (root && root.dataset.actionsBound !== "true") {
-    root.dataset.actionsBound = "true";
-    root.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const button = target.closest("[data-action]");
-      if (!button || !root.contains(button)) return;
-      handleAction(button.dataset.action, button);
-    });
-  }
-
-  let leaveTimer = null;
-  const clearLeaveTimer = () => {
-    if (!leaveTimer) return;
-    clearTimeout(leaveTimer);
-    leaveTimer = null;
-  };
-
-  const collapseGate = () => {
-    clearLeaveTimer();
-    if (!state.workflowGateOpen) return;
-    // Soft close — do not rebuild DOM (avoids click/leave races).
-    setWorkflowGateOpen(false);
-  };
-
-  document.addEventListener("pointerover", (event) => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    if (!target.closest("#workflowGateRoot [data-workflow-gate-shell]")) return;
-    clearLeaveTimer();
-  }, true);
-
-  document.addEventListener("pointerout", (event) => {
-    if (!state.workflowGateOpen) return;
-    if (performance.now() < workflowGateLeaveSuppressedUntil) return;
-    const from = event.target;
-    if (!(from instanceof Element) || !from.closest("#workflowGateRoot [data-workflow-gate-shell]")) return;
-    const to = event.relatedTarget;
-    if (to instanceof Element && to.closest("#workflowGateRoot [data-workflow-gate-shell]")) return;
-    // If the node was detached by a re-render, relatedTarget is often null — ignore those.
-    if (!(to instanceof Element) && !document.contains(from)) return;
-    clearLeaveTimer();
-    leaveTimer = window.setTimeout(collapseGate, 160);
-  }, true);
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || !state.workflowGateOpen) return;
-    event.preventDefault();
-    collapseGate();
-  });
-}
-
-bindMenubarChrome();
-bindWorkflowGateChrome();
-
-function bindAiModalsChrome() {
-  const configRoot = document.getElementById("aiConfigRoot");
-  if (configRoot && configRoot.dataset.actionsBound !== "true") {
-    configRoot.dataset.actionsBound = "true";
-    configRoot.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const button = target.closest("[data-action]");
-      if (!button || !configRoot.contains(button)) return;
-      handleAction(button.dataset.action, button);
-    });
-  }
-
-  const promptRoot = document.getElementById("aiPromptRoot");
-  if (promptRoot && promptRoot.dataset.actionsBound !== "true") {
-    promptRoot.dataset.actionsBound = "true";
-    promptRoot.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const button = target.closest("[data-action]");
-      if (!button || !promptRoot.contains(button)) return;
-      handleAction(button.dataset.action, button);
-    });
-  }
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    const overlay = $("#workflowModeOverlay");
-    if (overlay && !overlay.hidden && overlay.classList.contains("is-visible")) {
-      const busy = getBusyOverlayState();
-      const elapsedMs = Math.max(0, Date.now() - busyOverlayStartedAt);
-      if (elapsedMs > 2000 || (busy && elapsedMs >= (busy.expectedMs || 3000))) {
-        event.preventDefault();
-        forceDismissStuckOverlay(busy);
-        return;
-      }
-    }
-    if (state.aiPromptOpen) {
-      event.preventDefault();
-      handleAction("close-ai-prompts");
-      return;
-    }
-    if (state.aiConfigOpen) {
-      event.preventDefault();
-      handleAction("close-ai-config");
-      return;
-    }
-  });
-}
-
-bindAiModalsChrome();
+bindMenubarChrome(getChromeCtx());
+bindWorkflowGateChrome(getChromeCtx());
+bindAiModalsChrome(getChromeCtx());
 
 bindOv5aDragAndDrop(getOv5Ctx());
 

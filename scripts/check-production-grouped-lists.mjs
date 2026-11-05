@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const moduleSource = await read("design-studio/src/groupedListTemplate.js");
-const mainSource = await read("design-studio/src/main.js");
+const mainSource = (await read("design-studio/src/main.js"))
+  + (await read("design-studio/src/app/viewScrollFocus.js"));
 const dodafControllerSource = await read("design-studio/src/dodafProductController.js");
 const aiPromptControllerSource = await read("design-studio/src/aiPromptController.js");
 const css = await read("design-studio/styles.css");

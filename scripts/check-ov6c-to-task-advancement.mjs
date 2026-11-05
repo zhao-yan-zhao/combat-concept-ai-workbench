@@ -4,7 +4,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const mainSource = readFileSync(join(root, "design-studio/src/main.js"), "utf8");
+const mainSource = readFileSync(join(root, "design-studio/src/main.js"), "utf8")
+  + readFileSync(join(root, "design-studio/src/app/bindings/workflowActionBindings.js"), "utf8");
 
 // Verify that advance-related-workflow respects stepIntent 'ai'
 assert.ok(
