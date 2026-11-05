@@ -129,4 +129,12 @@
   8. 知识库与远程协同（6个）：协同审查关联, 知识库远程同步等；
   9. DoDAF 综合视图 OV-1~OV-4（13个）：ov1 浮动工具箱/侧边栏, ov1 source picker, 架构一致性评审跳转等。
 - 验证结果：不改动任何业务代码，测试基线保持一致。
-- 遗留问题：无。准备进入步骤 2 & 3（OV-5 事件抽离与 stateActions 试点）。
+- 遗留问题：无。
+
+### 阶段 3 - 步骤 2 & 3（OV-5 抽离与状态收口试点，2026-11-05）：
+- 完成情况：
+  1. 新增 `design-studio/src/app/stateActions.js`，试点落地 `setState`、`setOv5LeftMode`、`selectOv5Activity`、`clearSelection`；
+  2. 抽离 `design-studio/src/app/bindings/ov5Bindings.js`，收纳活动选择/删除、检查器表单保存（saveActivity / saveEdge）、来源挂接（attachOv1SourcesToOv5）、映射质量对齐（applyMappingQualityToOv5）、拖拽重构（bindOv5aDragAndDrop）与动作分发（handleOv5Action）；
+  3. `main.js` 接入 `bindOv5Events(ctx)` 与 `handleOv5Action(action, source, ctx)`，简化并委托检查器事件绑定；按铁律 7 同步维护 `check-ov5-edit-button-fix.mjs` 断言路径。
+- 验证结果：`ov5` 组 6/6 全通，`ui-static` 组 15/18（与基线一致，无退化），定向测试通过。
+- 遗留问题：无。准备进行兵力任务视图（forceMissionBindings）的抽离。

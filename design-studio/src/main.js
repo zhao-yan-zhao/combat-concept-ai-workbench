@@ -49,7 +49,37 @@ import { normalizeForceMissionPlan, persistForceMission } from "./forceMissionSt
 import { normalizePhaseActionConcept, persistPhaseAction } from "./phaseActionStore.js";
 import { normalizeConceptGraphicPlan, persistConceptGraphic } from "./conceptGraphicStore.js";
 
+import { createStateActions } from "./app/stateActions.js";
+import {
+  bindOv5Events,
+  handleOv5Action,
+  bindOv5aDragAndDrop,
+  saveActivity,
+  saveEdge
+} from "./app/bindings/ov5Bindings.js";
+
 const { state, projectBriefSeed, activeProjectId } = createInitialWorkbenchState();
+const stateActions = createStateActions({ state, getModels: () => getModels(), render: (opt) => render(opt), showToast });
+
+function getOv5Ctx() {
+  return {
+    state,
+    stateActions,
+    render,
+    showToast,
+    addEventListenerOnce,
+    $,
+    getModels,
+    select,
+    navigateToResearchView,
+    invalidateDerivedArtifacts,
+    projectOv5SyncController,
+    dodafProductController,
+    ov5AiController,
+    bindOv1SourcePicker,
+    handleAction
+  };
+}
 let busyOverlayTimer = 0;
 let busyOverlayKey = "";
 let busyOverlayStartedAt = 0;
@@ -888,17 +918,7 @@ function bindDynamicEvents() {
     render();
   });
 
-  document.querySelectorAll("[data-activity]").forEach((button) => {
-    addEventListenerOnce(button, "click", (event) => {
-      // 若点击的是卡片内部带 data-action 的独立操作按钮，不触发外层卡片的整体选择
-      if (event.target.closest("[data-action]")) return;
-      select("activity", button.dataset.activity);
-      if (state.activeView === "ov5") {
-        state.ov5LeftMode = "editor";
-        render();
-      }
-    }, "activity:click");
-  });
+  bindOv5Events(getOv5Ctx());
   document.querySelectorAll("[data-ov2-exchange]").forEach((button) => {
     addEventListenerOnce(button, "click", () => {
       const exchangeId = button.dataset.ov2Exchange;
@@ -1112,34 +1132,7 @@ function bindDynamicEvents() {
 }
 
 function bindInspectorEvents() {
-  document.querySelectorAll("[data-inspector-action=delete-activity]").forEach((button) => {
-    addEventListenerOnce(button, "click", () => {
-      const deleted = deleteActivity(state.ov5, state.selection?.id);
-      if (deleted) invalidateDerivedArtifacts();
-      if (deleted) void projectOv5SyncController.sync(state.ov5, { source: "manual" });
-      state.selection = null;
-      showToast(deleted ? "活动及其关联已删除" : "至少保留一个活动节点");
-      render();
-    }, "inspector:delete-activity");
-  });
-  document.querySelectorAll("[data-inspector-action=edit]").forEach((button) => {
-    addEventListenerOnce(button, "click", () => showToast("已将当前节点标记为待修订"), "inspector:edit");
-  });
-  const actForm = $("#ov5ActivityForm");
-  if (actForm) addEventListenerOnce(actForm, "submit", saveActivity, "ov5ActivityForm:submit");
-  const edgeForm = $("#ov5EdgeForm");
-  if (edgeForm) addEventListenerOnce(edgeForm, "submit", saveEdge, "ov5EdgeForm:submit");
-  bindOv1SourcePicker($("#ov5ActivityForm"));
-  document.querySelectorAll("[data-edge-remove]").forEach((button) => {
-    addEventListenerOnce(button, "click", () => {
-      const exists = state.ov5.edges.some((edge) => edge.id === button.dataset.edgeRemove);
-      deleteEdge(state.ov5, button.dataset.edgeRemove);
-      invalidateDerivedArtifacts();
-      if (exists) void projectOv5SyncController.sync(state.ov5, { source: "manual" });
-      showToast("活动关联已移除");
-      render();
-    }, "edge-remove:click");
-  });
+  bindOv5Events(getOv5Ctx());
 }
 
 function bindOv1SourcePicker(form) {
@@ -1213,6 +1206,8 @@ async function handleAction(action, source = null) {
   if (source && source.closest && action !== "close-provenance-popover") {
     source.closest(".derived-provenance-dropdown")?.removeAttribute("open");
   }
+
+  if (handleOv5Action(action, source, getOv5Ctx())) return;
 
   if (action === "switch-ov1-view-mode") {
     const targetMode = source?.dataset?.viewMode || "graph";
@@ -2136,32 +2131,10 @@ function confirmRegenerateWorkflowStep(context) {
     render();
     return;
   }
-  if (action === "continue-to-ov5") {
-    state.activeView = "ov5";
-    state.selection = null;
-    showToast("已进入作战活动模型。可手工维护活动，或使用 AI 生成候选。");
-    render();
-    return;
-  }
-  if (action === "generate-ov5-from-ov1") {
-    state.activeView = "ov5";
-    state.selection = null;
-    render();
-    ov5AiController.handleAction("generate-ov5");
-    return;
-  }
   if (action === "open-structure-review") {
     state.activeView = "structure-review";
     state.selection = null;
     render();
-    return;
-  }
-  if (action === "attach-ov1-sources") {
-    attachOv1SourcesToOv5();
-    return;
-  }
-  if (action === "apply-mapping-quality") {
-    applyMappingQualityToOv5();
     return;
   }
   if (action === "export-structure-review-markdown") {
@@ -2204,15 +2177,6 @@ function confirmRegenerateWorkflowStep(context) {
     saveCurrentReportVersion();
     return;
   }
-  if (action === "add-activity") {
-    const activity = addActivity(state.ov5);
-    invalidateDerivedArtifacts();
-    void projectOv5SyncController.sync(state.ov5, { source: "manual" });
-    state.selection = selectionFor("activity", activity.id, getModels());
-    showToast("已新增活动，请在右侧补充属性");
-    render();
-    return;
-  }
   showToast("已创建概念注释");
 }
 
@@ -2251,61 +2215,6 @@ function jumpFromStructureReview(viewId, targetKind, targetId) {
         ? `已打开 ${meta?.label || viewId}：${chainHint}`
         : `已打开 ${meta?.label || viewId}`
   );
-  render();
-}
-
-function attachOv1SourcesToOv5() {
-  if (!state.ov1?.nodes?.length) {
-    showToast("请先在高层作战概念图定义概念节点，再补挂活动来源");
-    return;
-  }
-  if (!state.ov5?.activities?.length) {
-    showToast("请先建立作战活动");
-    return;
-  }
-  const before = countUnmappedOv5Activities(state.ov5, state.ov1);
-  state.ov5 = linkOv5ActivitiesToOv1(state.ov5, state.ov1);
-  persistOv5Model(state.ov5);
-  const after = countUnmappedOv5Activities(state.ov5, state.ov1);
-  invalidateDerivedArtifacts();
-  void projectOv5SyncController.sync(state.ov5, { source: "ov1-source-link" });
-  const linked = Math.max(0, before - after);
-  showToast(linked || before === 0
-    ? (before === 0 ? "全部活动已具备有效总体图来源" : `已为 ${linked} 个活动补挂总体图来源，请在结构核对台复核`)
-    : "未能自动补挂更多来源，请手工为活动选择总体图节点");
-  if (state.activeView !== "structure-review" && state.activeView !== "ov5") state.activeView = "structure-review";
-  render();
-}
-
-/** Fill blank OV-5 I/O and shallow parent hierarchy; never overwrites authored text. */
-function applyMappingQualityToOv5() {
-  if (!state.ov5?.activities?.length) {
-    showToast("请先建立作战活动");
-    return;
-  }
-  // Sources improve I/O suggestions; keep existing valid links, only fill gaps.
-  if (state.ov1?.nodes?.length) {
-    state.ov5 = linkOv5ActivitiesToOv1(state.ov5, state.ov1);
-  }
-  const result = applyMappingQuality(state.ov5, state.ov1 || {});
-  state.ov5 = result.model;
-  persistOv5Model(state.ov5);
-  invalidateDerivedArtifacts();
-  void projectOv5SyncController.sync(state.ov5, { source: "mapping-quality" });
-  const { ioFromOv1, ioFromEdges, parentsSet, changed } = result.summary;
-  if (!changed) {
-    showToast("没有可自动补全的空字段；已有正文不会被覆盖");
-  } else {
-    const parts = [];
-    if (ioFromOv1) parts.push(`总体图回填 ${ioFromOv1} 处`);
-    if (ioFromEdges) parts.push(`沿边对齐 ${ioFromEdges} 处`);
-    if (parentsSet) parts.push(`父活动 ${parentsSet} 项`);
-    showToast(`已补全映射质量：${parts.join(" · ")}。请在活动模型 / 结构核对台复核`);
-  }
-  if (state.selection?.kind === "activity") {
-    state.selection = selectionFor("activity", state.selection.id, getModels());
-  }
-  if (state.activeView !== "structure-review" && state.activeView !== "ov5") state.activeView = "structure-review";
   render();
 }
 
@@ -4001,50 +3910,6 @@ function renderProjectManagerChrome() {
   });
 }
 
-function saveActivity(event) {
-  event.preventDefault();
-  const formData = new FormData(event.currentTarget);
-  const activity = updateActivity(state.ov5, state.selection.id, {
-    title: (formData.get("title") || "").trim() || "未命名活动",
-    type: (formData.get("type") || "").trim() || "待分类",
-    input: (formData.get("input") || "").trim() || "待定义",
-    output: (formData.get("output") || "").trim() || "待定义",
-    duration: (formData.get("duration") || "").trim() || "待估算",
-    parentId: (formData.get("parentId") || "").trim(),
-    resources: (formData.get("resources") || "").trim(),
-    performer: (formData.get("performer") || "").trim(),
-    domain: (formData.get("domain") || "").trim(),
-    autonomy: (formData.get("autonomy") || "").trim(),
-    timingWindow: (formData.get("timingWindow") || "").trim(),
-    resilienceFallback: (formData.get("resilienceFallback") || "").trim(),
-    preconditions: (formData.get("preconditions") || "").trim(),
-    constraints: (formData.get("constraints") || "").trim(),
-    text: (formData.get("text") || "").trim() || "补充该活动的任务说明。",
-    refs: (formData.get("refs") || "").split(/[、,，]/).map((item) => item.trim()).filter(Boolean),
-    sourceOv1NodeIds: formData.getAll("sourceOv1NodeIds").map((item) => item.trim()).filter(Boolean)
-  });
-  invalidateDerivedArtifacts();
-  void projectOv5SyncController.sync(state.ov5, { source: "manual" });
-  void dodafProductController.syncFromOv5b({ source: "manual" });
-  state.selection = selectionFor("activity", activity.id, getModels());
-  const sourceCount = activity.sourceOv1NodeIds?.length || 0;
-  showToast(sourceCount ? `活动已保存（${sourceCount} 个总体图来源），活动分解关系已同步` : "活动已保存；尚未挂接总体图来源；活动分解关系已同步");
-  render();
-}
-
-function saveEdge(event) {
-  event.preventDefault();
-  const formData = new FormData(event.currentTarget);
-  const edge = addEdge(state.ov5, state.selection.id, formData.get("targetId"), formData.get("type"), {
-    payload: formData.get("payload"),
-    condition: formData.get("condition")
-  });
-  if (edge) invalidateDerivedArtifacts();
-  if (edge) void projectOv5SyncController.sync(state.ov5, { source: "manual" });
-  showToast(edge ? "活动关联已建立" : "该关联已存在或无效");
-  render();
-}
-
 function getModels() {
   return { ov1: state.ov1, ov5: state.ov5, ooda: state.ooda, scenario: state.scenario, validationResult: state.validationResult, knowledge: state.knowledge, knowledgeQuery: state.knowledgeQuery, conceptMap: state.conceptMap };
 }
@@ -4463,69 +4328,7 @@ function bindAiModalsChrome() {
 
 bindAiModalsChrome();
 
-function bindOv5aDragAndDrop() {
-  let draggedActivityId = null;
-
-  document.addEventListener("dragstart", (event) => {
-    const card = event.target?.closest?.('[data-drag-type="ov5a-activity"]');
-    if (!card) return;
-    draggedActivityId = card.dataset.activityId || card.dataset.activity || null;
-    if (event.dataTransfer && draggedActivityId) {
-      event.dataTransfer.setData("text/plain", draggedActivityId);
-      event.dataTransfer.effectAllowed = "move";
-    }
-    card.classList.add("is-drag-source");
-  });
-
-  document.addEventListener("dragend", (event) => {
-    const card = event.target?.closest?.('[data-drag-type="ov5a-activity"]');
-    if (card) card.classList.remove("is-drag-source");
-    document.querySelectorAll(".is-drag-over").forEach((el) => el.classList.remove("is-drag-over"));
-    draggedActivityId = null;
-  });
-
-  document.addEventListener("dragover", (event) => {
-    if (!draggedActivityId) return;
-    const dropTarget = event.target?.closest?.('[data-drop-zone="activity"], [data-drop-zone="root"]');
-    if (!dropTarget) return;
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-  });
-
-  document.addEventListener("dragenter", (event) => {
-    if (!draggedActivityId) return;
-    const dropTarget = event.target?.closest?.('[data-drop-zone="activity"], [data-drop-zone="root"]');
-    if (dropTarget) dropTarget.classList.add("is-drag-over");
-  });
-
-  document.addEventListener("dragleave", (event) => {
-    const dropTarget = event.target?.closest?.('[data-drop-zone="activity"], [data-drop-zone="root"]');
-    if (dropTarget && (!event.relatedTarget || !dropTarget.contains(event.relatedTarget))) {
-      dropTarget.classList.remove("is-drag-over");
-    }
-  });
-
-  document.addEventListener("drop", (event) => {
-    if (!draggedActivityId) return;
-    const dropTarget = event.target?.closest?.('[data-drop-zone="activity"], [data-drop-zone="root"]');
-    if (!dropTarget) return;
-    event.preventDefault();
-    dropTarget.classList.remove("is-drag-over");
-
-    const zoneType = dropTarget.dataset.dropZone;
-    if (zoneType === "root") {
-      handleAction("ov5a-drop-root", { dataset: { childId: draggedActivityId } });
-    } else if (zoneType === "activity") {
-      const parentId = dropTarget.dataset.activityId || dropTarget.dataset.activity;
-      if (parentId && parentId !== draggedActivityId) {
-        handleAction("ov5a-reparent", { dataset: { childId: draggedActivityId, parentId } });
-      }
-    }
-    draggedActivityId = null;
-  });
-}
-
-bindOv5aDragAndDrop();
+bindOv5aDragAndDrop(getOv5Ctx());
 
 if (typeof window !== "undefined") {
   window.__workbench = {

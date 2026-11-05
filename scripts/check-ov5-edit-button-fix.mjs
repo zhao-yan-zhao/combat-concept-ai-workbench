@@ -52,20 +52,22 @@ assert(rendered === true, "Render should be triggered");
 assert(notified && notified.includes("对象判别与分发"), "Toast notification should give immediate feedback");
 console.log("✓ ov5AiController edit-activity 即时反馈与状态流转验证通过");
 
-console.log("=== 3. 验证 main.js 中 addEventListenerOnce 与事件防穿透契约 ===");
+console.log("=== 3. 验证 main.js 与 ov5Bindings.js 中 addEventListenerOnce 与事件防穿透契约 ===");
 const mainContent = fs.readFileSync("design-studio/src/main.js", "utf-8");
+const ov5BindingsContent = fs.readFileSync("design-studio/src/app/bindings/ov5Bindings.js", "utf-8");
+const combinedContent = mainContent + "\n" + ov5BindingsContent;
 assert(
-  mainContent.includes('addEventListenerOnce(button, "click"') && mainContent.includes('"activity:click"'),
-  "main.js must bind [data-activity] with addEventListenerOnce to prevent listener leaks"
+  combinedContent.includes('addEventListenerOnce(button, "click"') && combinedContent.includes('"activity:click"'),
+  "ov5Bindings / main.js must bind [data-activity] with addEventListenerOnce to prevent listener leaks"
 );
 assert(
-  mainContent.includes('event.target.closest("[data-action]")'),
-  "main.js must ignore outer card activity selection when clicking inner data-action controls"
+  combinedContent.includes('event.target.closest("[data-action]")'),
+  "ov5Bindings / main.js must ignore outer card activity selection when clicking inner data-action controls"
 );
 assert(
-  mainContent.includes('button.dataset.stopClickPropagation === "true"'),
+  combinedContent.includes('button.dataset.stopClickPropagation === "true"'),
   "main.js must stop click propagation when stopClickPropagation attribute is present"
 );
-console.log("✓ main.js 事件幂等性与冒泡隔离契约静态验证通过");
+console.log("✓ main.js / ov5Bindings.js 事件幂等性与冒泡隔离契约静态验证通过");
 
 console.log("\n>>> 本次‘编辑按钮无反应与连击卡顿’修复全部验证通过！<<<");
