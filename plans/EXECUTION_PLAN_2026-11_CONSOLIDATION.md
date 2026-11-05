@@ -137,4 +137,12 @@
   2. 抽离 `design-studio/src/app/bindings/ov5Bindings.js`，收纳活动选择/删除、检查器表单保存（saveActivity / saveEdge）、来源挂接（attachOv1SourcesToOv5）、映射质量对齐（applyMappingQualityToOv5）、拖拽重构（bindOv5aDragAndDrop）与动作分发（handleOv5Action）；
   3. `main.js` 接入 `bindOv5Events(ctx)` 与 `handleOv5Action(action, source, ctx)`，简化并委托检查器事件绑定；按铁律 7 同步维护 `check-ov5-edit-button-fix.mjs` 断言路径。
 - 验证结果：`ov5` 组 6/6 全通，`ui-static` 组 15/18（与基线一致，无退化），定向测试通过。
-- 遗留问题：无。准备进行兵力任务视图（forceMissionBindings）的抽离。
+- 遗留问题：无。
+
+### 阶段 3 - 步骤 4（兵力任务视图事件抽离，2026-11-05）：
+- 完成情况：
+  1. 抽离 `design-studio/src/app/bindings/forceMissionBindings.js`，导出 `bindForceMissionEvents` 与 `handleForceMissionAction`；
+  2. 收纳 `[data-unit]` 点击选择事件及 `toggle/close/open-force-mission-chat`、`return-force-mission`、门禁快速确认（任务/兵力）等动作逻辑；
+  3. `main.js` 精简直接事件监听与分支，保留静态断言契约；
+- 验证结果：`force-mission` 组 6/6 全通，`ui-static` 组 15/18（与基线一致，无退化）。
+- 遗留问题：无。准备进行规则库视图（rulesBindings）的抽离。

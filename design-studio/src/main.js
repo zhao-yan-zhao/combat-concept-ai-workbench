@@ -57,6 +57,7 @@ import {
   saveActivity,
   saveEdge
 } from "./app/bindings/ov5Bindings.js";
+import { bindForceMissionEvents, handleForceMissionAction } from "./app/bindings/forceMissionBindings.js";
 
 const { state, projectBriefSeed, activeProjectId } = createInitialWorkbenchState();
 const stateActions = createStateActions({ state, getModels: () => getModels(), render: (opt) => render(opt), showToast });
@@ -1005,9 +1006,7 @@ function bindDynamicEvents() {
   document.querySelectorAll("[data-ooda]").forEach((button) => {
     addEventListenerOnce(button, "click", () => select("ooda", button.dataset.ooda), "ooda:click");
   });
-  document.querySelectorAll("[data-unit]").forEach((button) => {
-    addEventListenerOnce(button, "click", () => select("unit", button.dataset.unit), "unit:click");
-  });
+  bindForceMissionEvents({ select, addEventListenerOnce });
   document.querySelectorAll("[data-validation-issue]").forEach((button) => {
     addEventListenerOnce(button, "click", () => select("issue", button.dataset.validationIssue), "validation-issue:click");
   });
@@ -1208,6 +1207,15 @@ async function handleAction(action, source = null) {
   }
 
   if (handleOv5Action(action, source, getOv5Ctx())) return;
+  if (await handleForceMissionAction(action, source, {
+    state,
+    render,
+    showToast,
+    navigateToResearchView,
+    conceptPlanningController,
+    refreshWorkflowGateUi,
+    dodafProductController
+  })) return;
 
   if (action === "switch-ov1-view-mode") {
     const targetMode = source?.dataset?.viewMode || "graph";
@@ -1281,33 +1289,6 @@ async function handleAction(action, source = null) {
       return;
     }
     state.phaseActionChatOpen = true;
-    render();
-    return;
-  }
-  if (action === "toggle-force-mission-chat") {
-    const hasDraft = (Array.isArray(state.forceMission?.forces) && state.forceMission.forces.length > 0)
-      || (Array.isArray(state.forceMission?.combatForces) && state.forceMission.combatForces.length > 0);
-    if (!hasDraft) {
-      showToast("请先生成兵力与任务草案");
-      return;
-    }
-    state.forceMissionChatOpen = !state.forceMissionChatOpen;
-    render();
-    return;
-  }
-  if (action === "close-force-mission-chat") {
-    state.forceMissionChatOpen = false;
-    render();
-    return;
-  }
-  if (action === "open-force-mission-chat") {
-    const hasDraft = (Array.isArray(state.forceMission?.forces) && state.forceMission.forces.length > 0)
-      || (Array.isArray(state.forceMission?.combatForces) && state.forceMission.combatForces.length > 0);
-    if (!hasDraft) {
-      showToast("请先生成兵力与任务草案");
-      return;
-    }
-    state.forceMissionChatOpen = true;
     render();
     return;
   }
@@ -1575,26 +1556,6 @@ function confirmRegenerateWorkflowStep(context) {
       showToast("已确认阶段与行动");
     } catch (e) {
       showToast(e?.message || "确认阶段与行动失败");
-    }
-    refreshWorkflowGateUi();
-    return;
-  }
-  if (action === "workflow-gate-quick-confirm-operational-tasks") {
-    try {
-      await conceptPlanningController.confirmOperationalTasks();
-      showToast("已确认作战任务");
-    } catch (e) {
-      showToast(e?.message || "确认作战任务失败");
-    }
-    refreshWorkflowGateUi();
-    return;
-  }
-  if (action === "workflow-gate-quick-confirm-force-mission") {
-    try {
-      await conceptPlanningController.confirmForceMission();
-      showToast("已确认作战兵力");
-    } catch (e) {
-      showToast(e?.message || "确认作战兵力失败");
     }
     refreshWorkflowGateUi();
     return;
@@ -1905,10 +1866,6 @@ function confirmRegenerateWorkflowStep(context) {
       await dodafProductController.saveProduct("ov3");
       await navigateToResearchView("force-mission", { toast: "已保存资源流矩阵 (OV-3)，返回作战兵力", entrySource: "ov3" });
     })();
-    return;
-  }
-  if (action === "return-force-mission") {
-    void navigateToResearchView("force-mission", { toast: "返回作战兵力" });
     return;
   }
   if (action === "toggle-ov1b-edit") {
