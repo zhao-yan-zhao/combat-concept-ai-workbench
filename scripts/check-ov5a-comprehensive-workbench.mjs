@@ -4,7 +4,9 @@ import {
   applyTemplateToActivity,
   applyGlobalTemplate,
   generateLocalDecomposition,
-  autoOrganizeOv5aHierarchy
+  autoOrganizeOv5aHierarchy,
+  evaluateOv5aDecompositionIoCoverage,
+  exportOv5aWbsText
 } from "../design-studio/src/ov5aTemplates.js";
 import { renderOv5a } from "../design-studio/src/dodafOperationalViews.js";
 import { normalizeDodafOv5, normalizeDodafOv5a } from "../shared/dodaf/products.js";
@@ -115,6 +117,12 @@ assert(renderedHtml.includes("ov5a-inspector-drawer"), "Activity Inspector drawe
 assert(renderedHtml.includes("ov5a-drawer-title"), "Inspector drawer title missing");
 assert(renderedHtml.includes("💾 保存活动变更"), "Save button in inspector missing");
 assert(renderedHtml.includes("🤖 AI 细化分解"), "AI decompose button in inspector missing");
+assert(renderedHtml.includes("ov5a-export-wbs-csv"), "Export CSV action button missing");
+assert(renderedHtml.includes("ov5a-export-wbs-md"), "Export Markdown action button missing");
+assert(renderedHtml.includes("ov5a-export-diagram-svg"), "Export Diagram action button missing");
+assert(renderedHtml.includes("data-drag-type=\"ov5a-activity\""), "Card draggable attribute missing");
+assert(renderedHtml.includes("data-drop-zone=\"root\""), "Root drop zone missing");
+assert(renderedHtml.includes("I/O 契约守恒率"), "I/O conservation metric chip missing");
 
 // 7. Verify Modal Dialogs Rendering
 const stateWithAddModal = {
@@ -138,5 +146,20 @@ assert(tplModalHtml.includes("ov5a-template-card"), "Template cards missing");
 assert(tplModalHtml.includes("F2T2EA 经典杀伤链范式"), "F2T2EA template card missing");
 assert(tplModalHtml.includes("OODA 循环决策与行动范式"), "OODA template card missing");
 console.log("✓ View rendering, filtering, Inspector drawer & Modals verified");
+
+// 8. Verify DoDAF 2.02 / DM2 Activity I/O Conservation Analysis
+const ioCoverage = evaluateOv5aDecompositionIoCoverage(childInjectionResult.nextOv5.activities, childInjectionResult.nextOv5a.decompositions);
+assert(typeof ioCoverage.stats.ioHealthScore === "number", "ioHealthScore should be a number");
+assert(ioCoverage.stats.parentCount > 0, `parentCount should be greater than 0, got ${ioCoverage.stats.parentCount}`);
+assert(ioCoverage.statusMap instanceof Map, "statusMap should be a Map");
+console.log(`✓ DoDAF I/O conservation verified (Health score: ${ioCoverage.stats.ioHealthScore}%, Parent count: ${ioCoverage.stats.parentCount})`);
+
+// 9. Verify WBS Text & Structure Exporters (CSV & Markdown)
+const csvExport = exportOv5aWbsText(childInjectionResult.nextOv5.activities, childInjectionResult.nextOv5a.decompositions, "csv");
+assert(csvExport.includes("WBS编码") && csvExport.includes("作战活动名称") && csvExport.includes("1.0"), "CSV export missing standard headers or root code");
+
+const mdExport = exportOv5aWbsText(childInjectionResult.nextOv5.activities, childInjectionResult.nextOv5a.decompositions, "md");
+assert(mdExport.includes("| WBS编码 |") && mdExport.includes("| 1.0 |"), "Markdown export missing table header or rows");
+console.log("✓ WBS text & table exporters verified (CSV & Markdown format complete)");
 
 console.log("All OV-5a Comprehensive Workbench checks passed successfully!");

@@ -2,15 +2,16 @@ import { resolveTargetOrigin } from "./deploymentBridgeStore.js";
 import { getScenarioFreshness } from "./scenarioStore.js";
 
 export function renderDeploymentIntegration(state) {
-  const settings = state.deployment.settings;
+  const deployment = state.deployment || { settings: { targetUrl: "" }, status: "idle", open: false };
+  const settings = deployment.settings || { targetUrl: "" };
   const targetOrigin = resolveTargetOrigin(settings.targetUrl);
   const freshness = getScenarioFreshness(state.scenario, state.ov5, state.ooda);
   const scenarioStale = Boolean(state.scenario && freshness.stale);
   const canOpen = Boolean(targetOrigin && state.scenario && !scenarioStale);
-  const canPush = Boolean(state.deployment.open && targetOrigin && state.scenario && !scenarioStale);
+  const canPush = Boolean(deployment.open && targetOrigin && state.scenario && !scenarioStale);
   const status = scenarioStale
     ? "想定已过期，已禁用推送"
-    : (state.deployment.status || (state.deployment.open ? "已连接" : "待推送"));
+    : (deployment.status || (deployment.open ? "已连接" : "待推送"));
   const statusClass = status.startsWith("已") && !scenarioStale ? "" : "review";
   return `
     <section class="surface surface-pad deployment-integration ${scenarioStale ? "is-stale" : ""}">
@@ -21,7 +22,7 @@ export function renderDeploymentIntegration(state) {
         <div class="deployment-bridge-actions"><button type="submit" class="quiet-button">保存地址</button><button type="button" data-action="open-deployment" ${canOpen ? "" : "disabled"} title="${scenarioStale ? "想定过期，请先重新生成" : ""}">打开部署图</button><button type="button" class="quiet-button" data-action="push-deployment" ${canPush ? "" : "disabled"} title="${scenarioStale ? "想定过期，请先重新生成" : ""}">重新推送</button></div>
       </form>
       <p class="deployment-origin">目标来源：${escapeHtml(targetOrigin || "地址无效")}${scenarioStale ? " · 推送已锁定" : ""}</p>
-      ${state.deployment.open && targetOrigin && !scenarioStale ? `<iframe id="deploymentFrame" class="deployment-frame" src="${escapeAttribute(settings.targetUrl)}" title="部署图工具"></iframe>` : ""}
+      ${deployment.open && targetOrigin && !scenarioStale ? `<iframe id="deploymentFrame" class="deployment-frame" src="${escapeAttribute(settings.targetUrl)}" title="部署图工具"></iframe>` : ""}
     </section>
   `;
 }

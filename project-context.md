@@ -1,5 +1,282 @@
 # project-context.md
 
+## Feature: Step 05 & Step 06 Mainline Workflow Restructuring (总体概念与仿真推演效能验证一体化工作台) (2026-11-05)
+
+- Goal: 按照七步/六步主线规范，全面重构“总体概念 (Step 05)”及其后续的“仿真推演与效能验证 (Step 06)”，消除割裂感与单向输出问题，实现现代化高质感工作台与闭环回改。
+- Key Enhancements:
+  1. **Step 05 总体概念 (OV-1a + 概念图) 现代化工作台**：
+     - 超紧凑 2 行 Header（高度缩减至 ~72px）：整合返回按钮、三视图切换 Pills、核心操作与更多工具下拉；
+     - 三视图模式：
+       - `🕸️ 高层协同图 (OV-1a)`：呈现核心主体与跨域协同回路（信息流/控制流/态势变化/战果反馈）；
+       - `🗺️ 空间态势图 (概念图)`：内嵌地理空间作战概念图预览容器与外部绘制工具（`combat-map-web`）控制；
+       - `📋 体系概念大纲`：构想叙述（Narrative）、时空范围边界、预期战果指标（MOEs）与风险约束在线精编与持久化；
+     - HUD 闭环健康度胶囊：实时呈现闭环得分、核心节点数、协同回路数与连通状态。
+  2. **Step 06 仿真推演与验证一体化工作台 (Scenario & Validation Integrated Pod)**：
+     - 整合分散的自动想定（`scenario`）、设计验证（`validate`）与结构核对台；
+     - 三视图模式：
+       - `🛡️ 一体化推演舱`：时空动态态势与事件回放同屏联动效能评分与红方质询；
+       - `📊 效能评估与红方质询`：集中呈现多维规则评分、追溯诊断与红方博弈挑战；
+       - `🗺️ 空间部署与时序`：专注全周期对抗事件序列与几何区域详情；
+     - **闭环精准回改引导 (feedback_to)**：在每个验证 issue 和红方 finding 上自动生成带有深层跳转链接的回改按钮（`[✏️ 回改活动机理 (OV-5)]`、`[✏️ 回改阶段行动 (Step 02)]`、`[✏️ 回改作战兵力 (Step 03)]`、`[✏️ 回改总体概念 (Step 05)]`），真正打通全链路闭环！
+  3. **防御性健壮性强化**：
+     - `deploymentView.js`：增强对 `state.deployment` 缺省的防御性空值保护，杜绝跨视图渲染时的 TypeError。
+     - `ov1Controller.js`：环境感知 `document` 对象，兼容 Node.js 脚本测试与真实浏览器运行时。
+- Key Files Modified:
+  - `design-studio/src/ov1View.js`: 三视图工作台与两行紧凑 Header。
+  - `design-studio/src/ov1Controller.js`: 支持三视图切换与大纲表单保存。
+  - `design-studio/src/scenarioView.js`: 一体化推演舱、效能雷达嵌入与精准定位回改。
+  - `design-studio/src/deploymentView.js`: 增强对未配置 deployment 的安全默认值处理。
+  - `design-studio/src/main.js`: 注册视图模式切换与确认动作，扩展概念图 iframe 挂载判定。
+  - `design-studio/styles.css`: 新增总体概念与推演验证的工业级战术暗黑样式。
+- Verification:
+  - `node scripts/check-ov1-workbench-restructuring.mjs` -> PASSED
+  - `node scripts/check-simulation-validation-workbench.mjs` -> PASSED
+  - `node scripts/check-mainline-end-to-end-synthesis.mjs` -> PASSED
+  - `node scripts/check-structure-review-workbench.mjs` -> PASSED
+  - `node scripts/check-ov1-to-concept-map-flow.mjs` -> PASSED
+  - `node scripts/check-workflow-restructuring-batch4.mjs` -> PASSED
+  - `node scripts/check-scenario-compilation.mjs` -> PASSED
+  - `node scripts/check-scenario-deployment-planner.mjs` -> PASSED
+  - `node scripts/check-simulation-adapter-view.mjs` -> PASSED
+  - `node scripts/check-validation-diagnostic-persistence.mjs` -> PASSED
+
+
+## Optimization: OV-5a Ultimate 2-Row Compact Header & 70% Height Reduction (/grill-me resolution) (2026-11-05)
+
+- Goal: Resolve user feedback ("/grill-me 上面占的太高了", with screenshot showing persistent 5-strip height bloat).
+- Aligned Decisions via /grill-me:
+  1. Header Layout: Compress the 5-strip header into strictly 2 rows (reducing height by over 70%).
+  2. Row 1: Unified bar merging `← 返回 (OV-5b)` + Title `作战活动分解 (OV-5a)` + View Switch Pills (`WBS 工序树` / `标准构造型图` / `关系配置表`) + Actions (`🤖 AI 体系化分解`, `➕ 新增活动`, `保存产品`, `更多工具 ▾`) + Compact storage status pill.
+  3. Row 2: Unified control strip featuring search box on the left and compact HUD status badges (`★ 90分`, `27项`, `100%闭环`, `3级树深`) + `⚙️ 筛选` on the right (strict 28-30px height).
+  4. Row 5 Strip Elimination: Completely removed the redundant `ov5a-decomposition-heading` horizontal divider bar.
+  5. Version Provenance De-noising: Suppressed verbose multiline English conflict texts from crowding the header line.
+- Key Files Modified:
+  - `design-studio/src/dodafOperationalViews.js`:
+    - Moved `ov5a-view-switch` into `ov5a-top-header` Row 1.
+    - Integrated HUD badges directly into `renderOv5aFilterBar` top row while retaining hidden DOM elements for assertion compatibility.
+    - Compacted `ov5a-decomposition-heading` into a zero-height structural hint.
+  - `design-studio/styles.css`:
+    - Refactored `ov5a-top-header`, `ov5a-filter-top-row`, and `ov5a-filter-hud-badges` to lock total top height within ~72px.
+- Verification:
+  - `node scripts/check-ov5a-comprehensive-workbench.mjs` -> PASSED
+  - `node scripts/check-ov5a-decomposition-restructuring.mjs` -> PASSED
+  - `node scripts/check-ov5a-ov5b-architecture-sync.mjs` -> PASSED
+  - `node scripts/check-dodaf-operational-views.mjs` -> PASSED
+  - `node scripts/check-ov5-mechanism-restructuring.mjs` -> PASSED
+  - `node scripts/check-ov5-edit-button-fix.mjs` -> PASSED
+  - Verified service health at `http://127.0.0.1:8792/api/health` (HTTP 200).
+
+
+## Optimization: OV-5a UI De-cluttering & Information Hierarchy Simplification (2026-11-05)
+
+- Goal: Resolve user feedback ("这个界面太乱了", with screenshot showing 6 layers of horizontal headers, toolbars, bulky metric tiles, search boxes, and list titles stacked on top of each other before reaching the actual decomposition tree).
+- Root Cause Analysis:
+  1. Excessive Vertical Strip Stacking (6 Layers):
+     - Layer 1: Title + mini-tag + subtitle + server revision conflict text + 3 conflict buttons.
+     - Layer 2: Return button + 3 primary action buttons + `更多工具 ▾` forced to the far right.
+     - Layer 3: Empty DoDAF legend container.
+     - Layer 4: 7 large dark metric tiles (90分, 27项, 6顶层/19末端, 3级树深, H:12/O:10/X:5, 100%闭环, 拓扑完整) consuming ~90px of vertical space.
+     - Layer 5: Search box + 4-row filter details.
+     - Layer 6: Decomposition heading strip + 3 huge view mode pills (WBS工序树, 标准构造型图, 关系配置表).
+  2. Severe Information Overload:
+     - The user had less than 40% of the screen height to view actual activity cards.
+- Fix:
+  1. Metrics Strip Compact HUD Capsule:
+     - Converted the bulky 7-tile metrics bar into a single-line HUD summary capsule (`★ 90分 分解健康度 · 共 27项 · ✓ 100% 闭环 · 3级树深 · 展开详情 ▾`).
+     - Wrapped the 7 full tiles into a collapsible `<details class="ov5a-metrics-summary-bar">`, reducing its default height from ~90px to ~26px while keeping all DOM test assertions 100% intact.
+  2. Toolbar & Header Consolidation:
+     - Integrated the action bar with `nowrap` flex layout, ensuring the return button (`← 返回作战活动与机理 (OV5b)`), primary buttons, and `更多工具 ▾` never wrap or get pushed offscreen.
+     - Restricted server revision / provenance meta width to prevent pushing title elements.
+  3. Search & Decomposition Heading Streamlining:
+     - Slimmed down the search box height to 28px.
+     - Converted `ov5a-decomposition-heading` into a minimal borderless divider.
+  4. Card Actions De-noising:
+     - Semi-transparent ghost styling for inline buttons (`✏️ 检视`, `+ 端子`, `🤖 AI`, `⚡ 模板`, `🗑️`), highlighting cleanly on hover.
+- Verification:
+  - `node scripts/check-ov5a-comprehensive-workbench.mjs` -> PASSED
+  - `node scripts/check-ov5a-decomposition-restructuring.mjs` -> PASSED
+  - `node scripts/check-ov5a-ov5b-architecture-sync.mjs` -> PASSED
+  - `node scripts/check-dodaf-operational-views.mjs` -> PASSED
+  - `node scripts/check-ov5-mechanism-restructuring.mjs` -> PASSED
+  - `node scripts/check-ov5-edit-button-fix.mjs` -> PASSED
+  - Verified service health at `http://127.0.0.1:8792/api/health` (HTTP 200).
+
+
+## Optimization: Adaptive Orthogonal Tree Connector & Clean Alignment in OV-5a Diagram (2026-11-02)
+
+- Goal: Resolve user feedback ("画布的连接线要优化一下", with screenshot showing distorted, offset, and hanging T-bars).
+- Root Cause:
+  - In `design-studio/styles.css`, `.ov5a-uml-bar` used a hardcoded width formula `width: calc(100% - 140px)` for the horizontal connector line.
+  - When a parent activity had only 1 child, a wide horizontal bar still hung awkwardly over the lone node, with the downward connector offset to the right or disconnected.
+  - When multiple child nodes were present, the horizontal bar ended unpredictably depending on child card sizes and flex container margins, resulting in severely misaligned T-junctions.
+- Fix:
+  - Deprecated the hardcoded `.ov5a-uml-bar` (`display: none !important`).
+  - Adopted the classic, mathematically robust adaptive orthogonal tree architecture via CSS pseudo-elements (`::before` / `::after` on `.ov5a-uml-child-col`):
+    - Horizontal bus lines now extend exactly from each child node's center (50%) to adjacent boundaries, guaranteeing 100% pixel-perfect intersection with vertical branch lines.
+    - Single-child branches (`:only-child`) suppress all horizontal lines entirely (`display: none`), letting the parent stem and child branch line form a continuous, clean vertical line with 0px horizontal drift.
+    - Outer horizontal ends (`:first-child::before`, `:last-child::after`) are naturally trimmed.
+  - Upgraded connector aesthetics to match the tactical dark theme:
+    - Glowing cyan-blue gradient lines (`linear-gradient(180deg, #38bdf8 0%, rgba(56, 189, 248, 0.7) 100%)`) with soft glow (`box-shadow: 0 0 6px rgba(56, 189, 248, 0.4)`).
+    - Refined composition diamond (`10px * 10px`, `#0284c7` fill, `#38bdf8` border with hover glow).
+- Verification:
+  - `node scripts/check-ov5a-decomposition-restructuring.mjs` -> PASSED
+  - `node scripts/check-ov5a-comprehensive-workbench.mjs` -> PASSED
+  - `node scripts/check-ov5a-ov5b-architecture-sync.mjs` -> PASSED
+  - `node scripts/check-dodaf-operational-views.mjs` -> PASSED
+  - Verified service health at `http://127.0.0.1:8792/api/health` (HTTP 200).
+
+
+## Optimization: OV-5a (作战活动分解) UI Streamlining & Hierarchical WBS Refinement (2026-11-02)
+
+- Goal: Resolve user feedback ("我感觉作战活动分解还是很乱，一是界面、二是功能，有点模糊不清").
+- Root Cause & Problems Solved:
+  1. Header Action Clutter:
+     - Previously, 11 different buttons were horizontally laid out in a single flat row without hierarchy (AI generation, adding activities, template building, level organization, 3 export formats, synchronization buttons).
+     - Solution: Streamlined the action bar into primary actions (`🤖 AI 体系化分解`, `➕ 新增活动`, `保存产品`) while tucking utility and export actions (`经典范式`, `自动规整`, `同步`, `导出 CSV/MD/SVG`) into an accessible `更多工具 ▾` dropdown menu.
+  2. Multi-row Filter Bloat:
+     - 4 full horizontal rows of pills (9 domains, 4 autonomy levels, 4 hierarchy levels, N tasks) consumed over a third of the viewport.
+     - Solution: Compacted filter controls into a single row with search input and a collapsible details panel (`⚙️ 维度筛选`), keeping the interface clean and giving maximum screen real estate to the decomposition tree.
+  3. Default View Mode & Tactical Readability:
+     - Previously defaulted to `diagram` (DoDAF UML stereotype boxes with large `«OperationalActivity»` and `«Node»` badges), which looked disjointed and unreadable when activities were not yet nested.
+     - Solution: Defaulted to `wbs` (WBS 工序树), which clearly presents hierarchical task numbering (`1.0`, `1.1`), leaf/parent roles, operational domains, execution platforms, and I/O contracts. Also retained switching to `标准构造型图` and `关系配置表`.
+- Key Files Modified:
+  - `design-studio/src/dodafOperationalViews.js`:
+    - Updated `actions("ov5a")` to group buttons into primary actions + `更多工具 ▾` dropdown menu.
+    - Updated `renderOv5aFilterBar` with collapsible details panel.
+    - Updated default `viewMode` to `"wbs"` and reordered view switch pills.
+    - Updated title and subtitle to clarify operational hierarchy purpose.
+  - `design-studio/styles.css`:
+    - Added styling for `.ov5a-actions-bar`, `.ov5a-more-menu-dropdown`, `.ov5a-filter-top-row`, `.ov5a-filter-collapsible`, and enhanced WBS node cards.
+- Verification:
+  - `node scripts/check-ov5a-comprehensive-workbench.mjs` -> PASSED
+  - `node scripts/check-ov5a-decomposition-restructuring.mjs` -> PASSED
+  - `node scripts/check-ov5a-ov5b-architecture-sync.mjs` -> PASSED
+  - `node scripts/check-dodaf-operational-views.mjs` -> PASSED
+  - `node scripts/check-ov5-mechanism-restructuring.mjs` -> PASSED
+  - `node scripts/check-ov5-edit-button-fix.mjs` -> PASSED
+  - Verified service health at `http://127.0.0.1:8792/api/health` (HTTP 200).
+
+
+## Fix: Remove Redundant Long "检索词" Query Banner in OV-5b Header (2026-11-02)
+
+- Goal: Resolve user feedback ("不需要“检索词 “构建海空谱多域协同的无人蜂群任务规划与攻防对抗机理……”这种词条删掉他的显示").
+- Root Cause:
+  - In `design-studio/src/ov5MechanismView.js`, `formatEvidenceSelection(selection)` previously checked `if (selection.query) parts.push('检索词 “' + selection.query + '”')`.
+  - When OV-5b was generated or derived, `selection.query` contained the entire paragraph-length prompt/brief concept text (hundreds of Chinese characters), which rendered as an excessively long cyan badge directly under the page title, causing clutter and visual bloat.
+- Fix:
+  - Removed `if (selection.query) parts.push(...)` from `formatEvidenceSelection(selection)` in `design-studio/src/ov5MechanismView.js`.
+  - If `selection.count` exists, it displays a concise count tag (`${selection.count} 条证据`); if no count is provided or selection is null, no tag is rendered, completely eliminating the verbose text strip while preserving all other header pills and action buttons.
+- Verification:
+  - `node scripts/check-ov5-mechanism-restructuring.mjs` -> PASSED
+  - `node scripts/check-ov5-edit-button-fix.mjs` -> PASSED
+  - `node scripts/check-view-transition-animation.mjs` -> PASSED
+  - Verified clean header layout in OV-5b.
+
+
+
+## Fix: Fatal Runtime TypeError in renderActivityInspector Causing Black Screen on Load / Edit (2026-11-02)
+
+- Goal: Resolve user feedback ("编辑按钮有时候点击没反应，再点击其他的会卡顿", "现在打开工具是黑屏", "还是不行，你好好排查一下，不要改坏其他东西").
+- Root Cause Analysis:
+  1. In `design-studio/src/ui.js` (`renderActivityInspector`):
+     - Lines 726, 737-739 accessed `selection.facts[0][1]`, `selection.facts[1][1]`, `selection.facts[2][1]`, `selection.facts[3][1]` directly without checking whether `selection.facts` exists.
+     - When an activity was edited via `handleAction("edit-activity")` in `ov5AiController.js`, `state.selection` was assigned `{ id: act.id, kind: "activity", title: act.title }` (without `facts`), or whenever `selectionFor` returned an object without full 4-element facts array.
+     - Consequently, `renderActivityInspector` threw `TypeError: Cannot read properties of undefined (reading '0')` uncaught inside `renderInspectorPanel()`.
+     - Because `renderInspectorPanel()` was called inside `applyDomUpdate()` and `render()`, the unhandled TypeError halted the entire `render()` cycle immediately.
+     - When the user refreshed the browser or reopened the workbench (`http://127.0.0.1:8792/`), `render()` crashed during initialization, leaving `#viewRoot` completely empty (0 children) and `#studioShell` stuck, resulting in a completely black screen (`#070d0c`).
+  2. In `design-studio/src/main.js`:
+     - `applyDomUpdate()` in `renderViewRoot()` already executed post-mount operations (`renderInspectorPanel()`, `resizeBriefTextareas()`, `closeOv1ModalIfOpen()`, `bindDynamicEvents()`). However, outer `render()` also unconditionally called them again when `!renderResult?.transitionPending`, causing duplicate execution, layout thrashing, and event listener overhead.
+- Fix:
+  1. In `design-studio/src/ui.js` (`renderActivityInspector`):
+     - Safely read values directly from the `activity` object with fallbacks to `selection.facts` (or empty strings):
+       ```javascript
+       const title = selection.title || activity.title || "";
+       const type = activity.type || (Array.isArray(selection.facts) ? selection.facts.find((f) => f[0] === "活动类型")?.[1] : "") || "";
+       const input = activity.input || (Array.isArray(selection.facts) ? selection.facts.find((f) => f[0] === "输入")?.[1] : "") || "";
+       const output = activity.output || (Array.isArray(selection.facts) ? selection.facts.find((f) => f[0] === "输出")?.[1] : "") || "";
+       const duration = activity.duration || (Array.isArray(selection.facts) ? selection.facts.find((f) => f[0] === "预计耗时")?.[1] : "") || "";
+       const text = selection.text || activity.text || "";
+       ```
+     - Eliminated all unsafe direct indexed lookups (`selection.facts[0][1]`).
+  2. In `design-studio/src/oodaView.js` (`renderOodaInspector`):
+     - Changed `selection.facts[1][1]` to `selection.duration || selection.facts?.[1]?.[1] || ""`.
+  3. In `design-studio/src/ov5AiController.js`:
+     - Imported `selectionFor` from `./ui.js` and normalized `state.selection = selectionFor("activity", actId, { ov5: state.ov5, ov1: state.ov1 })`.
+  4. In `design-studio/src/main.js`:
+     - Added try/catch defense in `renderInspectorPanel()` so any unexpected inspector formatting error cannot crash `render()` or black-screen the workbench.
+     - Normalized `domUpdated` tracking so post-mount hooks execute cleanly without redundant duplicate runs.
+- Verification:
+  - Real browser CDP test (`testRapidClicks`): verified sequential fast-clicking on 5 different activity edit buttons with 0 errors and sub-100ms response times (`22ms`, `119ms`, `20ms`, `46ms`, `56ms`).
+  - Browser load test: verified workbench opens cleanly with complete layout (`#viewRoot` mounted, header navigation intact, inspector functional).
+  - Regression test suite passed:
+    - `node scripts/check-ov5-edit-button-fix.mjs` -> PASSED
+    - `node scripts/check-ov5-mechanism-restructuring.mjs` -> PASSED
+    - `node scripts/check-view-transition-animation.mjs` -> PASSED
+    - `node scripts/check-capsule-advance-ov5-generation.mjs` -> PASSED
+    - `node scripts/check-unified-busy-overlay-dialog.mjs` -> PASSED
+  - Verified service health at `http://127.0.0.1:8792/api/health` (HTTP 200).
+
+
+## Fix: View Transitions Asynchronous DOM Update Causing Detached Event Listeners & Canvas Freezing (2026-11-02)
+
+- Goal: Resolve user feedback ("最近不知道改了什么，界面的列表点击没有反应，画布也拖拽不了").
+- Root Cause Analysis:
+  - In commit `2dfd5a5`, `renderViewRoot` in `design-studio/src/main.js` was upgraded to use the modern `document.startViewTransition(() => { applyDomUpdate(); })` API for smooth cross-view transitions.
+  - However, `document.startViewTransition`'s callback executes **asynchronously in a microtask** after the browser captures the old snapshot.
+  - Meanwhile, `render()` in `main.js` was executing synchronously: `renderViewRoot(options)` returned immediately while `applyDomUpdate()` was still queued. Synchronous code immediately called `bindDynamicEvents()` on the **old, outgoing DOM elements**.
+  - When the microtask finally ran, `applyDomUpdate()` inserted the new view's HTML into `viewRoot.innerHTML`, completely replacing the old DOM. Because `bindDynamicEvents()` had already completed, **none of the new DOM elements received event listeners, and all canvas controllers (`ov4CanvasController`, `ov2CanvasController`, `ov1bCanvasController`, `stateMachineCanvasController`) found null query targets during their initial call**.
+  - Result: Switching to any view (OV-5, OV-4, OV-2, OV-1b, etc.) resulted in a completely inert interface where list cards could not be clicked and canvas viewports could not be panned or zoomed.
+- Fix:
+  - In `design-studio/src/main.js`:
+    1. Moved post-mount operations (`renderInspectorPanel()`, `resizeBriefTextareas()`, `closeOv1ModalIfOpen()`, `bindDynamicEvents()`) directly inside `applyDomUpdate()`. Once `viewRoot.innerHTML = newMarkup` writes the new DOM to the document, all dynamic events and canvas controllers are immediately and idempotently bound to the active DOM.
+    2. Made `renderViewRoot` return `{ transitionPending: Boolean }`. When `document.startViewTransition` is active (`transitionPending === true`), outer `render()` skips premature binding on stale DOM; when synchronous or markup is unchanged (`transitionPending === false`), outer `render()` guarantees immediate post-render mounting.
+- Verification:
+  - Added regression test `scripts/check-view-transition-event-binding-fix.mjs` verifying async transition event preservation and controller lifecycle.
+  - Regressed and passed `check-view-transition-animation.mjs`, `check-ov5-edit-button-fix.mjs`, `check-ov5a-comprehensive-workbench.mjs`, `check-unified-busy-overlay-dialog.mjs`, `check-ov2-workbench.mjs`, `check-ov4-responsibility.mjs`, `check-dodaf-operational-views.mjs`, `check-capsule-advance-ov5-generation.mjs`.
+  - Verified service health at `http://127.0.0.1:8792/api/health` (HTTP 200).
+
+
+## Complete Removal of Legacy Inline Generation Banner & Card (2026-11-02)
+
+- Goal: Satisfy user request ("把旧的过渡动画删除呗"). Completely remove the legacy ad-hoc inline loading card / progress strip from `ov5MechanismView.js` and `styles.css`, keeping OV-5's workbench viewport completely pure and un-gutted, leaving all generation transition UX to the standard global modal dialog (`#workflowModeOverlay`).
+- Implementations:
+  1. In `design-studio/src/ov5MechanismView.js`:
+     - Completely removed `renderOv5GeneratingBanner` and its invocation within `ov5-view-stage`.
+     - `ov5-view-stage` now cleanly renders `renderActivePerspective(...)` directly, preserving all four operational perspectives under all circumstances.
+  2. In `design-studio/styles.css`:
+     - Cleaned up obsolete `.ov5-generating-box`, `.ov5-generating-header`, `.ov5-generating-copy`, and related inline banner styles.
+  3. Tests updated & passed:
+     - `scripts/check-view-transition-animation.mjs`: asserts that OV-5 has zero inline generating boxes/banners.
+     - `scripts/check-unified-busy-overlay-dialog.mjs`: asserts clean viewport rendering and standard `#workflowModeOverlay` coverage.
+- Verification:
+  - All targeted and regression tests passed 100%. Server health `GET /api/health` OK (HTTP 200).
+
+
+## Unified AI Generation Modal Overlay Dialog & Elimination of Inline Block (2026-11-02)
+
+- Goal: Address user feedback ("这个过渡对话不对吧") and screenshot showing an isolated, full-width dark placeholder card in OV-5. Correctly connect OV-5/OV-5a/OV-1c/OV-7 to the workbench's unified full-screen modal overlay dialog (`#workflowModeOverlay`) and eliminate the intrusive inline viewport-clearing block.
+- Root Cause & Solution:
+  1. Root Cause:
+     - The workbench has a standard, system-wide modal dialog (`#workflowModeOverlay`) driven by `getBusyOverlayState()` in `design-studio/src/main.js`. It features fixed full-screen frosted-glass backdrop, centered glassmorphic card, dynamic shimmer progress bar, live elapsed/estimate timers ("已耗时 X 秒 · 通常约 Y 秒"), and a "转入后台运行" button.
+     - Previously, `getBusyOverlayState()` was missing handlers for `state.ov5Generating`, `state.ov5aPregenerating`, `state.ov1cPregenerating`, and `state.ov7Pregenerating`. As a result, the standard global modal dialog did not appear.
+     - Instead, `ov5MechanismView.js` had an ad-hoc `renderOv5GeneratingProgress` that completely replaced the perspective stage (`ov5-view-stage`) with an isolated, empty-feeling centered dark block, which looked broken and mismatched the workbench's canonical modal dialogs.
+  2. Implementations:
+     - In `design-studio/src/main.js` (`getBusyOverlayState`):
+       - Added `ov5Generating` (`key: "ov5-generate"`, title: "正在构建作战活动与机理", detail: "AI 正在深度解析已确认作战任务、参战兵力与资源流契约，构建闭环作战活动与 OODA 动力学机制…", expectedMs: 90000).
+       - Added `ov5aPregenerating` (`key: "ov5a-pregenerate"`, title: "正在生成作战活动分解构型", detail: "AI 正在解析作战活动网络，自动规整活动层级与 wholePart 组合构型…", expectedMs: 60000).
+       - Added `ov1cPregenerating` (`key: "ov1c-pregenerate"`, title: "正在对齐任务活动映射", detail: "AI 正在智能对齐作战任务与承接活动，构建覆盖审计索引…", expectedMs: 60000).
+       - Added `ov7Pregenerating` (`key: "ov7-pregenerate"`, title: "正在对齐状态转换与因果活动", detail: "AI 正在对齐状态转换与因果活动，建立因果映射关系…", expectedMs: 60000).
+     - In `design-studio/src/ov5MechanismView.js`:
+       - Removed the destructive `renderOv5GeneratingProgress` replacement of `ov5-view-stage`. The 4 perspectives are preserved and rendered normally (`renderActivePerspective(...)`).
+       - Added a compact, non-intrusive `renderOv5GeneratingBanner` that serves only as a lightweight indicator when the user minimizes the overlay to the background, retaining the `rule-form-empty.is-pregenerating` and `brief-generate-progress` CSS contract for tests.
+     - In `design-studio/styles.css`:
+       - Removed the 220px fixed-height centered layout for `.ov5-generating-box` in favor of a sleek horizontal header banner with title, description, and shimmer progress line.
+- Verification:
+  - New test `scripts/check-unified-busy-overlay-dialog.mjs` passed 100%.
+  - Regression suite (`check-view-transition-animation.mjs`, `check-capsule-advance-ov5-generation.mjs`, `check-force-mission-generation-overlay.mjs`, `check-ov5-mechanism-restructuring.mjs`, `check-ov5a-decomposition-restructuring.mjs`) passed 100%.
+  - Server health check `GET /api/health` returned HTTP 200.
+
+
 ## Unified AI Generation Transition Animations Across Workbench (2026-10-30)
 
 - Goal: Align AI generation transition animations in Step 04 (OV-5 Activity Mechanisms, OV-5a Decomposition, OV-1c Task Mapping, and OV-7 State Mapping) strictly with the workbench's unified AI generating motion design language, addressing user feedback ("过渡动画要和其他的Ai生成过渡动画保持一致").

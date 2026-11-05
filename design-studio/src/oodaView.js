@@ -31,7 +31,7 @@ export function renderOodaInspector(selection) {
       <label>节点名称<input name="title" value="${selection.title}"></label>
       <label>输入信息<textarea name="input" rows="2">${selection.input}</textarea></label>
       <label>输出信息<textarea name="output" rows="2">${selection.output}</textarea></label>
-      <label>预计耗时<input name="duration" value="${selection.facts[1][1]}"></label>
+      <label>预计耗时<input name="duration" value="${selection.duration || selection.facts?.[1]?.[1] || ""}"></label>
       <label>行为说明<textarea name="text" rows="3">${selection.text}</textarea></label>
       <label>决策规则<textarea name="rule" rows="3">${selection.rule}</textarea></label>
       <label>关联装备（以顿号或逗号分隔）<input name="equipmentRefs" value="${escapeHtml((selection.equipmentRefs || []).join("、"))}" maxlength="1600"></label>

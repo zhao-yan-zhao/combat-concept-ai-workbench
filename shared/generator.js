@@ -129,6 +129,15 @@ function createResultBySchema(schema, workflow, analysis, evidenceRefs) {
   if (schema === "WargameReview") {
     return createWargameReview(analysis, evidenceRefs);
   }
+  if (schema === "ActivityDecompositionDraft") {
+    return createActivityDecompositionDraftResult(analysis);
+  }
+  if (schema === "TaskActivityMappingDraft") {
+    return createTaskActivityMappingDraftResult(analysis);
+  }
+  if (schema === "StateActivityMappingDraft") {
+    return createStateActivityMappingDraftResult(analysis);
+  }
   return createWorkflowBrief(workflow, analysis, evidenceRefs);
 }
 
@@ -1609,4 +1618,96 @@ function splitList(value) {
     .map((item) => item.trim())
     .filter(Boolean)
     .slice(0, 12);
+}
+
+function createActivityDecompositionDraftResult(analysis) {
+  const activities = Array.isArray(analysis?.activities) ? analysis.activities : [];
+  const root = activities[0] || { id: "act-root", title: "作战行动实施" };
+  return {
+    summary: "基于作战概念与任务剖面，建立规范化纵向作战活动分解结构",
+    activities: [
+      {
+        id: `${root.id}-cond-check`,
+        title: `${root.title}之条件核验与前置准备`,
+        type: "感知",
+        domain: root.domain || "综合",
+        autonomy: "HOTL",
+        performer: "前沿感知节点",
+        timingWindow: "3m",
+        input: "态势线索",
+        output: "目标数据集",
+        parentId: root.id,
+        text: "核验作战触发门槛与战场环境约束"
+      },
+      {
+        id: `${root.id}-core-exec`,
+        title: `${root.title}之核心协同作业`,
+        type: "行动",
+        domain: root.domain || "综合",
+        autonomy: "HOOTL",
+        performer: "主攻执行单元",
+        timingWindow: "6m",
+        input: "执行指令",
+        output: "毁伤/控制载荷",
+        parentId: root.id,
+        text: "实施协同突防与多源压制"
+      },
+      {
+        id: `${root.id}-assess-close`,
+        title: `${root.title}之战果评估与回路闭合`,
+        type: "评估",
+        domain: root.domain || "综合",
+        autonomy: "HITL",
+        performer: "指控战位",
+        timingWindow: "2m",
+        input: "毁伤回传数据",
+        output: "评估裁决报告",
+        parentId: root.id,
+        text: "评估打击成效并更新战术回路"
+      }
+    ],
+    decompositions: [
+      { parentActivityRef: root.id, childActivityRef: `${root.id}-cond-check`, rationale: "前置准备与环境确认" },
+      { parentActivityRef: root.id, childActivityRef: `${root.id}-core-exec`, rationale: "核心任务实施与协同" },
+      { parentActivityRef: root.id, childActivityRef: `${root.id}-assess-close`, rationale: "效果判定与反馈闭环" }
+    ]
+  };
+}
+
+function createTaskActivityMappingDraftResult(analysis) {
+  const tasks = Array.isArray(analysis?.tasks) ? analysis.tasks : [];
+  const activities = Array.isArray(analysis?.activities) ? analysis.activities : [];
+  const mappings = tasks.map((t, idx) => {
+    const act = activities[idx % Math.max(activities.length, 1)];
+    return {
+      taskRef: t.id,
+      activityRefs: act ? [act.id] : [],
+      judgment: "accepted",
+      rationale: `任务「${t.name || t.id}」由活动「${act?.title || act?.id || "作战活动"}」承接闭环`
+    };
+  });
+  return {
+    summary: `基于 ${tasks.length} 项作战任务与 ${activities.length} 项作战活动建立因果承接映射`,
+    mappings
+  };
+}
+
+function createStateActivityMappingDraftResult(analysis) {
+  const sources = Array.isArray(analysis?.sources) ? analysis.sources : [];
+  const activities = Array.isArray(analysis?.activities) ? analysis.activities : [];
+  const mappings = sources.map((s, idx) => {
+    const act = activities[idx % Math.max(activities.length, 1)];
+    return {
+      subjectType: s.subjectType || "state",
+      sourceRef: s.sourceRef || s.id,
+      activityRefs: act ? [act.id] : [],
+      semantic: "executes",
+      judgment: "accepted",
+      rationale: `状态/转换「${s.sourceRef || s.id}」驱动作战活动「${act?.title || act?.id || "作战活动"}」执行`
+    };
+  });
+  return {
+    summary: `基于 ${sources.length} 项状态源与 ${activities.length} 项作战活动建立动态驱动映射`,
+    mappings
+  };
 }

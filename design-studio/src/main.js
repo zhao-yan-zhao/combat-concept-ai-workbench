@@ -248,7 +248,7 @@ function render(options = {}) {
     loginGate.innerHTML = loginMarkup;
     loginGate.dataset.renderedMarkup = loginMarkup;
   }
-  $("#aiConfigRoot").innerHTML = renderAiConfigPanel({
+  const aiConfigMarkup = renderAiConfigPanel({
     open: state.aiConfigOpen,
     service: state.aiConfig,
     saving: state.aiConfigSaving,
@@ -256,32 +256,50 @@ function render(options = {}) {
     fetchedModels: state.aiConfigFetchedModels,
     modelFetchHint: state.aiConfigModelFetchHint
   });
-  $("#aiPromptRoot").innerHTML = renderAiPromptPanel({
+  const aiConfigElem = $("#aiConfigRoot");
+  if (aiConfigElem && aiConfigElem.dataset.renderedMarkup !== aiConfigMarkup) {
+    aiConfigElem.innerHTML = aiConfigMarkup;
+    aiConfigElem.dataset.renderedMarkup = aiConfigMarkup;
+  }
+
+  const aiPromptMarkup = renderAiPromptPanel({
     open: state.aiPromptOpen,
     catalog: state.aiPromptCatalog,
     selectedId: state.aiPromptSelectedId,
     saving: state.aiPromptSaving,
     drafts: state.aiPromptDrafts || {}
   });
-  $("#workflowGateRoot").innerHTML = renderWorkflowGate();
+  const aiPromptElem = $("#aiPromptRoot");
+  if (aiPromptElem && aiPromptElem.dataset.renderedMarkup !== aiPromptMarkup) {
+    aiPromptElem.innerHTML = aiPromptMarkup;
+    aiPromptElem.dataset.renderedMarkup = aiPromptMarkup;
+  }
+
+  const workflowGateMarkup = renderWorkflowGate();
+  const workflowGateElem = $("#workflowGateRoot");
+  if (workflowGateElem && workflowGateElem.dataset.renderedMarkup !== workflowGateMarkup) {
+    workflowGateElem.innerHTML = workflowGateMarkup;
+    workflowGateElem.dataset.renderedMarkup = workflowGateMarkup;
+  }
   renderOv1ToolboxFloatHost();
   // Project picker / menubar chrome toggles must not rebuild the concept-map iframe.
   if (!skipView) {
+    let renderResult = null;
     if (!state.projectEntryRequired) {
-      renderViewRoot(options);
-      renderInspectorPanel();
+      renderResult = renderViewRoot(options);
     }
-    resizeBriefTextareas();
-    closeOv1ModalIfOpen();
-    bindDynamicEvents();
+    if (!renderResult?.transitionPending && (!renderResult?.domUpdated || state.projectEntryRequired)) {
+      renderInspectorPanel();
+      resizeBriefTextareas();
+      closeOv1ModalIfOpen();
+      bindDynamicEvents();
+      restoreViewFocus(document, appFocusSnapshot);
+      restoreViewScroll(document, appScrollSnapshots);
+    }
   } else {
     // Fast path: bind dialog and chrome handlers without tearing down and re-binding page views
     aiConfigController.bind(document);
     aiPromptController.bind(document);
-  }
-  if (!skipView) {
-    restoreViewFocus(document, appFocusSnapshot);
-    restoreViewScroll(document, appScrollSnapshots);
   }
 }
 
@@ -389,13 +407,13 @@ let viewSwitchTimer = 0;
  */
 function renderViewRoot(options = {}) {
   const viewRoot = $("#viewRoot");
-  if (!viewRoot) return;
+  if (!viewRoot) return { transitionPending: false };
   const currentView = state.activeView;
   const isViewSwitch = Boolean(lastRenderedView && lastRenderedView !== currentView);
   const newMarkup = renderView(currentView, { ...state, oodaDuration: getOodaDuration(state.ooda) });
 
   if (!options.force && !isViewSwitch && viewRoot.dataset.renderedMarkup === newMarkup && viewRoot.dataset.renderedView === currentView) {
-    return;
+    return { transitionPending: false, domUpdated: false };
   }
 
   const scrollSnapshots = captureViewScroll(viewRoot);
@@ -404,18 +422,26 @@ function renderViewRoot(options = {}) {
   parkConceptMapFrame();
 
   const applyDomUpdate = () => {
-    viewRoot.dataset.renderedView = currentView;
-    viewRoot.dataset.renderedMarkup = newMarkup;
-    lastRenderedView = currentView;
+    try {
+      viewRoot.dataset.renderedView = currentView;
+      viewRoot.dataset.renderedMarkup = newMarkup;
+      lastRenderedView = currentView;
 
-    viewRoot.innerHTML = newMarkup;
-    mountRelatedModelReturn(viewRoot, renderRelatedModelReturn(state));
-    mountConceptMapFrame();
-    mountGroupedLists(viewRoot);
-    restoreViewFocus(viewRoot, focusSnapshot);
-    restoreViewScroll(viewRoot, scrollSnapshots, {
-      resetInnerPhaseScroll: Boolean(options.resetInnerPhaseScroll)
-    });
+      viewRoot.innerHTML = newMarkup;
+      mountRelatedModelReturn(viewRoot, renderRelatedModelReturn(state));
+      mountConceptMapFrame();
+      mountGroupedLists(viewRoot);
+      restoreViewFocus(viewRoot, focusSnapshot);
+      restoreViewScroll(viewRoot, scrollSnapshots, {
+        resetInnerPhaseScroll: Boolean(options.resetInnerPhaseScroll)
+      });
+      renderInspectorPanel();
+      resizeBriefTextareas();
+      closeOv1ModalIfOpen();
+      bindDynamicEvents();
+    } catch (err) {
+      console.error("applyDomUpdate error:", err);
+    }
   };
 
   // Modern Document View Transitions API for buttery smooth cross-fade page switches
@@ -432,9 +458,11 @@ function renderViewRoot(options = {}) {
       } else {
         window.setTimeout(() => viewRoot.classList.remove("is-view-switching"), 300);
       }
+      return { transitionPending: true, domUpdated: true };
     } catch {
       applyDomUpdate();
       window.setTimeout(() => viewRoot.classList.remove("is-view-switching"), 300);
+      return { transitionPending: false, domUpdated: true };
     }
   } else {
     if (isViewSwitch) {
@@ -447,6 +475,7 @@ function renderViewRoot(options = {}) {
       viewRoot.classList.remove("is-view-switching");
     }
     applyDomUpdate();
+    return { transitionPending: false, domUpdated: true };
   }
 }
 
@@ -518,7 +547,8 @@ function mountConceptMapFrame() {
   const mount = document.getElementById("conceptMapFrameMount");
   if (!park) return;
 
-  if (state.activeView !== "concept-map" || !mount) {
+  const isMapActive = state.activeView === "concept-map" || (state.activeView === "ov1" && state.ov1ViewMode === "map");
+  if (!isMapActive || !mount) {
     parkConceptMapFrame();
     return;
   }
@@ -663,7 +693,12 @@ function renderInspectorPanel() {
     $("#inspectorTitle").textContent = title;
     $("#inspectorStatus").textContent = status;
     $("#inspectorStatus").className = `status-tag ${status.includes("问题") ? "alert" : status.includes("建模") ? "review" : ""}`;
-    $("#inspectorRoot").innerHTML = renderInspector(inspectorSelection, { ...getModels(), activeView: state.activeView });
+    try {
+      $("#inspectorRoot").innerHTML = renderInspector(inspectorSelection, { ...getModels(), activeView: state.activeView });
+    } catch (err) {
+      console.error("renderInspector error:", err);
+      $("#inspectorRoot").innerHTML = `<div class="inspector-section"><p class="muted">无法渲染检查器：${err?.message || "未知错误"}</p></div>`;
+    }
   }
 
   // Optional floating knowledge panel (menu). Keep separate from docked brief sidebar.
@@ -854,36 +889,38 @@ function bindDynamicEvents() {
   });
 
   document.querySelectorAll("[data-activity]").forEach((button) => {
-    button.addEventListener("click", () => {
+    addEventListenerOnce(button, "click", (event) => {
+      // 若点击的是卡片内部带 data-action 的独立操作按钮，不触发外层卡片的整体选择
+      if (event.target.closest("[data-action]")) return;
       select("activity", button.dataset.activity);
       if (state.activeView === "ov5") {
         state.ov5LeftMode = "editor";
         render();
       }
-    });
+    }, "activity:click");
   });
   document.querySelectorAll("[data-ov2-exchange]").forEach((button) => {
-    button.addEventListener("click", () => {
+    addEventListenerOnce(button, "click", () => {
       const exchangeId = button.dataset.ov2Exchange;
       state.ov2SelectedExchangeId = exchangeId;
       state.ov2EditorOpen = true;
       select("ov2-exchange", exchangeId);
       render();
-    });
+    }, "ov2-exchange:click");
   });
   document.querySelectorAll("[data-ov3-exchange]").forEach((button) => {
-    button.addEventListener("click", () => {
+    addEventListenerOnce(button, "click", () => {
       const exchangeId = button.dataset.ov3Exchange;
       state.ov3SelectedExchangeId = exchangeId;
       select("ov3-exchange", exchangeId);
       render();
-    });
+    }, "ov3-exchange:click");
   });
   document.querySelectorAll('input[data-action="ov3-search"]').forEach((input) => {
-    input.addEventListener("input", (e) => {
+    addEventListenerOnce(input, "input", (e) => {
       state.ov3Search = e.target.value;
       render();
-    });
+    }, "ov3-search:input");
   });
   const matrixWrap = document.querySelector(".ov3-matrix-wrap");
   if (matrixWrap && !matrixWrap.dataset.boundHover) {
@@ -920,45 +957,45 @@ function bindDynamicEvents() {
     }, { passive: false });
   }
   document.querySelectorAll("[data-structure-jump]").forEach((button) => {
-    button.addEventListener("click", () => jumpFromStructureReview(button.dataset.structureJump, button.dataset.targetKind, button.dataset.targetId));
+    addEventListenerOnce(button, "click", () => jumpFromStructureReview(button.dataset.structureJump, button.dataset.targetKind, button.dataset.targetId), "structure-jump:click");
   });
   document.querySelectorAll("[data-structure-filter-severity]").forEach((button) => {
-    button.addEventListener("click", () => {
+    addEventListenerOnce(button, "click", () => {
       state.structureReviewFilter = {
         ...(state.structureReviewFilter || { severity: "all", group: "all" }),
         severity: button.dataset.structureFilterSeverity || "all"
       };
       render();
-    });
+    }, "structure-filter-severity:click");
   });
   document.querySelectorAll("[data-structure-filter-group]").forEach((button) => {
-    button.addEventListener("click", () => {
+    addEventListenerOnce(button, "click", () => {
       state.structureReviewFilter = {
         ...(state.structureReviewFilter || { severity: "all", group: "all" }),
         group: button.dataset.structureFilterGroup || "all"
       };
       render();
-    });
+    }, "structure-filter-group:click");
   });
-  document.querySelectorAll("[data-ov4-role]").forEach((button) => button.addEventListener("click", () => select("ov4-role", button.dataset.ov4Role)));
-  document.querySelectorAll("[data-ov4-relation]").forEach((button) => button.addEventListener("click", () => select("ov4-relation", button.dataset.ov4Relation)));
+  document.querySelectorAll("[data-ov4-role]").forEach((button) => addEventListenerOnce(button, "click", () => select("ov4-role", button.dataset.ov4Role), "ov4-role:click"));
+  document.querySelectorAll("[data-ov4-relation]").forEach((button) => addEventListenerOnce(button, "click", () => select("ov4-relation", button.dataset.ov4Relation), "ov4-relation:click"));
   document.querySelectorAll("[data-ov6c-event]").forEach((button) => {
-    button.addEventListener("click", () => select("ov6c-event", button.dataset.ov6cEvent));
+    addEventListenerOnce(button, "click", () => select("ov6c-event", button.dataset.ov6cEvent), "ov6c-event:click");
   });
   document.querySelectorAll("[data-ooda]").forEach((button) => {
-    button.addEventListener("click", () => select("ooda", button.dataset.ooda));
+    addEventListenerOnce(button, "click", () => select("ooda", button.dataset.ooda), "ooda:click");
   });
   document.querySelectorAll("[data-unit]").forEach((button) => {
-    button.addEventListener("click", () => select("unit", button.dataset.unit));
+    addEventListenerOnce(button, "click", () => select("unit", button.dataset.unit), "unit:click");
   });
   document.querySelectorAll("[data-validation-issue]").forEach((button) => {
-    button.addEventListener("click", () => select("issue", button.dataset.validationIssue));
+    addEventListenerOnce(button, "click", () => select("issue", button.dataset.validationIssue), "validation-issue:click");
   });
   document.querySelectorAll("[data-knowledge-result]").forEach((button) => {
-    button.addEventListener("click", () => select("knowledge", button.dataset.knowledgeResult));
+    addEventListenerOnce(button, "click", () => select("knowledge", button.dataset.knowledgeResult), "knowledge-result:click");
   });
-  document.querySelectorAll("[data-project-switch]").forEach((button) => button.addEventListener("click", () => switchProject(button.dataset.projectSwitch)));
-  document.querySelectorAll("[data-project-archive]").forEach((button) => button.addEventListener("click", async () => {
+  document.querySelectorAll("[data-project-switch]").forEach((button) => addEventListenerOnce(button, "click", () => switchProject(button.dataset.projectSwitch), "project-switch:click"));
+  document.querySelectorAll("[data-project-archive]").forEach((button) => addEventListenerOnce(button, "click", async () => {
     const targetProjectId = button.dataset.projectArchive;
     const shouldArchive = button.dataset.projectArchived === "true";
     if (shouldArchive && targetProjectId === state.activeProjectId) {
@@ -971,11 +1008,11 @@ function bindDynamicEvents() {
     } catch {
       showToast("项目状态更新失败，请确认负责人身份");
     }
-  }));
-  document.querySelectorAll("[data-project-delete]").forEach((button) => button.addEventListener("click", async () => {
+  }, "project-archive:click"));
+  document.querySelectorAll("[data-project-delete]").forEach((button) => addEventListenerOnce(button, "click", async () => {
     const title = button.dataset.projectTitle || button.dataset.projectDelete;
     await handleDeleteProject(button.dataset.projectDelete, title);
-  }));
+  }, "project-delete:click"));
   document.querySelector("#projectCreateForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
@@ -1003,7 +1040,12 @@ function bindDynamicEvents() {
   document.querySelectorAll("[data-action]").forEach((button) => {
     // Workflow gate uses root-level delegation (survives soft refresh / open toggle).
     if (button.closest("#workflowGateRoot") || button.closest("#aiConfigRoot") || button.closest("#aiPromptRoot")) return;
-    const fire = () => handleAction(button.dataset.action, button);
+    const fire = (event) => {
+      if (button.dataset.stopClickPropagation === "true" || button.classList.contains("card-inline-edit-btn") || button.classList.contains("sync-inline-edit-btn")) {
+        event?.stopPropagation?.();
+      }
+      handleAction(button.dataset.action, button, event);
+    };
     if (button.matches("input, select, textarea")) {
       addEventListenerOnce(button, "change", fire, "action:change");
       return;
@@ -1011,7 +1053,7 @@ function bindDynamicEvents() {
     addEventListenerOnce(button, "click", fire, "action:click");
   });
   document.querySelectorAll("[data-export]").forEach((button) => {
-    button.addEventListener("click", () => {
+    addEventListenerOnce(button, "click", () => {
       if (button.dataset.export === "docx") {
         exportWordReport();
         return;
@@ -1025,22 +1067,22 @@ function bindDynamicEvents() {
         return;
       }
       exportArtifact(button.dataset.export);
-    });
+    }, "export:click");
   });
   document.querySelectorAll("[data-report-template]").forEach((control) => {
-    control.addEventListener("change", () => {
+    addEventListenerOnce(control, "change", () => {
       state.reportTemplate = saveReportTemplate(control.value);
       render();
-    });
+    }, "report-template:change");
   });
   document.querySelectorAll("[data-version-export]").forEach((button) => {
-    button.addEventListener("click", () => exportReportVersion(button.dataset.versionExport, button.dataset.versionId));
+    addEventListenerOnce(button, "click", () => exportReportVersion(button.dataset.versionExport, button.dataset.versionId), "version-export:click");
   });
   document.querySelectorAll("[data-version-verify]").forEach((button) => {
-    button.addEventListener("click", () => void verifyArchivedReportVersion(button.dataset.versionVerify));
+    addEventListenerOnce(button, "click", () => void verifyArchivedReportVersion(button.dataset.versionVerify), "version-verify:click");
   });
   document.querySelectorAll("[data-version-delete]").forEach((button) => {
-    button.addEventListener("click", () => deleteArchivedReportVersion(button.dataset.versionDelete));
+    addEventListenerOnce(button, "click", () => deleteArchivedReportVersion(button.dataset.versionDelete), "version-delete:click");
   });
   bindInspectorEvents();
   aiConfigController.bind(document);
@@ -1071,30 +1113,32 @@ function bindDynamicEvents() {
 
 function bindInspectorEvents() {
   document.querySelectorAll("[data-inspector-action=delete-activity]").forEach((button) => {
-    button.addEventListener("click", () => {
+    addEventListenerOnce(button, "click", () => {
       const deleted = deleteActivity(state.ov5, state.selection?.id);
       if (deleted) invalidateDerivedArtifacts();
       if (deleted) void projectOv5SyncController.sync(state.ov5, { source: "manual" });
       state.selection = null;
       showToast(deleted ? "活动及其关联已删除" : "至少保留一个活动节点");
       render();
-    });
+    }, "inspector:delete-activity");
   });
   document.querySelectorAll("[data-inspector-action=edit]").forEach((button) => {
-    button.addEventListener("click", () => showToast("已将当前节点标记为待修订"));
+    addEventListenerOnce(button, "click", () => showToast("已将当前节点标记为待修订"), "inspector:edit");
   });
-  $("#ov5ActivityForm")?.addEventListener("submit", saveActivity);
-  $("#ov5EdgeForm")?.addEventListener("submit", saveEdge);
+  const actForm = $("#ov5ActivityForm");
+  if (actForm) addEventListenerOnce(actForm, "submit", saveActivity, "ov5ActivityForm:submit");
+  const edgeForm = $("#ov5EdgeForm");
+  if (edgeForm) addEventListenerOnce(edgeForm, "submit", saveEdge, "ov5EdgeForm:submit");
   bindOv1SourcePicker($("#ov5ActivityForm"));
   document.querySelectorAll("[data-edge-remove]").forEach((button) => {
-    button.addEventListener("click", () => {
+    addEventListenerOnce(button, "click", () => {
       const exists = state.ov5.edges.some((edge) => edge.id === button.dataset.edgeRemove);
       deleteEdge(state.ov5, button.dataset.edgeRemove);
       invalidateDerivedArtifacts();
       if (exists) void projectOv5SyncController.sync(state.ov5, { source: "manual" });
       showToast("活动关联已移除");
       render();
-    });
+    }, "edge-remove:click");
   });
 }
 
@@ -1102,30 +1146,36 @@ function bindOv1SourcePicker(form) {
   if (!form) return;
   const refresh = () => refreshOv1SourcePicker(form);
   form.querySelectorAll('input[name="sourceOv1NodeIds"]').forEach((input) => {
-    input.addEventListener("change", refresh);
+    addEventListenerOnce(input, "change", refresh, "ov1-picker:change");
   });
-  form.querySelector("[data-ov1-source-clear]")?.addEventListener("click", () => {
-    form.querySelectorAll('input[name="sourceOv1NodeIds"]').forEach((input) => {
-      input.checked = false;
-    });
-    refresh();
-    showToast("已清空来源选择，保存活动后生效");
-  });
-  form.querySelector("[data-ov1-source-suggest]")?.addEventListener("click", () => {
-    const activityId = form.querySelector("[data-ov1-source-suggest]")?.dataset.ov1SourceSuggest || state.selection?.id;
-    const activity = state.ov5.activities.find((item) => item.id === activityId);
-    if (!activity) return;
-    const suggested = new Set(suggestOv1SourcesForActivity(activity, state.ov1));
-    if (!suggested.size) {
-      showToast("未能根据活动类型给出总体图建议，请手工多选");
-      return;
-    }
-    form.querySelectorAll('input[name="sourceOv1NodeIds"]').forEach((input) => {
-      input.checked = suggested.has(input.value);
-    });
-    refresh();
-    showToast(`已按类型勾选 ${suggested.size} 个建议来源，请确认后保存`);
-  });
+  const clearBtn = form.querySelector("[data-ov1-source-clear]");
+  if (clearBtn) {
+    addEventListenerOnce(clearBtn, "click", () => {
+      form.querySelectorAll('input[name="sourceOv1NodeIds"]').forEach((input) => {
+        input.checked = false;
+      });
+      refresh();
+      showToast("已清空来源选择，保存活动后生效");
+    }, "ov1-picker:clear");
+  }
+  const suggestBtn = form.querySelector("[data-ov1-source-suggest]");
+  if (suggestBtn) {
+    addEventListenerOnce(suggestBtn, "click", () => {
+      const activityId = suggestBtn.dataset.ov1SourceSuggest || state.selection?.id;
+      const activity = state.ov5.activities.find((item) => item.id === activityId);
+      if (!activity) return;
+      const suggested = new Set(suggestOv1SourcesForActivity(activity, state.ov1));
+      if (!suggested.size) {
+        showToast("未能根据活动类型给出总体图建议，请手工多选");
+        return;
+      }
+      form.querySelectorAll('input[name="sourceOv1NodeIds"]').forEach((input) => {
+        input.checked = suggested.has(input.value);
+      });
+      refresh();
+      showToast(`已按类型勾选 ${suggested.size} 个建议来源，请确认后保存`);
+    }, "ov1-picker:suggest");
+  }
   refresh();
 }
 
@@ -1164,6 +1214,34 @@ async function handleAction(action, source = null) {
     source.closest(".derived-provenance-dropdown")?.removeAttribute("open");
   }
 
+  if (action === "switch-ov1-view-mode") {
+    const targetMode = source?.dataset?.viewMode || "graph";
+    state.ov1ViewMode = targetMode;
+    render();
+    return;
+  }
+  if (action === "switch-scenario-view-mode") {
+    const targetMode = source?.dataset?.viewMode || "workbench";
+    state.scenarioViewMode = targetMode;
+    render();
+    return;
+  }
+  if (action === "confirm-scenario-validation") {
+    if (!state.scenario) {
+      showToast("尚未生成想定推演，请先执行 AI 编译生成");
+      return;
+    }
+    state.scenario.confirmed = true;
+    state.scenario.confirmedAt = new Date().toISOString();
+    if (state.scenarioStorage) state.scenarioStorage.stale = false;
+    if (state.validationResult) {
+      state.validationResult.confirmed = true;
+      state.validationResult.stale = false;
+    }
+    showToast("仿真推演与验证结论已人工确认，研究主线已全部闭合！");
+    render();
+    return;
+  }
   if (action === "toggle-workflow-test-mode") {
     void setWorkflowMode(currentWorkflow().mode === "free" ? "gated" : "free");
     return;
@@ -3060,13 +3138,13 @@ async function navigateToResearchView(viewId, { toast = "", force = false, entry
     }
   }
   if (viewId === "ov5a" && (generate || forceRegenerate)) {
-    await dodafProductController.pregenerateOv5a({ silent: false, force: forceRegenerate });
+    await dodafProductController.pregenerateOv5a({ silent: false, force: forceRegenerate, useAi: Boolean(generate || forceRegenerate) });
   }
   if (viewId === "ov1c" && (generate || forceRegenerate)) {
-    await dodafProductController.pregenerateOv1c({ silent: false, force: forceRegenerate });
+    await dodafProductController.pregenerateOv1c({ silent: false, force: forceRegenerate, useAi: Boolean(generate || forceRegenerate) });
   }
   if (viewId === "ov7" && (generate || forceRegenerate)) {
-    await dodafProductController.pregenerateOv7({ silent: false, force: forceRegenerate });
+    await dodafProductController.pregenerateOv7({ silent: false, force: forceRegenerate, useAi: Boolean(generate || forceRegenerate) });
   }
   if (viewId === "force-mission" && (generate || forceRegenerate)) {
     // 门禁：必须先生成作战任务；若作战任务未生成或需补齐，优先生成作战任务，绝不越权生成兵力
@@ -3551,6 +3629,46 @@ function getBusyOverlayState() {
       isAiTask: false
     };
   }
+  if (state.ov5Generating) {
+    return {
+      key: "ov5-generate",
+      title: "正在构建作战活动与机理",
+      detail: "AI 正在深度解析已确认作战任务、参战兵力与资源流契约，构建闭环作战活动与 OODA 动力学机制…",
+      expectedMs: 90000,
+      timeoutMs: 600000,
+      isAiTask: true
+    };
+  }
+  if (state.ov5aPregenerating) {
+    return {
+      key: "ov5a-pregenerate",
+      title: "正在生成作战活动分解构型",
+      detail: "AI 正在解析作战活动网络，自动规整活动层级与 wholePart 组合构型…",
+      expectedMs: 60000,
+      timeoutMs: 600000,
+      isAiTask: true
+    };
+  }
+  if (state.ov1cPregenerating) {
+    return {
+      key: "ov1c-pregenerate",
+      title: "正在对齐任务活动映射",
+      detail: "AI 正在智能对齐作战任务与承接活动，构建覆盖审计索引…",
+      expectedMs: 60000,
+      timeoutMs: 600000,
+      isAiTask: true
+    };
+  }
+  if (state.ov7Pregenerating) {
+    return {
+      key: "ov7-pregenerate",
+      title: "正在对齐状态转换与因果活动",
+      detail: "AI 正在对齐状态转换与因果活动，建立因果映射关系…",
+      expectedMs: 60000,
+      timeoutMs: 600000,
+      isAiTask: true
+    };
+  }
   if (state.forceMissionGenerating) {
     const layer = state.forceMissionGeneratingLayer || "concept";
     if (layer === "combat") {
@@ -3887,22 +4005,22 @@ function saveActivity(event) {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
   const activity = updateActivity(state.ov5, state.selection.id, {
-    title: formData.get("title").trim() || "未命名活动",
-    type: formData.get("type").trim() || "待分类",
-    input: formData.get("input").trim() || "待定义",
-    output: formData.get("output").trim() || "待定义",
-    duration: formData.get("duration").trim() || "待估算",
-    parentId: formData.get("parentId").trim(),
-    resources: formData.get("resources").trim(),
+    title: (formData.get("title") || "").trim() || "未命名活动",
+    type: (formData.get("type") || "").trim() || "待分类",
+    input: (formData.get("input") || "").trim() || "待定义",
+    output: (formData.get("output") || "").trim() || "待定义",
+    duration: (formData.get("duration") || "").trim() || "待估算",
+    parentId: (formData.get("parentId") || "").trim(),
+    resources: (formData.get("resources") || "").trim(),
     performer: (formData.get("performer") || "").trim(),
     domain: (formData.get("domain") || "").trim(),
     autonomy: (formData.get("autonomy") || "").trim(),
     timingWindow: (formData.get("timingWindow") || "").trim(),
     resilienceFallback: (formData.get("resilienceFallback") || "").trim(),
-    preconditions: formData.get("preconditions").trim(),
-    constraints: formData.get("constraints").trim(),
-    text: formData.get("text").trim() || "补充该活动的任务说明。",
-    refs: formData.get("refs").split(/[、,，]/).map((item) => item.trim()).filter(Boolean),
+    preconditions: (formData.get("preconditions") || "").trim(),
+    constraints: (formData.get("constraints") || "").trim(),
+    text: (formData.get("text") || "").trim() || "补充该活动的任务说明。",
+    refs: (formData.get("refs") || "").split(/[、,，]/).map((item) => item.trim()).filter(Boolean),
     sourceOv1NodeIds: formData.getAll("sourceOv1NodeIds").map((item) => item.trim()).filter(Boolean)
   });
   invalidateDerivedArtifacts();
@@ -4344,6 +4462,70 @@ function bindAiModalsChrome() {
 }
 
 bindAiModalsChrome();
+
+function bindOv5aDragAndDrop() {
+  let draggedActivityId = null;
+
+  document.addEventListener("dragstart", (event) => {
+    const card = event.target?.closest?.('[data-drag-type="ov5a-activity"]');
+    if (!card) return;
+    draggedActivityId = card.dataset.activityId || card.dataset.activity || null;
+    if (event.dataTransfer && draggedActivityId) {
+      event.dataTransfer.setData("text/plain", draggedActivityId);
+      event.dataTransfer.effectAllowed = "move";
+    }
+    card.classList.add("is-drag-source");
+  });
+
+  document.addEventListener("dragend", (event) => {
+    const card = event.target?.closest?.('[data-drag-type="ov5a-activity"]');
+    if (card) card.classList.remove("is-drag-source");
+    document.querySelectorAll(".is-drag-over").forEach((el) => el.classList.remove("is-drag-over"));
+    draggedActivityId = null;
+  });
+
+  document.addEventListener("dragover", (event) => {
+    if (!draggedActivityId) return;
+    const dropTarget = event.target?.closest?.('[data-drop-zone="activity"], [data-drop-zone="root"]');
+    if (!dropTarget) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+  });
+
+  document.addEventListener("dragenter", (event) => {
+    if (!draggedActivityId) return;
+    const dropTarget = event.target?.closest?.('[data-drop-zone="activity"], [data-drop-zone="root"]');
+    if (dropTarget) dropTarget.classList.add("is-drag-over");
+  });
+
+  document.addEventListener("dragleave", (event) => {
+    const dropTarget = event.target?.closest?.('[data-drop-zone="activity"], [data-drop-zone="root"]');
+    if (dropTarget && (!event.relatedTarget || !dropTarget.contains(event.relatedTarget))) {
+      dropTarget.classList.remove("is-drag-over");
+    }
+  });
+
+  document.addEventListener("drop", (event) => {
+    if (!draggedActivityId) return;
+    const dropTarget = event.target?.closest?.('[data-drop-zone="activity"], [data-drop-zone="root"]');
+    if (!dropTarget) return;
+    event.preventDefault();
+    dropTarget.classList.remove("is-drag-over");
+
+    const zoneType = dropTarget.dataset.dropZone;
+    if (zoneType === "root") {
+      handleAction("ov5a-drop-root", { dataset: { childId: draggedActivityId } });
+    } else if (zoneType === "activity") {
+      const parentId = dropTarget.dataset.activityId || dropTarget.dataset.activity;
+      if (parentId && parentId !== draggedActivityId) {
+        handleAction("ov5a-reparent", { dataset: { childId: draggedActivityId, parentId } });
+      }
+    }
+    draggedActivityId = null;
+  });
+}
+
+bindOv5aDragAndDrop();
 
 if (typeof window !== "undefined") {
   window.__workbench = {

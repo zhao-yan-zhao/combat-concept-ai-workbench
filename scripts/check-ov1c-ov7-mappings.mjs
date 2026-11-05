@@ -163,6 +163,6 @@ try {
 const mainSource = await readFile(new URL("../design-studio/src/main.js", import.meta.url), "utf8");
 const flowSource = await readFile(new URL("../design-studio/src/contextualModelFlow.js", import.meta.url), "utf8");
 assert(mainSource.includes('focusType === "state"') && mainSource.includes('focusType === "transition"'), "Main navigation must focus OV7 state/transition sources");
-assert(flowSource.includes('scenario: ["ov1c", "ov7", "structure-review"]') && flowSource.includes('"ov1c", "ov6a"'), "Simulation contextual flow must expose enabled OV1c/OV7 entries");
+assert(flowSource.includes('"ov1c"') && flowSource.includes('"ov7"') && flowSource.includes('ov5: ["ov5a", "ov1c", "ov7"]'), "Contextual flow must expose enabled OV1c/OV7 entries under activity mainline");
 
 console.log("OV1c/OV7 mapping acceptance passed: authority, conflicts, coverage, topology, exchange, snapshot, report, SQLite stale propagation, UI and navigation.");

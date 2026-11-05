@@ -94,13 +94,36 @@ export function syncOv5ActivityPair({ ov5, ov5a = null, source = "ov5" } = {}) {
   return { ov5: nextOv5, ov5a: nextOv5a, source: "ov5" };
 }
 
-function introducesCycle(activityId, parentId, parentByChild) {
-  const seen = new Set([activityId]);
+export function introducesCycle(arg1, arg2, arg3) {
+  let childId;
+  let parentId;
+  let decompositionsOrMap;
+
+  if (Array.isArray(arg1) || arg1 instanceof Map) {
+    decompositionsOrMap = arg1;
+    parentId = arg2;
+    childId = arg3;
+  } else {
+    childId = arg1;
+    parentId = arg2;
+    decompositionsOrMap = arg3;
+  }
+
+  const getParent = (id) => {
+    if (decompositionsOrMap instanceof Map) return decompositionsOrMap.get(id) || "";
+    if (Array.isArray(decompositionsOrMap)) {
+      const match = decompositionsOrMap.find((d) => d.childActivityRef === id || d.childId === id);
+      return match ? (match.parentActivityRef || match.parentId || "") : "";
+    }
+    return "";
+  };
+
+  const seen = new Set([childId]);
   let currentId = parentId;
   while (currentId) {
     if (seen.has(currentId)) return true;
     seen.add(currentId);
-    currentId = parentByChild.get(currentId) || "";
+    currentId = getParent(currentId);
   }
   return false;
 }

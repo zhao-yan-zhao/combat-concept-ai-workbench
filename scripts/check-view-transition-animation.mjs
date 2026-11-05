@@ -27,7 +27,7 @@ assert(mainContent.includes("document.startViewTransition"), "renderViewRoot 必
 assert(mainContent.includes("state.workflowCompleting = true;"), "推进流转时必须设置 workflowCompleting 触发胶囊动效");
 console.log("✓ main.js View Transitions 与胶囊推进动效集成验证通过");
 
-console.log("=== 3. 验证 OV-5 与全系统其他 AI 生成过渡动画保持一致 ===");
+console.log("=== 3. 验证 OV-5 彻底移除旧过渡卡片，完全由全屏统一过渡弹窗接管 ===");
 const mockGeneratingState = {
   activeView: "ov5",
   ov5Generating: true,
@@ -35,12 +35,10 @@ const mockGeneratingState = {
   brief: { objective: "测试" }
 };
 const generatingHtml = renderOv5Workbench(mockGeneratingState);
-assert(generatingHtml.includes("brief-generate-progress"), "OV-5 生成中必须复用统一的 brief-generate-progress");
-assert(generatingHtml.includes("brief-generate-progress-bar"), "必须包含统一的 brief-generate-progress-bar");
-assert(generatingHtml.includes("brief-generate-progress-label"), "必须包含统一的 brief-generate-progress-label");
-assert(generatingHtml.includes("rule-pregenerate-spinner"), "必须复用统一的 rule-pregenerate-spinner 旋转环");
-assert(generatingHtml.includes("is-pregenerating"), "必须使用统一的 is-pregenerating 容器");
-console.log("✓ OV-5 生成中过渡动画一致性验证通过");
+assert(!generatingHtml.includes("ov5-generating-box"), "OV-5 页面内必须彻底移除旧的过渡卡片/动画横条");
+assert(!generatingHtml.includes("renderOv5GeneratingBanner"), "OV-5 不得存在旧的过渡横条渲染");
+assert(generatingHtml.includes("ov5-view-stage"), "OV-5 必须保持视角工作台正常渲染，不破坏性掏空");
+console.log("✓ OV-5 彻底移除旧过渡卡片、纯净保留工作台验证通过");
 
 console.log("=== 4. 验证 OV-1c / OV-7 预生成过渡动画一致性 ===");
 const mockMappingState = {

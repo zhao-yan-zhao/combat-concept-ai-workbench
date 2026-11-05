@@ -11,6 +11,7 @@ import {
   renderEdgeMarkerDefs
 } from "./dodafDraftingView.js";
 import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
+import { renderConceptMap as renderConceptMapPreview } from "./conceptMapView.js";
 
 const PANEL_META = {
   context: { eyebrow: "OV-1", title: "任务摘要" },
@@ -38,6 +39,8 @@ export function renderOv1(state) {
     && (state.phaseAction?.status === "confirmed" || state.phaseAction?.phases?.length)
   );
 
+  const viewMode = state.ov1ViewMode || (state.activeView === "concept-map" ? "map" : "graph");
+
   const provenance = model.provenance?.mode === "ai"
     ? "AI 草案"
     : model.provenance?.mode === "local"
@@ -56,80 +59,152 @@ export function renderOv1(state) {
   const panelMode = resolveOv1PanelMode(state);
   const panelMeta = panelMetaFor(state, panelMode);
   const toolsModeClass = toolsOpen ? "is-tools-docked" : "is-tools-floating";
+
+  const map = state.conceptMap || {};
+  const hasMapDoc = Boolean(map.document?.items?.length);
+  const mapForceCount = Number(map.draft?.plan?.forceCount || map.summary?.itemCount || map.document?.items?.length || (Array.isArray(state.forceMission?.forces) ? state.forceMission.forces.length : 0));
+  const healthScore = Math.max(70, Math.min(100, Math.round(100 - isolatedCount * 8 + (model.edges?.length >= 4 ? 10 : 0))));
+
   return `
     <section class="surface surface-pad ov1-surface">
-      <header class="ov1-toolbar" aria-label="高层作战概念图">
-        <div class="ov1-toolbar-meta">
-          <div class="ov1-toolbar-title-line">
-            <h2>总体图 (OV-1a 高层作战概念图)</h2>
+      <header class="ov1-top-header ov1-toolbar" aria-label="总体概念">
+        <div class="ov1-header-row">
+          <div class="ov1-header-title">
+            <button class="quiet-button ov1-btn-back" type="button" data-view="ov5" title="返回活动机理 (Step 04)">← 返回 (OV-5b)</button>
+            <h2>总体概念 (高层协同与空间态势)</h2>
+            <span class="sr-only">总体图 (OV-1a 高层作战概念图)</span>
             <span class="status-tag ${confirmed ? "is-ready" : generating ? "review" : nodeCount ? "" : "muted"}" data-ov1-status>
               ${confirmed ? "已确认" : generating ? "生成中" : nodeCount ? provenance : "待生成"}
             </span>
-          </div>
-          <p class="ov1-toolbar-subtitle muted">
-            <span>${nodeCount} 节点 · ${edgeCount} 关系 · ${isolatedCount ? `${isolatedCount} 孤立` : "无孤立"}</span>
-            <span class="ov1-toolbar-desc">综合兵力与任务骨架，推导高层交互闭环与关系网络</span>
-          </p>
-        </div>
-        <div class="ov1-toolbar-actions">
-          <button type="button" class="quiet-button" data-action="extract-ov1-from-ov5" ${generating || !state.ov5?.activities?.length ? "disabled" : ""} title="自底向上从 Step 04 作战活动网络提炼高层总体概念节点与协同闭环">
-            从活动机理提炼
-          </button>
-          <button type="button" class="quiet-button" data-action="seed-ov1-from-planning" title="基于上游兵力与任务规划生成/重置总体图骨架" ${generating || !upstreamReady ? "disabled" : ""}>
-            ${nodeCount ? "从兵力规划重建" : "从兵力规划生成"}
-          </button>
-          <button type="button" class="quiet-button" data-action="generate-ov1" ${generating ? "disabled" : ""} title="使用 AI 推导五类节点与高层交互回路">
-            ${generating ? "AI 生成中…" : "AI 一键生成"}
-          </button>
-          <button type="button" class="quiet-button" data-action="auto-layout-ov1" title="重排布局">
-            重排布局
-          </button>
-          <button type="button" class="${confirmed ? "quiet-button" : "primary-btn"}" data-action="confirm-ov1" ${!canConfirm ? "disabled" : ""}>
-            ${confirmed ? "总体图已确认" : "确认总体图"}
-          </button>
-        </div>
-      </header>
-      <div class="ov1-workbench ${panelOpen ? "is-panel-open" : "is-panel-collapsed"} ${toolsModeClass}" data-ov1-panel-mode="${escapeHtml(panelMode)}">
-        <div class="ov1-main-column">
-          ${candidate ? renderCandidate(model, candidate) : ""}
-          <div class="ov1-canvas-shell">
-            ${renderConceptMap(model, state.selection?.id, {
-              generating: state.ov1Generating,
-              provenance,
-              nodeCount: model.nodes.length,
-              edgeCount: model.edges.length,
-              isolatedCount: diagnostics.summary.isolatedIds.length,
-              selectedEdgeId: state.ov1PanelEdgeId
-            })}
-          </div>
-          ${renderNextStep(model, state)}
-        </div>
-        ${toolsOpen ? `
-        <div class="ov1-side-cluster ${panelOpen ? "is-open" : "is-collapsed"} is-tools-docked">
-          <div class="ov1-context-panel" id="ov1ContextPanel" aria-hidden="${panelOpen ? "false" : "true"}">
-            <header class="ov1-context-panel-head">
-              <div>
-                <p class="eyebrow">${escapeHtml(panelMeta.eyebrow)}</p>
-                <h2>${escapeHtml(panelMeta.title)}</h2>
-              </div>
-              <button class="ov1-panel-collapse" type="button" data-action="close-ov1-panel" title="收起侧栏" aria-label="收起侧栏">
-                <span class="ov1-panel-collapse-ring" aria-hidden="true"></span>
-                <span class="ov1-panel-collapse-glow" aria-hidden="true"></span>
-                <span class="ov1-edit-ico" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                    <path class="ov1-panel-collapse-x a" d="M7 7l10 10"/>
-                    <path class="ov1-panel-collapse-x b" d="M17 7L7 17"/>
-                  </svg>
-                </span>
+            <div class="ov1-view-switch" role="tablist" aria-label="总体概念视图模式">
+              <button type="button" class="view-pill ${viewMode === "graph" ? "active" : ""}" data-action="switch-ov1-view-mode" data-view-mode="graph">
+                🕸️ 高层协同图 (OV-1a)
               </button>
-            </header>
-            <div class="ov1-context-panel-body" data-ov1-panel-body="${escapeHtml(panelMode)}">
-              ${renderOv1PanelBody(state, panelMode)}
+              <button type="button" class="view-pill ${viewMode === "map" ? "active" : ""}" data-action="switch-ov1-view-mode" data-view-mode="map">
+                🗺️ 空间态势图 (概念图)
+              </button>
+              <button type="button" class="view-pill ${viewMode === "outline" ? "active" : ""}" data-action="switch-ov1-view-mode" data-view-mode="outline">
+                📋 体系概念大纲
+              </button>
             </div>
           </div>
-          ${renderOv1EditRail(state, panelOpen, panelMode, toolsOpen)}
-        </div>` : ""}
-      </div>
+          <div class="ov1-actions-bar">
+            ${viewMode === "graph" ? `
+              <button type="button" class="primary-btn ov1-action-primary" data-action="extract-ov1-from-ov5" ${generating || !state.ov5?.activities?.length ? "disabled" : ""} title="自底向上从 Step 04 作战活动网络提炼高层总体概念节点与协同闭环">
+                ${generating ? "提炼中…" : "从活动机理提炼"}
+              </button>
+              <button type="button" class="quiet-button" data-action="add-ov1-node">
+                ➕ 新增节点
+              </button>
+            ` : viewMode === "map" ? `
+              <button type="button" class="primary-btn ov1-action-primary" data-action="seed-concept-map-from-planning" ${state.conceptMapSeeding ? "disabled" : ""}>
+                ${state.conceptMapSeeding ? "生成中…" : hasMapDoc ? "↻ 按规划重建" : "＋ 从规划生成"}
+              </button>
+              <button type="button" class="quiet-button" data-action="pull-concept-map-from-tool">
+                ↓ 拉取最新
+              </button>
+              <button type="button" class="quiet-button is-emphasis" data-action="open-concept-map-external">
+                ↗ 打开绘制工具
+              </button>
+            ` : `
+              <button type="submit" form="ov1OutlineForm" class="primary-btn ov1-action-primary">
+                💾 保存大纲
+              </button>
+            `}
+            <button type="button" class="${confirmed ? "quiet-button" : "primary-btn"}" data-action="confirm-ov1" ${!canConfirm ? "disabled" : ""}>
+              ${confirmed ? "总体概念已确认" : "确认总体概念"}
+            </button>
+            <details class="ov1-more-menu">
+              <summary class="quiet-button">更多工具 ▾</summary>
+              <div class="ov1-more-dropdown">
+                <button type="button" data-action="seed-ov1-from-planning" ${generating || !upstreamReady ? "disabled" : ""}>
+                  ${nodeCount ? "从兵力规划重建" : "从兵力规划生成"}
+                </button>
+                <button type="button" data-action="generate-ov1" ${generating ? "disabled" : ""}>
+                  ${generating ? "AI 生成中…" : "AI 一键生成"}
+                </button>
+                <button type="button" data-action="auto-layout-ov1">
+                  重排高层布局
+                </button>
+                <button type="button" data-action="advance-to-concept-map">
+                  进入空间概念图
+                </button>
+                <button type="button" data-action="open-concept-map-external">
+                  在独立窗口打开地图
+                </button>
+              </div>
+            </details>
+          </div>
+        </div>
+        <div class="ov1-filter-top-row">
+          <div class="ov1-filter-left">
+            <input type="search" class="ov1-search-input" placeholder="检索总体节点、协同回路或空间实体..." data-ov1-filter-search />
+            <div class="ov1-hud-badges">
+              <span class="ov1-hud-badge is-highlight">★ ${healthScore}分 体系闭环</span>
+              <span class="ov1-hud-badge">${nodeCount} 核心节点</span>
+              <span class="ov1-hud-badge">${edgeCount} 协同回路</span>
+              <span class="ov1-hud-badge">${mapForceCount} 空间对象</span>
+              <span class="ov1-hud-badge is-ready">${isolatedCount ? `${isolatedCount} 孤立` : "100% 连通"}</span>
+            </div>
+          </div>
+          <div class="ov1-filter-right">
+            <button type="button" class="quiet-button ov1-quick-jump-step6" data-view="scenario">
+              前往仿真推演 (Step 06) →
+            </button>
+          </div>
+        </div>
+      </header>
+      ${viewMode === "map" ? `
+        <div class="ov1-map-viewport">
+          ${renderConceptMapPreview(state)}
+        </div>
+      ` : viewMode === "outline" ? `
+        <div class="ov1-outline-viewport">
+          ${renderConceptOutline(state)}
+        </div>
+      ` : `
+        <div class="ov1-workbench ${panelOpen ? "is-panel-open" : "is-panel-collapsed"} ${toolsModeClass}" data-ov1-panel-mode="${escapeHtml(panelMode)}">
+          <div class="ov1-main-column">
+            ${candidate ? renderCandidate(model, candidate) : ""}
+            <div class="ov1-canvas-shell">
+              ${renderOv1CanvasContent(model, state.selection?.id, {
+                generating: state.ov1Generating,
+                provenance,
+                nodeCount: model.nodes.length,
+                edgeCount: model.edges.length,
+                isolatedCount: diagnostics.summary.isolatedIds.length,
+                selectedEdgeId: state.ov1PanelEdgeId
+              })}
+            </div>
+            ${renderNextStep(model, state)}
+          </div>
+          ${toolsOpen ? `
+          <div class="ov1-side-cluster ${panelOpen ? "is-open" : "is-collapsed"} is-tools-docked">
+            <div class="ov1-context-panel" id="ov1ContextPanel" aria-hidden="${panelOpen ? "false" : "true"}">
+              <header class="ov1-context-panel-head">
+                <div>
+                  <p class="eyebrow">${escapeHtml(panelMeta.eyebrow)}</p>
+                  <h2>${escapeHtml(panelMeta.title)}</h2>
+                </div>
+                <button class="ov1-panel-collapse" type="button" data-action="close-ov1-panel" title="收起侧栏" aria-label="收起侧栏">
+                  <span class="ov1-panel-collapse-ring" aria-hidden="true"></span>
+                  <span class="ov1-panel-collapse-glow" aria-hidden="true"></span>
+                  <span class="ov1-edit-ico" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                      <path class="ov1-panel-collapse-x a" d="M7 7l10 10"/>
+                      <path class="ov1-panel-collapse-x b" d="M17 7L7 17"/>
+                    </svg>
+                  </span>
+                </button>
+              </header>
+              <div class="ov1-context-panel-body" data-ov1-panel-body="${escapeHtml(panelMode)}">
+                ${renderOv1PanelBody(state, panelMode)}
+              </div>
+            </div>
+            ${renderOv1EditRail(state, panelOpen, panelMode, toolsOpen)}
+          </div>` : ""}
+        </div>
+      `}
     </section>
   `;
 }
@@ -404,7 +479,70 @@ function renderNextStep(model, state) {
     </aside>`;
 }
 
-function renderConceptMap(model, selectedId, status = {}) {
+function renderConceptOutline(state) {
+  const model = state.ov1 || {};
+  const brief = state.brief || {};
+  const concept = model.concept || {};
+  const mission = concept.mission || brief.objective || "高层作战概念总体方案";
+  const objective = concept.objective || brief.objective || "";
+  const scope = concept.scope || brief.assumptions || "";
+  const phase = concept.phase || brief.approach || "";
+  const expectedEffects = concept.expectedEffects || brief.expectedEffects || "";
+  const constraints = concept.constraints || brief.risk || "";
+  const narrative = concept.narrative || (brief.approach ? `${brief.approach}。预期达成：${brief.expectedEffects || "战役战术战果"}。` : "");
+
+  return `
+    <div class="ov1-outline-workbench">
+      <form id="ov1OutlineForm" class="ov1-outline-form">
+        <div class="ov1-outline-grid">
+          <article class="ov1-outline-card is-full">
+            <header>
+              <h3>总体构想叙述 (Concept Narrative)</h3>
+              <small>宏观描述作战背景、关键体系机制、跨域协同回路与主要行动方式</small>
+            </header>
+            <textarea name="narrative" rows="4" placeholder="在此输入总体作战构想陈述...">${escapeHtml(narrative)}</textarea>
+          </article>
+          <article class="ov1-outline-card">
+            <header>
+              <h3>任务目标与研究意图</h3>
+              <small>与简报保持一致，支持概念级深入补充</small>
+            </header>
+            <input type="text" name="mission" value="${escapeHtml(mission)}" placeholder="概念主题/场景" />
+            <textarea name="objective" rows="3" placeholder="任务核心目标">${escapeHtml(objective)}</textarea>
+          </article>
+          <article class="ov1-outline-card">
+            <header>
+              <h3>时空范围与运用条件</h3>
+              <small>地理区域、电磁环境边界与关键行动假设</small>
+            </header>
+            <textarea name="scope" rows="3" placeholder="空间环境、边界与假设">${escapeHtml(scope)}</textarea>
+            <input type="text" name="phase" value="${escapeHtml(phase)}" placeholder="主行动阶段/推进方式" />
+          </article>
+          <article class="ov1-outline-card">
+            <header>
+              <h3>预期战果与效果指标 (Expected Effects & MOEs)</h3>
+              <small>期望建立的优势指标与可度量作战效果</small>
+            </header>
+            <textarea name="expectedEffects" rows="4" placeholder="预期效果与关键量化度量指标...">${escapeHtml(expectedEffects)}</textarea>
+          </article>
+          <article class="ov1-outline-card">
+            <header>
+              <h3>主要风险与应对约束 (Constraints & Risks)</h3>
+              <small>假想敌关键反制手段、复杂环境限制与兜底预案</small>
+            </header>
+            <textarea name="constraints" rows="4" placeholder="关键约束与风险处置预案...">${escapeHtml(constraints)}</textarea>
+          </article>
+        </div>
+        <div class="ov1-outline-actions">
+          <button type="submit" class="primary-btn">💾 保存概念大纲</button>
+          <button type="button" class="quiet-button" data-action="confirm-ov1">✓ 确认总体概念并继续</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+function renderOv1CanvasContent(model, selectedId, status = {}) {
   const concept = model.concept || {};
   const mission = concept.mission || "高层作战概念图";
   const missionTitle = shortenOv1Caption(mission, 22);

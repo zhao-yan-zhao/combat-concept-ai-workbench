@@ -7,14 +7,16 @@ import {
 } from "./dodafProductStore.js";
 import { createProjectModelSyncController } from "./projectModelSyncController.js";
 import { mergeProductsIntoArchitecture } from "../../shared/dodaf/architectureWriteback.js";
-import { applyOv5aToOv5b, applyOv5bToOv5a, setOv5aParent, syncOv5ActivityPair } from "../../shared/dodaf/ov5ActivitySync.js";
+import { applyOv5aToOv5b, applyOv5bToOv5a, setOv5aParent, syncOv5ActivityPair, introducesCycle } from "../../shared/dodaf/ov5ActivitySync.js";
 import { persistOv5Model } from "./ov5Store.js";
 import {
   applyTemplateToActivity,
   applyGlobalTemplate,
   generateLocalDecomposition,
   autoOrganizeOv5aHierarchy,
-  getOv5aTemplates
+  getOv5aTemplates,
+  evaluateOv5aDecompositionIoCoverage,
+  exportOv5aWbsText
 } from "./ov5aTemplates.js";
 import { generateWithAi } from "../../shared/aiClient.js";
 import { compactForceMissionForAnalysis } from "../../shared/conceptPlanning.js";
@@ -111,7 +113,7 @@ import { generateMockOutput } from "../../shared/generator.js";
 import { normalizeDodafOv1b, normalizeDodafOv1c, normalizeDodafOv2, normalizeDodafOv3, normalizeDodafOv4, normalizeDodafOv5a, normalizeDodafOv6b, normalizeDodafOv6c, normalizeDodafOv7 } from "../../shared/dodaf/products.js";
 import { applySequenceDraft } from "./sequenceChatController.js";
 import { addOv1bTaskGroup, moveOv1bTaskStep, removeOv1bTaskGroup, setOv1bStepMode, updateOv1bTaskGroup } from "./ov1bStore.js";
-import { buildOv1cModel, buildOv7Model, updateMappingProduct } from "./mappingProductStore.js";
+import { buildOv1cModel, buildOv7Model, listStateSources, updateMappingProduct } from "./mappingProductStore.js";
 
 const LOADERS = {
   ov1b: loadProjectOv1b,
@@ -1932,7 +1934,7 @@ export function createDodafProductController({
       }
     },
 
-    async pregenerateOv5a({ silent = false, force = false } = {}) {
+    async pregenerateOv5a({ silent = false, force = false, useAi = false } = {}) {
       const state = getState();
       if (state.ov5aPregenerating) return { skipped: true, reason: "busy" };
       const current = state.ov5a && typeof state.ov5a === "object"
@@ -1952,6 +1954,51 @@ export function createDodafProductController({
       render();
       try {
         const pair = syncOv5ActivityPair({ ov5, ov5a: force ? null : state.ov5a, source: "ov5" });
+
+        if (useAi && activities.length > 0) {
+          try {
+            const rootActs = activities.filter((a) => !a.parentId);
+            const aiRes = await generateWithAi({
+              workflow: { id: "activity-decomposition", title: "活动分解", outputSchema: "ActivityDecompositionDraft" },
+              scope: "ov5a",
+              projectId,
+              analysis: {
+                conceptBrief: state.conceptBrief || {},
+                activities: activities.map((a) => ({ id: a.id, title: a.title, type: a.type, domain: a.domain, text: a.text }))
+              },
+              evidence: []
+            });
+            const steps = aiRes?.result?.activities || aiRes?.output?.activities || aiRes?.activities || [];
+            if (steps.length > 0) {
+              let currOv5 = pair.ov5;
+              let currOv5a = pair.ov5a;
+              for (const step of steps) {
+                const pId = step.parentId || rootActs[0]?.id;
+                const res = generateLocalDecomposition({
+                  ov5: currOv5,
+                  ov5a: currOv5a,
+                  targetActivityId: pId,
+                  aiResponseSteps: [step]
+                });
+                currOv5 = res.nextOv5;
+                currOv5a = res.nextOv5a;
+              }
+              const nextPair = syncOv5ActivityPair({ ov5: currOv5, ov5a: currOv5a, source: "ov5a" });
+              state.ov5 = persistOv5Model(nextPair.ov5);
+              state.ov5a = saveLocalDodafProduct("ov5a", { ...nextPair.ov5a, status: "confirmed", confirmedAt: new Date().toISOString() }, projectId);
+              if (syncOv5) await syncOv5(state.ov5, { source: "ov5a:pregenerate:ai" });
+              await syncControllers.ov5a.sync(state.ov5a, { source: "ov5a:pregenerate:ai" });
+              await writebackArchitecture("ov5a:pregenerate:ai");
+              if (!silent) {
+                notify(`已由大模型驱动生成活动分解树 (OV-5a)，注入 ${steps.length} 项子活动`);
+              }
+              return { applied: state.ov5a.decomposition?.length || 0, skipped: false };
+            }
+          } catch (aiErr) {
+            console.warn("AI ov5a pregeneration failed, fallback to structural pair:", aiErr);
+          }
+        }
+
         const ov5aModel = {
           ...pair.ov5a,
           status: "confirmed",
@@ -1974,7 +2021,7 @@ export function createDodafProductController({
       }
     },
 
-    async pregenerateOv1c({ silent = false, force = false } = {}) {
+    async pregenerateOv1c({ silent = false, force = false, useAi = false } = {}) {
       const state = getState();
       if (state.ov1cPregenerating) return { skipped: true, reason: "busy" };
       const current = state.ov1c && typeof state.ov1c === "object"
@@ -1990,11 +2037,57 @@ export function createDodafProductController({
         const rawModel = buildOv1cModel(state);
         const activities = Array.isArray(state.ov5?.activities) ? state.ov5.activities : [];
         const tasks = Array.isArray(state.forceMission?.tasks) ? state.forceMission.tasks : (state.forceMissionPlan?.tasks || []);
+        const actIds = new Set(activities.map((a) => String(a.id)));
+        const aiMappingsMap = new Map();
+
+        if (useAi && tasks.length > 0 && activities.length > 0) {
+          if (!silent) notify("正在调用大模型深度推理任务与活动因果承接映射...");
+          try {
+            const aiRes = await generateWithAi({
+              workflow: { id: "ov1c", title: "任务与活动映射", outputSchema: "TaskActivityMappingDraft" },
+              scope: "ov1c",
+              projectId,
+              analysis: {
+                conceptBrief: state.conceptBrief || {},
+                tasks: tasks.map((t) => ({ id: t.id, name: t.name, missionType: t.missionType, text: t.text || t.objective })),
+                activities: activities.map((a) => ({ id: a.id, title: a.title, type: a.type, domain: a.domain, text: a.text }))
+              },
+              evidence: []
+            });
+            const draftMappings = aiRes?.result?.mappings || aiRes?.output?.mappings || aiRes?.mappings || [];
+            if (Array.isArray(draftMappings)) {
+              for (const m of draftMappings) {
+                const validRefs = (Array.isArray(m.activityRefs) ? m.activityRefs : []).map(String).filter((id) => actIds.has(id));
+                if (m.taskRef && validRefs.length > 0) {
+                  aiMappingsMap.set(String(m.taskRef), {
+                    activityRefs: validRefs,
+                    note: m.rationale || m.note || "大模型推理因果承接",
+                    judgment: m.judgment === "rejected" ? "rejected" : "accepted"
+                  });
+                }
+              }
+            }
+          } catch (aiErr) {
+            console.warn("AI OV-1c generation failed, falling back to heuristic:", aiErr);
+          }
+        }
 
         const mappings = (rawModel.mappings || []).map((mapping) => {
-          if ((mapping.activityRefs || []).length > 0) return mapping;
-          const task = tasks.find((t) => t.id === mapping.taskRef);
+          if ((mapping.activityRefs || []).length > 0 && !force) return mapping;
+          const task = tasks.find((t) => String(t.id) === String(mapping.taskRef));
           if (!task) return mapping;
+
+          if (aiMappingsMap.has(String(task.id))) {
+            const aiData = aiMappingsMap.get(String(task.id));
+            return {
+              ...mapping,
+              activityRefs: aiData.activityRefs,
+              coverageStatus: "covered",
+              judgment: aiData.judgment,
+              note: aiData.note,
+              status: "confirmed"
+            };
+          }
 
           let matched = activities.filter((act) => act.sourceTaskId === task.id).map((a) => a.id);
           if (!matched.length) {
@@ -2016,6 +2109,7 @@ export function createDodafProductController({
               activityRefs: matched,
               coverageStatus: "covered",
               judgment: "accepted",
+              note: mapping.note || "智能规则匹配",
               status: "confirmed"
             };
           }
@@ -2034,7 +2128,8 @@ export function createDodafProductController({
         await writebackArchitecture("ov1c:pregenerate");
         if (!silent) {
           const coveredCount = next.mappings.filter((m) => (m.activityRefs || []).length > 0).length;
-          notify(`已生成任务与作战活动映射 (OV-1c)，覆盖 ${coveredCount}/${next.mappings.length} 项作战任务`);
+          const aiCount = aiMappingsMap.size;
+          notify(`已生成任务与作战活动映射 (OV-1c)${aiCount > 0 ? ` [大模型驱动 ${aiCount} 项]` : ""}，覆盖 ${coveredCount}/${next.mappings.length} 项作战任务`);
         }
         return { applied: next.mappings.length, skipped: false };
       } catch (error) {
@@ -2046,7 +2141,7 @@ export function createDodafProductController({
       }
     },
 
-    async pregenerateOv7({ silent = false, force = false } = {}) {
+    async pregenerateOv7({ silent = false, force = false, useAi = false } = {}) {
       const state = getState();
       if (state.ov7Pregenerating) return { skipped: true, reason: "busy" };
       const current = state.ov7 && typeof state.ov7 === "object"
@@ -2061,23 +2156,88 @@ export function createDodafProductController({
       try {
         const rawModel = buildOv7Model(state);
         const activities = Array.isArray(state.ov5?.activities) ? state.ov5.activities : [];
+        const actIds = new Set(activities.map((a) => String(a.id)));
+        const aiMappingsMap = new Map();
+        const sources = listStateSources(state);
+        const sourceMap = new Map(sources.map((s) => [`${s.subjectType}:${s.sourceRef}`, s]));
+
+        if (useAi && (rawModel.mappings || []).length > 0 && activities.length > 0) {
+          if (!silent) notify("正在调用大模型深度推理状态转换与因果活动映射...");
+          try {
+            const aiRes = await generateWithAi({
+              workflow: { id: "ov7", title: "状态与活动映射", outputSchema: "StateActivityMappingDraft" },
+              scope: "ov7",
+              projectId,
+              analysis: {
+                conceptBrief: state.conceptBrief || {},
+                sources: (rawModel.mappings || []).map((m) => {
+                  const s = sourceMap.get(`${m.subjectType}:${m.sourceRef}`);
+                  return {
+                    subjectType: m.subjectType,
+                    sourceRef: m.sourceRef,
+                    label: s?.label || m.sourceRef,
+                    kind: s?.kind || "normal",
+                    machineLabel: s?.machineLabel || ""
+                  };
+                }),
+                activities: activities.map((a) => ({ id: a.id, title: a.title, type: a.type, domain: a.domain, text: a.text }))
+              },
+              evidence: []
+            });
+            const draftMappings = aiRes?.result?.mappings || aiRes?.output?.mappings || aiRes?.mappings || [];
+            if (Array.isArray(draftMappings)) {
+              for (const m of draftMappings) {
+                const validRefs = (Array.isArray(m.activityRefs) ? m.activityRefs : []).map(String).filter((id) => actIds.has(id));
+                const key = `${m.subjectType || "state"}:${m.sourceRef}`;
+                if (m.sourceRef && validRefs.length > 0) {
+                  aiMappingsMap.set(key, {
+                    activityRefs: validRefs,
+                    semantic: ["triggers", "executes", "ends"].includes(m.semantic) ? m.semantic : "executes",
+                    note: m.rationale || m.note || "大模型推理状态驱动",
+                    judgment: m.judgment === "rejected" ? "rejected" : "accepted"
+                  });
+                }
+              }
+            }
+          } catch (aiErr) {
+            console.warn("AI OV-7 generation failed, falling back to heuristic:", aiErr);
+          }
+        }
 
         const mappings = (rawModel.mappings || []).map((mapping) => {
-          if ((mapping.activityRefs || []).length > 0) return mapping;
-          const ref = String(mapping.sourceRef || "").toLowerCase();
+          if ((mapping.activityRefs || []).length > 0 && !force) return mapping;
+          const key = `${mapping.subjectType}:${mapping.sourceRef}`;
+
+          if (aiMappingsMap.has(key)) {
+            const aiData = aiMappingsMap.get(key);
+            return {
+              ...mapping,
+              activityRefs: aiData.activityRefs,
+              semantic: aiData.semantic,
+              judgment: aiData.judgment,
+              note: aiData.note,
+              status: "confirmed"
+            };
+          }
+
+          const s = sourceMap.get(`${mapping.subjectType}:${mapping.sourceRef}`);
+          const labelText = `${s?.label || ""} ${s?.machineLabel || ""}`.toLowerCase();
+          const ref = `${mapping.sourceRef} ${labelText}`.toLowerCase();
+          const isInitial = s?.kind === "initial" || labelText.includes("开始");
+
           const matched = activities.filter((act) => {
             const title = String(act.title || "").toLowerCase();
             const type = String(act.type || "").toLowerCase();
             if (ref.includes("sense") || ref.includes("recon") || ref.includes("侦察") || ref.includes("态势")) {
               return type.includes("感知") || type.includes("识别");
             }
-            if (ref.includes("strike") || ref.includes("attack") || ref.includes("打击") || ref.includes("交战")) {
+            if (ref.includes("strike") || ref.includes("attack") || ref.includes("打击") || ref.includes("交战") || ref.includes("压制")) {
               return type.includes("行动") || type.includes("控制");
             }
-            if (ref.includes("c2") || ref.includes("command") || ref.includes("指挥") || ref.includes("决策")) {
-              return type.includes("决策");
+            if (ref.includes("c2") || ref.includes("command") || ref.includes("指挥") || ref.includes("决策") || ref.includes("协同")) {
+              return type.includes("决策") || type.includes("控制");
             }
-            if (ref.includes("assess") || ref.includes("评估") || ref.includes("回收")) {
+            if (ref.includes("assess") || ref.includes("评估") || ref.includes("回收") || ref.includes("修订")) {
               return type.includes("评估");
             }
             return false;
@@ -2087,10 +2247,27 @@ export function createDodafProductController({
             return {
               ...mapping,
               activityRefs: matched,
+              semantic: mapping.semantic || (isInitial ? "triggers" : "executes"),
               judgment: "accepted",
+              note: mapping.note || "智能规则匹配",
               status: "confirmed"
             };
           }
+
+          if (isInitial && activities.length > 0) {
+            const prepAct = activities.find((a) => a.type?.includes("感知") || a.type?.includes("识别") || a.title?.includes("准备") || a.title?.includes("核验")) || activities[0];
+            if (prepAct) {
+              return {
+                ...mapping,
+                activityRefs: [prepAct.id],
+                semantic: "triggers",
+                judgment: "accepted",
+                note: mapping.note || "状态机起始节点，触发首项前置准备/态势感知活动",
+                status: "confirmed"
+              };
+            }
+          }
+
           return mapping;
         });
 
@@ -2105,7 +2282,8 @@ export function createDodafProductController({
         await syncControllers.ov7.sync(state.ov7, { source: "ov7:pregenerate" });
         await writebackArchitecture("ov7:pregenerate");
         if (!silent) {
-          notify(`已生成状态与作战活动映射关系 (OV-7)，包含 ${next.mappings.length} 组状态因果绑定`);
+          const aiCount = aiMappingsMap.size;
+          notify(`已生成状态与作战活动映射 (OV-7)${aiCount > 0 ? ` [大模型驱动 ${aiCount} 项]` : ""}，包含 ${next.mappings.length} 组状态因果绑定`);
         }
         return { applied: next.mappings.length, skipped: false };
       } catch (error) {
@@ -2278,6 +2456,19 @@ export function createDodafProductController({
 
   return api;
 
+function downloadWorkbenchText(filename, content, mimeType = "text/plain;charset=utf-8") {
+  if (typeof document === "undefined") return;
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function handleOv5aWorkbenchAction(action, el) {
   if (!action || (!action.startsWith("ov5a-") && action !== "select-ov5a-activity" && action !== "close-ov5a-inspector")) {
     return false;
@@ -2332,9 +2523,96 @@ function handleOv5aWorkbenchAction(action, el) {
     return true;
   }
 
-  if (action === "ov5a-filter-clear") {
-    state.ov5aFilter = { query: "", domain: "", autonomy: "", level: "" };
+  if (action === "ov5a-filter-task") {
+    state.ov5aFilter = state.ov5aFilter || {};
+    state.ov5aFilter.taskId = ds.taskId || "";
     render();
+    return true;
+  }
+
+  if (action === "ov5a-filter-clear") {
+    state.ov5aFilter = { query: "", domain: "", autonomy: "", level: "", taskId: "" };
+    render();
+    return true;
+  }
+
+  if (action === "ov5a-export-wbs-csv") {
+    const activities = state.ov5?.activities || [];
+    const decompositions = state.ov5a?.decompositions || [];
+    const csvContent = exportOv5aWbsText(activities, decompositions, "csv");
+    downloadWorkbenchText(`ov5a-wbs-${Date.now().toString(36)}.csv`, csvContent, "text/csv;charset=utf-8");
+    notify(`已成功导出 WBS 工作分解表格 (CSV) 共 ${activities.length} 项活动`);
+    return true;
+  }
+
+  if (action === "ov5a-export-wbs-md") {
+    const activities = state.ov5?.activities || [];
+    const decompositions = state.ov5a?.decompositions || [];
+    const mdContent = exportOv5aWbsText(activities, decompositions, "md");
+    if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(mdContent).then(() => {
+        notify("已将 WBS Markdown 复制至剪贴板，并下载文件");
+      }).catch(() => {});
+    }
+    downloadWorkbenchText(`ov5a-wbs-${Date.now().toString(36)}.md`, mdContent, "text/markdown;charset=utf-8");
+    notify(`已成功导出 WBS 工作分解结构 (Markdown)`);
+    return true;
+  }
+
+  if (action === "ov5a-export-diagram-svg") {
+    const canvas = document.querySelector(".ov5a-uml-diagram-canvas");
+    if (!canvas) {
+      notify("未找到构造型图画布");
+      return true;
+    }
+    const title = state.conceptBrief?.title || "作战活动分解构型";
+    const svgWrap = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1200" viewBox="0 0 1600 1200">
+  <style>
+    .canvas-bg { fill: #07101d; }
+    .title { fill: #38bdf8; font-family: sans-serif; font-size: 20px; font-weight: bold; }
+  </style>
+  <rect width="100%" height="100%" class="canvas-bg" />
+  <text x="30" y="40" class="title">${title} - DoDAF 2.0 OV-5a 构造型分解图</text>
+  <foreignObject x="20" y="60" width="1560" height="1120">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="color: #cbd5e1; font-family: system-ui, -apple-system, sans-serif;">
+      ${canvas.innerHTML}
+    </div>
+  </foreignObject>
+</svg>`;
+    downloadWorkbenchText(`ov5a-decomposition-${Date.now().toString(36)}.svg`, svgWrap, "image/svg+xml;charset=utf-8");
+    notify("已成功导出 OV-5a 矢量构型图 (SVG)");
+    return true;
+  }
+
+  if (action === "ov5a-reparent") {
+    const childId = ds.childId || ds.activityId;
+    const newParentId = ds.parentId || "";
+    if (!childId) return true;
+    if (childId === newParentId) {
+      notify("不能将活动自身设为上级");
+      return true;
+    }
+    if (newParentId && introducesCycle(state.ov5a?.decompositions || [], newParentId, childId)) {
+      notify("层级调整失败：检测到环路从属关系！");
+      return true;
+    }
+    state.ov5a = setOv5aParent(state.ov5a, childId, newParentId);
+    void syncOv5aIntoOv5b("drag-reparent").then(() => {
+      notify(`已调整活动归属层级${newParentId ? `（归属至：${newParentId}）` : "（提升为顶层活动）"}`);
+      render();
+    });
+    return true;
+  }
+
+  if (action === "ov5a-drop-root") {
+    const childId = ds.childId || ds.activityId;
+    if (!childId) return true;
+    state.ov5a = setOv5aParent(state.ov5a, childId, "");
+    void syncOv5aIntoOv5b("drag-root").then(() => {
+      notify("已将该活动提升为顶层根活动");
+      render();
+    });
     return true;
   }
 
@@ -2620,7 +2898,7 @@ function handleOv5aWorkbenchAction(action, el) {
   }
 
   if (action === "ov5a-ai-decompose-all") {
-    notify("正在进行全流程作战活动体系化分解...");
+    notify("正在调用大模型进行全流程作战活动体系化分解...");
     void (async () => {
       const rootActs = (state.ov5?.activities || []).filter((a) => !a.parentId);
       if (!rootActs.length) {
@@ -2634,6 +2912,45 @@ function handleOv5aWorkbenchAction(action, el) {
         render();
         return;
       }
+      try {
+        const aiRes = await generateWithAi({
+          workflow: { id: "activity-decomposition", title: "活动分解", outputSchema: "ActivityDecompositionDraft" },
+          scope: "ov5a",
+          projectId,
+          analysis: {
+            conceptBrief: state.conceptBrief || {},
+            activities: (state.ov5?.activities || []).map((a) => ({ id: a.id, title: a.title, type: a.type, domain: a.domain, text: a.text }))
+          },
+          evidence: []
+        });
+        const steps = aiRes?.result?.activities || aiRes?.output?.activities || aiRes?.activities || [];
+        if (steps.length > 0) {
+          let currOv5 = state.ov5;
+          let currOv5a = state.ov5a;
+          for (const step of steps) {
+            const pId = step.parentId || rootActs[0]?.id;
+            const res = generateLocalDecomposition({
+              ov5: currOv5,
+              ov5a: currOv5a,
+              targetActivityId: pId,
+              aiResponseSteps: [step]
+            });
+            currOv5 = res.nextOv5;
+            currOv5a = res.nextOv5a;
+          }
+          const pair = syncOv5ActivityPair({ ov5: currOv5, ov5a: currOv5a, source: "ov5a" });
+          state.ov5 = persistOv5Model(pair.ov5);
+          state.ov5a = saveLocalDodafProduct("ov5a", pair.ov5a, projectId);
+          if (syncOv5) await syncOv5(state.ov5, { source: "ov5a-ai-all" });
+          await syncControllers.ov5a.sync(state.ov5a, { source: "ov5a-ai-all" });
+          await writebackArchitecture("ov5a-ai-all");
+          notify(`AI 体系化分解完成：大模型成功为 ${rootActs.length} 项顶层活动注入 ${steps.length} 项子活动`);
+          render();
+          return;
+        }
+      } catch (err) {
+        console.warn("AI systemic decomposition failed, fallback to heuristic:", err);
+      }
       for (const r of rootActs) {
         const res = generateLocalDecomposition({ ov5: state.ov5, ov5a: state.ov5a, targetActivityId: r.id });
         state.ov5 = res.nextOv5;
@@ -2645,9 +2962,19 @@ function handleOv5aWorkbenchAction(action, el) {
       if (syncOv5) await syncOv5(state.ov5, { source: "ov5a-ai-all" });
       await syncControllers.ov5a.sync(state.ov5a, { source: "ov5a-ai-all" });
       await writebackArchitecture("ov5a-ai-all");
-      notify(`全流程分解完成：已对 ${rootActs.length} 项顶层活动完成纵向深化分解`);
+      notify(`全流程分解完成：已对 ${rootActs.length} 项顶层活动完成纵向深化分解（启发式保底）`);
       render();
     })();
+    return true;
+  }
+
+  if (action === "ov1c-ai-mapping") {
+    void api.pregenerateOv1c({ silent: false, force: true, useAi: true });
+    return true;
+  }
+
+  if (action === "ov7-ai-mapping") {
+    void api.pregenerateOv7({ silent: false, force: true, useAi: true });
     return true;
   }
 

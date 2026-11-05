@@ -43,7 +43,10 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       "RuleLibraryChangeSet",
       "StateMachineDraft",
       "SequenceDraft",
-      "ScenarioDraft"
+      "ScenarioDraft",
+      "ActivityDecompositionDraft",
+      "TaskActivityMappingDraft",
+      "StateActivityMappingDraft"
     ]);
     // 远端大模型深度思考与复杂时序生成需充裕窗口（默认 10 分钟），只要远端连接未断就持续等待并流式传输
     if (longSchemas.has(schema)) return 600000;
@@ -81,6 +84,8 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     const isStateMachineDraft = input.workflow?.outputSchema === "StateMachineDraft";
     const isScenarioDraft = input.workflow?.outputSchema === "ScenarioDraft";
     const isActivityDecompositionDraft = input.workflow?.outputSchema === "ActivityDecompositionDraft";
+    const isTaskActivityMappingDraft = input.workflow?.outputSchema === "TaskActivityMappingDraft";
+    const isStateActivityMappingDraft = input.workflow?.outputSchema === "StateActivityMappingDraft";
     const promptId = generationPromptId(input.workflow?.outputSchema, isResearchChat);
     const promptParts = [
       "你是作战概念研究工作台的专业研究助理。",
@@ -156,6 +161,12 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         '{ "summary": "1-3 句中文说明，概述本轮作战活动分解要点与层级规划",',
         '  "activities": [{ "id": "act-sub-1", "title": "子活动规范名称", "type": "感知|识别|决策|行动|控制|评估|电子对抗|协同打击", "domain": "太空|空中|水面|水下|陆基|电磁|网络|综合", "autonomy": "HITL|HOTL|HOOTL", "performer": "执行责任单元/装备", "timingWindow": "时限窗口如5m", "input": "输入契约", "output": "产出契约", "parentId": "上级活动id", "text": "活动机理与执行说明" }],',
         '  "decompositions": [{ "parentActivityRef": "上级活动id", "childActivityRef": "act-sub-1", "rationale": "分解因果与层级依据" }] }'
+      ] : isTaskActivityMappingDraft ? [
+        '{ "summary": "1-3 句中文说明，概述作战任务与承接活动之间的因果承接与闭环机理",',
+        '  "mappings": [{ "taskRef": "任务ID（必须来自输入的任务列表）", "activityRefs": ["活动ID（必须来自输入的作战活动清单）"], "judgment": "accepted|rejected", "rationale": "承接因果与覆盖说明" }] }'
+      ] : isStateActivityMappingDraft ? [
+        '{ "summary": "1-3 句中文说明，概述状态/转换与作战活动之间的动态承接与驱动机理",',
+        '  "mappings": [{ "subjectType": "state|transition", "sourceRef": "状态ID或转换ID（必须来自输入的状态机）", "activityRefs": ["活动ID（必须来自输入的作战活动清单）"], "semantic": "triggers|executes|ends", "judgment": "accepted|rejected", "rationale": "状态机承接说明" }] }'
       ] : [
         "{",
         '  "summary": "一句话概括",',
@@ -395,6 +406,17 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         "relations 的 fromForceId/toForceId 必须引用上述概念兵力 id。",
         "阶段只能使用 recon、deployment、assault、support 四项。不得生成真实坐标、地点、目标选择、路线、武器使用、具体行动步骤、性能数据或 CMO 文件名。布局 slot 仅表示相对位置。"
       ] : []),
+      ...(isTaskActivityMappingDraft ? [
+        "任务与活动映射要求：taskRef 必须是输入的作战任务 task.id，严禁虚构不存在的 ID。",
+        "activityRefs 必须是输入的作战活动 act.id，严禁虚构不存在的 ID。",
+        "每个任务必须映射 1-3 项真实承接活动，覆盖侦察、协同、突击、控制或评估环节，并在 rationale 中给出军事因果依据。"
+      ] : []),
+      ...(isStateActivityMappingDraft ? [
+        "状态与活动映射要求：sourceRef 必须是输入的状态 state.id 或转换 transition.id，严禁虚构。",
+        "activityRefs 必须是输入的作战活动 act.id，严禁虚构。",
+        "semantic 必须是 triggers（触发活动）、executes（执行活动）或 ends（结束活动）之一。",
+        "在 rationale 中给出状态转换触发或驱动该活动的战术机理说明。"
+      ] : []),
       "",
       `当前工作流：${input.workflow?.title || input.workflowId || base.workflowTitle}`,
       `输出类型：${base.outputSchema}`,
@@ -432,6 +454,12 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
               ? sequenceDraftSchema()
               : isStateMachineDraft
                 ? stateMachineDraftSchema()
+                : isActivityDecompositionDraft
+                  ? activityDecompositionDraftSchema()
+                  : isTaskActivityMappingDraft
+                    ? taskActivityMappingDraftSchema()
+                    : isStateActivityMappingDraft
+                      ? stateActivityMappingDraftSchema()
               : isConceptGraphicPlan
                 ? conceptGraphicPlanSchema()
                 : isConceptMapInitialPlan
@@ -1106,7 +1134,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
           };
     }
 
-    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "OperationalTaskDraft" || base.outputSchema === "TaskOrganizationDraft" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "OrganizationRelationshipDraft" || base.outputSchema === "ResourceFlowDraft" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft" || base.outputSchema === "ScenarioDraft") && draft && typeof draft === "object") {
+    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "OperationalTaskDraft" || base.outputSchema === "TaskOrganizationDraft" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "OrganizationRelationshipDraft" || base.outputSchema === "ResourceFlowDraft" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft" || base.outputSchema === "ScenarioDraft" || base.outputSchema === "ActivityDecompositionDraft" || base.outputSchema === "TaskActivityMappingDraft" || base.outputSchema === "StateActivityMappingDraft") && draft && typeof draft === "object") {
       base.result = draft;
     }
   
@@ -1637,6 +1665,103 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     };
   }
 
+  function activityDecompositionDraftSchema() {
+    return {
+      type: "object",
+      additionalProperties: false,
+      required: ["summary", "activities"],
+      properties: {
+        summary: { type: "string", maxLength: 800 },
+        activities: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "title"],
+            properties: {
+              id: { type: "string", maxLength: 180 },
+              title: { type: "string", maxLength: 240 },
+              type: { type: "string", maxLength: 100 },
+              domain: { type: "string", maxLength: 100 },
+              autonomy: { type: "string", maxLength: 50 },
+              performer: { type: "string", maxLength: 160 },
+              timingWindow: { type: "string", maxLength: 100 },
+              input: { type: "string", maxLength: 500 },
+              output: { type: "string", maxLength: 500 },
+              parentId: { type: "string", maxLength: 180 },
+              text: { type: "string", maxLength: 1000 }
+            }
+          }
+        },
+        decompositions: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["parentActivityRef", "childActivityRef"],
+            properties: {
+              parentActivityRef: { type: "string", maxLength: 180 },
+              childActivityRef: { type: "string", maxLength: 180 },
+              rationale: { type: "string", maxLength: 500 }
+            }
+          }
+        }
+      }
+    };
+  }
+
+  function taskActivityMappingDraftSchema() {
+    return {
+      type: "object",
+      additionalProperties: false,
+      required: ["summary", "mappings"],
+      properties: {
+        summary: { type: "string", maxLength: 800 },
+        mappings: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["taskRef", "activityRefs"],
+            properties: {
+              taskRef: { type: "string", maxLength: 180 },
+              activityRefs: { type: "array", items: { type: "string", maxLength: 180 } },
+              judgment: { type: "string", enum: ["accepted", "rejected"] },
+              rationale: { type: "string", maxLength: 800 }
+            }
+          }
+        }
+      }
+    };
+  }
+
+  function stateActivityMappingDraftSchema() {
+    return {
+      type: "object",
+      additionalProperties: false,
+      required: ["summary", "mappings"],
+      properties: {
+        summary: { type: "string", maxLength: 800 },
+        mappings: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["sourceRef", "activityRefs"],
+            properties: {
+              subjectType: { type: "string", enum: ["state", "transition"] },
+              sourceRef: { type: "string", maxLength: 180 },
+              activityRefs: { type: "array", items: { type: "string", maxLength: 180 } },
+              semantic: { type: "string", enum: ["triggers", "executes", "ends"] },
+              judgment: { type: "string", enum: ["accepted", "rejected"] },
+              rationale: { type: "string", maxLength: 800 }
+            }
+          }
+        }
+      }
+    };
+  }
+
   function conceptGraphicPlanSchema() {
     return {
       type: "object", additionalProperties: false, required: ["narrative", "nodes", "edges", "effects", "activityCandidates", "oodaHints", "openQuestions", "reviewChecklist", "consistencyReport"],
@@ -1793,6 +1918,8 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       ["ConceptMapInitialPlan", "初始概念图", "研究级兵力部署与阶段关系"],
       ["ScenarioDraft", "仿真想定", "基于阶段时序、任务区域与兵力编成生成仿真推演想定脚本"],
       ["ActivityDecompositionDraft", "活动分解", "对作战活动进行 DoDAF OV-5a 规范化纵向分解与层级规划"],
+      ["TaskActivityMappingDraft", "任务与活动映射", "基于作战任务与作战活动清单建立 DoDAF OV-1c 因果承接映射与理由"],
+      ["StateActivityMappingDraft", "状态与活动映射", "基于状态转换与作战活动清单建立 DoDAF OV-7 动态承接与触发映射"],
       ["ConceptPlan", "作战活动与机理", "基于作战阶段、任务编成与资源流矩阵生成闭环作战活动网络与 OODA 动力学机制"],
       ["GenericAiDraft", "通用生成", "未设专用分支的通用结构化生成"]
     ];
@@ -1926,6 +2053,7 @@ function generationPromptId(schema, researchChat = false) {
     RuleLibraryChangeSet: "rule-change-set", RuleLibraryDraft: "rule-library", SequenceDraft: "sequence",
     StateMachineDraft: "state-machine", ConceptGraphicPlan: "concept-graphic-plan", ConceptMapInitialPlan: "concept-map-initial",
     ScenarioDraft: "scenario", ActivityDecompositionDraft: "activity-decomposition",
+    TaskActivityMappingDraft: "task-activity-mapping", StateActivityMappingDraft: "state-activity-mapping",
     ConceptPlan: "ov5-concept-plan"
   };
   return `ai.generate.${ids[schema] || "generic"}`;

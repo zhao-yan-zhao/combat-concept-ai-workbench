@@ -14,7 +14,6 @@ function escapeHtml(value) {
 function formatEvidenceSelection(selection) {
   if (!selection) return "";
   const parts = [];
-  if (selection.query) parts.push(`检索词 “${selection.query}”`);
   if (selection.count) parts.push(`${selection.count} 条证据`);
   return parts.join(" · ");
 }
@@ -105,7 +104,7 @@ export function renderOv5Workbench(state, context = {}) {
 
           <!-- 视角具体内容 -->
           <div class="ov5-view-stage">
-            ${state.ov5Generating ? renderOv5GeneratingProgress() : renderActivePerspective({ viewMode, model, activities, edges, activityById, oodaHealth, state, stressedNodeId })}
+            ${renderActivePerspective({ viewMode, model, activities, edges, activityById, oodaHealth, state, stressedNodeId })}
           </div>
 
           <!-- 底部关系与连线维护（低视觉侵入折叠抽屉） -->
@@ -565,10 +564,10 @@ function renderSyncMatrixView({ activities, state }) {
                     <div class="sync-card ${state.selection?.id === act.id ? "selected" : ""}" data-activity="${escapeHtml(act.id)}">
                       <div class="sync-card-top">
                         <div class="sync-card-title">${escapeHtml(act.title)}</div>
-                        <button type="button" class="sync-inline-edit-btn" data-action="edit-activity" data-activity="${escapeHtml(act.id)}" title="编辑活动与主体绑定">✏️</button>
+                        <button type="button" class="sync-inline-edit-btn" data-action="edit-activity" data-activity-id="${escapeHtml(act.id)}" data-activity="${escapeHtml(act.id)}" data-stop-click-propagation="true" title="编辑活动与主体绑定">✏️</button>
                       </div>
                       <div class="sync-card-meta">
-                        <span class="${act.performer ? 'assigned' : 'unassigned'}" data-action="edit-activity" data-activity="${escapeHtml(act.id)}" title="点击绑定或修改执行主体">${escapeHtml(act.performer || act.resources || "+绑定主体")}</span>
+                        <span class="${act.performer ? 'assigned' : 'unassigned'}" data-action="edit-activity" data-activity-id="${escapeHtml(act.id)}" data-activity="${escapeHtml(act.id)}" data-stop-click-propagation="true" title="点击绑定或修改执行主体">${escapeHtml(act.performer || act.resources || "+绑定主体")}</span>
                         <span class="pill-time">${escapeHtml(act.timingWindow || act.duration || "15m")}</span>
                       </div>
                     </div>
@@ -743,14 +742,14 @@ function renderResilienceView({ activities, edges, state, stressedNodeId, activi
               <div class="resilience-head">
                 <span class="domain-tag">${escapeHtml(act.domain || "综合")}</span>
                 <div class="resilience-head-actions">
-                  <button type="button" class="card-inline-edit-btn" data-action="edit-activity" data-activity="${escapeHtml(act.id)}" title="编辑该活动的主体平台与契约">✏️ 编辑</button>
-                  <button type="button" class="stress-toggle-btn ${isStressed ? "stressed" : ""}" data-action="toggle-ov5-stress" data-node="${escapeHtml(act.id)}" title="注入战损模拟">
+                  <button type="button" class="card-inline-edit-btn" data-action="edit-activity" data-activity-id="${escapeHtml(act.id)}" data-activity="${escapeHtml(act.id)}" data-stop-click-propagation="true" title="编辑该活动的主体平台与契约">✏️ 编辑</button>
+                  <button type="button" class="stress-toggle-btn ${isStressed ? "stressed" : ""}" data-action="toggle-ov5-stress" data-node="${escapeHtml(act.id)}" data-stop-click-propagation="true" title="注入战损模拟">
                     ${isStressed ? "💥 战损中" : "⚡ 注入扰动"}
                   </button>
                 </div>
               </div>
               <strong class="resilience-title">${escapeHtml(act.title)}</strong>
-              <div class="resilience-performer ${act.performer ? 'assigned' : 'unassigned'}" data-action="edit-activity" data-activity="${escapeHtml(act.id)}" title="点击绑定或修改执行主体">主体: <strong>${escapeHtml(act.performer || act.resources || "待分配 (+绑定)")}</strong></div>
+              <div class="resilience-performer ${act.performer ? 'assigned' : 'unassigned'}" data-action="edit-activity" data-activity-id="${escapeHtml(act.id)}" data-activity="${escapeHtml(act.id)}" data-stop-click-propagation="true" title="点击绑定或修改执行主体">主体: <strong>${escapeHtml(act.performer || act.resources || "待分配 (+绑定)")}</strong></div>
 
               ${isImpacted ? `
                 <div class="impact-status-bar ${hasFallback ? "recovered" : "broken"}">
@@ -790,13 +789,13 @@ function renderActivityCard(act, selectedId, edges, selectedUpstream = new Set()
         <span class="autonomy-pill ${autonomy.toLowerCase()}">${autonomy}</span>
         <span class="io-flow-pill" title="上游来源 ${inCount} 项，下游驱动 ${outCount} 项">↑${inCount} ↓${outCount}</span>
         ${act.timingWindow ? `<span class="timing-badge">${escapeHtml(act.timingWindow)}</span>` : ""}
-        <button type="button" class="card-inline-edit-btn" data-action="edit-activity" data-activity="${escapeHtml(act.id)}" title="编辑该活动的执行主体、作战域与契约">✏️ 编辑</button>
+        <button type="button" class="card-inline-edit-btn" data-action="edit-activity" data-activity-id="${escapeHtml(act.id)}" data-activity="${escapeHtml(act.id)}" data-stop-click-propagation="true" title="编辑该活动的执行主体、作战域与契约">✏️ 编辑</button>
       </div>
       <strong class="card-title">${escapeHtml(act.title)}</strong>
       ${act.performer ? `
-        <small class="card-performer assigned" data-action="edit-activity" data-activity="${escapeHtml(act.id)}" title="点击修改执行主体">主体: <strong>${escapeHtml(act.performer)}</strong></small>
+        <small class="card-performer assigned" data-action="edit-activity" data-activity-id="${escapeHtml(act.id)}" data-activity="${escapeHtml(act.id)}" data-stop-click-propagation="true" title="点击修改执行主体">主体: <strong>${escapeHtml(act.performer)}</strong></small>
       ` : `
-        <small class="card-performer unassigned" data-action="edit-activity" data-activity="${escapeHtml(act.id)}" title="点击绑定执行兵力与装备平台">+ 绑定执行主体</small>
+        <small class="card-performer unassigned" data-action="edit-activity" data-activity-id="${escapeHtml(act.id)}" data-activity="${escapeHtml(act.id)}" data-stop-click-propagation="true" title="点击绑定执行兵力与装备平台">+ 绑定执行主体</small>
       `}
       <div class="card-io">
         <span title="输入: ${escapeHtml(act.input)}">入: ${escapeHtml(act.input || "无")}</span>
@@ -819,18 +818,18 @@ function renderLadderCard(act, selectedId, isViolation = false) {
       <div class="ladder-card-header">
         <span class="domain-badge">${escapeHtml(act.domain || "综合")}</span>
         <strong>${escapeHtml(act.title)}</strong>
-        <button type="button" class="card-inline-edit-btn" data-action="edit-activity" data-activity="${escapeHtml(act.id)}" title="编辑活动属性与主体绑定">✏️ 编辑</button>
+        <button type="button" class="card-inline-edit-btn" data-action="edit-activity" data-activity-id="${escapeHtml(act.id)}" data-activity="${escapeHtml(act.id)}" data-stop-click-propagation="true" title="编辑活动属性与主体绑定">✏️ 编辑</button>
       </div>
       <p class="ladder-card-desc">${escapeHtml(act.text)}</p>
       <div class="ladder-card-footer">
-        <span class="${act.performer ? 'assigned-performer' : 'unassigned-performer'}" data-action="edit-activity" data-activity="${escapeHtml(act.id)}" title="点击绑定或修改执行主体">主体: <strong>${escapeHtml(act.performer || act.resources || "待分配 (+绑定)")}</strong></span>
+        <span class="${act.performer ? 'assigned-performer' : 'unassigned-performer'}" data-action="edit-activity" data-activity-id="${escapeHtml(act.id)}" data-activity="${escapeHtml(act.id)}" data-stop-click-propagation="true" title="点击绑定或修改执行主体">主体: <strong>${escapeHtml(act.performer || act.resources || "待分配 (+绑定)")}</strong></span>
         <span class="time">${escapeHtml(act.timingWindow || act.duration || "15m")}</span>
       </div>
       <div class="ladder-card-actions">
         <span class="autonomy-switch-label">分配自主权:</span>
-        <button type="button" class="autonomy-switch-btn ${currentLevel === "HITL" ? "active hitl" : ""}" data-action="change-activity-autonomy" data-activity="${escapeHtml(act.id)}" data-level="HITL" title="设置为人在回路决策">HITL</button>
-        <button type="button" class="autonomy-switch-btn ${currentLevel === "HOTL" ? "active hotl" : ""}" data-action="change-activity-autonomy" data-activity="${escapeHtml(act.id)}" data-level="HOTL" title="设置为人上回路协同">HOTL</button>
-        <button type="button" class="autonomy-switch-btn ${currentLevel === "HOOTL" ? "active hootl" : ""}" data-action="change-activity-autonomy" data-activity="${escapeHtml(act.id)}" data-level="HOOTL" title="设置为边缘全自主">HOOTL</button>
+        <button type="button" class="autonomy-switch-btn ${currentLevel === "HITL" ? "active hitl" : ""}" data-action="change-activity-autonomy" data-activity="${escapeHtml(act.id)}" data-level="HITL" data-stop-click-propagation="true" title="设置为人在回路决策">HITL</button>
+        <button type="button" class="autonomy-switch-btn ${currentLevel === "HOTL" ? "active hotl" : ""}" data-action="change-activity-autonomy" data-activity="${escapeHtml(act.id)}" data-level="HOTL" data-stop-click-propagation="true" title="设置为人上回路协同">HOTL</button>
+        <button type="button" class="autonomy-switch-btn ${currentLevel === "HOOTL" ? "active hootl" : ""}" data-action="change-activity-autonomy" data-activity="${escapeHtml(act.id)}" data-level="HOOTL" data-stop-click-propagation="true" title="设置为边缘全自主">HOOTL</button>
       </div>
     </div>
   `;
@@ -866,19 +865,4 @@ function formatPhaseActivities(activities = []) {
   if (!activities.length) return `<span class="phase-empty">无直接对应活动</span>`;
   return activities.slice(0, 4).map((a) => `<span class="phase-chip" title="${escapeHtml(a.title)}">${escapeHtml(a.title)}</span>`).join("")
     + (activities.length > 4 ? `<span class="phase-chip more">+${activities.length - 4}</span>` : "");
-}
-
-
-function renderOv5GeneratingProgress() {
-  return `
-    <div class="ov5-generating-box rule-form-empty is-pregenerating" role="status" aria-live="polite">
-      <div class="rule-pregenerate-spinner" aria-hidden="true"></div>
-      <h3>正在构建作战活动与动力学因果网络</h3>
-      <p>AI 正在深度解析已确认作战任务、参战兵力与资源流契约，构建闭环作战活动与 OODA 动力学机制…</p>
-      <div class="brief-generate-progress">
-        <span class="brief-generate-progress-bar"></span>
-        <span class="brief-generate-progress-label">正在基于任务、兵力与资源流契约构建杀伤网因果闭环…</span>
-      </div>
-    </div>
-  `;
 }

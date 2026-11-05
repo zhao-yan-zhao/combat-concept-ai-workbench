@@ -5,6 +5,7 @@ import { addEdge, deriveActivitiesFromTasks, persistOv5Model } from "./ov5Store.
 import { deriveOodaFromOv5, evaluateOodaLoopHealth } from "./oodaStore.js";
 import { countUnmappedOv5Activities } from "./ov5Ov1Linker.js";
 import { planningAnalysisForDownstream } from "./planningContext.js";
+import { selectionFor } from "./ui.js";
 
 export function createOv5AiController({ getState, render, notify, invalidateDerivedArtifacts, syncOv5, syncOoda }) {
   return {
@@ -73,20 +74,22 @@ export function createOv5AiController({ getState, render, notify, invalidateDeri
       if (action === "preset-stress-domain") {
         const state = getState();
         const domain = source?.dataset?.domain;
-        const target = (state.ov5?.activities || []).find((a) => a.domain === domain);
+        const target = (state.ov5?.activities || []).find((a) => a.domain === domain || String(a.title).includes(domain) || String(a.resources).includes(domain))
+          || (state.ov5?.activities || [])[0];
         if (target) {
           state.ov5StressedNodeId = target.id;
           render();
           notify(`已注入「${domain}域」对抗压制战损场景（扰动节点：${target.title}）`);
         } else {
-          notify(`当前活动网络中暂无归属于「${domain}域」的作战活动`);
+          notify(`当前活动网络中暂无作战活动`);
         }
         return true;
       }
       if (action === "preset-stress-type") {
         const state = getState();
         const type = source?.dataset?.type;
-        const target = (state.ov5?.activities || []).find((a) => String(a.type).includes(type) || String(a.title).includes(type));
+        const target = (state.ov5?.activities || []).find((a) => String(a.type).includes(type) || String(a.title).includes(type))
+          || (state.ov5?.activities || [])[0];
         if (target) {
           state.ov5StressedNodeId = target.id;
           render();
@@ -98,12 +101,16 @@ export function createOv5AiController({ getState, render, notify, invalidateDeri
       }
       if (action === "edit-activity") {
         const state = getState();
-        const actId = source?.dataset?.activity;
+        const actId = source?.dataset?.activityId || source?.dataset?.activity;
         if (actId) {
           const act = (state.ov5?.activities || []).find((a) => a.id === actId);
-          state.selection = act ? { id: act.id, kind: "activity", title: act.title } : { id: actId, kind: "activity" };
+          state.selection = selectionFor("activity", actId, { ov5: state.ov5, ov1: state.ov1 })
+            || (act ? { id: act.id, kind: "activity", title: act.title } : { id: actId, kind: "activity" });
           state.ov5LeftMode = "editor";
           render();
+          if (act?.title) {
+            notify(`已载入「${act.title}」编辑表单`);
+          }
         }
         return true;
       }

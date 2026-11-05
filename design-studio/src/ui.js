@@ -720,10 +720,17 @@ function renderActivityInspector(selection, context) {
       </span>
     </label>`;
   }).join("");
+  const title = selection.title || activity.title || "";
+  const type = activity.type || (Array.isArray(selection.facts) ? selection.facts.find((f) => f[0] === "活动类型")?.[1] : "") || "";
+  const input = activity.input || (Array.isArray(selection.facts) ? selection.facts.find((f) => f[0] === "输入")?.[1] : "") || "";
+  const output = activity.output || (Array.isArray(selection.facts) ? selection.facts.find((f) => f[0] === "输出")?.[1] : "") || "";
+  const duration = activity.duration || (Array.isArray(selection.facts) ? selection.facts.find((f) => f[0] === "预计耗时")?.[1] : "") || "";
+  const text = selection.text || activity.text || "";
+
   return `
     <form class="activity-editor" id="ov5ActivityForm">
-      <label>活动名称<input name="title" value="${escapeHtml(selection.title)}"></label>
-      <label>活动类型<input name="type" value="${escapeHtml(selection.facts[0][1])}"></label>
+      <label>活动名称<input name="title" value="${escapeHtml(title)}"></label>
+      <label>活动类型<input name="type" value="${escapeHtml(type)}"></label>
       <label>执行主体 / 平台编组<input name="performer" value="${escapeHtml(activity.performer || activity.resources || "")}" placeholder="如：隐身无人机编队、战区指控所"></label>
       <label>作战域<select name="domain">
         ${["综合", "太空", "空中", "水面", "水下", "陆基", "电磁", "网络"].map((d) => `<option value="${d}" ${(activity.domain || "综合") === d ? "selected" : ""}>${d}域</option>`).join("")}
@@ -734,15 +741,15 @@ function renderActivityInspector(selection, context) {
         <option value="HOOTL" ${activity.autonomy === "HOOTL" ? "selected" : ""}>全自主回路 (HOOTL) - 微秒级边缘防御与避障</option>
       </select></label>
       <label>时效窗口 / 预算<input name="timingWindow" value="${escapeHtml(activity.timingWindow || activity.duration || "")}" placeholder="如：15-30m、5s"></label>
-      <label>输入信息<textarea name="input" rows="2">${escapeHtml(selection.facts[1][1])}</textarea></label>
-      <label>输出信息<textarea name="output" rows="2">${escapeHtml(selection.facts[2][1])}</textarea></label>
-      <label>预计耗时<input name="duration" value="${escapeHtml(selection.facts[3][1])}"></label>
+      <label>输入信息<textarea name="input" rows="2">${escapeHtml(input)}</textarea></label>
+      <label>输出信息<textarea name="output" rows="2">${escapeHtml(output)}</textarea></label>
+      <label>预计耗时<input name="duration" value="${escapeHtml(duration)}"></label>
       <label>父活动<select name="parentId"><option value="">无（顶层活动）</option>${parentOptions}</select></label>
       <label>资源消耗 / 需求<textarea name="resources" rows="2">${escapeHtml(activity.resources || "")}</textarea></label>
       <label>抗毁 / 降级备用机制<textarea name="resilienceFallback" rows="2" placeholder="如：卫星受阻时转机间战术自组网交接">${escapeHtml(activity.resilienceFallback || "")}</textarea></label>
       <label>前置条件<textarea name="preconditions" rows="2">${escapeHtml(activity.preconditions || "")}</textarea></label>
       <label>时间与规则约束<textarea name="constraints" rows="2">${escapeHtml(activity.constraints || "")}</textarea></label>
-      <label>活动说明<textarea name="text" rows="3">${escapeHtml(selection.text)}</textarea></label>
+      <label>活动说明<textarea name="text" rows="3">${escapeHtml(text)}</textarea></label>
       <label>知识依据<input name="refs" value="${escapeHtml(refs)}"></label>
       <fieldset class="trace-source-field ov1-source-picker">
         <legend>来源 OV-1 节点 <span class="ov1-source-count" data-ov1-source-count>${selectedCount}/${ov1Nodes.length || 0} 已选</span></legend>

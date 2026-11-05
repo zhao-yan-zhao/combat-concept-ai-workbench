@@ -439,3 +439,151 @@ export function autoOrganizeOv5aHierarchy(arg1, arg2) {
     totalDecompositions: cleanDecompositions.length
   };
 }
+
+/**
+ * Evaluates Input/Output coverage and contract conservation for OV-5a decomposition.
+ * Checks whether parent activity input/output are properly inherited and closed across child activities.
+ */
+export function evaluateOv5aDecompositionIoCoverage(activities = [], decompositions = []) {
+  const actById = new Map((activities || []).map((a) => [String(a.id), a]));
+  const childrenByParent = new Map();
+  (decompositions || []).forEach((d) => {
+    if (!childrenByParent.has(d.parentActivityRef)) childrenByParent.set(d.parentActivityRef, []);
+    childrenByParent.get(d.parentActivityRef).push(d.childActivityRef);
+  });
+
+  const issues = [];
+  const statusMap = new Map();
+
+  let parentCount = 0;
+  let cleanCount = 0;
+
+  childrenByParent.forEach((childIds, parentId) => {
+    const parentAct = actById.get(parentId);
+    if (!parentAct) return;
+    parentCount += 1;
+    const children = childIds.map((id) => actById.get(id)).filter(Boolean);
+    if (!children.length) return;
+
+    let hasInputWarning = false;
+    let hasOutputWarning = false;
+
+    // Check parent input coverage
+    if (parentAct.input && parentAct.input.trim()) {
+      const anyChildHasInput = children.some((c) => c.input && c.input.trim());
+      if (!anyChildHasInput) {
+        hasInputWarning = true;
+        issues.push({
+          state: "warning",
+          statusLabel: "输入未承接",
+          label: `「${parentAct.title}」输入契约未被下级子活动承接`,
+          detail: `父活动声明了输入「${parentAct.input}」，但其 ${children.length} 个子活动均未声明输入触发条件。`
+        });
+      }
+    }
+
+    // Check parent output coverage
+    if (parentAct.output && parentAct.output.trim()) {
+      const anyChildHasOutput = children.some((c) => c.output && c.output.trim());
+      if (!anyChildHasOutput) {
+        hasOutputWarning = true;
+        issues.push({
+          state: "warning",
+          statusLabel: "产出未交付",
+          label: `「${parentAct.title}」产出契约未被下级子活动交付`,
+          detail: `父活动声明了交付物「${parentAct.output}」，但其 ${children.length} 个子活动均未声明产出物交付契约。`
+        });
+      }
+    }
+
+    if (hasInputWarning || hasOutputWarning) {
+      statusMap.set(parentId, {
+        status: "warning",
+        message: hasInputWarning && hasOutputWarning ? "I/O 契约未闭环" : hasInputWarning ? "输入契约未承接" : "产出契约未交付"
+      });
+    } else {
+      cleanCount += 1;
+      statusMap.set(parentId, {
+        status: "clean",
+        message: "I/O 守恒闭环"
+      });
+    }
+  });
+
+  const ioHealthScore = parentCount === 0 ? 100 : Math.round((cleanCount / parentCount) * 100);
+
+  return {
+    issues,
+    statusMap,
+    stats: {
+      parentCount,
+      cleanCount,
+      warningCount: parentCount - cleanCount,
+      ioHealthScore
+    }
+  };
+}
+
+/**
+ * Builds structured WBS text export in CSV or Markdown table format.
+ */
+export function exportOv5aWbsText(activities = [], decompositions = [], format = "csv") {
+  const parentByChild = new Map((decompositions || []).map((d) => [d.childActivityRef, d.parentActivityRef]));
+  const childrenByParent = new Map();
+
+  (activities || []).forEach((act) => {
+    const p = parentByChild.get(String(act.id)) || "__root__";
+    if (!childrenByParent.has(p)) childrenByParent.set(p, []);
+    childrenByParent.get(p).push(act);
+  });
+
+  const roots = childrenByParent.get("__root__") || [];
+
+  const rows = [];
+  function traverse(act, code) {
+    rows.push({
+      code,
+      title: act.title || act.id,
+      domain: act.domain || "综合",
+      autonomy: act.autonomy || "HOTL",
+      performer: act.performer || act.resources || "",
+      timing: act.timingWindow || "",
+      input: act.input || "",
+      output: act.output || "",
+      text: act.text || ""
+    });
+    const children = childrenByParent.get(String(act.id)) || [];
+    children.forEach((child, idx) => {
+      traverse(child, `${code}.${idx + 1}`);
+    });
+  }
+
+  roots.forEach((root, idx) => {
+    traverse(root, `${idx + 1}.0`);
+  });
+
+  if (format === "csv") {
+    const headers = ["WBS编码", "作战活动名称", "作战域", "自主度分级", "执行主体/装备", "时效窗口", "输入数据/触发契约", "产出数据/交付契约", "活动战术机理说明"];
+    const csvLines = [headers.join(",")];
+    rows.forEach((r) => {
+      const escapeCsv = (val) => `"${String(val || "").replace(/"/g, '""')}"`;
+      csvLines.push([
+        escapeCsv(r.code),
+        escapeCsv(r.title),
+        escapeCsv(r.domain),
+        escapeCsv(r.autonomy),
+        escapeCsv(r.performer),
+        escapeCsv(r.timing),
+        escapeCsv(r.input),
+        escapeCsv(r.output),
+        escapeCsv(r.text)
+      ].join(","));
+    });
+    return "\uFEFF" + csvLines.join("\r\n");
+  }
+
+  const mdHeaders = "| WBS编码 | 作战活动名称 | 作战域 | 自主度 | 执行主体 | 时效 | 输入契约 | 产出交付 |";
+  const mdDivider = "| :--- | :--- | :---: | :---: | :--- | :--- | :--- | :--- |";
+  const mdLines = rows.map((r) => `| ${r.code} | **${r.title}** | ${r.domain} | ${r.autonomy} | ${r.performer || "-"} | ${r.timing || "-"} | ${r.input || "-"} | ${r.output || "-"} |`);
+  return [mdHeaders, mdDivider, ...mdLines].join("\n");
+}

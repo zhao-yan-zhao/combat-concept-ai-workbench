@@ -18,6 +18,15 @@ export function createOv1Controller({ getState, render, notify, selectNode, inva
         notify("高层概念图任务摘要已保存");
         render();
       });
+      root.querySelector("#ov1OutlineForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const state = getState();
+        state.ov1 = updateOv1Concept(state.ov1, Object.fromEntries(new FormData(event.currentTarget).entries()));
+        invalidateValidation?.();
+        void syncOv1?.(state.ov1, { source: "concept-outline" });
+        notify("体系概念大纲已保存并同步");
+        render();
+      });
       root.querySelector("#ov1NodeForm")?.addEventListener("submit", (event) => {
         event.preventDefault();
         const state = getState();
@@ -105,6 +114,16 @@ export function createOv1Controller({ getState, render, notify, selectNode, inva
     },
 
     handleAction(action) {
+      if (action === "switch-ov1-view-mode") {
+        const state = getState();
+        const doc = typeof document !== "undefined" ? document : null;
+        const targetMode = doc?.activeElement?.dataset?.viewMode
+          || doc?.querySelector?.("[data-action='switch-ov1-view-mode'].active")?.dataset?.viewMode
+          || "graph";
+        state.ov1ViewMode = targetMode;
+        render();
+        return true;
+      }
       if (action === "auto-layout-ov1") {
         const state = getState();
         state.ov1 = autoLayoutOv1(state.ov1);

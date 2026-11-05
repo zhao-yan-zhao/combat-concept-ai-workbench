@@ -75,8 +75,9 @@ function renderMappingPage({ resource, product, eyebrow, title, description, sou
     </header>
     ${renderProjectStorageState(state[`${resource}Storage`], { refreshAction: `refresh-project-${resource}` })}
     <div class="mapping-toolbar">
-      <button type="button" class="ghost-btn" data-action="seed-dodaf-${resource}">刷新来源</button>
-      <button type="button" class="primary-btn" data-action="save-dodaf-${resource}">保存映射</button>
+      <button type="button" class="primary-btn" data-action="${resource}-ai-mapping" title="由大模型结合任务与活动上下文，深度推理因果映射关系与作战理由">🤖 AI 认知映射</button>
+      <button type="button" class="ghost-btn" data-action="seed-dodaf-${resource}" title="按启发式规则重置并重新对齐">启发式重置</button>
+      <button type="button" class="ghost-btn" data-action="save-dodaf-${resource}">保存映射</button>
     </div>
     ${(resource === "ov1c" ? state.ov1cPregenerating : state.ov7Pregenerating) ? `
       <div class="rule-form-empty is-pregenerating" role="status" aria-live="polite" style="margin: 12px 0;">
