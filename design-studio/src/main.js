@@ -986,7 +986,6 @@ function writePrintableReport(target, payload, loading = false) {
   writePrintableReportHelper(target, payload, loading, (reportPayload) => buildExportArtifactFromPayload("markdown", reportPayload).content);
 }
 
-$("#saveVersionBtn").addEventListener("click", saveCurrentReportVersion);
 render();
 redTeamController.refreshHealth();
 aiConfigController.refresh();

@@ -54,6 +54,13 @@ export function bindReportEvents(ctx) {
       deleteArchivedReportVersion(button.dataset.versionDelete, ctx);
     }, "version-delete:click");
   });
+
+  const saveVersionBtn = document.getElementById("saveVersionBtn");
+  if (saveVersionBtn) {
+    addEventListenerOnce(saveVersionBtn, "click", () => {
+      void saveCurrentReportVersion(ctx);
+    }, "save-version:click");
+  }
 }
 
 /**
