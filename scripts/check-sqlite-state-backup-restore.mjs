@@ -46,9 +46,14 @@ async function verifyIdentityRoundTrip() {
 
 function run(script, args) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [`scripts/${script}`, ...args], { cwd: process.cwd(), windowsHide: true });
+    const child = spawn(process.execPath, [`scripts/${script}`, ...args], {
+      cwd: process.cwd(),
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
     let stderr = "";
     child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.stdout.resume();
     child.on("error", reject);
     child.on("close", (code) => code === 0 ? resolve() : reject(new Error(stderr || `${script} exited ${code}`)));
   });

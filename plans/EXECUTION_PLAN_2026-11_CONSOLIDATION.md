@@ -95,4 +95,7 @@
 
 ## 执行记录
 
-（每阶段完成后追加）
+### 阶段 1（2026-11-05）：
+- 完成情况：排查并修复 `scripts/check-sqlite-state-backup-restore.mjs` 中 `spawn` 子进程由于未指定 stdio 导致 stdin 保持开启及 stdout 缓冲区未排空引起的挂起风险，配置 `stdio: ["ignore", "pipe", "pipe"]` 并显式恢复 stdout 流。
+- 验证结果：运行 `node scripts/check-sqlite-state-backup-restore.mjs` 约 2 秒内顺利通过断言并以 0 退出。
+- 遗留问题：无。
