@@ -116,3 +116,17 @@
 - 完成情况：新增统一测试分组配置文件 `scripts/check-groups.json` 与运行器 `scripts/run-checks.mjs`，支持无参列出分组、单分组/多分组/全量按子进程隔离运行，设置 60s 超时与状态汇总报告。
 - 验证结果：运行 `node scripts/run-checks.mjs storage server` 与全量分组完成基线梳理，准确识别出 10 个历史既有失败脚本并登记基线表，各重构核心分组（storage/ov5/force-mission/rules）全绿。
 - 遗留问题：既有 10 个失败脚本保持现状不改动，作为后续阶段不劣化对照基线。
+
+### 阶段 3 - 步骤 1（2026-11-05）：
+- 完成情况：完成 `main.js`（共 4,538 行）全部 135 个顶层函数与核心分发逻辑的盘点与视图归类：
+  1. 通用壳层与主线流程（60个）：render, renderViewRoot, scroll/focus 维护, bindDynamicEvents, handleAction 分发, advanceWorkflowStep 等；
+  2. 概念规划与想定编制（12个）：brief textarea 适配, direction 维护, concept map 挂载与 draft 恢复等；
+  3. 兵力任务（6个）：forceMission 远程同步/冲突恢复, CMO 目录加载, 任务编成推进门禁等；
+  4. OV-5 作战活动（7个）：saveActivity, saveEdge, attachOv1SourcesToOv5, applyMappingQualityToOv5, bindOv5aDragAndDrop, OV-5 冲突与远程同步；
+  5. OV-6 与 OODA（6个）：phaseAction 与 ooda 冲突恢复/远程同步, 焦点维护等；
+  6. 规则库与仿真想定（5个）：scenario/validation 冲突与缓存失效等；
+  7. 报告与归档快照（20个）：word/pdf/pptx 导出, 报告版本归档/校验/删除, 快照恢复等；
+  8. 知识库与远程协同（6个）：协同审查关联, 知识库远程同步等；
+  9. DoDAF 综合视图 OV-1~OV-4（13个）：ov1 浮动工具箱/侧边栏, ov1 source picker, 架构一致性评审跳转等。
+- 验证结果：不改动任何业务代码，测试基线保持一致。
+- 遗留问题：无。准备进入步骤 2 & 3（OV-5 事件抽离与 stateActions 试点）。
