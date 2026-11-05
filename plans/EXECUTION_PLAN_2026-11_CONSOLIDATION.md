@@ -91,7 +91,19 @@
 
 ## 基线
 
-（阶段 2 执行时填写）
+基线测试执行时间：2026-11-05（通过 `node scripts/run-checks.mjs all` 统计，共 131 个脚本，121 通过，10 失败，0 超时）。
+
+| 分组 | 脚本总数 | 通过 | 失败 | 失败脚本清单与预存原因 |
+| :--- | :--- | :--- | :--- | :--- |
+| `storage` | 10 | 10 | 0 | 无 |
+| `server` | 23 | 22 | 1 | `check-ai-prompt-management.mjs`（25 !== 23，历史新增提示词未更新测试基准条数） |
+| `workflow` | 11 | 10 | 1 | `check-workflow-restructuring-batch3.mjs` |
+| `ov5` | 6 | 6 | 0 | 无 |
+| `force-mission` | 6 | 6 | 0 | 无 |
+| `rules` | 7 | 7 | 0 | 无 |
+| `ui-static` | 18 | 15 | 3 | `check-contextual-model-flow.mjs`, `check-operational-task-step.mjs`, `check-workflow-test-mode.mjs` |
+| `dodaf` | 18 | 14 | 4 | `check-dodaf-consistency-snapshot-import.mjs`, `check-dodaf-drafting-legend.mjs`, `check-ov1-strengthening.mjs`, `check-ov2-operational-exchange.mjs` |
+| `misc` | 32 | 31 | 1 | `check-concept-map-integration.mjs` |
 
 ## 执行记录
 
@@ -99,3 +111,8 @@
 - 完成情况：排查并修复 `scripts/check-sqlite-state-backup-restore.mjs` 中 `spawn` 子进程由于未指定 stdio 导致 stdin 保持开启及 stdout 缓冲区未排空引起的挂起风险，配置 `stdio: ["ignore", "pipe", "pipe"]` 并显式恢复 stdout 流。
 - 验证结果：运行 `node scripts/check-sqlite-state-backup-restore.mjs` 约 2 秒内顺利通过断言并以 0 退出。
 - 遗留问题：无。
+
+### 阶段 2（2026-11-05）：
+- 完成情况：新增统一测试分组配置文件 `scripts/check-groups.json` 与运行器 `scripts/run-checks.mjs`，支持无参列出分组、单分组/多分组/全量按子进程隔离运行，设置 60s 超时与状态汇总报告。
+- 验证结果：运行 `node scripts/run-checks.mjs storage server` 与全量分组完成基线梳理，准确识别出 10 个历史既有失败脚本并登记基线表，各重构核心分组（storage/ov5/force-mission/rules）全绿。
+- 遗留问题：既有 10 个失败脚本保持现状不改动，作为后续阶段不劣化对照基线。
