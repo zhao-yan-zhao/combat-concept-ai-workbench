@@ -146,3 +146,11 @@
   3. `main.js` 精简直接事件监听与分支，保留静态断言契约；
 - 验证结果：`force-mission` 组 6/6 全通，`ui-static` 组 15/18（与基线一致，无退化）。
 - 遗留问题：无。准备进行规则库视图（rulesBindings）的抽离。
+
+### 阶段 3 - 步骤 5（规则库/时序/状态机与OODA事件抽离，2026-11-05）：
+- 完成情况：
+  1. 抽离 `design-studio/src/app/bindings/rulesBindings.js`，导出 `bindRulesEvents` 与 `handleRulesAction`；
+  2. 收纳 `[data-ooda]`、`[data-ov6c-event]` 选择监听，以及规则库/阶段行动/时序/状态机研讨对话窗、快速全采纳待审核规则、相关联模型视图快速跳转（view-ov6*）等动作分发；
+  3. `main.js` 委托绑定并移除相关重复 case 分支。
+- 验证结果：`rules` 组 7/7 全通，`ui-static` 组 15/18（与基线一致，无退化）。
+- 遗留问题：无。准备进行其余视图（DoDAF、报告/归档、规划与项目管理）事件与动作的模块化抽离。
