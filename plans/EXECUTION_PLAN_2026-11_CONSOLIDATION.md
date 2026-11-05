@@ -154,3 +154,12 @@
   3. `main.js` 委托绑定并移除相关重复 case 分支。
 - 验证结果：`rules` 组 7/7 全通，`ui-static` 组 15/18（与基线一致，无退化）。
 - 遗留问题：无。准备进行其余视图（DoDAF、报告/归档、规划与项目管理）事件与动作的模块化抽离。
+
+### 阶段 3 - 步骤 6（DoDAF 综合视图事件与动作抽离，2026-11-05）：
+- 完成情况：
+  1. 抽离 `design-studio/src/app/bindings/dodafBindings.js`，导出 `bindDodafEvents` 与 `handleDodafAction`；
+  2. 抽离 `jumpFromStructureReview`、`exportStructureReviewChecklist`、`attachStructureReviewToCollaboration`、`applyOv1CandidateWithRecoveryPoint` 等 DoDAF/架构关联函数；
+  3. 收纳侧边栏、工具箱浮动交互、结构审阅跳转、协同清单挂接、OV-1 候选应用确认等动作分发；
+  4. `main.js` 接入 `bindDodafEvents` 与 `handleDodafAction`，移除相关冗余函数与分支。
+- 验证结果：`dodaf` 组 14/18（与基线一致），`ui-static` 组 15/18（与基线一致，无任何新增退化）。
+- 遗留问题：无。准备进行报告/版本归档视图（reportBindings）与概念规划/项目管理（projectBindings）的抽离。
