@@ -163,3 +163,12 @@
   4. `main.js` 接入 `bindDodafEvents` 与 `handleDodafAction`，移除相关冗余函数与分支。
 - 验证结果：`dodaf` 组 14/18（与基线一致），`ui-static` 组 15/18（与基线一致，无任何新增退化）。
 - 遗留问题：无。准备进行报告/版本归档视图（reportBindings）与概念规划/项目管理（projectBindings）的抽离。
+
+### 阶段 3 - 步骤 7（报告导出与版本归档抽离，2026-11-05）：
+- 完成情况：
+  1. 抽离 `design-studio/src/app/bindings/reportBindings.js`，导出 `bindReportEvents` 与 `handleReportAction`；
+  2. 收纳 `[data-export]`（Word/PDF/PPTX/其他）、`[data-report-template]`、`[data-version-export]`、`[data-version-verify]`、`[data-version-delete]` 等事件绑定；
+  3. 抽离 `exportArtifact`、`exportWordReport*`、`exportPdfReport*`、`exportPptxReport*`、`exportReportVersion`、`verifyArchivedReportVersion`、`saveCurrentReportVersion`、`deleteArchivedReportVersion` 与 `exportContext`；
+  4. `main.js` 精简头部未使用的导入，接入 `bindReportEvents` 与 `handleReportAction`，删除约 210 行本地实现。
+- 验证结果：`ui-static` 组 15/18，`workflow` 组 10/11，与基线完全一致，无任何新增退化。
+- 遗留问题：无。准备进行概念规划与项目管理（projectBindings）的抽离。
