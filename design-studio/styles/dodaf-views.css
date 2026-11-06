@@ -3014,4 +3014,4 @@ a { color: var(--cyan); }
 /* OV-1 command strip: the workspace title already supplies page context. */
 .ov1-heading { justify-content: flex-end; min-height: 34px; padding: 0 0 10px; }.ov1-command-area { display: flex; align-items: center; gap: 10px; }.ov1-status-line { gap: 6px; }.ov1-model-count { padding-left: 0; border-left: 0; color: var(--muted); font-size: 11px; white-space: nowrap; }.ov1-surface .activity-toolbar { gap: 6px; }.ov1-surface .activity-toolbar .ov1-add-node-button { display: grid; width: 34px; min-width: 34px; height: 34px; min-height: 34px; place-items: center; padding: 0; color: var(--cyan); font-size: 20px; font-weight: 400; line-height: 1; }.ov1-surface .activity-toolbar .ov1-ai-command { min-height: 34px; padding: 6px 11px; }.ov1-more-actions > summary { font-size: 15px; letter-spacing: 1px; }
 @media (max-width: 600px) { .ov1-heading { justify-content: flex-start; }.ov1-command-area { align-items: flex-start; flex-direction: column; }.ov1-status-line { justify-content: flex-start; }.ov1-model-count { white-space: normal; } }
-
+

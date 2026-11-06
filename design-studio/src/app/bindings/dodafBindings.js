@@ -1,10 +1,12 @@
 /**
  * DoDAF Products Event Bindings and Action Handlers (OV-1, OV-2, OV-3, OV-4, Structure Review).
  */
-import { views } from "../../data.js";
+import { views, project } from "../../data.js";
 import { buildStructureReviewExport } from "../../structureReviewExport.js";
 import { saveOv1Model } from "../../ov1Store.js";
 import { createLocalOv1Draft } from "../../ov1DraftStore.js";
+import { saveModelSnapshot, snapshotContextFromState } from "../../modelSnapshotStore.js";
+import { selectionFor } from "../../ui.js";
 
 export function closeOv1ModalIfOpen($) {
   const dialog = $("#ov1Dialog");
@@ -222,32 +224,33 @@ export function refreshOv1SourcePicker(form) {
 }
 
 export function jumpFromStructureReview(viewId, targetKind, targetId, ctx) {
-  const { state, render, showToast, select, getViewMeta } = ctx;
+  const { state, render, showToast, getViewMeta, getModels } = ctx;
   const allowed = new Set(views.map((view) => view.id));
   if (!allowed.has(viewId)) return;
   state.activeView = viewId;
   state.selection = null;
+  // Phase-chain reverse checks default to sequence filter when jumping from review.
   if (["ov6a", "ov6b", "ov6c", "phase-action"].includes(viewId)) {
     state.structureReviewFilter = {
       ...(state.structureReviewFilter || { severity: "all", group: "all" }),
       group: "sequence"
     };
   }
-  if (viewId === "ov3" && targetKind === "resource-exchange" && targetId) {
-    state.ov3SelectedExchangeId = targetId;
-  }
   if (targetKind && targetId) {
-    select(targetKind, targetId);
+    try {
+      // Validation issues live under design-validation selection type "issue".
+      const kind = targetKind === "issue" ? "issue" : targetKind;
+      state.selection = selectionFor(kind, targetId, getModels());
+    } catch {
+      state.selection = null;
+    }
   }
   const meta = getViewMeta(viewId);
   const chainHint = {
-    ov1b: "高层逻辑连接（OV-1b）",
-    ov4: "组织结构与指挥关系（OV-4）",
-    ov2: "作战节点间资源流（OV-2）",
-    ov3: "作战资源流转矩阵（OV-3）",
-    ov6a: "作战规则模型（OV-6a）",
-    ov6b: "作战状态转换模型（OV-6b）",
-    ov6c: "作战事件时序（OV-6c）"
+    ov6a: "请绑定规则到受约束活动，或修订规则库",
+    ov6b: "请补状态出口或按任务/对象分机",
+    ov6c: "请为消息回链阶段活动",
+    "phase-action": "请修订阶段、行动或进入退出条件"
   }[viewId];
   showToast(
     state.selection
@@ -354,9 +357,6 @@ export async function applyOv1CandidateWithRecoveryPoint(ctx) {
     state,
     render,
     showToast,
-    project,
-    saveModelSnapshot,
-    snapshotContextFromState,
     projectModelSnapshotSyncController,
     projectOv1SyncController,
     invalidateDerivedArtifacts
@@ -366,17 +366,13 @@ export async function applyOv1CandidateWithRecoveryPoint(ctx) {
     if (!window.confirm("应用候选将替换当前高层作战概念图。系统会先保存一个可恢复的模型快照，是否继续？")) return;
   }
 
-  if (saveModelSnapshot && snapshotContextFromState) {
-    state.modelSnapshots = saveModelSnapshot(snapshotContextFromState(state, project), state.modelSnapshots);
-    const recoveryPoint = state.modelSnapshots[0];
-    render();
-    if (projectModelSnapshotSyncController) {
-      const saved = await projectModelSnapshotSyncController.save(recoveryPoint, { source: "ov1-ai-candidate-preapply" });
-      if (!saved) {
-        showToast("恢复点未能同步到服务端，当前候选未应用。");
-        return;
-      }
-    }
+  state.modelSnapshots = saveModelSnapshot(snapshotContextFromState(state, project), state.modelSnapshots);
+  const recoveryPoint = state.modelSnapshots[0];
+  render();
+  const saved = await projectModelSnapshotSyncController.save(recoveryPoint, { source: "ov1-ai-candidate-preapply" });
+  if (!saved) {
+    showToast("恢复点未能同步到服务端，当前候选未应用。");
+    return;
   }
   state.ov1 = saveOv1Model(state.ov1Candidate);
   state.ov1Candidate = null;
@@ -387,9 +383,7 @@ export async function applyOv1CandidateWithRecoveryPoint(ctx) {
     /* camera reset is best-effort */
   }
   invalidateDerivedArtifacts();
-  if (projectOv1SyncController) {
-    await projectOv1SyncController.sync(state.ov1, { source: "ai-candidate-approved" });
-  }
+  await projectOv1SyncController.sync(state.ov1, { source: "ai-candidate-approved" });
   showToast("已应用高层作战概念图候选；恢复点已保存。可用「基于当前概念生成活动模型候选」继续。");
   render();
 }
@@ -403,6 +397,7 @@ export async function handleDodafAction(action, source, ctx) {
     completeWorkflowStage,
     dodafProductController,
     projectOv1SyncController,
+    invalidateValidation,
     applyOv1CandidateWithRecoveryPoint: applyCandidate,
     exportStructureReviewChecklist: exportReview,
     attachStructureReviewToCollaboration: attachReview
@@ -656,11 +651,42 @@ export async function handleDodafAction(action, source, ctx) {
   }
 
   if (action === "seed-ov1-from-planning") {
-    await dodafProductController.seedOv1FromPlanning();
+    const seeded = createLocalOv1Draft({
+      brief: state.brief,
+      direction: state.direction,
+      forceMission: state.forceMission
+    });
+    state.ov1 = seeded;
+    state.ov1Candidate = null;
+    state.selection = null;
+    invalidateValidation();
+    try {
+      await projectOv1SyncController.sync(state.ov1, { source: "ov1:seed-from-planning" });
+    } catch {
+      /* local */
+    }
+    showToast("已基于兵力规划生成总体图初图");
+    render();
     return true;
   }
-  if (action === "confirm-ov1") {
-    await dodafProductController.confirmOv1();
+  if (action === "confirm-ov1" || action === "workflow-gate-quick-confirm-ov1") {
+    if (!state.ov1?.nodes?.length) {
+      showToast("总体图尚无节点，请先生成或编辑");
+      return true;
+    }
+    state.ov1.confirmed = true;
+    state.ov1.confirmedAt = new Date().toISOString();
+    if (state.ov1Storage) {
+      state.ov1Storage.stale = false;
+    }
+    try {
+      await projectOv1SyncController.sync(state.ov1, { source: "ov1:confirm" });
+    } catch {
+      /* local */
+    }
+    await completeWorkflowStage();
+    showToast("总体图已确认");
+    render();
     return true;
   }
   if (action === "advance-to-concept-map") {

@@ -1804,4 +1804,4 @@ h3 { margin-bottom: 8px; font-size: 15px; color: #d9f3e8; }
 .relation-remove { width: 26px; height: 26px; padding: 0; background: rgba(239, 68, 68, .15); border: 1px solid rgba(239, 68, 68, .3); color: #fca5a5; font-size: 16px; line-height: 1; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 140ms ease; }
 .relation-remove:hover { background: rgba(239, 68, 68, .3); color: #fff; border-color: #ef4444; }
 .empty-relations { margin: 0; color: var(--muted); font-size: 12px; font-style: italic; }
-
+

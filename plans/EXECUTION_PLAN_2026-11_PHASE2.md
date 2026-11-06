@@ -144,4 +144,37 @@ grep -n "contextPanelDialog" design-studio/src/app/inspectorBindings.js         
 
 ## 执行记录
 
-（每阶段完成后追加）
+### 阶段 1：修复重构回归与样式一致性（已完成）
+
+1. **R1 / R2 修复**：
+   - 位置：`design-studio/src/app/bindings/dodafBindings.js`
+   - 将 `seed-ov1-from-planning` 与 `confirm-ov1 || workflow-gate-quick-confirm-ov1` 恢复为原版（commit `25750d1`）实现，直接调用 `createLocalOv1Draft` 与 `completeWorkflowStage`，补回遗失的快捷动作标识；移除了对未定义 controller 方法的调用。
+2. **R3 修复**：
+   - 位置：`design-studio/src/app/bindings/dodafBindings.js` 与 `design-studio/src/main.js`
+   - 将 `applyOv1CandidateWithRecoveryPoint` 迁回原版实现，在 `dodafBindings.js` 头部静态导入 `saveModelSnapshot`、`snapshotContextFromState`、`project`；移除全部 `if (dep)` 防御性代码；
+   - 在 `main.js` 的 `getDodafCtx()` 中补齐注入 `projectModelSnapshotSyncController`、`invalidateValidation`、`getModels`、`collaborationController`。
+3. **R4 修复**：
+   - 位置：`design-studio/src/app/inspectorBindings.js`
+   - 在 `renderInspectorPanel(ctx)` 末尾完整恢复原版 `#contextPanelDialog` 弹窗与 cancel 监听逻辑。
+4. **R5 修复**：
+   - 位置：`design-studio/src/app/bindings/dodafBindings.js`
+   - `jumpFromStructureReview` 移除未经讨论的 OV-3 独立分支，使用静态导入的 `selectionFor` 恢复原版行为。
+5. **D1 修复**：
+   - 位置：`design-studio/styles/*.css`
+   - 保持 LF 换行符，二进制对齐原版 `git show 47704b3:design-studio/styles.css`，`Buffer.equals` 逐字节验证 100% 相同（639,455 字节）。
+6. **新增防线测试与门禁验证**：
+   - 文件：`scripts/check-refactor-wiring.mjs`
+   - 加入 `scripts/check-groups.json` 的 `ui-static` 分组。
+   - 验证命令与输出：
+     ```powershell
+     node scripts/check-refactor-wiring.mjs
+     # 输出：
+     # PASS: Refactor wiring verification passed cleanly!
+     #   - 119/119 actions mapped
+     #   - Controller methods verified
+     #   - Ctx properties completeness verified
+     ```
+     ```powershell
+     node scripts/run-checks.mjs ui-static
+     # [19/19] 运行 check-refactor-wiring.mjs ... ✓ 通过 (97ms)
+     ```

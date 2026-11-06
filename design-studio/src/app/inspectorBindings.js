@@ -88,4 +88,39 @@ export function renderInspectorPanel(ctx) {
       $("#inspectorRoot").innerHTML = `<div class="inspector-section"><p class="muted">无法渲染检查器：${err?.message || "未知错误"}</p></div>`;
     }
   }
+
+  // Optional floating knowledge panel (menu). Keep separate from docked brief sidebar.
+  const dialog = $("#contextPanelDialog");
+  if (!dialog) return;
+  if (!dialog.dataset.bound) {
+    dialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      state.contextPanelOpen = false;
+      if (dialog.open) dialog.close();
+    });
+    dialog.dataset.bound = "true";
+  }
+  if (state.contextPanelOpen) {
+    const body = $("#contextPanelBody");
+    const title = $("#contextPanelTitle");
+    const status = $("#contextPanelStatus");
+    const eyebrow = $("#contextPanelEyebrow");
+    if (eyebrow) eyebrow.textContent = "知识与上下文";
+    if (title) title.textContent = getViewMeta(state.activeView)?.label || "上下文";
+    if (status) {
+      status.textContent = state.selection?.status || "查阅";
+      status.className = "status-tag";
+    }
+    if (body) {
+      body.innerHTML = renderInspector(state.activeView === "ov1" ? null : state.selection, {
+        ...getModels(),
+        activeView: state.activeView
+      });
+    }
+    dialog.hidden = false;
+    if (!dialog.open) dialog.showModal();
+  } else if (dialog.open) {
+    dialog.close();
+    dialog.hidden = true;
+  }
 }
