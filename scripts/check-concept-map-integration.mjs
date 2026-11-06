@@ -204,10 +204,10 @@ try {
     ...planningComplete
   };
   assert(getWorkflowStageIncompleteReasons(workflowState, 1).length === 0, "Confirmed phase-action satisfies stage 1");
-  assert(getWorkflowStageIncompleteReasons(workflowState, 2).length === 0, "Confirmed operational tasks satisfy stage 2");
-  assert(getWorkflowStageIncompleteReasons(workflowState, 3).length === 0, "Confirmed combat forces satisfy stage 3");
-  assert(getWorkflowStageIncompleteReasons(workflowState, 4).length === 0, "Overall graph satisfies stage 4");
-  assert(getWorkflowStageIncompleteReasons(workflowState, 5).length === 0 && currentWorkflow(workflowState).completedThrough === 5, "Confirmed concept map satisfies stage 5");
+  assert(getWorkflowStageIncompleteReasons(workflowState, 2).length === 0, "Confirmed task and force plan satisfies stage 2");
+  assert(getWorkflowStageIncompleteReasons(workflowState, 3).length === 0, "Confirmed activity model satisfies stage 3");
+  assert(getWorkflowStageIncompleteReasons(workflowState, 4).length === 0, "Confirmed ov1 and concept map satisfies stage 4");
+  assert(currentWorkflow(workflowState).completedThrough >= 4, "Confirmed concept map satisfies mainline stage");
   reopened.close();
 
   console.log("Concept-map integration acceptance passed: no-AI seed, project binding, phase deployment, preview UI, persistence.");

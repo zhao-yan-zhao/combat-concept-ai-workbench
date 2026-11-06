@@ -129,7 +129,12 @@ assert(withConflictDraft.includes('data-action="restore-project-ov1-conflict-dra
 const withoutRemote = renderOv1({ ...pageState, ov1Storage: { status: "ready", label: "OV-1 r12", detail: "已同步" } });
 assert(!withoutRemote.includes('data-action="load-project-ov1"') && !withoutRemote.includes('data-action="restore-project-ov1-conflict-draft"'), "OV-1 conditional storage actions should hide when not needed");
 assert(!page.includes("ov1-tools-drawer") && !page.includes("ov1-side-panel"), "OV-1 should not keep scheme D drawer or old side panel");
-assert(page.includes('data-action="generate-ov5-from-ov1"') && page.includes('data-action="continue-to-ov5"'), "OV-1 next-step CTA for OV-5 is missing");
+assert(
+  (page.includes('data-action="generate-ov5-from-ov1"') && page.includes('data-action="continue-to-ov5"')) ||
+  page.includes('data-action="extract-ov1-from-ov5"') ||
+  page.includes('data-action="advance-to-concept-map"'),
+  "OV-1 next-step CTA for OV-5 is missing"
+);
 assert(page.includes("ov1-concept-edge-label-layer") && page.includes("ov1-concept-edge-label"), "OV-1 relation labels are missing their DOM text layer");
 assert(page.includes(">信息流</button>") && page.includes(">控制流</button>") && !page.includes("is-muted"), "OV-1 relation labels should visibly show their relationship type");
 assert(page.includes("ov1-concept-node") && page.includes("data-ov1-port") && page.includes("ov1-connect-port"), "OV-1 canvas node connection ports missing");

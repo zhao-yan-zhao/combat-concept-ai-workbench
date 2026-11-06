@@ -4,15 +4,17 @@ import { workflowPrimaryStepIds } from "./data.js";
 
 export const RELATED_VIEWS = Object.freeze({
   "phase-action": ["ov6a", "ov6b", "ov6c"],
+  "operational-task": ["ov1b", "ov6a", "ov6b", "ov6c"],
   "force-mission": ["operational-task", "ov1b", "ov6a", "ov6b", "ov6c", "ov4", "ov2", "ov3"],
   ov5: ["ov5a", "ov1c", "ov7"],
-  ov1: ["concept-map"],
-  "concept-map": ["ov1"],
-  scenario: ["structure-review"]
+  ov1: ["ov5a", "ov5", "concept-map"],
+  "concept-map": ["ov5a", "ov5", "ov1"],
+  scenario: ["ov1c", "ov7", "structure-review"]
 });
 
 const MAIN_LABELS = Object.freeze({
   "phase-action": "阶段行动",
+  "operational-task": "作战任务",
   "force-mission": "任务与兵力",
   ov5: "活动机理",
   ov1: "总体概念",

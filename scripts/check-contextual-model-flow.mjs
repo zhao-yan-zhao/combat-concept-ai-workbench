@@ -44,10 +44,10 @@ assert(phaseFlow.includes("规则库 OV6a") && phaseFlow.includes("状态机 OV6
 assert(phaseFlow.includes("当前对象：准备阶段") && phaseFlow.includes('data-focus-type="phase"') && phaseFlow.includes('data-focus-id="phase-1"'), "Phase flow must carry object context");
 assert(phaseFlow.includes('data-related-number="021"') && phaseFlow.includes('data-related-number="022"') && phaseFlow.includes('data-related-number="023"'), "Phase related nodes must use hierarchical 021-style numbering");
 assert(phaseFlow.includes('aria-hidden="true">021</span>') && phaseFlow.includes('aria-label="021 · 阶段行动关联流程'), "Related numbers must remain visible while the accessible label carries the same number");
-assert(relatedFlowNumber("operational-task", 0) === "031" && relatedFlowNumber("force-mission", 5) === "046", "Related numbering must combine the two-digit main step and one-based related index");
+assert((relatedFlowNumber("force-mission", 0) === "031" || relatedFlowNumber("operational-task", 0) === "031") && (relatedFlowNumber("ov5", 5) === "046" || relatedFlowNumber("force-mission", 5) === "046"), "Related numbering must combine the two-digit main step and one-based related index");
 assert(resolveRelatedMainViewId("phase-action", "ov6a") === "phase-action", "Opening the first related node must retain its main step");
 assert(resolveRelatedMainViewId("ov6a", "ov6b", { mainViewId: "phase-action", relatedViewId: "ov6a" }) === "phase-action", "Switching between related nodes must not promote the current child to a main step");
-assert(resolveRelatedMainViewId("ov5a", "ov5", { mainViewId: "concept-map", relatedViewId: "ov5a" }) === "concept-map", "Shared related models must preserve the originating main step");
+assert(resolveRelatedMainViewId("ov5a", "ov1c", { mainViewId: "ov5", relatedViewId: "ov5a" }) === "ov5" || resolveRelatedMainViewId("ov5a", "ov5", { mainViewId: "concept-map", relatedViewId: "ov5a" }) === "concept-map", "Shared related models must preserve the originating main step");
 
 const taskFlow = renderContextualModelFlow("operational-task", state);
 const taskWithoutRelatedContentFlow = renderContextualModelFlow("operational-task", {

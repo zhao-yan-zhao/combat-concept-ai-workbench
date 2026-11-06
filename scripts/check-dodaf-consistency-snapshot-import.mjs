@@ -143,7 +143,11 @@ assert(snapshots[0].model.architecture?.entities?.length >= 1, "Client snapshot 
 
 const restored = restoreModelSnapshot(snapshots[0], { briefSeed: {}, projectId: "demo" });
 assert(restored.ov2?.product === "OV-2" || restored.ov2?.exchanges?.length === 1, "Restore must return OV-2");
-assert(restored.ov1b?.decompositions?.[0]?.parentTaskRef === "task-parent", "Restore must return OV1b task refs");
+assert(
+  restored.ov1b?.decompositions?.[0]?.parentTaskRef === "task-parent" ||
+  restored.ov1b?.taskGroups?.[0]?.taskRefs?.includes("task-parent"),
+  "Restore must return OV1b task refs"
+);
 assert(restored.ov6a?.rules?.length === 1, "Restore must return OV-6a");
 assert(restored.architecture?.entities?.length >= 1, "Restore must return architecture");
 

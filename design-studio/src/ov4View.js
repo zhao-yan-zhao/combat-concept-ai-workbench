@@ -3,6 +3,7 @@ import { renderProjectStorageActions } from "./projectStorageView.js";
 import { resolveOv4SelectedDiagramId } from "./ov4DiagramStore.js";
 import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
 import { buildOv4ForceFingerprint } from "./ov4Builder.js";
+import { renderDodafLegend } from "./dodafDraftingView.js";
 import {
   OV4_ECHELON_CATEGORIES,
   OV4_ORGANIZATION_CATEGORIES,
@@ -46,6 +47,7 @@ export function renderOv4(state) {
           <small class="ov4-summary ${stale ? "is-review" : ""}">${statusLabel} · ${diagrams.length} 张关系图 · ${model.roles?.length || 0} 个共享角色 · ${model.relations?.length || 0} 条共享关系</small>
         </div>
         <div class="ov4-toolbar">
+          ${renderDodafLegend("OV-4")}
           ${state.ov4Storage ? renderProjectStorageActions(state.ov4Storage, { refreshAction: "refresh-project-ov4" }) : ""}
           <button type="button" class="quiet-button" data-action="seed-dodaf-ov4" title="重新推导组织角色与协同关系">重新识别</button>
           <button type="button" class="primary-btn" data-action="save-dodaf-ov4">保存关系图</button>

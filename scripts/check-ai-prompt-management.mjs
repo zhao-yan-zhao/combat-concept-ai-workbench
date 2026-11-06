@@ -24,7 +24,7 @@ try {
       getAiPromptOverrides: () => overrides
     });
     const items = client.listPromptDefinitions();
-    assert.equal(items.length, 23);
+    assert.equal(items.length, 25);
     assert.equal(items.find((item) => item.id === "ai.generate.generic")?.customized, true);
     assert.equal(items.find((item) => item.id === "ai.generate.activity-decomposition")?.name, "活动分解");
     assert.equal(items.find((item) => item.id === "ai.generate.phase-action")?.variables.includes("analysis"), true);

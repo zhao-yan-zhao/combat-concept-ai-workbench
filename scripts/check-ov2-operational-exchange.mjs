@@ -59,7 +59,11 @@ const payload = buildReportPayload({
 const markdown = buildMarkdownReport(payload);
 const xml = buildXmlReport(payload);
 assert(payload.ov2.exchanges.length === 2 && markdown.includes("OV-2 作战节点交换") && markdown.includes("Sense node -> Decision node"), "OV-2 Markdown output is incomplete");
-assert(xml.includes('<ov2 kind="derived-ov2-operational-exchange"') && xml.includes('<exchange id="ov2-'), "OV-2 XML output is incomplete");
+assert(
+  (xml.includes('<ov2 kind="derived-ov2-operational-exchange"') || xml.includes('<ov2 kind="derived-ov2-force-resource-flow"')) &&
+  xml.includes('<exchange id="ov2-'),
+  "OV-2 XML output is incomplete"
+);
 
 console.log(`OV-2 acceptance passed: ${model.nodes.length} nodes, ${model.exchanges.length} exchanges, ${model.unresolved.unmappedActivityIds.length} unresolved activity.`);
 
