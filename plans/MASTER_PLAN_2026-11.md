@@ -660,6 +660,30 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：140/140 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
+---
+
+### T3.4 执行记录 (2026-11-08)
+
+- **任务卡**：M3-T3.4 术语词典
+- **交付内容**：
+  1. 共享统一术语词典模块（新建 `shared/glossary.js`）：
+     - `GLOSSARY`：全面收录 OV-1～OV-7（含 OV-1a/b/c、OV-5a/b、OV-6a/b/c）、OODA、DoDAF、DM2、CONOPS、CMO、C2、ISR、EW、SEAD、ROE、SPOF、HITL/HOTL/HOOTL、DAG、DSL、DPAPI、DB3 等 40+ 核心军事概念与技术缩写；每个条目均含术语名、英文全称、中文标准规范名与详细释义；
+     - 导出 `lookupGlossary(term)`：支持大小写不敏感检索；
+     - 导出 `renderAbbr(term, displayText)`：标准生成 `<abbr class="glossary-abbr" title="...">` 标签，未知项安全回退为纯文本；
+     - 导出 `formatTermTooltip(term)`：用于悬浮提示的格式化文案生成；
+  2. 界面展示接入与悬浮体验优化：
+     - `design-studio/src/dodafDraftingView.js`：图例区（`renderDodafLegend`）接入 `renderAbbr(product)` 与 `renderAbbr("DM2")`；
+     - `design-studio/src/oodaView.js`：标题区接入 `renderAbbr("OODA")`；
+     - `design-studio/styles/dodaf-views.css`：为 `abbr.glossary-abbr` 添加点状下划线与 `cursor: help` 样式；
+  3. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-glossary-coverage.mjs`：动态扫描全部 32 个 `design-studio/src/*View.js` 文件，提取全部出现的缩写，验证 100% 被词典收录且生成合规 `<abbr>` 标签；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 组。
+- **验证命令与结果**：
+  - `node scripts/run-checks.mjs ui-static`：22/22 PASS (100%)
+  - `node scripts/run-checks.mjs all`：141/141 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+
 
 
 

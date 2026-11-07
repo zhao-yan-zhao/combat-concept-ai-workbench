@@ -120,7 +120,8 @@
     "check-workflow-test-mode.mjs",
     "check-refactor-wiring.mjs",
     "check-recovery-transactions.mjs",
-    "check-citation-provenance-ui.mjs"
+    "check-citation-provenance-ui.mjs",
+    "check-glossary-coverage.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",

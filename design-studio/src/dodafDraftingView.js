@@ -10,6 +10,7 @@ import {
   resolveEdgeStyle,
   resolveEntityStyle
 } from "../../shared/dodaf/drafting.js";
+import { renderAbbr } from "../../shared/glossary.js";
 
 export function renderDodafLegend(product, { compact = false } = {}) {
   const spec = getProductLegendSpec(product);
@@ -27,7 +28,7 @@ export function renderDodafLegend(product, { compact = false } = {}) {
   return `<aside class="dodaf-legend ${compact ? "is-compact" : "is-panel"}" data-dodaf-legend="${escapeHtml(product)}" aria-label="${escapeHtml(product)} 制图图例">
     <div class="dodaf-legend-head">
       <strong>图例</strong>
-      <span title="DoDAF 2.02 / DM2">${escapeHtml(product)} · DM2</span>
+      <span title="DoDAF 2.02 / DM2">${renderAbbr(product)} · ${renderAbbr("DM2")}</span>
     </div>
     <div class="dodaf-legend-body">
       ${entityItems ? `<div class="dodaf-legend-group"><b>节点</b><div class="dodaf-legend-row">${entityItems}</div></div>` : ""}
