@@ -363,7 +363,33 @@ TE.x 在每个里程碑结束时各做一张
 遗留/待确认：……
 ```
 
-### T1.3 撤销按钮 — 2026-11-07
+### T1.4 候选差异预览 — 2026-11-07
+
+**现状理解**：
+此前在应用高层概念图（OV-1）候选时，代码采用原生的 `window.confirm("应用候选将替换当前高层作战概念图...")`。用户无法在确认前获知候选模型到底新增、修改或删除了哪些节点或关系，容易造成盲目覆盖。必须基于系统现有的 `compareModelSnapshots`（`modelCompare.js`），用结构化差异对话框 `<dialog id="candidateDiffDialog">` 替代原生 confirm，直观展现新增/修改/删除统计与前 10 条明细。
+
+**改动文件**：
+1. `design-studio/src/app/candidateDiffDialog.js`：新建候选差异对比弹窗组件 `showCandidateDiffDialog`，基于 `compareModelSnapshots` 提取变更明细并渲染为结构化卡片与操作按键；
+2. `design-studio/src/app/bindings/dodafBindings.js`：在 `applyOv1CandidateWithRecoveryPoint` 中移除原生 `window.confirm`，改用 `showCandidateDiffDialog` 进行交互确认。
+
+**验收命令与输出**：
+```powershell
+node scripts/check-refactor-wiring.mjs
+# 输出：PASS: Refactor wiring verification passed cleanly! (119/119 actions mapped)
+
+node scripts/smoke-ui.mjs
+# 输出：
+# [Smoke] Verifying T1.3 Undo transaction flow (apply candidate -> undo -> restore nodes) ...
+# [Smoke] ✓ T1.3 Undo transaction flow verified cleanly (nodes: 5 -> 7 -> 5)
+# [Smoke] ✓ Headless Edge CDP smoke test PASSED with 0 errors!
+
+node scripts/run-checks.mjs all
+# 输出：总脚本数: 135, 通过 (PASS): 135, 失败 (FAIL): 0, 超时 (TIMEOUT): 0 (100% 全绿)
+```
+
+**遗留/待确认**：
+T1.4 候选差异预览对话框已落地，复用了系统既有对比算法，零新增冗余算法代码。下一张任务卡 T1.5 将推进“保存状态指示”，基于 `projectWriteFailureState.js` 在顶栏呈现同步状态（已同步 / 保存中 / 未同步本地暂存）。
+
 
 **现状理解**：
 工作台顶部工具栏之前仅有“测试模式”、“账号管理”、“保存版本”与“清空当前项目”按钮。在 T1.2 落地了 `state.undoStack` 事务栈后，用户仍缺少直观可视化的撤销入口。必须在顶栏接入“撤销”按钮，动态展示最新可撤销操作标签（如“撤销: 应用高层概念图候选”），点击后恢复对应模型快照并弹出栈顶；当栈为空时保持禁用。

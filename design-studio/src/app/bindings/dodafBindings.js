@@ -8,6 +8,7 @@ import { createLocalOv1Draft } from "../../ov1DraftStore.js";
 import { saveModelSnapshot, snapshotContextFromState } from "../../modelSnapshotStore.js";
 import { selectionFor } from "../../ui.js";
 import { applyWithRecoveryPoint } from "../recoveryTransaction.js";
+import { showCandidateDiffDialog } from "../candidateDiffDialog.js";
 
 export function closeOv1ModalIfOpen($) {
   const dialog = $("#ov1Dialog");
@@ -362,9 +363,16 @@ export async function applyOv1CandidateWithRecoveryPoint(ctx) {
     invalidateDerivedArtifacts
   } = ctx;
   if (!state.ov1Candidate) return;
-  if (typeof window !== "undefined" && typeof window.confirm === "function") {
-    if (!window.confirm("应用候选将替换当前高层作战概念图。系统会先保存一个可恢复的模型快照，是否继续？")) return;
-  }
+
+  const confirmed = await showCandidateDiffDialog(
+    { model: { ov1: state.ov1 || { nodes: [], edges: [] } } },
+    { model: { ov1: state.ov1Candidate } },
+    {
+      title: "高层作战概念图 (OV-1) 候选差异预览",
+      note: "应用候选将替换当前高层作战概念图。系统会在应用前自动保存一个可恢复的模型快照。"
+    }
+  );
+  if (!confirmed) return;
 
   const success = await applyWithRecoveryPoint(ctx, {
     label: "应用高层概念图 (OV-1) 候选",
