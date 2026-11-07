@@ -83,7 +83,8 @@ export function createFileProjectRepository({ filePath, databasePath = "", now =
         if (!current) throw createNotFoundError("Project was not found");
         const title = input.title === undefined ? current.title : clean(input.title, 120);
         if (!title) throw new Error("Project title is required");
-        const project = { ...current, title, description: input.description === undefined ? current.description : clean(input.description, 500), archived: input.archived === undefined ? current.archived : Boolean(input.archived), workflow: input.workflow === undefined ? current.workflow : normalizeWorkflow(input.workflow), updatedAt: now() };
+        const kind = input.kind === undefined ? (current.kind || "tactic") : (input.kind === "scenario" ? "scenario" : "tactic");
+        const project = { ...current, kind, title, description: input.description === undefined ? current.description : clean(input.description, 500), archived: input.archived === undefined ? current.archived : Boolean(input.archived), workflow: input.workflow === undefined ? current.workflow : normalizeWorkflow(input.workflow), updatedAt: now() };
         state.projectCatalog = { ...catalog, [id]: project };
         await persistState(state);
         return { project: projectSummary(project, state.projects[id]) };
@@ -112,7 +113,7 @@ export function createFileProjectRepository({ filePath, databasePath = "", now =
         const id = normalizeProjectId(projectId);
         let current = catalog[id];
         if (!current && id === "default") {
-          current = { id: "default", title: "作战概念研究", description: "", archived: false, workflow: normalizeWorkflow(), createdAt: now(), updatedAt: now() };
+          current = { id: "default", kind: "tactic", title: "作战概念研究", description: "", archived: false, workflow: normalizeWorkflow(), createdAt: now(), updatedAt: now() };
         }
         if (!current) throw createNotFoundError("Project was not found");
         const auditActor = getProjectWriteActor(input);
@@ -963,7 +964,7 @@ function createProjectPersistence({ filePath, databasePath }) {
   let closed = false;
   database.exec(`
     CREATE TABLE IF NOT EXISTS project_repository_state (id INTEGER PRIMARY KEY CHECK (id = 1), payload TEXT NOT NULL, updated_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS project_catalog (project_id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL, archived INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, workflow_json TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS project_catalog (project_id TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT 'tactic', title TEXT NOT NULL, description TEXT NOT NULL, archived INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, workflow_json TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS project_records (project_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, brief_revision INTEGER NOT NULL, updated_at TEXT NOT NULL, direction TEXT NOT NULL, brief_json TEXT, inspiration_json TEXT, directions_json TEXT, citation_approvals_json TEXT);
     CREATE TABLE IF NOT EXISTS project_briefs (project_id TEXT PRIMARY KEY, research_intent TEXT NOT NULL DEFAULT '', objective TEXT NOT NULL, approach TEXT NOT NULL, assumptions TEXT NOT NULL, expected_effects TEXT NOT NULL, risk TEXT NOT NULL, evidence_refs_json TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS project_conversation_messages (project_id TEXT NOT NULL, message_id TEXT NOT NULL, position INTEGER NOT NULL, role TEXT NOT NULL, topic TEXT NOT NULL, source TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (project_id, message_id));
@@ -979,12 +980,14 @@ function createProjectPersistence({ filePath, databasePath }) {
   `);
   const briefColumns = database.prepare("PRAGMA table_info(project_briefs)").all();
   if (!briefColumns.some((column) => column.name === "research_intent")) database.exec("ALTER TABLE project_briefs ADD COLUMN research_intent TEXT NOT NULL DEFAULT ''");
+  const catalogColumns = database.prepare("PRAGMA table_info(project_catalog)").all();
+  if (!catalogColumns.some((column) => column.name === "kind")) database.exec("ALTER TABLE project_catalog ADD COLUMN kind TEXT NOT NULL DEFAULT 'tactic'");
   const legacyRead = database.prepare("SELECT payload FROM project_repository_state WHERE id = 1");
   const legacyWrite = database.prepare("INSERT INTO project_repository_state (id, payload, updated_at) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at");
   const countRecords = database.prepare("SELECT COUNT(*) AS count FROM project_records");
   const countMessages = database.prepare("SELECT COUNT(*) AS count FROM project_conversation_messages");
   const clearStatements = ["project_catalog", "project_records", "project_briefs", "project_conversation_messages", "project_resources", "project_history_collections", "project_history_items", "project_collaboration", "project_collaboration_reviews", "project_collaboration_decisions", "project_audit_events"].map((table) => database.prepare(`DELETE FROM ${table}`));
-  const insertCatalog = database.prepare("INSERT INTO project_catalog (project_id, title, description, archived, created_at, updated_at, workflow_json) VALUES (?, ?, ?, ?, ?, ?, ?)");
+  const insertCatalog = database.prepare("INSERT INTO project_catalog (project_id, kind, title, description, archived, created_at, updated_at, workflow_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
   const insertRecord = database.prepare("INSERT INTO project_records (project_id, revision, brief_revision, updated_at, direction, brief_json, inspiration_json, directions_json, citation_approvals_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
   const insertBrief = database.prepare("INSERT INTO project_briefs (project_id, research_intent, objective, approach, assumptions, expected_effects, risk, evidence_refs_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
   const insertMessage = database.prepare("INSERT INTO project_conversation_messages (project_id, message_id, position, role, topic, source, text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
@@ -1054,7 +1057,7 @@ function createProjectPersistence({ filePath, databasePath }) {
     database.exec("BEGIN IMMEDIATE");
     try {
       clearStatements.forEach((statement) => statement.run());
-      Object.entries(catalog).forEach(([projectId, project]) => insertCatalog.run(projectId, project.title || projectId, project.description || "", project.archived ? 1 : 0, project.createdAt || "", project.updatedAt || "", JSON.stringify(project.workflow || {})));
+      Object.entries(catalog).forEach(([projectId, project]) => insertCatalog.run(projectId, project.kind || "tactic", project.title || projectId, project.description || "", project.archived ? 1 : 0, project.createdAt || "", project.updatedAt || "", JSON.stringify(project.workflow || {})));
       Object.entries(projects).forEach(([projectId, raw]) => {
         const record = raw && typeof raw === "object" ? raw : {};
         const inspiration = record.inspiration && typeof record.inspiration === "object" ? record.inspiration : null;
@@ -1090,7 +1093,7 @@ function createProjectPersistence({ filePath, databasePath }) {
 
   function readNormalizedState() {
     const state = { version: 1, projectCatalog: {}, projects: {} };
-    database.prepare("SELECT * FROM project_catalog").all().forEach((row) => { state.projectCatalog[row.project_id] = { id: row.project_id, title: row.title, description: row.description, archived: Boolean(row.archived), createdAt: row.created_at, updatedAt: row.updated_at, workflow: parse(row.workflow_json, {}) }; });
+    database.prepare("SELECT * FROM project_catalog").all().forEach((row) => { state.projectCatalog[row.project_id] = { id: row.project_id, kind: row.kind === "scenario" ? "scenario" : "tactic", title: row.title, description: row.description, archived: Boolean(row.archived), createdAt: row.created_at, updatedAt: row.updated_at, workflow: parse(row.workflow_json, {}) }; });
     database.prepare("SELECT * FROM project_records").all().forEach((row) => { state.projects[row.project_id] = { revision: Number(row.revision || 0), briefRevision: Number(row.brief_revision || 0), updatedAt: row.updated_at, direction: row.direction, brief: parse(row.brief_json, null), inspiration: parse(row.inspiration_json, null), directions: parse(row.directions_json, []), knowledgeCitationApprovals: parse(row.citation_approvals_json, []), audit: [] }; });
     database.prepare("SELECT * FROM project_briefs").all().forEach((row) => { if (state.projects[row.project_id]) state.projects[row.project_id].brief = { researchIntent: row.research_intent || "", objective: row.objective, approach: row.approach, assumptions: row.assumptions, expectedEffects: row.expected_effects, risk: row.risk, evidenceRefs: parse(row.evidence_refs_json, []) }; });
     database.prepare("SELECT * FROM project_conversation_messages ORDER BY project_id, position").all().forEach((row) => { const record = state.projects[row.project_id]; if (!record) return; record.inspiration = { ...(record.inspiration || {}), messages: [...(record.inspiration?.messages || []), { id: row.message_id, role: row.role, topic: row.topic, source: row.source, text: row.text, createdAt: row.created_at }] }; });
@@ -1172,7 +1175,8 @@ function normalizeProjectMeta(value, timestamp) {
   const title = clean(value?.title, 120);
   if (!title) throw new Error("Project title is required");
   const createdAt = clean(value?.createdAt || timestamp, 80);
-  return { id, title, description: clean(value?.description, 500), archived: Boolean(value?.archived), workflow: normalizeWorkflow(value?.workflow), createdAt, updatedAt: clean(value?.updatedAt || timestamp, 80) };
+  const kind = value?.kind === "scenario" ? "scenario" : "tactic";
+  return { id, kind, title, description: clean(value?.description, 500), archived: Boolean(value?.archived), workflow: normalizeWorkflow(value?.workflow), createdAt, updatedAt: clean(value?.updatedAt || timestamp, 80) };
 }
 
 function normalizeWorkflow(value) {

@@ -204,6 +204,7 @@ export function productShortLabel(id, fallback = "") {
 }
 
 export const project = {
+  kind: "tactic",
   title: "联合封控概念研究",
   brief: {
     objective: "在 48 小时行动窗口内建立持续态势优势，形成重点通道的联合封控能力。",

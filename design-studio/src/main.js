@@ -633,6 +633,7 @@ function bindDynamicEvents() {
     try {
       const result = await createProject({
         id: values.get("id"),
+        kind: values.get("kind") || "tactic",
         title: values.get("title"),
         description: values.get("description")
       });

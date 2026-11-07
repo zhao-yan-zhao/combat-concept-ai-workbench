@@ -591,5 +591,28 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：137/137 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
+---
+
+### T3.1 执行记录 (2026-11-08)
+
+- **任务卡**：M3-T3.1 项目类型二选一（战法设计 / 想定推演）
+- **交付内容**：
+  1. 服务端数据模型与安全归一化（`server/projectRepository.mjs`）：
+     - `normalizeProjectMeta` 增加 `kind` 归一化支持（`"scenario"` 或默认 `"tactic"`），存量或缺失值安全默认回退为 `"tactic"`；
+     - `updateProject` 扩展可选 `kind` 更新与保持；
+     - SQLite `project_catalog` 表结构新增 `kind TEXT NOT NULL DEFAULT 'tactic'` 列，通过 PRAGMA 安全列探测自适应无缝迁移现有数据库；
+  2. 前端表单与项目列表呈现：
+     - `design-studio/src/projectManagerView.js`：新建项目表单提供“研究类型”选择器（二选一：战法设计 `tactic` / 想定推演 `scenario`），项目列表行展示类型徽标（`<small class="project-kind-pill">`）；
+     - `design-studio/src/main.js`：新建项目表单提交联动提取 `values.get("kind")`；
+     - `design-studio/src/data.js`：基准静态项目默认标记 `kind: "tactic"`；
+  3. 专用自动化回归测试与基准纳入：
+     - 新建 `scripts/check-project-kind-selection.mjs`，覆盖 3 组完整断言：基准、内存/SQLite 持久化重载一致性、前端表单与列表渲染，100% 通过；
+     - 纳入 `scripts/check-groups.json` 的 `storage` 组。
+- **验证命令与结果**：
+  - `node scripts/run-checks.mjs storage`：11/11 PASS (100%)
+  - `node scripts/run-checks.mjs all`：138/138 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+
 
 
