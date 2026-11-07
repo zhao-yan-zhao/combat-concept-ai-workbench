@@ -442,7 +442,7 @@ function renderViewRoot(options = {}) {
         applyDomUpdate();
       });
       if (transition && typeof transition.finished?.finally === "function") {
-        transition.finished.finally(() => {
+        transition.finished.catch(() => {}).finally(() => {
           viewRoot.classList.remove("is-view-switching");
         });
       } else {

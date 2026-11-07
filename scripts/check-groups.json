@@ -148,5 +148,8 @@
     "check-theme-config.mjs",
     "check-toolbox-shell.mjs",
     "check-validation-diagnostic-persistence.mjs"
+  ],
+  "smoke": [
+    "smoke-ui.mjs"
   ]
 }

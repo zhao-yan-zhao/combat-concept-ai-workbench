@@ -227,3 +227,33 @@ grep -n "contextPanelDialog" design-studio/src/app/inspectorBindings.js         
   超时 (TIMEOUT): 0
   ==========================================
   ```
+
+### 阶段 3 执行记录 (2026-11-07)
+- **交付内容**：
+  1. **前端异常防护**：在 `design-studio/src/main.js` 修复 View Transitions API 快速切换时因用户或浏览器打断导致未处理 Promise Rejection (`AbortError`) 缺陷，统一使用 `.catch(() => {}).finally(...)` 吸收保证平滑过渡。
+  2. **行为级冒烟测试落地**：新建独立自动化测试脚本 `scripts/smoke-ui.mjs`。
+     - **零外部 npm 依赖**：使用 Node.js 原生 `node:http`、`node:child_process`、`WebSocket` 与 Chrome DevTools Protocol (CDP)。
+     - **环境完全隔离**：动态申请空闲端口（Server 端口与 CDP 调试端口），创建临时目录隔离 SQLite 数据库（`projects.sqlite` 与 `collab.sqlite`），禁用外部地图工具（`CONCEPT_MAP_TOOL_ENABLED=false`）。
+     - **主线遍历**：启动本地无头 Edge（`msedge.exe`），初始化协同身份与模式配置，经由 UI 主线按钮连续点击遍历 6 步主线视图（`brief` -> `phase-action` -> `force-mission` -> `ov5` -> `ov1` -> `scenario`）。
+     - **元素与异常双重校验**：不仅断言 Step 05 总体概念中 DoDAF OV-1 制图图例（`[data-dodaf-legend="OV-1"]`）与画布渲染无误，还实时监听前端 `Runtime.exceptionThrown` 与 `Log.entryAdded`，严密防守 0 报错。
+  3. **测试分组纳入**：在 `scripts/check-groups.json` 中配置独立分组 `"smoke": ["smoke-ui.mjs"]`。
+- **验证命令与输出**：
+  ```powershell
+  node scripts/run-checks.mjs smoke
+  === 开始执行选定测试 (共 1 个脚本) ===
+  [1/1] 运行 smoke-ui.mjs ... ✓ 通过 (13393ms)
+  ================ 汇总报告 ================
+  总脚本数: 1
+  通过 (PASS):    1
+  失败 (FAIL):    0
+  超时 (TIMEOUT): 0
+  ==========================================
+
+  node scripts/run-checks.mjs ui-static
+  ================ 汇总报告 ================
+  总脚本数: 19
+  通过 (PASS):    19
+  失败 (FAIL):    0
+  超时 (TIMEOUT): 0
+  ==========================================
+  ```
