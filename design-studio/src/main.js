@@ -843,6 +843,44 @@ async function handleAction(action, source = null) {
     render();
     return;
   }
+  if (action === "undo-last-transaction") {
+    if (!Array.isArray(state.undoStack) || state.undoStack.length === 0) {
+      showToast("当前暂无可撤销的操作");
+      return;
+    }
+    const itemToUndo = state.undoStack[0];
+    const targetSnapshot = state.modelSnapshots?.find((s) => s.id === itemToUndo.snapshotId);
+    if (!targetSnapshot) {
+      state.undoStack.shift();
+      showToast(`未能找到恢复快照（${itemToUndo.snapshotId}），该撤销项已移除`);
+      render();
+      return;
+    }
+    const confirmed = window.confirm(`确定要撤销操作「${itemToUndo.label}」吗？\n\n系统将恢复至操作前的模型快照。`);
+    if (!confirmed) return;
+    try {
+      const restored = restoreModelSnapshot(targetSnapshot, { briefSeed: projectBriefSeed, projectId: activeProjectId });
+      state.direction = restored.direction || state.direction;
+      state.brief = restored.brief;
+      if (restored.inspiration) state.inspiration = restored.inspiration;
+      state.ov1 = saveOv1Model(restored.ov1);
+      state.ov5 = restored.ov5;
+      state.ooda = restored.ooda;
+      state.scenario = restored.scenario;
+      state.validationResult = restored.validationResult;
+      for (const key of ["ov1b", "ov1c", "ov2", "ov3", "ov4", "ov5a", "ov6a", "ov6b", "ov6c", "ov7", "architecture"]) {
+        state[key] = restored[key] ?? null;
+      }
+      state.undoStack.shift();
+      void syncRestoredModels();
+      showToast(`已成功撤销操作「${itemToUndo.label}」`);
+      render();
+    } catch (err) {
+      console.error("撤销恢复失败:", err);
+      showToast(`撤销失败：${err.message || "未知异常"}`);
+    }
+    return;
+  }
   if (action === "open-account-management") {
     state.activeView = "account-management";
     state.selection = null;
@@ -2008,6 +2046,13 @@ if (typeof window !== "undefined") {
     getState: () => state,
     render,
     goToWorkflowView,
-    navigateToResearchView
+    navigateToResearchView,
+    handleAction: (action, source) => handleAction(action, source),
+    applyWithRecoveryPoint: (meta, mutate) => applyWithRecoveryPoint({
+      state,
+      render,
+      showToast,
+      projectModelSnapshotSyncController
+    }, meta, mutate)
   };
 }

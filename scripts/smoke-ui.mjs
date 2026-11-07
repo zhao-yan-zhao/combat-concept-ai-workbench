@@ -277,8 +277,11 @@ try {
 
   // 6. Verify DoDAF OV-1 Drafting Legend in OV-1 View
   console.log("[Smoke] Verifying OV-1 drafting legend and canvas in Step 05 ...");
-  await evalInPage(`document.querySelector('.step-button[data-view="ov1"]')?.click()`);
-  await sleep(1000);
+  await evalInPage(`(() => {
+    const btn = document.querySelector('.step-button[data-view="ov1"]') || document.querySelector('[data-view="ov1"]');
+    btn?.click();
+  })()`);
+  await sleep(1500);
 
   const ov1Rendered = await evalInPage(`(() => {
     const root = document.querySelector('#viewRoot');
@@ -296,6 +299,70 @@ try {
     throw new Error(`OV-1 view did not render the required [data-dodaf-legend="OV-1"] legend! RenderedView: ${ov1Rendered.renderedView}`);
   }
   console.log("[Smoke] ✓ OV-1 legend [data-dodaf-legend=\"OV-1\"] verified cleanly");
+
+  // 6.1 T1.3 撤销事务链路冒烟验证：应用候选 -> 节点数变更 -> 点击撤销 -> 节点数精确回退
+  console.log("[Smoke] Verifying T1.3 Undo transaction flow (apply candidate -> undo -> restore nodes) ...");
+  const undoTestResult = await evalInPage(`(async () => {
+    try {
+      const wb = window.__workbench;
+      if (!wb) return { ok: false, reason: "window.__workbench not found" };
+      const state = wb.getState();
+      const originalCount = (state.ov1?.nodes || []).length;
+
+      // 绕过 window.confirm 自动确认
+      const originalConfirm = window.confirm;
+      window.confirm = () => true;
+
+      try {
+        // 模拟执行一个事务变更：修改 OV-1 节点
+        await wb.applyWithRecoveryPoint({
+          label: "冒烟测试添加候选节点",
+          source: "smoke-ov1-candidate"
+        }, async () => {
+          state.ov1 = {
+            ...(state.ov1 || {}),
+            nodes: [
+              ...(state.ov1?.nodes || []),
+              { id: "smoke-node-cand-1", label: "候选节点 Alpha", role: "sensor" },
+              { id: "smoke-node-cand-2", label: "候选节点 Beta", role: "shooter" }
+            ]
+          };
+        });
+
+        const appliedCount = (state.ov1?.nodes || []).length;
+        const undoBtn = document.getElementById("undoTransactionBtn");
+        const undoDisabledBefore = undoBtn?.disabled;
+        const undoTextBefore = undoBtn?.textContent;
+
+        // 触发顶部撤销按钮点击 (data-action="undo-last-transaction")
+        undoBtn?.click();
+        await new Promise((r) => setTimeout(r, 600));
+
+        const restoredCount = (state.ov1?.nodes || []).length;
+        const undoDisabledAfter = undoBtn?.disabled;
+
+        return {
+          ok: true,
+          originalCount,
+          appliedCount,
+          restoredCount,
+          undoDisabledBefore,
+          undoDisabledAfter,
+          undoTextBefore
+        };
+      } finally {
+        window.confirm = originalConfirm;
+      }
+    } catch (err) {
+      return { ok: false, error: err.message || String(err) };
+    }
+  })()`);
+
+  console.log("[Smoke] Undo transaction flow check:", JSON.stringify(undoTestResult));
+  if (!undoTestResult.ok || undoTestResult.appliedCount !== (undoTestResult.originalCount + 2) || undoTestResult.restoredCount !== undoTestResult.originalCount) {
+    throw new Error(`Undo transaction test failed! Applied: ${undoTestResult.appliedCount}, Restored: ${undoTestResult.restoredCount}, Expected: ${undoTestResult.originalCount}`);
+  }
+  console.log("[Smoke] ✓ T1.3 Undo transaction flow verified cleanly (nodes: " + undoTestResult.originalCount + " -> " + undoTestResult.appliedCount + " -> " + undoTestResult.restoredCount + ")");
 
   // 7. Check for critical runtime errors
   console.log(`[Smoke] Critical errors recorded during walkthrough: ${criticalErrors.length}`);

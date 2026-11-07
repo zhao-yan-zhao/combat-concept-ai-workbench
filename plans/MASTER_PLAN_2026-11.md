@@ -363,7 +363,33 @@ TE.x 在每个里程碑结束时各做一张
 遗留/待确认：……
 ```
 
-### T1.2 统一事务包装 — 2026-11-07
+### T1.3 撤销按钮 — 2026-11-07
+
+**现状理解**：
+工作台顶部工具栏之前仅有“测试模式”、“账号管理”、“保存版本”与“清空当前项目”按钮。在 T1.2 落地了 `state.undoStack` 事务栈后，用户仍缺少直观可视化的撤销入口。必须在顶栏接入“撤销”按钮，动态展示最新可撤销操作标签（如“撤销: 应用高层概念图候选”），点击后恢复对应模型快照并弹出栈顶；当栈为空时保持禁用。
+
+**改动文件**：
+1. `design-studio/index.html`：在顶部栏操作区注入 `<button id="undoTransactionBtn" data-action="undo-last-transaction">`；
+2. `design-studio/src/app/shellRenderer.js`：动态响应 `state.undoStack` 状态，更新撤销按钮文字、标题及 disabled 禁用态；
+3. `design-studio/src/main.js`：添加 `undo-last-transaction` 动作处理，通过确认弹窗恢复快照模型并同步持久化；并在 `window.__workbench` 暴露调试挂载点；
+4. `scripts/smoke-ui.mjs`：扩展行为级冒烟测试，真实驱动无头 Edge 完成“应用候选 -> 节点数变动 -> 点击顶栏撤销 -> 节点数精确回退 (5 -> 7 -> 5) -> 按钮恢复禁用”全流程。
+
+**验收命令与输出**：
+```powershell
+node scripts/smoke-ui.mjs
+# 输出：
+# [Smoke] Verifying T1.3 Undo transaction flow (apply candidate -> undo -> restore nodes) ...
+# [Smoke] Undo transaction flow check: {"ok":true,"originalCount":5,"appliedCount":7,"restoredCount":5,"undoDisabledBefore":false,"undoDisabledAfter":true,"undoTextBefore":"撤销: 冒烟测试添加候选节点"}
+# [Smoke] ✓ T1.3 Undo transaction flow verified cleanly (nodes: 5 -> 7 -> 5)
+# [Smoke] ✓ Headless Edge CDP smoke test PASSED with 0 errors!
+
+node scripts/run-checks.mjs all
+# 输出：总脚本数: 135, 通过 (PASS): 135, 失败 (FAIL): 0, 超时 (TIMEOUT): 0 (100% 全绿)
+```
+
+**遗留/待确认**：
+T1.3 顶栏撤销按钮已完全落地并经 CDP 冒烟测试验证闭环。下一张任务卡 T1.4 将推进“候选差异预览”，在应用 AI 候选前基于 `compareModelSnapshots` 用原生 `<dialog>` 展示 Diff 摘要与明细，替换原生 `window.confirm`。
+
 
 **现状理解**：
 工作台中的模型覆盖操作缺乏统一的事务边界。当用户执行覆盖性动作（如应用 AI 候选、导入架构包、清空项目、恢复历史快照）时，若中途发生异常或用户后悔，旧状态已丢失。必须通过 `applyWithRecoveryPoint` 将“创建快照 -> 服务端同步持久化 -> 执行变更 -> 异常自动回退快照 -> 成功记录 undoStack”固化为统一机制。

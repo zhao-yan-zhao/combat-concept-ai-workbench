@@ -55,10 +55,21 @@ export function renderStudioShell(ctx) {
   const actor = state.collaboration?.session?.actor;
   const workflowTestModeButton = $("#workflowTestModeBtn");
   const saveVersionButton = $("#saveVersionBtn");
+  const undoTransactionButton = $("#undoTransactionBtn");
   const testModeActive = currentWorkflow().mode === "free";
   const modeSwitching = Boolean(state.workflowModeSwitching);
   const reportArchiving = Boolean(state.reportArchiving);
   const busyOverlay = getBusyOverlayState();
+
+  if (undoTransactionButton) {
+    const hasUndo = Array.isArray(state.undoStack) && state.undoStack.length > 0;
+    const latestUndo = hasUndo ? state.undoStack[0] : null;
+    undoTransactionButton.disabled = !hasUndo || modeSwitching || reportArchiving || Boolean(busyOverlay);
+    undoTransactionButton.textContent = latestUndo ? `撤销: ${latestUndo.label}` : "撤销";
+    undoTransactionButton.title = latestUndo
+      ? `撤销上一步操作「${latestUndo.label}」并恢复模型快照 (${new Date(latestUndo.at).toLocaleTimeString()})`
+      : "暂无可撤销的操作";
+  }
 
   $("#adminEntry").hidden = !actor?.roles?.includes("lead");
   identityButton.textContent = actor ? `账号 · ${actor.label}` : "账号管理";
