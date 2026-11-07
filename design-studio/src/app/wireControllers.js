@@ -553,6 +553,7 @@ export function wireControllers({
     invalidateDependents: invalidateConceptMapDependents,
     downloadArtifact,
     projectTitle: () => project.title || activeProjectId,
+    projectModelSnapshotSyncController,
     onReferenceConfirmed: async () => {
       await completeCurrentWorkflowStage?.();
     }
@@ -693,7 +694,8 @@ export function wireControllers({
     downloadArtifact,
     syncOv5: (...args) => projectOv5SyncController.sync(...args),
     onSaved: refreshWorkflowConfirmation,
-    projectTitle: () => project.title || activeProjectId
+    projectTitle: () => project.title || activeProjectId,
+    projectModelSnapshotSyncController
   });
 
   const stateMachineCanvasController = createStateMachineCanvasController({

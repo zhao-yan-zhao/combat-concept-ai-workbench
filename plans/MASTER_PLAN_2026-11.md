@@ -363,7 +363,44 @@ TE.x 在每个里程碑结束时各做一张
 遗留/待确认：……
 ```
 
-### T1.1 盘点覆盖性操作 — 2026-11-07
+### T1.2 统一事务包装 — 2026-11-07
+
+**现状理解**：
+工作台中的模型覆盖操作缺乏统一的事务边界。当用户执行覆盖性动作（如应用 AI 候选、导入架构包、清空项目、恢复历史快照）时，若中途发生异常或用户后悔，旧状态已丢失。必须通过 `applyWithRecoveryPoint` 将“创建快照 -> 服务端同步持久化 -> 执行变更 -> 异常自动回退快照 -> 成功记录 undoStack”固化为统一机制。
+
+**改动文件**：
+1. `design-studio/src/app/recoveryTransaction.js`：新建统一事务包装器，导出 `applyWithRecoveryPoint`；
+2. `design-studio/src/app/bindings/dodafBindings.js`：将 `applyOv1CandidateWithRecoveryPoint` 切换至统一事务包装器；
+3. `design-studio/src/main.js`：将 `reset-project-content`（全项目清空重置）与 `restoreSnapshot`（历史快照恢复）切换至统一事务包装器；
+4. `design-studio/src/dodafProductController.js`：将 `applyImport`（架构包导入 replace-products）切换至统一事务包装器；
+5. `design-studio/src/modelSnapshotController.js`：快照恢复调用点更新为异步等待事务完成；
+6. `design-studio/src/app/wireControllers.js`：为相关控制器注入 `projectModelSnapshotSyncController` 依赖；
+7. `scripts/check-recovery-transactions.mjs`：新建事务防线测试，覆盖静态调用断言与运行时 Mock 自动回滚断言；
+8. `scripts/check-groups.json`：将 `check-recovery-transactions.mjs` 纳入 `ui-static` 分组。
+
+**验收命令与输出**：
+```powershell
+node scripts/check-recovery-transactions.mjs
+# 输出：
+# === 1. 静态扫描：验证 recoveryTransaction 模块规范 ===
+# ✓ recoveryTransaction.js 静态语法与关键逻辑检查通过
+# === 2. 静态扫描：验证关键覆盖动作使用 applyWithRecoveryPoint 事务包装 ===
+# ✓ 已验证 apply-ov1-candidate、reset-project-content、restore-model-snapshot、apply-architecture-import 均接入事务包装
+# === 3. 单元测试与 Mock 回滚验证 ===
+# ✓ 成功路径验证通过 (快照创建 + 服务端同步 + undoStack 记录)
+# ✓ 异常回滚验证通过 (状态精确回退到修改前，toast 正常弹出)
+# === 所有 Recovery Transaction 验证 100% 通过 ===
+
+node scripts/run-checks.mjs all
+# 结果：总脚本数: 135, 通过 (PASS): 135, 失败 (FAIL): 0, 超时: 0 (100% 全绿)
+
+node scripts/smoke-ui.mjs
+# 结果：Critical errors recorded during walkthrough: 0, Headless Edge CDP smoke test PASSED with 0 errors!
+```
+
+**遗留/待确认**：
+首批最高破坏性操作（应用 OV-1 候选、重置项目、恢复快照、导入架构包）已接入统一事务包装与自动回滚保护。下一张任务卡 T1.3 将在工作台顶部栏落地可视化的“撤销”按钮与交互联动。
+
 
 **现状理解**：
 工作台内存在大量会引发模型全量替换、重置或批量删除的动作。目前除 `applyOv1CandidateWithRecoveryPoint`（在阶段 1 补全）以及快照控制器中手动创建快照外，其余绝大部分覆盖性操作均仅依靠浏览器弹窗 `window.confirm` 进行警告，甚至部分操作连确认都没有，更未在内存与服务端建立原子恢复点，导致一旦误操作或生成结果不理想，用户既有研究成果极易丢失。

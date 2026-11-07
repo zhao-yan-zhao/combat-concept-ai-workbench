@@ -28,6 +28,7 @@ import { getCmoCatalogStatus } from "./cmoCatalogClient.js";
 import { applyTheme, getThemeConfig } from "./themeConfigClient.js";
 import { createProject, deleteProject, loadProjects, resetProjectContent, updateProject } from "./projectBriefClient.js";
 import { ensureClientStoragePurged, purgeProjectClientStorage } from "./clientStoragePurge.js";
+import { applyWithRecoveryPoint } from "./app/recoveryTransaction.js";
 
 import { createStateActions } from "./app/stateActions.js";
 import {
@@ -857,7 +858,7 @@ async function handleAction(action, source = null) {
     closeMenubarMenus();
     const title = currentProjectTitle();
     const confirmed = window.confirm(
-      `确定要清空当前项目“${title}”的全部研究内容吗？\n\n此操作将清空：\n• 概念简报、研讨记录与研究方向\n• 阶段与行动规划\n• 作战任务、任务区域与作战兵力编成\n• 概念图及所有 DoDAF 架构模型（OV-1 至 OV-7）\n• 想定、OODA 循环与验证结果\n\n清空后项目将重置回第 1 阶段「概念简报」。此操作无法撤销，确定继续吗？`
+      `确定要清空当前项目“${title}”的全部研究内容吗？\n\n此操作将清空：\n• 概念简报、研讨记录与研究方向\n• 阶段与行动规划\n• 作战任务、任务区域与作战兵力编成\n• 概念图及所有 DoDAF 架构模型（OV-1 至 OV-7）\n• 想定、OODA 循环与验证结果\n\n系统会在清空前自动创建可撤销恢复点。确定继续吗？`
     );
     if (!confirmed) return;
     state.resettingProject = true;
@@ -870,7 +871,18 @@ async function handleAction(action, source = null) {
         showToast("重置已在后台完成，已恢复工作台");
       }
     }, 10000);
-    try {
+
+    const resetCtx = {
+      state,
+      render,
+      showToast,
+      projectModelSnapshotSyncController
+    };
+
+    await applyWithRecoveryPoint(resetCtx, {
+      label: `清空项目「${title}」全部内容`,
+      source: "project-reset"
+    }, async () => {
       showToast("正在清空项目全部内容…");
       await resetProjectContent(state.activeProjectId);
       purgeProjectClientStorage(state.activeProjectId);
@@ -893,17 +905,14 @@ async function handleAction(action, source = null) {
       if (window.location.hash !== "#brief") {
         window.location.hash = "brief";
       }
+    }).catch((err) => {
+      console.error("清空事务执行异常:", err);
+    }).finally(() => {
       window.clearTimeout(safetyTimer);
       state.resettingProject = false;
       updateBusyOverlay();
       render();
-      showToast("项目已成功清空并重置为初始状态");
-    } catch (error) {
-      window.clearTimeout(safetyTimer);
-      state.resettingProject = false;
-      updateBusyOverlay();
-      showToast(error?.status === 403 ? "只有具备权限的成员可清空项目" : `清空项目失败：${error?.message || "网络异常"}`);
-    }
+    });
     return;
   }
   if (knowledgeController.handleAction(action, $("#knowledgeVaultInput"))) return;
@@ -944,28 +953,40 @@ async function handleAction(action, source = null) {
   showToast("已创建概念注释");
 }
 
-function restoreSnapshot(snapshot) {
-  const restored = restoreModelSnapshot(snapshot, { briefSeed: projectBriefSeed, projectId: activeProjectId });
-  state.direction = restored.direction || state.direction;
-  state.brief = restored.brief;
-  if (restored.inspiration) state.inspiration = restored.inspiration;
-  state.ov1 = saveOv1Model(restored.ov1);
-  state.ov5 = restored.ov5;
-  state.ooda = restored.ooda;
-  state.scenario = restored.scenario;
-  state.validationResult = restored.validationResult;
-  for (const key of ["ov1b", "ov1c", "ov2", "ov3", "ov4", "ov5a", "ov6a", "ov6b", "ov6c", "ov7", "architecture"]) {
-    state[key] = restored[key] ?? null;
-  }
-  state.lastDeploymentData = null;
-  state.redTeamRunning = false;
-  state.selection = null;
-  state.deployment.open = false;
-  state.deployment.exchange = null;
-  state.deployment.acceptedChangeIds = [];
-  state.deployment.lastAccepted = null;
-  state.deployment.status = "快照已恢复，待推送";
-  void syncRestoredModels();
+async function restoreSnapshot(snapshot) {
+  const restoreCtx = {
+    state,
+    render,
+    showToast,
+    projectModelSnapshotSyncController
+  };
+
+  return applyWithRecoveryPoint(restoreCtx, {
+    label: `恢复快照 ${snapshot?.label || ""}`,
+    source: "snapshot-restore-preapply"
+  }, async () => {
+    const restored = restoreModelSnapshot(snapshot, { briefSeed: projectBriefSeed, projectId: activeProjectId });
+    state.direction = restored.direction || state.direction;
+    state.brief = restored.brief;
+    if (restored.inspiration) state.inspiration = restored.inspiration;
+    state.ov1 = saveOv1Model(restored.ov1);
+    state.ov5 = restored.ov5;
+    state.ooda = restored.ooda;
+    state.scenario = restored.scenario;
+    state.validationResult = restored.validationResult;
+    for (const key of ["ov1b", "ov1c", "ov2", "ov3", "ov4", "ov5a", "ov6a", "ov6b", "ov6c", "ov7", "architecture"]) {
+      state[key] = restored[key] ?? null;
+    }
+    state.lastDeploymentData = null;
+    state.redTeamRunning = false;
+    state.selection = null;
+    state.deployment.open = false;
+    state.deployment.exchange = null;
+    state.deployment.acceptedChangeIds = [];
+    state.deployment.lastAccepted = null;
+    state.deployment.status = "快照已恢复，待推送";
+    await syncRestoredModels();
+  });
 }
 
 async function syncRestoredModels() {

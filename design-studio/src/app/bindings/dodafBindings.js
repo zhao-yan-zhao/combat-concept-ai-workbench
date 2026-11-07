@@ -7,6 +7,7 @@ import { saveOv1Model } from "../../ov1Store.js";
 import { createLocalOv1Draft } from "../../ov1DraftStore.js";
 import { saveModelSnapshot, snapshotContextFromState } from "../../modelSnapshotStore.js";
 import { selectionFor } from "../../ui.js";
+import { applyWithRecoveryPoint } from "../recoveryTransaction.js";
 
 export function closeOv1ModalIfOpen($) {
   const dialog = $("#ov1Dialog");
@@ -357,7 +358,6 @@ export async function applyOv1CandidateWithRecoveryPoint(ctx) {
     state,
     render,
     showToast,
-    projectModelSnapshotSyncController,
     projectOv1SyncController,
     invalidateDerivedArtifacts
   } = ctx;
@@ -366,26 +366,26 @@ export async function applyOv1CandidateWithRecoveryPoint(ctx) {
     if (!window.confirm("应用候选将替换当前高层作战概念图。系统会先保存一个可恢复的模型快照，是否继续？")) return;
   }
 
-  state.modelSnapshots = saveModelSnapshot(snapshotContextFromState(state, project), state.modelSnapshots);
-  const recoveryPoint = state.modelSnapshots[0];
-  render();
-  const saved = await projectModelSnapshotSyncController.save(recoveryPoint, { source: "ov1-ai-candidate-preapply" });
-  if (!saved) {
-    showToast("恢复点未能同步到服务端，当前候选未应用。");
-    return;
+  const success = await applyWithRecoveryPoint(ctx, {
+    label: "应用高层概念图 (OV-1) 候选",
+    source: "ov1-ai-candidate-preapply"
+  }, async () => {
+    state.ov1 = saveOv1Model(state.ov1Candidate);
+    state.ov1Candidate = null;
+    try {
+      const { resetOv1Camera } = await import("../../ov1ConceptMapController.js");
+      resetOv1Camera();
+    } catch {
+      /* camera reset is best-effort */
+    }
+    invalidateDerivedArtifacts();
+    await projectOv1SyncController.sync(state.ov1, { source: "ai-candidate-approved" });
+  });
+
+  if (success) {
+    showToast("已应用高层作战概念图候选；恢复点已保存。可用「基于当前概念生成活动模型候选」继续。");
+    render();
   }
-  state.ov1 = saveOv1Model(state.ov1Candidate);
-  state.ov1Candidate = null;
-  try {
-    const { resetOv1Camera } = await import("../../ov1ConceptMapController.js");
-    resetOv1Camera();
-  } catch {
-    /* camera reset is best-effort */
-  }
-  invalidateDerivedArtifacts();
-  await projectOv1SyncController.sync(state.ov1, { source: "ai-candidate-approved" });
-  showToast("已应用高层作战概念图候选；恢复点已保存。可用「基于当前概念生成活动模型候选」继续。");
-  render();
 }
 
 export async function handleDodafAction(action, source, ctx) {

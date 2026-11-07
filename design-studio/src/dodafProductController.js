@@ -28,6 +28,7 @@ import {
 } from "./ov4Builder.js";
 import { applyResourceFlowDraft, buildOv2ForceFingerprint } from "./ov2Builder.js";
 import { buildOv3Model } from "./ov3Builder.js";
+import { applyWithRecoveryPoint } from "./app/recoveryTransaction.js";
 import { OV4_ECHELON_CATEGORIES, OV4_ORGANIZATION_CATEGORIES, OV4_RELATION_CATEGORIES } from "../../shared/dodaf/ov4Taxonomy.js";
 import {
   exportProjectArchitecture,
@@ -562,7 +563,8 @@ export function createDodafProductController({
   downloadArtifact,
   syncOv5 = null,
   projectTitle = () => "Operational Architecture",
-  onSaved = null
+  onSaved = null,
+  projectModelSnapshotSyncController = null
 }) {
   const syncControllers = Object.fromEntries(DODAF_PRODUCT_KEYS.map((resource) => {
     const applyRemote = (remote, { force = false } = {}) => {
@@ -3159,41 +3161,53 @@ function handleOv5aWorkbenchAction(action, el) {
 
   async function applyImport({ package: packageModel, body, format = "json" }) {
     const state = getState();
-    if (!window.confirm("导入将按 replace-products 覆盖当前 OV 产品与 architecture。是否继续？")) return;
-    const result = await importProjectArchitecture(projectId, {
-      package: packageModel,
-      body,
-      format,
-      mergeStrategy: "replace-products",
-      source: "import-file",
-      expectedRevision: state.projectRevision
-    });
-    state.projectRevision = result.revision;
-    try { await onSaved?.({ resource: "architecture", source: "import-file", remote: result }); } catch {}
-    for (const [resource, payload] of Object.entries(result.resources || {})) {
-      if (!payload?.model) continue;
-      if (resource === "architecture") {
-        state.architecture = payload.model;
-        state.architectureStorage = {
-          status: "ready",
-          mode: "server",
-          label: `Architecture r${result.revision}`,
-          revision: result.revision,
-          resourceRevision: payload.resourceRevision,
-          localSaved: false
-        };
-      } else if (DODAF_PRODUCT_KEYS.includes(resource)) {
-        state[resource] = saveLocalDodafProduct(resource, payload.model, projectId);
-      } else if (resource === "ov1" || resource === "ov5") {
-        state[resource] = payload.model;
+    if (!window.confirm("导入将按 replace-products 覆盖当前 OV 产品与 architecture。系统会在导入前保存可恢复快照，是否继续？")) return;
+    
+    const importCtx = {
+      state,
+      render,
+      showToast: notify,
+      projectModelSnapshotSyncController
+    };
+
+    await applyWithRecoveryPoint(importCtx, {
+      label: `导入架构包 (${format.toUpperCase()})`,
+      source: "architecture-import-preapply"
+    }, async () => {
+      const result = await importProjectArchitecture(projectId, {
+        package: packageModel,
+        body,
+        format,
+        mergeStrategy: "replace-products",
+        source: "import-file",
+        expectedRevision: state.projectRevision
+      });
+      state.projectRevision = result.revision;
+      try { await onSaved?.({ resource: "architecture", source: "import-file", remote: result }); } catch {}
+      for (const [resource, payload] of Object.entries(result.resources || {})) {
+        if (!payload?.model) continue;
+        if (resource === "architecture") {
+          state.architecture = payload.model;
+          state.architectureStorage = {
+            status: "ready",
+            mode: "server",
+            label: `Architecture r${result.revision}`,
+            revision: result.revision,
+            resourceRevision: payload.resourceRevision,
+            localSaved: false
+          };
+        } else if (DODAF_PRODUCT_KEYS.includes(resource)) {
+          state[resource] = saveLocalDodafProduct(resource, payload.model, projectId);
+        } else if (resource === "ov1" || resource === "ov5") {
+          state[resource] = payload.model;
+        }
       }
-    }
-    if (result.resources?.ov1?.model) state.ov1 = result.resources.ov1.model;
-    if (result.resources?.ov5?.model) {
-      state.ov5 = persistOv5Model(result.resources.ov5.model);
-      if (syncOv5) await syncOv5(state.ov5, { source: "import" });
-    }
-    notify(`已导入架构包：${(result.imported || []).join(", ")}`);
-    render();
+      if (result.resources?.ov1?.model) state.ov1 = result.resources.ov1.model;
+      if (result.resources?.ov5?.model) {
+        state.ov5 = persistOv5Model(result.resources.ov5.model);
+        if (syncOv5) await syncOv5(state.ov5, { source: "import" });
+      }
+      notify(`已导入架构包：${(result.imported || []).join(", ")}`);
+    });
   }
 }
