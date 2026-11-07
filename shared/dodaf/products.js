@@ -5,6 +5,7 @@ import {
 } from "./constants.js";
 import {
   createProductEnvelope,
+  normalizeCitations,
   normalizeDerivedFrom,
   normalizeDm2Entity,
   normalizeEntityList,
@@ -1713,6 +1714,9 @@ export function normalizeProductByResource(resourceKey, value) {
 
 function normalizeActivity(activity, index) {
   const id = clean(activity?.id, 160) || `activity-${index + 1}`;
+  const citations = normalizeCitations(activity?.citations);
+  const rawRefs = normalizeStringList(activity?.refs || activity?.evidenceRefs, 30, 240);
+  const refs = rawRefs.length ? rawRefs : citations.map((c) => c.chunkId);
   return {
     id,
     type: clean(activity?.type, 4000) || "TBD",
@@ -1721,7 +1725,9 @@ function normalizeActivity(activity, index) {
     input: clean(activity?.input, 4000) || "TBD",
     output: clean(activity?.output, 4000) || "TBD",
     duration: clean(activity?.duration, 4000) || "TBD",
-    refs: normalizeStringList(activity?.refs, 30, 240),
+    refs,
+    citations,
+    evidenceRefs: refs,
     sourceOv1NodeIds: uniqueIds(activity?.sourceOv1NodeIds, 60),
     parentId: clean(activity?.parentId, 160),
     resources: clean(activity?.resources, 4000),

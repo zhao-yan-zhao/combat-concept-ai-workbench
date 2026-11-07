@@ -257,3 +257,36 @@ grep -n "contextPanelDialog" design-studio/src/app/inspectorBindings.js         
   超时 (TIMEOUT): 0
   ==========================================
   ```
+
+### 阶段 4 执行记录 (2026-11-07)
+- **交付内容**：
+  1. **实体规范化与双向兼容性**：在 `shared/dodaf/entities.js` 与 `shared/dodaf/products.js` 扩展结构化引用对象 `KnowledgeCitationRef`（含 `citationId`、`chunkId`、`vaultId`、`filePath`、`title`、`snippet`、`score` 等），并自动与既有 `evidenceRefs` 和 `refs` 双向兼容联动。
+  2. **提示词纳管与防幻觉指令**：在 `server/openaiClient.mjs` 中将活动分解提示词 `ai.generate.activity-decomposition` 增补严格指令，要求每项分解活动必须在 `citations` 中准确指明对应知识切片 ID 与佐证短句，严禁编造或臆造不存在的 chunkId；同步更新 `activityDecompositionDraftSchema`。
+  3. **服务端引用过滤与检索充填防线**：在 `server/openaiClient.mjs` 实现 `sanitizeActivityDecompositionCitations`，坚决过滤丢弃模型幻觉生成的虚假 chunkId，并为合法引用自动补全知识切片标题、来源与分值；在 `server/routes/aiRoutes.mjs` 接入自动知识检索，当未显式指定依据时自动检索当前项目关联切片注入上下文。
+  4. **前端交互与检查器追溯呈现**：在 `design-studio/src/ov5MechanismView.js` 为带引用的活动卡片渲染右上角 `[📖 N]` 轻量科技风角标；在 `design-studio/src/ui.js` 扩展活动 Inspector，清晰呈现结构化知识依据卡片（标题、相关度、文件路径与原文摘录）。
+  5. **成果报告导出体现**：在 `design-studio/src/reportBuilder.js` 中让活动列表与分解树表格如实呈现关联切片标题与出处。
+  6. **单项防退化与全量回归**：编写 `scripts/check-ov5-knowledge-citation-chain.mjs`，覆盖实体规范化、防幻觉过滤、活动模型落库、UI Badge 渲染、Inspector 呈现与报告导出。
+- **验证命令与输出**：
+  ```powershell
+  node scripts/check-ov5-knowledge-citation-chain.mjs
+  === 1. 测试基础引用实体规范化与双向兼容性 ===
+  ✓ 实体层引用规范化通过
+  === 2. 测试服务端防幻觉防线：过滤虚假引用并补全合法引用 ===
+  ✓ 服务端防幻觉过滤防线通过
+  === 3. 测试 OV-5 活动模型落库与结构保存 ===
+  ✓ OV-5 产品模型存储归一化通过
+  === 4. 测试前端视图渲染：引用 Badge 与侧边栏面板 ===
+  ✓ 前端卡片 Badge 与侧边栏 Inspector 溯源渲染通过
+  === 5. 测试成果报告导出包含知识依据与溯源信息 ===
+  ✓ 成果报告导出溯源呈现通过
+
+  === OV-5a 作战活动知识引用溯源全链路测试 100% 通过 ===
+
+  node scripts/run-checks.mjs all
+  ================ 汇总报告 ================
+  总脚本数: 134
+  通过 (PASS):    134
+  失败 (FAIL):    0
+  超时 (TIMEOUT): 0
+  ==========================================
+  ```

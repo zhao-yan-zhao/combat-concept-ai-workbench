@@ -697,7 +697,7 @@ export function selectionFor(type, id, models = {}) {
   return null;
 }
 
-function renderActivityInspector(selection, context) {
+export function renderActivityInspector(selection, context) {
   const model = context.ov5;
   const activity = (model?.activities || []).find((item) => item.id === selection.id) || {};
   const options = (model?.activities || []).filter((item) => item.id !== selection.id)
@@ -751,6 +751,23 @@ function renderActivityInspector(selection, context) {
       <label>时间与规则约束<textarea name="constraints" rows="2">${escapeHtml(activity.constraints || "")}</textarea></label>
       <label>活动说明<textarea name="text" rows="3">${escapeHtml(text)}</textarea></label>
       <label>知识依据<input name="refs" value="${escapeHtml(refs)}"></label>
+      ${(activity.citations?.length || selection.citations?.length) ? `
+        <div class="activity-citations-panel" data-activity-citations>
+          <label>知识溯源依据（${(activity.citations || selection.citations).length} 条已核验切片）</label>
+          <div class="citation-items-list">
+            ${(activity.citations || selection.citations).map((c) => `
+              <div class="citation-card" data-chunk-id="${escapeHtml(c.chunkId)}">
+                <div class="citation-head">
+                  <strong class="citation-title">📖 ${escapeHtml(c.title || c.chunkTitle || c.chunkId)}</strong>
+                  ${c.score ? `<span class="citation-score">${c.score}% 匹配</span>` : ""}
+                </div>
+                ${c.filePath ? `<small class="citation-source">${escapeHtml(c.filePath)}</small>` : ""}
+                ${c.snippet ? `<p class="citation-snippet">“${escapeHtml(c.snippet)}”</p>` : ""}
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      ` : ""}
       <fieldset class="trace-source-field ov1-source-picker">
         <legend>来源 OV-1 节点 <span class="ov1-source-count" data-ov1-source-count>${selectedCount}/${ov1Nodes.length || 0} 已选</span></legend>
         <p class="ov1-source-hint">可多选。来源决定 OV-2/OV-4 映射与跨视图追溯；保存后生效。空的输入/输出可在工具栏「补全映射质量」中从已选 OV-1 节点与相邻边回填。</p>

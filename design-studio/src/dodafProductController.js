@@ -1966,7 +1966,7 @@ export function createDodafProductController({
                 conceptBrief: state.conceptBrief || {},
                 activities: activities.map((a) => ({ id: a.id, title: a.title, type: a.type, domain: a.domain, text: a.text }))
               },
-              evidence: []
+              evidence: (state.evidence || state.knowledgeVault?.docs || []).slice(0, 5)
             });
             const steps = aiRes?.result?.activities || aiRes?.output?.activities || aiRes?.activities || [];
             if (steps.length > 0) {
@@ -2921,7 +2921,7 @@ function handleOv5aWorkbenchAction(action, el) {
             conceptBrief: state.conceptBrief || {},
             activities: (state.ov5?.activities || []).map((a) => ({ id: a.id, title: a.title, type: a.type, domain: a.domain, text: a.text }))
           },
-          evidence: []
+          evidence: (state.evidence || state.knowledgeVault?.docs || []).slice(0, 5)
         });
         const steps = aiRes?.result?.activities || aiRes?.output?.activities || aiRes?.activities || [];
         if (steps.length > 0) {

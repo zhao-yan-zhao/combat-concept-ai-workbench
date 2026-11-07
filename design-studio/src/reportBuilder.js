@@ -116,7 +116,8 @@ export function buildReportPayload({ project, brief, inspiration, direction, for
         preconditions: activity.preconditions || "",
         constraints: activity.constraints || "",
         description: activity.text,
-        refs: activity.refs || []
+        refs: activity.refs || [],
+        citations: activity.citations || []
       })),
       edges: ov5.edges
     },
@@ -235,7 +236,10 @@ export function buildMarkdownReport(payload) {
     ...evidenceSelectionLines(payload.ov5.provenance?.evidenceSelection),
     "| 活动 | 类型 | 输入 | 输出 | 耗时 | 知识依据 |",
     "| --- | --- | --- | --- | --- | --- |",
-    ...payload.ov5.activities.map((activity) => `| ${cell(activity.title)} | ${cell(activity.type)} | ${cell(activity.input)} | ${cell(activity.output)} | ${cell(activity.duration)} | ${cell(activity.refs.join("、"))} |`),
+    ...payload.ov5.activities.map((activity) => {
+      const citeStr = (activity.citations || []).map((c) => c.title || c.chunkId).filter(Boolean).join("、") || (activity.refs || []).join("、");
+      return `| ${cell(activity.title)} | ${cell(activity.type)} | ${cell(activity.input)} | ${cell(activity.output)} | ${cell(activity.duration)} | ${cell(citeStr)} |`;
+    }),
     "",
     `活动关联：${payload.ov5.edges.map((edge) => `${edge.sourceId} -> ${edge.targetId}（${edge.type}）`).join("；") || "未定义"}`,
     "",
@@ -527,9 +531,13 @@ function renderActivityDecompositions(model, activities = []) {
   if (!model?.decompositions?.length) return ["- 尚无活动父子分解关系。"];
   const activityById = new Map((activities || []).map((activity) => [activity.id, activity]));
   return [
-    "| 上级活动 | 下级活动 | 状态 |",
-    "| --- | --- | --- |",
-    ...model.decompositions.map((item) => `| ${cell(activityById.get(item.parentActivityRef)?.title || item.parentActivityRef)} | ${cell(activityById.get(item.childActivityRef)?.title || item.childActivityRef)} | ${cell(item.status || "pending_review")} |`)
+    "| 上级活动 | 下级活动 | 知识依据 | 状态 |",
+    "| --- | --- | --- | --- |",
+    ...model.decompositions.map((item) => {
+      const child = activityById.get(item.childActivityRef);
+      const citeStr = (child?.citations || []).map((c) => c.title || c.chunkId).filter(Boolean).join("、") || (child?.refs || []).join("、") || "无";
+      return `| ${cell(activityById.get(item.parentActivityRef)?.title || item.parentActivityRef)} | ${cell(child?.title || item.childActivityRef)} | ${cell(citeStr)} | ${cell(item.status || "pending_review")} |`;
+    })
   ];
 }
 

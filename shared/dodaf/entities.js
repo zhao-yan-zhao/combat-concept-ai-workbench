@@ -11,6 +11,9 @@ export function normalizeDm2Entity(value, index = 0, fallbackType = "Performer")
     ? clean(value.dm2Type, 40)
     : fallbackType;
   const id = clean(value?.id, 160) || `entity-${dm2Type.toLowerCase()}-${index + 1}`;
+  const citations = normalizeCitations(value?.citations);
+  const rawEvidence = normalizeStringList(value?.evidenceRefs || value?.refs, 16, 240);
+  const evidenceRefs = rawEvidence.length ? rawEvidence : citations.map((c) => c.chunkId);
   return {
     id,
     dm2Type,
@@ -18,7 +21,8 @@ export function normalizeDm2Entity(value, index = 0, fallbackType = "Performer")
     description: clean(value?.description || value?.detail || value?.text, 8000),
     aliases: normalizeStringList(value?.aliases, 12, 240),
     properties: normalizeProperties(value?.properties),
-    evidenceRefs: normalizeStringList(value?.evidenceRefs || value?.refs, 16, 240),
+    citations,
+    evidenceRefs,
     source: normalizeSource(value?.source)
   };
 }
@@ -124,6 +128,30 @@ export function normalizeSource(value) {
     mode: clean(value.mode, 40) || "manual",
     at: clean(value.at || value.generatedAt, 80)
   };
+}
+
+export function normalizeCitation(value = {}) {
+  if (!value || typeof value !== "object") return null;
+  const chunkId = clean(value.chunkId || value.id, 120);
+  if (!chunkId) return null;
+  return {
+    citationId: clean(value.citationId, 80) || `cite-${Math.random().toString(36).slice(2, 10)}`,
+    chunkId,
+    vaultId: clean(value.vaultId, 80),
+    filePath: clean(value.filePath, 240),
+    fileTitle: clean(value.fileTitle, 120),
+    title: clean(value.title || value.chunkTitle, 120),
+    chunkTitle: clean(value.chunkTitle || value.title, 120),
+    snippet: clean(value.snippet || value.summary || value.excerpt, 500),
+    score: Number.isFinite(Number(value.score)) ? Number(value.score) : 0,
+    adoptedAt: clean(value.adoptedAt, 80) || new Date().toISOString(),
+    attributionType: value.attributionType === "human_annotated" ? "human_annotated" : "ai_generated"
+  };
+}
+
+export function normalizeCitations(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map(normalizeCitation).filter(Boolean);
 }
 
 function normalizeProperties(value) {

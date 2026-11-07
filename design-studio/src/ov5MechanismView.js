@@ -772,7 +772,7 @@ function renderResilienceView({ activities, edges, state, stressedNodeId, activi
   `;
 }
 
-function renderActivityCard(act, selectedId, edges, selectedUpstream = new Set(), selectedDownstream = new Set(), upstreamMap = new Map(), downstreamMap = new Map()) {
+export function renderActivityCard(act, selectedId, edges, selectedUpstream = new Set(), selectedDownstream = new Set(), upstreamMap = new Map(), downstreamMap = new Map()) {
   const isSelected = act.id === selectedId;
   const isUpstream = selectedUpstream.has(act.id);
   const isDownstream = selectedDownstream.has(act.id);
@@ -789,6 +789,7 @@ function renderActivityCard(act, selectedId, edges, selectedUpstream = new Set()
         <span class="autonomy-pill ${autonomy.toLowerCase()}">${autonomy}</span>
         <span class="io-flow-pill" title="上游来源 ${inCount} 项，下游驱动 ${outCount} 项">↑${inCount} ↓${outCount}</span>
         ${act.timingWindow ? `<span class="timing-badge">${escapeHtml(act.timingWindow)}</span>` : ""}
+        ${(act.citations?.length || act.evidenceRefs?.length || act.refs?.length) ? `<span class="citation-badge" title="已关联知识依据：${escapeHtml((act.citations || []).map((c) => c.title || c.chunkId).filter(Boolean).join("、") || (act.refs || []).join("、"))}">📖 ${(act.citations?.length || act.evidenceRefs?.length || act.refs?.length)}</span>` : ""}
         <button type="button" class="card-inline-edit-btn" data-action="edit-activity" data-activity-id="${escapeHtml(act.id)}" data-activity="${escapeHtml(act.id)}" data-stop-click-propagation="true" title="编辑该活动的执行主体、作战域与契约">✏️ 编辑</button>
       </div>
       <strong class="card-title">${escapeHtml(act.title)}</strong>

@@ -3,9 +3,25 @@ import { readJson, send, sendJson } from "../httpUtils.mjs";
 import { randomUUID } from "node:crypto";
 
 export function createAiHandlers(runtime) {
-  const { getAiApiKey, getAiServiceConfig, localIdentity, openAi } = runtime;
+  const { getAiApiKey, getAiServiceConfig, localIdentity, openAi, projectRepository } = runtime;
   const { callOpenAi, streamOpenAi, callOpenAiRedTeam, mergeAiDraft } = openAi;
   const generationJobs = new Map();
+
+  async function resolveInputEvidence(input = {}) {
+    if (Array.isArray(input.evidence) && input.evidence.length > 0) return input.evidence;
+    if (!input.projectId || !projectRepository) return [];
+    try {
+      const query = input.analysis?.conceptBrief?.objective
+        || (Array.isArray(input.analysis?.activities) ? input.analysis.activities.map((a) => a.title).join(" ") : "")
+        || input.workflow?.title
+        || "";
+      if (!query.trim()) return [];
+      const searchRes = await projectRepository.searchKnowledge(input.projectId, query, 5);
+      return Array.isArray(searchRes?.results) ? searchRes.results : (Array.isArray(searchRes) ? searchRes : []);
+    } catch {
+      return [];
+    }
+  }
 
   async function handleCreateGenerateJob(request, response) {
     if (!getAiApiKey()) {
@@ -74,6 +90,7 @@ export function createAiHandlers(runtime) {
 
   async function runGenerationJob(job) {
     const input = job.input;
+    input.evidence = await resolveInputEvidence(input);
     const base = generateMockOutput({
       workflow: input.workflow,
       analysis: input.analysis || {},
@@ -143,6 +160,7 @@ export function createAiHandlers(runtime) {
 
     try {
       const input = await readJson(request);
+      input.evidence = await resolveInputEvidence(input);
       const base = generateMockOutput({
         workflow: input.workflow,
         analysis: input.analysis || {},
@@ -166,6 +184,7 @@ export function createAiHandlers(runtime) {
     }
 
     const input = await readJson(request);
+    input.evidence = await resolveInputEvidence(input);
     const base = generateMockOutput({
       workflow: input.workflow,
       analysis: input.analysis || {},

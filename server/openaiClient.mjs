@@ -159,7 +159,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         '  "narrative": "仿真推演总体叙述（100-300字）" }'
       ] : isActivityDecompositionDraft ? [
         '{ "summary": "1-3 句中文说明，概述本轮作战活动分解要点与层级规划",',
-        '  "activities": [{ "id": "act-sub-1", "title": "子活动规范名称", "type": "感知|识别|决策|行动|控制|评估|电子对抗|协同打击", "domain": "太空|空中|水面|水下|陆基|电磁|网络|综合", "autonomy": "HITL|HOTL|HOOTL", "performer": "执行责任单元/装备", "timingWindow": "时限窗口如5m", "input": "输入契约", "output": "产出契约", "parentId": "上级活动id", "text": "活动机理与执行说明" }],',
+        '  "activities": [{ "id": "act-sub-1", "title": "子活动规范名称", "type": "感知|识别|决策|行动|控制|评估|电子对抗|协同打击", "domain": "太空|空中|水面|水下|陆基|电磁|网络|综合", "autonomy": "HITL|HOTL|HOOTL", "performer": "执行责任单元/装备", "timingWindow": "时限窗口如5m", "input": "输入契约", "output": "产出契约", "parentId": "上级活动id", "text": "活动机理与执行说明", "citations": [{ "chunkId": "知识切片ID", "snippet": "佐证原文短句" }] }],',
         '  "decompositions": [{ "parentActivityRef": "上级活动id", "childActivityRef": "act-sub-1", "rationale": "分解因果与层级依据" }] }'
       ] : isTaskActivityMappingDraft ? [
         '{ "summary": "1-3 句中文说明，概述作战任务与承接活动之间的因果承接与闭环机理",',
@@ -416,6 +416,14 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         "activityRefs 必须是输入的作战活动 act.id，严禁虚构。",
         "semantic 必须是 triggers（触发活动）、executes（执行活动）或 ends（结束活动）之一。",
         "在 rationale 中给出状态转换触发或驱动该活动的战术机理说明。"
+      ] : []),
+      ...(isActivityDecompositionDraft ? [
+        "活动分解要求：围绕给定的上级活动或作战概念，进行 DoDAF OV-5a 规范化纵向分解与层级规划。",
+        "1. 节点属性必须规范：包含 id、title、type、domain、autonomy、performer、timingWindow、input、output、parentId 与 text 机理说明。",
+        "2. 知识引用与溯源（防幻觉铁律）：",
+        "   - 若输入中提供了知识依据（evidence），每项活动若有条令或战法支撑，应在 citations 中指明对应知识切片的 chunkId，并摘录 ≤100 字的事实片段（snippet）；",
+        "   - citations 中的 chunkId 必须严格来自输入中明确提供的知识切片 ID，严禁编造或臆造不存在的 chunkId；",
+        "   - 若某活动无匹配的知识依据支撑，citations 保持为空数组 []，绝不得无中生有。"
       ] : []),
       "",
       `当前工作流：${input.workflow?.title || input.workflowId || base.workflowTitle}`,
@@ -1134,7 +1142,9 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
           };
     }
 
-    if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "OperationalTaskDraft" || base.outputSchema === "TaskOrganizationDraft" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "OrganizationRelationshipDraft" || base.outputSchema === "ResourceFlowDraft" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft" || base.outputSchema === "ScenarioDraft" || base.outputSchema === "ActivityDecompositionDraft" || base.outputSchema === "TaskActivityMappingDraft" || base.outputSchema === "StateActivityMappingDraft") && draft && typeof draft === "object") {
+    if (base.outputSchema === "ActivityDecompositionDraft" && draft && typeof draft === "object") {
+      base.result = sanitizeActivityDecompositionCitations(draft, base.evidenceRefs || input?.evidence || []);
+    } else if ((base.outputSchema === "ConceptMapInitialPlan" || base.outputSchema === "OperationalTaskDraft" || base.outputSchema === "TaskOrganizationDraft" || base.outputSchema === "ForceMissionPlan" || base.outputSchema === "OrganizationRelationshipDraft" || base.outputSchema === "ResourceFlowDraft" || base.outputSchema === "PhaseActionConcept" || base.outputSchema === "CombatFocusOptions" || base.outputSchema === "ConceptGraphicPlan" || base.outputSchema === "RuleLibraryDraft" || base.outputSchema === "RuleLibraryChangeSet" || base.outputSchema === "SequenceDraft" || base.outputSchema === "StateMachineDraft" || base.outputSchema === "ScenarioDraft" || base.outputSchema === "TaskActivityMappingDraft" || base.outputSchema === "StateActivityMappingDraft") && draft && typeof draft === "object") {
       base.result = draft;
     }
   
@@ -1689,7 +1699,24 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
               input: { type: "string", maxLength: 500 },
               output: { type: "string", maxLength: 500 },
               parentId: { type: "string", maxLength: 180 },
-              text: { type: "string", maxLength: 1000 }
+              text: { type: "string", maxLength: 1000 },
+              evidenceRefs: {
+                type: "array",
+                items: { type: "string", maxLength: 120 }
+              },
+              citations: {
+                type: "array",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["chunkId"],
+                  properties: {
+                    citationId: { type: "string", maxLength: 80 },
+                    chunkId: { type: "string", maxLength: 120 },
+                    snippet: { type: "string", maxLength: 500 }
+                  }
+                }
+              }
             }
           }
         },
@@ -1820,6 +1847,49 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     }
   }
   
+  function sanitizeActivityDecompositionCitations(draft, evidenceList = []) {
+    const validChunkMap = new Map();
+    (Array.isArray(evidenceList) ? evidenceList : []).forEach((e) => {
+      if (e && (e.id || e.chunkId)) {
+        validChunkMap.set(e.id || e.chunkId, e);
+      }
+    });
+
+    const activities = (Array.isArray(draft.activities) ? draft.activities : []).map((act) => {
+      const rawCitations = Array.isArray(act.citations) ? act.citations : [];
+      const validCitations = [];
+      for (const c of rawCitations) {
+        if (!c || !c.chunkId) continue;
+        const matched = validChunkMap.get(c.chunkId);
+        if (matched) {
+          validCitations.push({
+            citationId: c.citationId || `cite-${Math.random().toString(36).slice(2, 8)}`,
+            chunkId: c.chunkId,
+            title: matched.title || matched.fileTitle || c.title || "",
+            filePath: matched.source || matched.filePath || "",
+            snippet: c.snippet || matched.summary || "",
+            score: matched.score || 80
+          });
+        }
+      }
+
+      const rawRefs = Array.isArray(act.evidenceRefs) ? act.evidenceRefs : [];
+      const validRefs = rawRefs.filter((id) => validChunkMap.has(id));
+      const mergedRefs = Array.from(new Set([...validRefs, ...validCitations.map((c) => c.chunkId)]));
+
+      return {
+        ...act,
+        citations: validCitations,
+        evidenceRefs: mergedRefs
+      };
+    });
+
+    return {
+      ...draft,
+      activities
+    };
+  }
+
   function normalizeSections(draft) {
     return Array.isArray(draft.sections)
       ? draft.sections

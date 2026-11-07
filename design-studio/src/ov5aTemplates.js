@@ -289,7 +289,12 @@ export function generateLocalDecomposition(arg1, arg2) {
       input: step.input || "任务前置信号",
       output: step.output || "执行结果契约",
       parentId: pId,
-      text: step.text || `归属于「${pTitle}」的纵向细化动作`
+      text: step.text || `归属于「${pTitle}」的纵向细化动作`,
+      citations: Array.isArray(step.citations) ? step.citations : [],
+      refs: Array.isArray(step.refs) ? step.refs : (Array.isArray(step.evidenceRefs) ? step.evidenceRefs : []),
+      evidenceRefs: Array.isArray(step.evidenceRefs) ? step.evidenceRefs : (Array.isArray(step.refs) ? step.refs : []),
+      sourceOv1NodeIds: parentActivity.sourceOv1NodeIds || [],
+      sourceTaskId: parentActivity.sourceTaskId || ""
     }));
   } else {
     let subSpecs = [];

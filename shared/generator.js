@@ -130,7 +130,7 @@ function createResultBySchema(schema, workflow, analysis, evidenceRefs) {
     return createWargameReview(analysis, evidenceRefs);
   }
   if (schema === "ActivityDecompositionDraft") {
-    return createActivityDecompositionDraftResult(analysis);
+    return createActivityDecompositionDraftResult(analysis, evidenceRefs);
   }
   if (schema === "TaskActivityMappingDraft") {
     return createTaskActivityMappingDraftResult(analysis);
@@ -1620,7 +1620,16 @@ function splitList(value) {
     .slice(0, 12);
 }
 
-function createActivityDecompositionDraftResult(analysis) {
+function createActivityDecompositionDraftResult(analysis, evidenceRefs = []) {
+  const citations = (Array.isArray(evidenceRefs) ? evidenceRefs : []).slice(0, 2).map((e) => ({
+    citationId: `cite-${e.id || Math.random().toString(36).slice(2, 8)}`,
+    chunkId: e.id || "",
+    title: e.title || "",
+    filePath: e.source || e.filePath || "",
+    snippet: e.summary || "",
+    score: 85
+  })).filter((c) => Boolean(c.chunkId));
+  const rawRefs = citations.map((c) => c.chunkId);
   const activities = Array.isArray(analysis?.activities) ? analysis.activities : [];
   const root = activities[0] || { id: "act-root", title: "作战行动实施" };
   return {
@@ -1637,7 +1646,9 @@ function createActivityDecompositionDraftResult(analysis) {
         input: "态势线索",
         output: "目标数据集",
         parentId: root.id,
-        text: "核验作战触发门槛与战场环境约束"
+        text: "核验作战触发门槛与战场环境约束",
+        citations,
+        evidenceRefs: rawRefs
       },
       {
         id: `${root.id}-core-exec`,
@@ -1650,7 +1661,9 @@ function createActivityDecompositionDraftResult(analysis) {
         input: "执行指令",
         output: "毁伤/控制载荷",
         parentId: root.id,
-        text: "实施协同突防与多源压制"
+        text: "实施协同突防与多源压制",
+        citations,
+        evidenceRefs: rawRefs
       },
       {
         id: `${root.id}-assess-close`,
@@ -1663,7 +1676,9 @@ function createActivityDecompositionDraftResult(analysis) {
         input: "毁伤回传数据",
         output: "评估裁决报告",
         parentId: root.id,
-        text: "评估打击成效并更新战术回路"
+        text: "评估打击成效并更新战术回路",
+        citations,
+        evidenceRefs: rawRefs
       }
     ],
     decompositions: [
