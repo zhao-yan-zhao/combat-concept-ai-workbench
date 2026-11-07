@@ -24,8 +24,24 @@ export function renderProjectStorageActions(storage = {}, { refreshAction = "ref
 }
 
 export function renderProjectStorageFooter(storage = {}) {
-  const label = storage.mode === "server" ? storage.label || "服务端已同步" : storage.label || "本地草稿已保存";
-  return `<span></span> ${escapeHtml(label)}`;
+  const isSaving = storage.status === "saving" || storage.status === "checking";
+  const isSynced = !isSaving && storage.mode === "server" && (storage.status === "ready" || !storage.localSaved);
+  
+  let stateTag = "synced";
+  let displayLabel = "已同步";
+  let detailTip = "服务端已同步 (原生 SQLite 仓储)";
+
+  if (isSaving) {
+    stateTag = "saving";
+    displayLabel = "保存中…";
+    detailTip = "正在向服务端同步最新模型快照与修改…";
+  } else if (!isSynced) {
+    stateTag = "unsynced";
+    displayLabel = "未同步 (本地暂存)";
+    detailTip = storage.detail || "当前修改已暂存于浏览器本地草稿，尚未同步至服务端";
+  }
+
+  return `<span class="storage-dot storage-dot-${stateTag}" aria-hidden="true"></span> <span class="storage-status-text" title="${escapeHtml(detailTip)}">${escapeHtml(displayLabel)}</span>`;
 }
 
 function escapeHtml(value) {

@@ -363,7 +363,32 @@ TE.x 在每个里程碑结束时各做一张
 遗留/待确认：……
 ```
 
-### T1.4 候选差异预览 — 2026-11-07
+### T1.5 保存状态指示 — 2026-11-08
+
+**现状理解**：
+工作台顶栏右侧状态区之前仅显示简单的文本标签，缺乏鲜明直观的同步状态区分。系统内部各模块已有 `state.projectStorage` 以及写失败逻辑（`projectWriteFailureState.js`）。必须在顶栏明确呈现三种状态：“已同步 / 保存中… / 未同步（本地暂存）”，并在 hover 提示中展示具体原因与审计信息，不额外新建状态源。
+
+**改动文件**：
+1. `design-studio/src/projectStorageView.js`：重构 `renderProjectStorageFooter`，根据 `storage.status` 与 `storage.mode` 严格区分并输出“已同步 / 保存中… / 未同步 (本地暂存)”以及状态徽标与工具提示；
+2. `design-studio/src/main.js`：完善 `document.startViewTransition` 异常捕获逻辑（补齐对 `.ready`、`.updateCallbackDone` 与 `.finished` 的安全防护），彻底杜绝在快速切换视图时的未处理 Promise 拒绝。
+
+**验收命令与输出**：
+```powershell
+node scripts/smoke-ui.mjs
+# 输出：
+# [Smoke] Verifying T1.3 Undo transaction flow (apply candidate -> undo -> restore nodes) ...
+# [Smoke] ✓ T1.3 Undo transaction flow verified cleanly (nodes: 5 -> 7 -> 5)
+# [Smoke] Critical errors recorded during walkthrough: 0
+# [Smoke] ✓ Headless Edge CDP smoke test PASSED with 0 errors!
+
+node scripts/run-checks.mjs all
+# 输出：总脚本数: 135, 通过 (PASS): 135, 失败 (FAIL): 0, 超时 (TIMEOUT): 0 (100% 全绿)
+```
+
+**遗留/待确认**：
+**至此，里程碑 M1（可控：所有覆盖性操作都可以撤回，T1.1～T1.5）已全部完成！**
+下一个里程碑是 **M2（可信：引用溯源）**。按照主计划第四部分与执行规则第 6 条要求，M2 的首张任务卡 **T2.1（修订设计稿）只写文档、不改代码**，完成后必须**停下报告**，等待人工确认后再进入 T2.2。
+
 
 **现状理解**：
 此前在应用高层概念图（OV-1）候选时，代码采用原生的 `window.confirm("应用候选将替换当前高层作战概念图...")`。用户无法在确认前获知候选模型到底新增、修改或删除了哪些节点或关系，容易造成盲目覆盖。必须基于系统现有的 `compareModelSnapshots`（`modelCompare.js`），用结构化差异对话框 `<dialog id="candidateDiffDialog">` 替代原生 confirm，直观展现新增/修改/删除统计与前 10 条明细。

@@ -442,10 +442,20 @@ function renderViewRoot(options = {}) {
       const transition = document.startViewTransition(() => {
         applyDomUpdate();
       });
-      if (transition && typeof transition.finished?.finally === "function") {
-        transition.finished.catch(() => {}).finally(() => {
-          viewRoot.classList.remove("is-view-switching");
-        });
+      if (transition) {
+        if (transition.ready && typeof transition.ready.catch === "function") {
+          transition.ready.catch(() => {});
+        }
+        if (transition.updateCallbackDone && typeof transition.updateCallbackDone.catch === "function") {
+          transition.updateCallbackDone.catch(() => {});
+        }
+        if (transition.finished && typeof transition.finished.catch === "function") {
+          transition.finished.catch(() => {}).finally(() => {
+            viewRoot.classList.remove("is-view-switching");
+          });
+        } else {
+          window.setTimeout(() => viewRoot.classList.remove("is-view-switching"), 300);
+        }
       } else {
         window.setTimeout(() => viewRoot.classList.remove("is-view-switching"), 300);
       }
