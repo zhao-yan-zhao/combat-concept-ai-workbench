@@ -76,7 +76,8 @@
     "check-ov5-mechanism-restructuring.mjs",
     "check-ov5a-comprehensive-workbench.mjs",
     "check-ov5a-decomposition-restructuring.mjs",
-    "check-ov5a-ov5b-architecture-sync.mjs"
+    "check-ov5a-ov5b-architecture-sync.mjs",
+    "check-citation-ov5-pilot.mjs"
   ],
   "force-mission": [
     "check-cmo-force-mission.mjs",

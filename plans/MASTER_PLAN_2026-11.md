@@ -545,3 +545,26 @@ node scripts/smoke-ui.mjs
 2. 序号 6~14 为各业务模块的 AI 批量生成与模板覆盖动作，后续卡片将按优先级分批（每 3 个一批）接入事务包装；
 3. 序号 15~20 为各模块一键清空按钮，同样需统一走事务包装，让清空操作亦可秒级撤销。
 
+---
+
+### T2.2 执行记录 (2026-11-08)
+
+- **任务卡**：M2-T2.2 试点：OV-5 活动分解（ActivityDecompositionDraft）
+- **交付内容**：
+  1. 服务端引用安全清洗与来源打标（`server/openaiClient.mjs` 中的 `sanitizeActivityDecompositionCitations`）：
+     - 校验 AI 生成 draft 中活动携带的 `citations` chunkId 是否在知识检索的 `evidence` 中真实存在；
+     - 合法引用保留并打标 `origin: "cited"`；
+     - 虚构/捏造引用丢弃，无合法引用时打标退化为 `origin: "ai-inferred"`；
+  2. DM2 实体规范化支持（`shared/dodaf/entities.js` 中的 `normalizeDm2Entity`）：
+     - 规范化 `origin` 字段（`"cited" | "ai-inferred" | "human"`）；
+  3. 前端编辑维护（`design-studio/src/ov5Store.js`）：
+     - 人工新建或修改活动时，显式赋予并保持 `origin: "human"`；
+  4. 专用回归测试与基准纳入：
+     - 新建 `scripts/check-citation-ov5-pilot.mjs`，包含 4 组针对性断言（合法保留、虚构安全丢弃、无引用标记、人工维护保持），全部 100% 通过；
+     - 纳入 `scripts/check-groups.json` 的 `ov5` 测试组。
+- **验证命令与结果**：
+  - `node scripts/run-checks.mjs ov5`：7/7 PASS (100%)
+  - `node scripts/run-checks.mjs all`：136/136 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+

@@ -14,6 +14,11 @@ export function normalizeDm2Entity(value, index = 0, fallbackType = "Performer")
   const citations = normalizeCitations(value?.citations);
   const rawEvidence = normalizeStringList(value?.evidenceRefs || value?.refs, 16, 240);
   const evidenceRefs = rawEvidence.length ? rawEvidence : citations.map((c) => c.chunkId);
+  const origin = value?.origin === "human"
+    ? "human"
+    : citations.length > 0
+      ? "cited"
+      : "ai-inferred";
   return {
     id,
     dm2Type,
@@ -23,6 +28,7 @@ export function normalizeDm2Entity(value, index = 0, fallbackType = "Performer")
     properties: normalizeProperties(value?.properties),
     citations,
     evidenceRefs,
+    origin,
     source: normalizeSource(value?.source)
   };
 }

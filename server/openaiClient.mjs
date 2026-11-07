@@ -1876,11 +1876,13 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       const rawRefs = Array.isArray(act.evidenceRefs) ? act.evidenceRefs : [];
       const validRefs = rawRefs.filter((id) => validChunkMap.has(id));
       const mergedRefs = Array.from(new Set([...validRefs, ...validCitations.map((c) => c.chunkId)]));
+      const origin = validCitations.length > 0 ? "cited" : "ai-inferred";
 
       return {
         ...act,
         citations: validCitations,
-        evidenceRefs: mergedRefs
+        evidenceRefs: mergedRefs,
+        origin: act.origin === "human" ? "human" : origin
       };
     });
 
@@ -2111,7 +2113,8 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     callOpenAiRedTeam,
     mergeAiDraft,
     listPromptDefinitions,
-    fetchUpstreamModels
+    fetchUpstreamModels,
+    sanitizeActivityDecompositionCitations
   };
 }
 

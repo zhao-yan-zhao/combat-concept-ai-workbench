@@ -85,7 +85,8 @@ export function addActivity(model) {
     preconditions: "",
     constraints: "",
     refs: [],
-    sourceOv1NodeIds: []
+    sourceOv1NodeIds: [],
+    origin: "human"
   };
   model.activities.push(activity);
   persistOv5Model(model);
@@ -95,7 +96,7 @@ export function addActivity(model) {
 export function updateActivity(model, activityId, patch) {
   const activity = model.activities.find((item) => item.id === activityId);
   if (!activity) return null;
-  const next = { ...patch };
+  const next = { ...patch, origin: "human" };
   if (Object.hasOwn(next, "parentId") && !canAssignActivityParent(model, activityId, next.parentId)) next.parentId = "";
   Object.assign(activity, next);
   persistOv5Model(model);
