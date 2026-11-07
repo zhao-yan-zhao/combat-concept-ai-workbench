@@ -48,6 +48,30 @@ const MAX_COLLABORATION_REVIEWS = 160;
 const MAX_COLLABORATION_DECISIONS = 160;
 const COLLABORATION_RESOURCES = new Set(["brief", "forceMissionPlan", "phaseActionConcept", "conceptMap", "conceptGraphicPlan", "ov1", "ov1b", "ov1c", "ov2", "ov3", "ov4", "ov5a", "ov5", "ov6a", "ov6b", "ov6c", "ov7", "architecture", "ooda", "scenario", "validation", "knowledge", "report"]);
 const OV_MODEL_RESOURCES = ["ov1", "ov1b", "ov1c", "ov2", "ov3", "ov4", "ov5a", "ov5", "ov6a", "ov6b", "ov6c", "ov7", "architecture"];
+const PROJECT_RESOURCE_KEYS = [
+  "forceMissionPlan",
+  "phaseActionConcept",
+  "conceptMap",
+  "conceptGraphicPlan",
+  "researchChats",
+  "ov1",
+  "ov1b",
+  "ov1c",
+  "ov2",
+  "ov3",
+  "ov4",
+  "ov5a",
+  "ov5",
+  "ov6a",
+  "ov6b",
+  "ov6c",
+  "ov7",
+  "architecture",
+  "ooda",
+  "scenario",
+  "validation",
+  "knowledge"
+];
 
 export function createFileProjectRepository({ filePath, databasePath = "", now = () => new Date().toISOString(), knowledgeRetrievalMode = "hybrid", externalVectorAdapter = null }) {
   if (!filePath) throw new Error("Project repository file path is required");
@@ -69,7 +93,41 @@ export function createFileProjectRepository({ filePath, databasePath = "", now =
         const project = normalizeProjectMeta(input, now());
         if (catalog[project.id]) throw createConflictError("Project identifier is already in use");
         state.projectCatalog = { ...catalog, [project.id]: project };
-        state.projects[project.id] = { revision: 0, updatedAt: project.createdAt, audit: [] };
+        let initialRecord = { revision: 0, updatedAt: project.createdAt, audit: [] };
+        if (input.record && typeof input.record === "object") {
+          const rec = input.record;
+          const createdAt = project.createdAt || now();
+          const recordBrief = rec.brief && typeof rec.brief === "object" ? normalizeBrief(rec.brief) : null;
+          const initialResources = {};
+          for (const key of PROJECT_RESOURCE_KEYS) {
+            if (rec[key] !== undefined) {
+              try {
+                const def = getResourceDefinition(key);
+                const rawModel = rec[key]?.model !== undefined ? rec[key].model : rec[key];
+                const model = def ? def.normalize(rawModel) : rawModel;
+                initialResources[key] = {
+                  resourceRevision: Number(rec[key]?.resourceRevision || 1),
+                  updatedAt: rec[key]?.updatedAt || createdAt,
+                  model
+                };
+              } catch {
+                initialResources[key] = rec[key];
+              }
+            }
+          }
+          initialRecord = normalizeProjectRecord({
+            revision: Number(rec.revision || 1),
+            briefRevision: Number(rec.briefRevision || 1),
+            updatedAt: rec.updatedAt || createdAt,
+            direction: rec.direction || "",
+            directions: normalizeCustomDirections(rec.directions),
+            brief: recordBrief,
+            inspiration: rec.inspiration || null,
+            audit: Array.isArray(rec.audit) ? rec.audit : [],
+            ...initialResources
+          });
+        }
+        state.projects[project.id] = initialRecord;
         await persistState(state);
         return { project: projectSummary(project, state.projects[project.id]) };
       });
@@ -998,30 +1056,7 @@ function createProjectPersistence({ filePath, databasePath }) {
   const insertReview = database.prepare("INSERT INTO project_collaboration_reviews (project_id, review_id, position, review_json) VALUES (?, ?, ?, ?)");
   const insertDecision = database.prepare("INSERT INTO project_collaboration_decisions (project_id, review_id, position, decision_json) VALUES (?, ?, ?, ?)");
   const insertAudit = database.prepare("INSERT INTO project_audit_events (project_id, event_id, position, revision, action, occurred_at, event_json) VALUES (?, ?, ?, ?, ?, ?, ?)");
-  const resourceKeys = [
-    "forceMissionPlan",
-    "phaseActionConcept",
-    "conceptMap",
-    "conceptGraphicPlan",
-    "researchChats",
-    "ov1",
-    "ov1b",
-    "ov1c",
-    "ov2",
-    "ov3",
-    "ov4",
-    "ov5a",
-    "ov5",
-    "ov6a",
-    "ov6b",
-    "ov6c",
-    "ov7",
-    "architecture",
-    "ooda",
-    "scenario",
-    "validation",
-    "knowledge"
-  ];
+  const resourceKeys = PROJECT_RESOURCE_KEYS;
   const historyKeys = ["reportArchives", "modelSnapshots"];
   // One-time bootstrap after schema exists: empty SQLite inherits projects.json, then all writes stay in DB.
   bootstrapSqliteFromFileIfEmpty({

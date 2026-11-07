@@ -10,7 +10,8 @@
     "check-sqlite-default-all-resources.mjs",
     "check-sqlite-project-repository.mjs",
     "check-sqlite-state-backup-restore.mjs",
-    "check-project-kind-selection.mjs"
+    "check-project-kind-selection.mjs",
+    "check-example-projects.mjs"
   ],
   "server": [
     "check-ai-config-write-access.mjs",

@@ -94,6 +94,7 @@ export function renderProjectManagerChrome(ctx) {
     try {
       const result = await createProject({
         id: values.get("id"),
+        kind: values.get("kind") || "tactic",
         title: values.get("title"),
         description: values.get("description")
       });
@@ -102,6 +103,45 @@ export function renderProjectManagerChrome(ctx) {
       showToast("项目创建失败，请检查项目标识和名称");
     }
   });
+}
+
+/**
+ * Handle loading example projects without overwriting existing projects.
+ */
+export async function handleLoadExampleProject(kind = "tactic", ctx) {
+  const { state, showToast, hydrateProjectDirectory } = ctx;
+  try {
+    const fileName = kind === "scenario" ? "scenario-example.json" : "tactic-example.json";
+    const response = await fetch(`/design-studio/examples/${fileName}`);
+    if (!response.ok) throw new Error("示例配置文件读取失败");
+    const example = await response.json();
+
+    const existingIds = new Set((state.projectDirectory?.projects || []).map((p) => p.id));
+    const baseId = kind === "scenario" ? "example-scenario" : "example-tactic";
+    let candidateId = baseId;
+    let counter = 1;
+    while (existingIds.has(candidateId)) {
+      candidateId = `${baseId}-${counter++}`;
+    }
+    const candidateTitle = candidateId === baseId
+      ? example.title
+      : `${example.title}（副本${counter - 1}）`;
+
+    const result = await createProject({
+      id: candidateId,
+      kind: example.kind || kind,
+      title: candidateTitle,
+      description: example.description,
+      workflow: example.workflow,
+      record: example.record
+    });
+
+    showToast(`已成功载入示例：${candidateTitle}`);
+    if (hydrateProjectDirectory) await hydrateProjectDirectory({ skipRender: true });
+    switchProject(result.project.id, ctx);
+  } catch (error) {
+    showToast(`载入示例失败：${error?.message || "网络错误"}`);
+  }
 }
 
 /**
@@ -117,6 +157,11 @@ export function handleProjectAction(action, source, ctx) {
     hydrateProjectDirectory
   } = ctx;
 
+  if (action === "load-example-project") {
+    const kind = source?.dataset?.exampleKind || "tactic";
+    void handleLoadExampleProject(kind, ctx);
+    return true;
+  }
   if (action === "toggle-project-manager") {
     const nextOpen = !state.projectManagerOpen;
     if (nextOpen) closeMenubarMenus();

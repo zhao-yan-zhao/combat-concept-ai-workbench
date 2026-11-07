@@ -1,0 +1,419 @@
+{
+  "id": "example-scenario-littoral",
+  "kind": "scenario",
+  "title": "海空联合海峡通道防御推演想定",
+  "description": "面向关键海峡水道封控与反介入防御任务的双阵营多回合推演想定示例，已设定红蓝双方编组、时序裁决与推演事件。",
+  "workflow": {
+    "version": 2,
+    "mode": "free",
+    "completedThrough": 6,
+    "updatedAt": "2026-11-08T00:00:00.000Z"
+  },
+  "record": {
+    "direction": "海空联合多层拦截与拒止",
+    "directions": [
+      {
+        "id": "multi-layer-defense",
+        "title": "海空联合多层拦截与拒止",
+        "text": "依托近海防空阵地与水面编队形成内陆、海岸、远海三层拦截火力网。"
+      },
+      {
+        "id": "asymmetric-chokepoint",
+        "title": "通道不对称水下阻截",
+        "text": "以潜艇布雷与无人潜航器封锁狭窄海峡出口。"
+      },
+      {
+        "id": "rapid-reaction-strike",
+        "title": "海空快速机动反击",
+        "text": "依托机动航空力量对进犯水面编队实施快速突击。"
+      }
+    ],
+    "brief": {
+      "researchIntent": "检验海空联合防御体系在关键通道封控背景下的协同抗击能力与决策裁决机制。",
+      "objective": "构建红蓝对抗仿真想定，在 72 小时推演周期内验证多波次海空反击在海峡通道的防御胜率与抗毁冗余。",
+      "approach": "划分红蓝双方兵力编组，设定 4 个推演回合与裁决节点，运用抽象态势网格进行回合对抗仿真。",
+      "assumptions": "假定红方岸基雷达网完好率大于 85%；蓝方水面编队在防区外展开；双方交战裁决依据规则库判定概率模型。",
+      "expectedEffects": "形成多回合推演复盘数据，验证海空协同火力通道通畅率大于 80%，输出防御部署优化建议。",
+      "risk": "复杂水文与恶劣海况可能降低水面编队协同反应速率。",
+      "evidenceRefs": [
+        "obs/想定推演/通道防御推演规则.md",
+        "obs/战术协同/海空防空协同手册.md"
+      ]
+    },
+    "phaseActionConcept": {
+      "model": {
+        "status": "confirmed",
+        "phases": [
+          {
+            "id": "phase-1",
+            "name": "早期预警与威慑展开",
+            "timeWindow": "T+00 ~ T+12",
+            "blueAction": "蓝方海上先锋编队抵近海峡外围并起飞预警巡逻机",
+            "redAction": "红方启动岸基与海空雷达组网，前出巡逻拦截线",
+            "transitions": ["蓝方编队越过外围警戒线，推演进入外围拦截回合"]
+          },
+          {
+            "id": "phase-2",
+            "name": "前沿海上接触与拦截",
+            "timeWindow": "T+12 ~ T+36",
+            "blueAction": "蓝方出动多波次舰载机实施佯动佯攻并测试红方反应",
+            "redAction": "红方前出驱护编队实施电子战遮蔽与防空压制",
+            "transitions": ["双方首发远程交火裁决，进入联合抗击阶段"]
+          },
+          {
+            "id": "phase-3",
+            "name": "空海联合火力抗击",
+            "timeWindow": "T+36 ~ T+60",
+            "blueAction": "蓝方主力突击群展开集中突穿并实施饱和打击",
+            "redAction": "红方岸海空一体火力网实施梯次拦截与联合反击",
+            "transitions": ["双方主要突击波次消耗完毕，进入重构与复盘阶段"]
+          },
+          {
+            "id": "phase-4",
+            "name": "态势重构与防御稳态",
+            "timeWindow": "T+60 ~ T+72",
+            "blueAction": "蓝方受损编队后撤脱离接触重组",
+            "redAction": "红方巩固海峡控制线，完成战损统计与复盘归档",
+            "transitions": ["推演裁决闭环，导出推演文书与复盘报告"]
+          }
+        ],
+        "transitions": [
+          { "from": "phase-1", "to": "phase-2", "condition": "外围警戒线突破" },
+          { "from": "phase-2", "to": "phase-3", "condition": "接触火力展开" },
+          { "from": "phase-3", "to": "phase-4", "condition": "主力波次裁决完成" }
+        ]
+      }
+    },
+    "forceMissionPlan": {
+      "model": {
+        "status": "confirmed",
+        "tasks": [
+          {
+            "id": "task-littoral-isr",
+            "name": "海空联合预警监视",
+            "phase": "早期预警与威慑展开",
+            "description": "构建覆盖海峡纵深 300 公里范围的海空综合侦搜网"
+          },
+          {
+            "id": "task-littoral-interdiction",
+            "name": "通道外围拦截拒止",
+            "phase": "前沿海上接触与拦截",
+            "description": "在预定外围接触线形成水面与低空阻截屏障"
+          },
+          {
+            "id": "task-integrated-defense",
+            "name": "海峡通道综合防空",
+            "phase": "空海联合火力抗击",
+            "description": "多层火力协同拦截进犯空中与海上突击群"
+          }
+        ],
+        "forces": [
+          {
+            "id": "force-red-surface-1",
+            "name": "红方第一水面护卫编队",
+            "type": "水面作战",
+            "domain": "sea",
+            "echelon": "战术编队",
+            "platform": "概念防空驱逐舰单元"
+          },
+          {
+            "id": "force-red-air-1",
+            "name": "红方海空协同突击机群",
+            "type": "空中作战",
+            "domain": "air",
+            "echelon": "战术机群",
+            "platform": "概念多用途战斗机群"
+          },
+          {
+            "id": "force-blue-surface-1",
+            "name": "蓝方海上先锋特混编队",
+            "type": "水面突击",
+            "domain": "sea",
+            "echelon": "特混大队",
+            "platform": "假想蓝方综合突击水面群"
+          },
+          {
+            "id": "force-blue-air-1",
+            "name": "蓝方舰载空中突击梯队",
+            "type": "舰载航空",
+            "domain": "air",
+            "echelon": "攻击梯队",
+            "platform": "假想蓝方舰载多用途机队"
+          }
+        ],
+        "combatForces": [
+          {
+            "id": "cf-red-1",
+            "name": "红方第一水面护卫编队",
+            "forceId": "force-red-surface-1",
+            "taskId": "task-littoral-interdiction"
+          },
+          {
+            "id": "cf-red-2",
+            "name": "红方海空协同突击机群",
+            "forceId": "force-red-air-1",
+            "taskId": "task-integrated-defense"
+          }
+        ]
+      }
+    },
+    "ov1": {
+      "model": {
+        "nodes": [
+          {
+            "id": "node-red-c2",
+            "label": "红方联合指挥中心",
+            "category": "指挥节点",
+            "kind": "command",
+            "className": "",
+            "x": "18%",
+            "y": "50%",
+            "detail": "负责统筹海空岸基火力裁决与部署分配。"
+          },
+          {
+            "id": "node-red-fleet",
+            "label": "红方水面护卫编队",
+            "category": "关键动作",
+            "kind": "action",
+            "className": "",
+            "x": "38%",
+            "y": "36%",
+            "detail": "前出通道拦截线，执行防空与电子压制。"
+          },
+          {
+            "id": "node-chokepoint",
+            "label": "海峡关键封控通道",
+            "category": "装备平台",
+            "kind": "equipment",
+            "className": "",
+            "x": "55%",
+            "y": "52%",
+            "detail": "关键海域通道，具备多层拦截屏障覆盖。"
+          },
+          {
+            "id": "node-blue-forces",
+            "label": "蓝方海上进犯编队",
+            "category": "外部对象",
+            "kind": "external",
+            "className": "blue",
+            "x": "82%",
+            "y": "32%",
+            "detail": "蓝方由外海向海峡方向突穿的特混舰群。"
+          },
+          {
+            "id": "node-adjudication",
+            "label": "推演裁决与态势终态",
+            "category": "预期效果",
+            "kind": "effect",
+            "className": "gold",
+            "x": "82%",
+            "y": "72%",
+            "detail": "记录各回合裁决损耗率与防御稳态指标。"
+          }
+        ],
+        "links": [
+          { "source": "node-red-c2", "target": "node-red-fleet", "type": "command" },
+          { "source": "node-red-fleet", "target": "node-chokepoint", "type": "control" },
+          { "source": "node-blue-forces", "target": "node-chokepoint", "type": "engage" },
+          { "source": "node-chokepoint", "target": "node-adjudication", "type": "impact" }
+        ]
+      }
+    },
+    "ov5": {
+      "model": {
+        "activities": [
+          {
+            "id": "act-s1",
+            "type": "感知",
+            "title": "海空全谱态势建构",
+            "text": "融合岸基超视距雷达与海面巡逻舰侦察信息，锁定蓝方编队航向航速。",
+            "input": "海峡外围传感器流",
+            "output": "蓝方编队态势轨迹",
+            "duration": "持续",
+            "origin": "cited",
+            "citations": [
+              {
+                "filePath": "obs/想定推演/通道防御推演规则.md",
+                "title": "早期预警判定",
+                "snippet": "超视距雷达网与水面巡逻哨协同构成主预警网。",
+                "score": 0.91
+              }
+            ]
+          },
+          {
+            "id": "act-s2",
+            "type": "决策",
+            "title": "对抗回合推演裁决",
+            "text": "依据双方态势与战术规则库解算交战对抗结果与兵力损耗。",
+            "input": "蓝方编队态势轨迹",
+            "output": "回合裁决事件与指令",
+            "duration": "15 分钟",
+            "origin": "cited",
+            "citations": [
+              {
+                "filePath": "obs/想定推演/通道防御推演规则.md",
+                "title": "裁决规则库",
+                "snippet": "按火力密度与电子对抗干扰比解算命中概率。",
+                "score": 0.89
+              }
+            ]
+          },
+          {
+            "id": "act-s3",
+            "type": "行动",
+            "title": "梯次海空联合截击",
+            "text": "红方前沿舰艇与机群组织两道拦截线阻截蓝方突进。",
+            "input": "回合裁决事件与指令",
+            "output": "交火裁决毁伤记录",
+            "duration": "30 分钟",
+            "origin": "human"
+          },
+          {
+            "id": "act-s4",
+            "type": "评估",
+            "title": "推演战损与稳态复盘",
+            "text": "汇聚各阶段推演裁决指标，生成推演文书与复盘建议。",
+            "input": "交火裁决毁伤记录",
+            "output": "推演复盘报告",
+            "duration": "持续",
+            "origin": "cited",
+            "citations": [
+              {
+                "filePath": "obs/战术协同/海空防空协同手册.md",
+                "title": "战损统计与复盘",
+                "snippet": "复盘重点检验火力断点与指挥链冗余度。",
+                "score": 0.86
+              }
+            ]
+          }
+        ],
+        "edges": [
+          { "id": "se-1", "source": "act-s1", "target": "act-s2", "type": "data" },
+          { "id": "se-2", "source": "act-s2", "target": "act-s3", "type": "control" },
+          { "id": "se-3", "source": "act-s3", "target": "act-s4", "type": "data" }
+        ]
+      }
+    },
+    "ooda": {
+      "model": {
+        "lanes": [
+          {
+            "id": "observe",
+            "title": "Observe",
+            "subtitle": "观察",
+            "color": "#2a72a8",
+            "cards": [
+              { "id": "so-1", "title": "海空全谱态势建构", "text": "汇聚岸海空雷达与巡逻报告", "duration": "持续" }
+            ]
+          },
+          {
+            "id": "orient",
+            "title": "Orient",
+            "subtitle": "判断",
+            "color": "#187a57",
+            "cards": [
+              { "id": "sr-1", "title": "交火对抗裁决解算", "text": "依据规则库评估阻截成功率", "duration": "5 分钟" }
+            ]
+          },
+          {
+            "id": "decide",
+            "title": "Decide",
+            "subtitle": "决策",
+            "color": "#ad7a19",
+            "cards": [
+              { "id": "sd-1", "title": "防空阵位重组授权", "text": "下达水面与航空兵力拦截指令", "duration": "3 分钟" }
+            ]
+          },
+          {
+            "id": "act",
+            "title": "Act",
+            "subtitle": "行动",
+            "color": "#bd554d",
+            "cards": [
+              { "id": "sa-1", "title": "梯次海空联合截击", "text": "红方前沿舰艇与机群实施火力拦截", "duration": "30 分钟" }
+            ]
+          }
+        ]
+      }
+    },
+    "scenario": {
+      "model": {
+        "confirmed": true,
+        "entities": [
+          {
+            "id": "ent-red-fleet",
+            "name": "红方驱护舰前沿编队",
+            "side": "friendly",
+            "domain": "sea",
+            "x": 30,
+            "y": 48,
+            "status": "active"
+          },
+          {
+            "id": "ent-red-air",
+            "name": "红方巡逻截击机群",
+            "side": "friendly",
+            "domain": "air",
+            "x": 22,
+            "y": 32,
+            "status": "active"
+          },
+          {
+            "id": "ent-blue-fleet",
+            "name": "蓝方海上先锋大队",
+            "side": "hostile",
+            "domain": "sea",
+            "x": 78,
+            "y": 42,
+            "status": "active"
+          },
+          {
+            "id": "ent-blue-air",
+            "name": "蓝方舰载前锋巡逻机",
+            "side": "hostile",
+            "domain": "air",
+            "x": 84,
+            "y": 28,
+            "status": "active"
+          }
+        ],
+        "timeline": [
+          { "time": "回合 1 (T+00~T+12)", "event": "双方前沿接触，建立侦搜网与电子警戒" },
+          { "time": "回合 2 (T+12~T+36)", "event": "蓝方前锋试探性突入，红方实施前沿电子压制与防空阻截" },
+          { "time": "回合 3 (T+36~T+60)", "event": "主力交火裁决，红方岸海联合火力瓦解蓝方第一突击波次" },
+          { "time": "回合 4 (T+60~T+72)", "event": "蓝方脱离接触，红方重整阵地，推演达成防御稳态" }
+        ]
+      }
+    },
+    "validation": {
+      "model": {
+        "scores": [
+          { "label": "活动连通性", "score": 92 },
+          { "label": "信息闭环", "score": 90 },
+          { "label": "资源约束", "score": 85 },
+          { "label": "OODA 时效", "score": 83 }
+        ],
+        "issues": [
+          {
+            "level": "",
+            "title": "恶劣海况下的水文延迟校正",
+            "text": "建议在推演裁决中增加季风海况下的通信中断概率修正。"
+          }
+        ]
+      }
+    },
+    "architecture": {
+      "model": {
+        "entities": [
+          { "id": "ent-red-ship", "name": "防空驱逐舰单元", "category": "Resource", "origin": "cited" },
+          { "id": "ent-red-plane", "name": "多用途空中作战单元", "category": "Resource", "origin": "cited" },
+          { "id": "ent-blue-ship", "name": "假想蓝方突击水面群", "category": "Resource", "origin": "human" }
+        ],
+        "relations": [
+          { "id": "rel-s1", "source": "ent-red-ship", "target": "ent-red-plane", "type": "Exchange" }
+        ],
+        "products": {}
+      }
+    }
+  }
+}

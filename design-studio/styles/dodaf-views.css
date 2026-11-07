@@ -2297,6 +2297,7 @@ table.ov3-matrix thead th.matrix-head-th.is-col-hovered {
   overflow: hidden;
 }
 .project-manager-heading { display: flex; min-width: 0; align-items: center; justify-content: space-between; padding: 0 2px; color: #2c4037; font-size: 11px; font-weight: 800; }
+.project-manager-heading-actions { display: flex; gap: 3px; align-items: center; }
 .project-manager-list { display: grid; min-width: 0; gap: 5px; max-height: min(280px, 40vh); padding-right: 2px; overflow-x: hidden; overflow-y: auto; }
 .project-manager-row { display: grid; min-width: 0; gap: 6px; padding: 8px 9px; border: 1px solid #e5eee8; border-left: 3px solid transparent; border-radius: 8px; background: #f9fbfa; }
 .project-manager-row.is-active { border-left-color: var(--green); background: #f1f8f4; }

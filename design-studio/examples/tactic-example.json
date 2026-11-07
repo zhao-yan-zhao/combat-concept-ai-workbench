@@ -1,0 +1,438 @@
+{
+  "id": "example-tactic-distributed",
+  "kind": "tactic",
+  "title": "分布式无人机群协同突防与压制战法",
+  "description": "面向复杂电磁环境与强对抗防御体系的分布式蜂群低空突防与协同制压战法研究示例，已走完全部战法规划与推演步骤。",
+  "workflow": {
+    "version": 2,
+    "mode": "free",
+    "completedThrough": 6,
+    "updatedAt": "2026-11-08T00:00:00.000Z"
+  },
+  "record": {
+    "direction": "分布式协同饱和制压",
+    "directions": [
+      {
+        "id": "swarm-saturation",
+        "title": "分布式协同饱和制压",
+        "text": "通过低成本无人蜂群与电子压制单元协同，实现多轴向饱和突防与节点瘫痪。"
+      },
+      {
+        "id": "stealth-penetration",
+        "title": "隐蔽单点体系穿刺",
+        "text": "依托多域隐身平台在重点走廊实施纵深快速突破。"
+      },
+      {
+        "id": "standoff-interdiction",
+        "title": "远距离防区外联合阻截",
+        "text": "采用远距离非接触火力与信息扰乱限制对手机动。"
+      }
+    ],
+    "brief": {
+      "researchIntent": "探索分布式无人作战力量在复杂电磁环境下的体系协同机理与抗毁制胜路径。",
+      "objective": "在 24 小时作战窗口内，通过多批次分布式蜂群协同突防，瓦解对手防御体系前沿雷达感知网与通信指挥链路，保障后续作战通道畅通。",
+      "approach": "以低空分布式协同感知为先导，自组织网络与自主航迹解算为支撑，实施网络化电磁压制与多轴向饱和精确打击。",
+      "assumptions": "假定战术数据链在强干扰下可降级维持近距自组织通信；机载自主决策算法通过预置规则库校验；协同打击时标同步误差在容许范围内。",
+      "expectedEffects": "实现对手前沿感知网覆盖率下降 70% 以上，指挥响应时延增加 3 倍，达成防空火力通道饱和瘫痪。",
+      "risk": "广域强电磁压制可能导致局部蜂群失联，需依赖预置自主规则完成降级退出。",
+      "evidenceRefs": [
+        "obs/战法机理/分布式蜂群协同.md",
+        "obs/体系对抗/防空压制作战研究.md"
+      ]
+    },
+    "phaseActionConcept": {
+      "model": {
+        "status": "confirmed",
+        "phases": [
+          {
+            "id": "phase-1",
+            "name": "态势建立与电磁侦察",
+            "timeWindow": "T+00 ~ T+04",
+            "blueAction": "部署前沿侦察蜂群与无源侦收节点，建立电磁频谱图谱",
+            "redAction": "前沿警戒雷达周期扫描与通信守听",
+            "transitions": ["完成电磁指纹标定并达到目标覆盖率"]
+          },
+          {
+            "id": "phase-2",
+            "name": "多轴向低空突防",
+            "timeWindow": "T+04 ~ T+12",
+            "blueAction": "蜂群沿多条预设低空走廊自主机动突防，实施航路规避",
+            "redAction": "启动近程防空告警与局部干扰压制",
+            "transitions": ["首批梯队进入打击包线并建立自组织协同网络"]
+          },
+          {
+            "id": "phase-3",
+            "name": "网络化协同制压",
+            "timeWindow": "T+12 ~ T+20",
+            "blueAction": "电子战无人机与攻击单元实施硬软复合打击",
+            "redAction": "备用雷达开机并组织机动防空单元拦截",
+            "transitions": ["主要防空节点毁伤确认"]
+          },
+          {
+            "id": "phase-4",
+            "name": "效果评估与重组重构",
+            "timeWindow": "T+20 ~ T+24",
+            "blueAction": "滞空侦察节点回传战果，受损节点重组网络并安全退出",
+            "redAction": "收缩防御态势并组织残余力量自保",
+            "transitions": ["达成作战通道贯通指标，转入防御稳态"]
+          }
+        ],
+        "transitions": [
+          { "from": "phase-1", "to": "phase-2", "condition": "完成指纹标定" },
+          { "from": "phase-2", "to": "phase-3", "condition": "突击梯队占位" },
+          { "from": "phase-3", "to": "phase-4", "condition": "节点毁伤确认" }
+        ]
+      }
+    },
+    "forceMissionPlan": {
+      "model": {
+        "status": "confirmed",
+        "tasks": [
+          {
+            "id": "task-isr",
+            "name": "广域电磁侦察与节点标定",
+            "phase": "态势建立与电磁侦察",
+            "description": "通过分布式无源侦收建立假想敌辐射源拓扑"
+          },
+          {
+            "id": "task-penetration",
+            "name": "多通道分布式低空突防",
+            "phase": "多轴向低空突防",
+            "description": "利用地形掩护分轴向突入假想敌防御纵深"
+          },
+          {
+            "id": "task-suppression",
+            "name": "关键防空节点网络化制压",
+            "phase": "网络化协同制压",
+            "description": "软硬复合压制雷达引导与指挥中枢"
+          }
+        ],
+        "forces": [
+          {
+            "id": "force-isr",
+            "name": "空中分布式侦察集群",
+            "type": "无人侦察",
+            "domain": "air",
+            "echelon": "战术编队",
+            "platform": "概念中空长航时无人机"
+          },
+          {
+            "id": "force-strike-1",
+            "name": "第一突击蜂群分队",
+            "type": "无人突击",
+            "domain": "air",
+            "echelon": "战术分队",
+            "platform": "概念小型巡飞突击单元"
+          },
+          {
+            "id": "force-strike-2",
+            "name": "第二突击蜂群分队",
+            "type": "无人突击",
+            "domain": "air",
+            "echelon": "战术分队",
+            "platform": "概念小型巡飞突击单元"
+          },
+          {
+            "id": "force-ew",
+            "name": "伴随式电磁压制组",
+            "type": "电子战",
+            "domain": "air",
+            "echelon": "战术编组",
+            "platform": "概念分布式电子干扰平台"
+          }
+        ],
+        "combatForces": [
+          {
+            "id": "cf-1",
+            "name": "空中分布式侦察集群",
+            "forceId": "force-isr",
+            "taskId": "task-isr"
+          },
+          {
+            "id": "cf-2",
+            "name": "第一突击蜂群分队",
+            "forceId": "force-strike-1",
+            "taskId": "task-penetration"
+          },
+          {
+            "id": "cf-3",
+            "name": "伴随式电磁压制组",
+            "forceId": "force-ew",
+            "taskId": "task-suppression"
+          }
+        ]
+      }
+    },
+    "ov1": {
+      "model": {
+        "nodes": [
+          {
+            "id": "node-isr",
+            "label": "分布式侦察节点",
+            "category": "装备平台",
+            "kind": "equipment",
+            "className": "",
+            "x": "15%",
+            "y": "42%",
+            "detail": "负责多源电磁感知与目标指示。"
+          },
+          {
+            "id": "node-c2",
+            "label": "蜂群协同指挥单元",
+            "category": "指挥节点",
+            "kind": "command",
+            "className": "",
+            "x": "35%",
+            "y": "68%",
+            "detail": "下发自主协同规则与时序同步脉冲。"
+          },
+          {
+            "id": "node-strike",
+            "label": "多轴突击蜂群",
+            "category": "关键动作",
+            "kind": "action",
+            "className": "",
+            "x": "55%",
+            "y": "38%",
+            "detail": "执行低空突防与饱和压制打击。"
+          },
+          {
+            "id": "node-target",
+            "label": "假想敌防空体系节点",
+            "category": "外部对象",
+            "kind": "external",
+            "className": "blue",
+            "x": "78%",
+            "y": "26%",
+            "detail": "假想敌前沿雷达与通信节点。"
+          },
+          {
+            "id": "node-effect",
+            "label": "通道瘫痪与战法效果",
+            "category": "预期效果",
+            "kind": "effect",
+            "className": "gold",
+            "x": "80%",
+            "y": "68%",
+            "detail": "达成防空压制目标，输出评估反馈。"
+          }
+        ],
+        "links": [
+          { "source": "node-isr", "target": "node-c2", "type": "data" },
+          { "source": "node-c2", "target": "node-strike", "type": "command" },
+          { "source": "node-strike", "target": "node-target", "type": "engage" },
+          { "source": "node-target", "target": "node-effect", "type": "impact" }
+        ]
+      }
+    },
+    "ov5": {
+      "model": {
+        "activities": [
+          {
+            "id": "act-1",
+            "type": "感知",
+            "title": "多源频谱侦搜",
+            "text": "汇聚前沿电磁信号，提取假想敌雷达指纹特征。",
+            "input": "任务扇区电磁信号",
+            "output": "目标频谱图谱",
+            "duration": "持续",
+            "origin": "cited",
+            "citations": [
+              {
+                "filePath": "obs/战法机理/分布式蜂群协同.md",
+                "title": "分布式电磁感知",
+                "snippet": "多节点交叉定位可提升抗干扰测向精度。",
+                "score": 0.92
+              }
+            ]
+          },
+          {
+            "id": "act-2",
+            "type": "决策",
+            "title": "自主航路与时序规划",
+            "text": "基于威胁分布自组织生成多突防通道航路与时钟同步基准。",
+            "input": "目标频谱图谱",
+            "output": "突防任务剖面与协同指令",
+            "duration": "5 分钟",
+            "origin": "cited",
+            "citations": [
+              {
+                "filePath": "obs/战法机理/分布式蜂群协同.md",
+                "title": "自主协同规划",
+                "snippet": "航迹去中心化规划降低单点受制概率。",
+                "score": 0.88
+              }
+            ]
+          },
+          {
+            "id": "act-3",
+            "type": "行动",
+            "title": "网络化伴随电子制压",
+            "text": "对假想敌前沿雷达与通信链路实施协同压制。",
+            "input": "突防任务剖面与协同指令",
+            "output": "电磁压制效果反馈",
+            "duration": "10 分钟",
+            "origin": "human"
+          },
+          {
+            "id": "act-4",
+            "type": "行动",
+            "title": "饱和突防打击",
+            "text": "多批次无人机分轴向进入目标区实施多点饱和打击。",
+            "input": "突防任务剖面与协同指令",
+            "output": "打击毁伤瞬态记录",
+            "duration": "8 分钟",
+            "origin": "ai-inferred"
+          },
+          {
+            "id": "act-5",
+            "type": "评估",
+            "title": "毁伤评估与网络自愈重构",
+            "text": "实时汇聚毁伤结果，受损节点重构拓扑并向指挥节点回传。",
+            "input": "打击毁伤瞬态记录",
+            "output": "战法评估报告",
+            "duration": "持续",
+            "origin": "cited",
+            "citations": [
+              {
+                "filePath": "obs/体系对抗/防空压制作战研究.md",
+                "title": "作战效果评估",
+                "snippet": "战果确认与体系重构是闭环关键步骤。",
+                "score": 0.85
+              }
+            ]
+          }
+        ],
+        "edges": [
+          { "id": "e1-2", "source": "act-1", "target": "act-2", "type": "data" },
+          { "id": "e2-3", "source": "act-2", "target": "act-3", "type": "control" },
+          { "id": "e2-4", "source": "act-2", "target": "act-4", "type": "control" },
+          { "id": "e4-5", "source": "act-4", "target": "act-5", "type": "data" }
+        ]
+      }
+    },
+    "ooda": {
+      "model": {
+        "lanes": [
+          {
+            "id": "observe",
+            "title": "Observe",
+            "subtitle": "观察",
+            "color": "#2a72a8",
+            "cards": [
+              { "id": "o-1", "title": "多源频谱侦搜", "text": "提取假想敌雷达辐射源指纹", "duration": "持续" }
+            ]
+          },
+          {
+            "id": "orient",
+            "title": "Orient",
+            "subtitle": "判断",
+            "color": "#187a57",
+            "cards": [
+              { "id": "r-1", "title": "防空阵地威胁度判定", "text": "解算威胁重叠区与低空突防走廊", "duration": "2 分钟" }
+            ]
+          },
+          {
+            "id": "decide",
+            "title": "Decide",
+            "subtitle": "决策",
+            "color": "#ad7a19",
+            "cards": [
+              { "id": "d-1", "title": "突击分配与协同授权", "text": "自组织生成航迹与打击时标", "duration": "3 分钟" }
+            ]
+          },
+          {
+            "id": "act",
+            "title": "Act",
+            "subtitle": "行动",
+            "color": "#bd554d",
+            "cards": [
+              { "id": "a-1", "title": "网络化伴随电子制压", "text": "实施协同干扰遮蔽", "duration": "10 分钟" },
+              { "id": "a-2", "title": "饱和突防打击", "text": "多轴向实施精确打击", "duration": "8 分钟" }
+            ]
+          }
+        ]
+      }
+    },
+    "scenario": {
+      "model": {
+        "confirmed": true,
+        "entities": [
+          {
+            "id": "ent-swarm-1",
+            "name": "突击蜂群第一梯队",
+            "side": "friendly",
+            "domain": "air",
+            "x": 25,
+            "y": 45,
+            "status": "active"
+          },
+          {
+            "id": "ent-ew-1",
+            "name": "伴随电磁干扰机",
+            "side": "friendly",
+            "domain": "air",
+            "x": 15,
+            "y": 35,
+            "status": "active"
+          },
+          {
+            "id": "ent-radar-1",
+            "name": "假想敌前沿雷达站 A",
+            "side": "hostile",
+            "domain": "ground",
+            "x": 75,
+            "y": 30,
+            "status": "active"
+          },
+          {
+            "id": "ent-c2-1",
+            "name": "假想敌指挥节点 B",
+            "side": "hostile",
+            "domain": "ground",
+            "x": 85,
+            "y": 60,
+            "status": "active"
+          }
+        ],
+        "timeline": [
+          { "time": "T+00", "event": "侦察集群完成前沿电磁信号采集与标定" },
+          { "time": "T+06", "event": "第一蜂群梯队突入前沿防空识别区" },
+          { "time": "T+14", "event": "电磁压制组对雷达站实施宽带压制" },
+          { "time": "T+18", "event": "突击蜂群多轴实施精确毁伤" },
+          { "time": "T+22", "event": "评估确认雷达关机，通道贯通" }
+        ]
+      }
+    },
+    "validation": {
+      "model": {
+        "scores": [
+          { "label": "活动连通性", "score": 95 },
+          { "label": "信息闭环", "score": 88 },
+          { "label": "资源约束", "score": 82 },
+          { "label": "OODA 时效", "score": 85 }
+        ],
+        "issues": [
+          {
+            "level": "",
+            "title": "备用通信链路抗干扰冗余确认",
+            "text": "建议在强噪声背景下校验副信道切换时延。"
+          }
+        ]
+      }
+    },
+    "architecture": {
+      "model": {
+        "entities": [
+          { "id": "ent-drone-1", "name": "中空长航时侦察无人机", "category": "Resource", "origin": "cited" },
+          { "id": "ent-drone-2", "name": "小型巡飞突击单元", "category": "Resource", "origin": "human" },
+          { "id": "ent-radar", "name": "假想敌前沿警戒雷达", "category": "Resource", "origin": "cited" }
+        ],
+        "relations": [
+          { "id": "rel-1", "source": "ent-drone-1", "target": "ent-drone-2", "type": "Exchange" }
+        ],
+        "products": {}
+      }
+    }
+  }
+}

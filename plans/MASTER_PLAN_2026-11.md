@@ -636,6 +636,31 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：139/139 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
+---
+
+### T3.3 执行记录 (2026-11-08)
+
+- **任务卡**：M3-T3.3 示例项目（战法设计 / 想定推演）
+- **交付内容**：
+  1. 两套走完全部 6 步主线流程的标准化虚构示例文件：
+     - `design-studio/examples/tactic-example.json`（战法设计）：《分布式无人机群协同突防与压制战法》，包含简报、方向、4 阶段行动、任务与双层兵力编成、OV-1 总体节点、OV-5 带有溯源依据的 5 个作战活动流与连线、OODA 循环、实体推演与设计验证；严格遵守安全边界，无真实地理坐标与武器性能参数；
+     - `design-studio/examples/scenario-example.json`（想定推演）：《海空联合海峡通道防御推演想定》，包含简报、方向、4 个对抗推进回合、双阵营海空编成、OV-1 态势骨架、活动机理流、抽象网格实体部署与时序事件、验证评分；
+  2. 服务端项目初始化与深层模型落库扩展（`server/projectRepository.mjs`）：
+     - `createProject(input)` 扩展支持可选 `input.record` 与 `input.workflow` 初始化负载；
+     - 循环映射 `PROJECT_RESOURCE_KEYS`（涵盖简报、阶段、任务兵力、OV-1、OV-5、想定、验证等），将示例数据原子化持久化至 SQLite 及 JSON 仓储；
+  3. 前端项目管理页载入入口与非覆盖安全复制（`design-studio/src/projectManagerView.js` & `projectBindings.js`）：
+     - 项目管理浮层头部增加“战法示例”与“想定示例”直达按钮；
+     - 导出 `handleLoadExampleProject(kind, ctx)`：探测既有项目 ID，按序号生成独立 `candidateId`（如 `example-tactic-1`）与带有副本标记的标题，100% 杜绝覆盖既有项目；
+     - 载入成功后刷新项目目录并无缝切换至新创建的示例项目；
+  4. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-example-projects.mjs`，覆盖 4 组完整测试：战法/想定示例数据完整度与安全边界校验、SQLite 完整模型持久化回读一致性、多副本无覆盖独立创建验证、UI 按钮与交互渲染断言；
+     - 纳入 `scripts/check-groups.json` 的 `storage` 组。
+- **验证命令与结果**：
+  - `node scripts/run-checks.mjs storage`：12/12 PASS (100%)
+  - `node scripts/run-checks.mjs all`：140/140 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+
 
 
 
