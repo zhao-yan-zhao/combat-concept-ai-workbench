@@ -1,80 +1,113 @@
-# 知识库引用溯源架构设计方案 (KNOWLEDGE_CITATION.md)
+# 知识库引用溯源架构设计稿（修订版） (KNOWLEDGE_CITATION.md)
 
-> 本方案为**纯规划设计稿（阶段 6 交付物，零代码变动）**，针对国防作战概念研究工作台提供全链路“研读—检索—生成—挂接—审阅—导出”的知识引用溯源体系。
-
----
-
-## 1. 现状调研与链路瓶颈
-
-1. **切片与检索层（`shared/knowledge.js`）**：
-   - 知识库导入 Markdown/TXT 文件，按二级/三级标题拆分为 `KnowledgeChunk`（含 `id`, `vaultId`, `filePath`, `title`, `parameterTables` 等）；
-   - 检索引擎 `searchKnowledge(query, docs, limit)` 基于词频加权检索（标题 6x、标签 5x、双链 4x、表格 3x、正文 1x）。
-2. **AI 生成链路（`server/openaiClient.mjs` & `shared/generator.js`）**：
-   - 检索命中的切片作为 `payload.evidence` 拼装入提示词变量（`evidence`）；
-   - **痛点**：目前为单向即用即弃，AI 生成的各实体（任务、兵力、活动、规则、想定）**未回填结构化引用锚点**；报告导出亦缺乏可核验的文献追溯章节。
+> **修订状态**：对应主计划里程碑 **M2-T2.1 修订设计稿（只写文档，不改代码）**。  
+> **核心原则**：不造第二套平行体系，立足现有机制（`evidenceRefs`, `citations`, `provenance`, 敏感引用审批），将引用格式与来源标记规范化、标准化，并保持 100% 向后兼容。
 
 ---
 
-## 2. 核心数据结构设计
+## 1. 现有引用与溯源能力映射表
 
-### 2.1 引用凭证对象 (`KnowledgeCitationRef`)
+| 能力层级 | 现有字段 / 所在模块 | 写入方 (Writers) | 读取方 (Readers) | 现状与演进方案 |
+| :--- | :--- | :--- | :--- | :--- |
+| **DoDAF 实体层** | `entity.citations`、`entity.evidenceRefs`、`entity.source`<br>(`shared/dodaf/entities.js`, `products.js`) | `normalizeDm2Entity`、`sanitizeActivityDecompositionCitations` | Inspector 侧边栏、WBS 树卡片、报告导出 | 已具备结构化解析，现扩展为全局通用的标准格式并向下兼容。 |
+| **检索与凭据层** | `evidenceSelection`<br>(`evidenceSelectionStore.js`, `projectKnowledgeRetrieval.mjs`) | `selectEvidenceForAi`、检索服务 | `briefController`、`ov5AiController`、提示词注入上下文 | 将检索命中的知识切片赋予稳定 `chunkId`，并在请求 AI 时注入上下文变量。 |
+| **敏感引用管控** | `sensitiveCitationApprovals`<br>(`server/projectKnowledgeCitationPolicy.mjs`) | 协同审计与审批动作 | 报告导出审计、引用公开性检查 | 维持现有涉密/敏感切片审批机制，未获批引用的涉密切片在导出时自动掩码。 |
+| **衍生视图溯源** | `derivedViewProvenance`<br>(`derivedViewProvenance.js`) | 体系模型映射器、产品投影器 | OV-2、OV-3、核对台等产品顶部 Provenance Popover | 维持视点级溯源，实体级引用与视点级溯源互补互通。 |
+| **报告导出与索引** | `reportBuilder.js`、`officeReports.mjs` | 报告构建器 | Word/Markdown/HTML 导出 | 读取实体 `citations` 生成正文脚注 `[n]` 与文末“参考文献与依据索引表”。 |
+
+---
+
+## 2. 标准结构化引用格式与向后兼容契约
+
+### 2.1 标准引用数据契约 (`KnowledgeCitationRef`)
+
+每个被要素关联的知识切片必须遵循以下规范化结构：
 
 ```typescript
 interface KnowledgeCitationRef {
-  citationId: string;        // 引用唯一标识 (cite-uuid)
-  chunkId: string;           // 知识切片 ID (vaultId-fileIndex-chunkIndex)
-  vaultId: string;           // 知识库/Vault 标识
-  filePath: string;          // 源文件相对路径 (e.g. "作战条令/防空反导协同规范.md")
-  fileTitle: string;         // 文件标题
-  chunkTitle: string;        // 章节标题 (e.g. "第3章 拦截火控分配原则")
-  snippet: string;           // 支撑本条生成的原文佐证片段 (≤200字)
-  score: number;             // 检索相关度分值 (0~100)
-  adoptedAt: string;         // 采纳生成或人工关联时间戳 (ISO-8601)
-  attributionType: "ai_generated" | "human_annotated"; // 来源类型
+  /** 知识切片唯一全局 ID (对应检索出的切片稳定 ID) */
+  chunkId: string;
+  /** 知识库/仓库相对文件路径，例如 "条令/防空反导协同规范.md" */
+  sourcePath: string;
+  /** 章节标题 / H2 / H3，例如 "第3节 拦截火控分配原则" */
+  heading: string;
+  /** 原文佐证摘录 (精确摘录核心句子，建议不超过 200 字) */
+  excerpt: string;
+  /** 检索与采纳的时间戳 (ISO 8601) */
+  retrievedAt: string;
+  /** 检索分值 (相关度 0~100，可选) */
+  score?: number;
+  /** 历史兼容标识 (若是旧格式字符串升级而来，保留原文本) */
+  legacy?: string;
 }
 ```
 
-### 2.2 领域实体绑定方式（向后兼容）
+### 2.2 向后兼容策略（零破坏存量数据）
 
-所有领域模型在实体对象扩展可选字段 `citations?: KnowledgeCitationRef[]`，无引用时默认缺省或空数组，不破坏既有 SQLite 存储契约与断言：
-
-- **活动模型 (OV-5a/OV-5b)**：`Activity.citations`（支撑该作战活动、前置触发条令或输入输出契约的文献）。
-- **编成与兵力 (ForceMission)**：`ForceUnit.citations`（装备参数表、编制规格来源）。
-- **规则与时序 (OV-6a/OV-6c)**：`CombatRule.citations`、`SequenceEvent.citations`（交战规则准则、时序动作规范）。
-- **综合想定 (Scenario)**：`ScenarioEvent.citations`（战术战法指引、蓝军对抗逻辑）。
-
----
-
-## 3. AI 提示词纳管与链路升级
-
-遵循 `AGENTS.md`“提示词统一纳管”铁律，所有引用生成引导必须进入顶部菜单已纳管的标准提示词，严禁隐藏提示词：
-
-| 提示词 ID | 所属生成阶段 | 动态变量扩充 | 结构化输出增补要求 |
-|---|---|---|---|
-| `ai.generate.concept-brief` | Step 00 概念规划 | `{{knowledge}}` | `brief.citations`: 核心意图与背景溯源 |
-| `ai.generate.force-mission` | Step 03 作战兵力 | `{{knowledge}}` | `forces[].citations`: 兵力选型与指标溯源 |
-| `ai.generate.activity-decomposition` | Step 04 活动机理 | `{{knowledge}}` | `activities[].citations`: 阶段与机理条令溯源 |
-| `ai.generate.rule-library` | Step 04/OV-6a 规则库 | `{{knowledge}}` | `rules[].citations`: 交战规则条文出处 |
-| `ai.generate.scenario` | Step 06 仿真想定 | `{{knowledge}}` | `events[].citations`: 战术推演动作溯源 |
-| `ai.generate.research-chat` | 全流程 AI 研讨对话 | `{{knowledge}}` | `chatResponse.citations`: 研讨答复佐证 |
+系统现有模型和存量 SQLite 数据中包含旧式的纯字符串数组 `evidenceRefs: string[]`（例如 `["chunk-101", "条令第3节"]`）：
+1. **读取规范化**：当读取到字符串项时，自动转换为：
+   ```javascript
+   {
+     chunkId: str.startsWith("chunk-") ? str : "",
+     sourcePath: "",
+     heading: str,
+     excerpt: "",
+     retrievedAt: "",
+     legacy: str
+   }
+   ```
+2. **双向桥接**：在实体对象上同时保留 `citations: KnowledgeCitationRef[]` 与存量计算字段 `evidenceRefs: string[]`（自动映射为 `citations.map(c => c.chunkId || c.legacy)`），彻底消除对历史检查脚本的破坏。
 
 ---
 
-## 4. UI 交互落点与成果输出
+## 3. 三种来源标记（Origin Attribute）
 
-1. **画布与列表引用气泡**：
-   - 在 OV-5 活动卡片、兵力卡片、规则项右上角渲染 `[📖 2]` 科技风轻量徽标；
-   - Hover 悬浮显示源文件路径与佐证切片摘要（Popover）；
-2. **检查器抽屉（Inspector）新增引用溯源面板**：
-   - 选中实体后，在右侧侧边栏展示“知识溯源”分区：展示自动引证条目，支持人工“添加引用/删除/校对原文档”；
-3. **报告导出全格式留存（Word / PDF / Markdown）**：
-   - 在各章正文末尾标注引用上标 `[1]`、`[2]`；
-   - 报告文档文末新增自动生成的规范章节：`附录：作战概念知识引用与文献溯源索引表`（含文档路径、章节出处、引用频次与佐证摘录）。
+为了杜绝大模型“一本正经胡说八道”，让用户与审计员一眼看清要素从何而来，**所有要素（活动、任务、兵力、规则、想定事件）统一赋予 `origin` 来源标记**：
+
+```typescript
+type ElementOrigin = "cited" | "ai-inferred" | "human";
+```
+
+| 来源标记值 | 含义 | 判定条件 | 界面视觉表现 |
+| :--- | :--- | :--- | :--- |
+| **`"cited"`** | **有据可查** | 由 AI 生成或人工标注，且**成功绑定了至少 1 条真实存在的 `chunkId` 结构化引用**。 | 绿色徽标 `[📖 依据]`，可点击展开引用原文出处。 |
+| **`"ai-inferred"`** | **模型推论** | 由 AI 生成，但**没有引用文献**，或其引用的 `chunkId` 经服务端校验属于编造/不存在并被剔除。 | 灰色/橙色轻量标签 `[⚡ 推论]`，提示未关联条令依据。 |
+| **`"human"`** | **人工设定** | 用户在工作台界面手动新增或手动编辑修改过的要素。 | 蓝色标签 `[👤 人工]`，代表指挥员/研究员意志。 |
 
 ---
 
-## 5. 实施里程碑演进建议
+## 4. 链路防线：防幻觉校验与门禁（服务端）
 
-- **阶段 A**：在 `shared/knowledge.js` 与生成器中落地 `KnowledgeCitationRef` 数据标准与 Mock 解析（零业务破坏）。
-- **阶段 B**：在 `server/openaiClient.mjs` 中更新上述 6 个提示词的输出契约与解析注入。
-- **阶段 C**：前端侧边栏 Inspector 挂接与报告导出（Word/PDF/PPTX）溯源附录渲染。
+在服务端处理 AI 生成返回时建立硬性过滤防线（已在 OV-5 试点打通）：
+```text
+  [知识库检索] ───► 得到合法切片集 ValidChunks: [C-1, C-2, C-3]
+        │
+        ▼ (携带 ValidChunks 注入提示词)
+  [AI 模型生成] ───► 输出活动项与 citations: [C-1, Fake-Chunk-999]
+        │
+        ▼ (服务端防御性清洗)
+  [防幻觉过滤器] ──► Fake-Chunk-999 不在 ValidChunks 中 ──► 坚决剔除并记录日志！
+        │       ──► C-1 合法 ──► 保留并自动补齐源文件路径与章节名
+        ▼
+  [要素落库标记] ──► 有合法引用：origin = "cited"
+                ──► 无合法引用：origin = "ai-inferred"
+```
+
+---
+
+## 5. 界面呈现与成果导出规划（T2.3 实施指引）
+
+1. **工作台检查器（Inspector Panel）**：
+   - 选中任意活动或要素时，侧边栏展示【引用溯源】分区；
+   - 展开展示文件路径、章节标题、原文片段（可一键定位）。
+2. **产品顶部证据覆盖率指标**：
+   - 顶部统计胶囊实时计算：  
+     $$\text{证据覆盖率} = \frac{\text{标记为 cited 的要素总数}}{\text{要素总数}} \times 100\%$$
+3. **成果导出（Office Word & Markdown）**：
+   - 正文段落或表格中按引用顺序自动编排上标脚注 `[1]`, `[2]`；
+   - 文末自动追加《参考文献与引用溯源清单》，列出源文档、章节与原文摘要。
+
+---
+
+> [!IMPORTANT]
+> **T2.1 门禁检查点**：本设计稿纯为文档设计，未改动任何业务代码。当前状态：**已完成设计稿修订，停下等待人工确认**。

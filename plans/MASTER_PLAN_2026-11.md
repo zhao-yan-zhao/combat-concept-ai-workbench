@@ -363,7 +363,27 @@ TE.x 在每个里程碑结束时各做一张
 遗留/待确认：……
 ```
 
-### T1.5 保存状态指示 — 2026-11-08
+### T2.1 修订设计稿 — 2026-11-08
+
+**现状理解**：
+工作台既有系统已在 `shared/dodaf/entities.js`、`products.js`、`evidenceSelectionStore.js` 及敏感引用审批机制中沉淀了部分引用与溯源能力。此前原版设计方案忽略了现有结构，容易走向割裂。必须立足现有字段进行渐进演化，完善《知识库引用溯源架构设计稿（修订版）》（`plans/KNOWLEDGE_CITATION.md`），明确现有能力映射表、标准结构化引用格式与兼容策略，以及 `cited` / `ai-inferred` / `human` 三种来源标记。
+
+**改动文件**：
+1. `plans/KNOWLEDGE_CITATION.md`：依据 T2.1 要求修订设计方案（纯文档修订，零业务代码改动）；
+2. `plans/MASTER_PLAN_2026-11.md`：记录本卡执行情况并设置人工评审门禁。
+
+**验收命令与输出**：
+```powershell
+node scripts/run-checks.mjs all
+# 结果：总脚本数: 135, 通过 (PASS): 135, 失败 (FAIL): 0, 超时 (TIMEOUT): 0 (100% 全绿)
+
+node scripts/smoke-ui.mjs
+# 结果：Headless Edge CDP smoke test PASSED with 0 errors!
+```
+
+**门禁说明（停下报告）**：
+严格遵守 `plans/MASTER_PLAN_2026-11.md` 规则第 6 条与 M2-T2.1 的硬性要求：“**停下：等待人工确认后再进入 T2.2**”。
+
 
 **现状理解**：
 工作台顶栏右侧状态区之前仅显示简单的文本标签，缺乏鲜明直观的同步状态区分。系统内部各模块已有 `state.projectStorage` 以及写失败逻辑（`projectWriteFailureState.js`）。必须在顶栏明确呈现三种状态：“已同步 / 保存中… / 未同步（本地暂存）”，并在 hover 提示中展示具体原因与审计信息，不额外新建状态源。
