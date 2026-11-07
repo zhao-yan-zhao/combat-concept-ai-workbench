@@ -8,7 +8,8 @@ import { contextualFlowViewIds, inferRelatedMainViewId, relatedViewLabel } from 
 
 export function currentWorkflow(state, project) {
   const workflow = normalizeWorkflowProgress(
-    state.projectDirectory.projects.find((item) => item.id === state.activeProjectId)?.workflow
+    state?.projectDirectory?.projects?.find((item) => item.id === state?.activeProjectId)?.workflow
+      || state?.workflow
       || { completedThrough: -1 }
   );
   let completed = completedWorkflowStage(workflow);
@@ -21,8 +22,8 @@ export function currentWorkflow(state, project) {
 }
 
 export function currentProjectTitle(state, project) {
-  return state.projectDirectory.projects.find((item) => item.id === state.activeProjectId)?.title
-    || (state.activeProjectId === "default" ? project.title : state.activeProjectId);
+  return state?.projectDirectory?.projects?.find((item) => item.id === state?.activeProjectId)?.title
+    || (state?.activeProjectId === "default" ? project?.title : state?.activeProjectId);
 }
 
 export function completedWorkflowStage(workflow) {
@@ -680,4 +681,61 @@ export function renderWorkflowGate(state) {
       <span class="workflow-gate-capsule-chevron" aria-hidden="true"></span>
     </button>
   </div>`;
+}
+
+export function resolveStepTargetOutput(viewId, current) {
+  const outputs = {
+    brief: "作战概念研究简报六要素（意图、目标、路线、假设、效果、风险）",
+    "phase-action": "作战阶段划分与蓝红两军关键行动构想",
+    "force-mission": "作战任务清单与平台兵力编组方案",
+    "operational-task": "作战任务分解与任务输入输出规格",
+    ov5: "作战活动因果网络与动力学协同抗毁机理",
+    ov5a: "层次化作战活动分解模型",
+    ov1: "DoDAF OV-1 总体概念图与核心要素拓扑",
+    ov1b: "任务层级分解与任务组关系",
+    ov2: "作战节点间信息与资源交换流",
+    ov3: "作战资源流交互矩阵与频次约束",
+    ov4: "指挥编制与协同组织关系",
+    ov6a: "战法语义规则与约束知识库",
+    ov6b: "平台/任务状态转移自动机",
+    ov6c: "交互事件因果时序追踪图",
+    "concept-map": "作战态势总体概念图面成果",
+    scenario: "战法推演想定、初始态势与推演回合",
+    validate: "多方案量化评估、红方质询与综合报告",
+    report: "作战概念完整研究报告与成果归档"
+  };
+  return outputs[viewId] || (current?.label ? `${current.label}阶段成果` : "阶段成果规格");
+}
+
+/**
+ * T3.2 每步顶部固定条：三部分构成
+ * 1. 这一步要产出什么
+ * 2. 完成条件还差几项（直接读取门禁判定结果）
+ * 3. 唯一的主按钮
+ */
+export function renderStepNextBar(state) {
+  const ctx = resolveWorkflowGateContext(state);
+  if (!ctx || ctx.mode === "hidden") return "";
+
+  const viewId = state.activeView || ctx.current?.id || "";
+  const targetOutput = resolveStepTargetOutput(viewId, ctx.current);
+  const incomplete = ctx.incompleteReasons || [];
+  const isReady = Boolean(ctx.ready);
+
+  // 1. 产出目标
+  const targetHtml = `<div class="step-next-bar-target"><span class="step-bar-label">本步产出：</span><strong class="step-bar-target-text">${escapeHtml(targetOutput)}</strong></div>`;
+
+  // 2. 完成条件（直接读取现有门禁判定结果）
+  const statusHtml = isReady
+    ? `<div class="step-next-bar-status"><span class="step-bar-label">完成条件：</span><span class="step-condition-pill is-ready">✓ 已就绪 (0项待补充)</span></div>`
+    : `<div class="step-next-bar-status"><span class="step-bar-label">完成条件：</span><span class="step-condition-pill is-pending" title="${escapeHtml(incomplete.join("、"))}">还差 ${incomplete.length} 项（${escapeHtml(incomplete.slice(0, 3).join("、"))}${incomplete.length > 3 ? "…" : ""}）</span></div>`;
+
+  // 3. 唯一主按钮
+  const actionAttr = ctx.action ? `data-action="${escapeHtml(ctx.action)}"` : "";
+  const btnClass = `step-next-primary-btn ${isReady ? "is-ready" : "is-pending"}`;
+  const disabledAttr = !isReady && ctx.mode === "complete-phase" ? "disabled" : "";
+  const actionLabel = ctx.actionLabel || (isReady ? "进入下一步 →" : `待完成 ${incomplete.length} 项`);
+  const actionHtml = `<div class="step-next-bar-action"><button type="button" class="${btnClass}" ${actionAttr} ${disabledAttr}>${escapeHtml(actionLabel)}</button></div>`;
+
+  return `<section class="step-next-bar" data-step-next-bar role="region" aria-label="步骤推进向导条">${targetHtml}${statusHtml}${actionHtml}</section>`;
 }

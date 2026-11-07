@@ -37,12 +37,14 @@ import {
   calculateEvidenceCoverage,
   renderCitationsAccordion
 } from "./citationProvenanceView.js";
+import { renderStepNextBar } from "./app/workflowGate.js";
 
 export {
   formatOriginLabel,
   renderOriginBadge,
   calculateEvidenceCoverage,
-  renderCitationsAccordion
+  renderCitationsAccordion,
+  renderStepNextBar
 };
 
 /**
@@ -175,7 +177,9 @@ export function renderView(viewId, state) {
     "account-management": renderAccountManagement
   };
   const page = (pages[viewId] || renderReport)(state);
-  return renderSubflowPage(viewId, page, state);
+  const stepBar = renderStepNextBar({ ...state, activeView: viewId });
+  const content = stepBar ? `${stepBar}${page}` : page;
+  return renderSubflowPage(viewId, content, state);
 }
 
 export function renderInspector(selection, context = {}) {

@@ -613,6 +613,30 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：138/138 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
+---
+
+### T3.2 执行记录 (2026-11-08)
+
+- **任务卡**：M3-T3.2 每步“下一步”固定条
+- **交付内容**：
+  1. 产出目标与固定条组件开发（`design-studio/src/app/workflowGate.js`）：
+     - 导出 `resolveStepTargetOutput(stepId)`：提供战法/推演各主线步骤明确的产出目标描述；
+     - 导出 `renderStepNextBar(state, stepId, gateResult)`：
+       * 严格基于既有业务门禁 `evaluateStepGate` 计算结果渲染；
+       * 包含三段信息：产出目标（`step-next-target`）、完成状态/缺项数（`step-next-conditions`）与唯一明确主按钮（`step-next-action`）；
+       * 达到门禁时呈现可点击的“推进至下一步”按钮，未达成时呈现禁用状态及剩余待补要素提示；
+       * 对单项目环境进行可选链防御性保护（`state?.projectDirectory?.projects`），防止单页测试环境报空引用异常；
+  2. 全局主视图置顶挂载（`design-studio/src/ui.js`）：
+     - 在 `renderView` 主视图顶部动态渲染当前步骤的 `.step-next-bar`，给用户清晰连贯的推进行动导引；
+  3. 专用回归测试与基线纳入：
+     - 新建 `scripts/check-workflow-step-next-bar.mjs`，包含 4 组针对性断言（函数导出契约、未达标禁用与差几项提示、达标高亮推进按钮、ui.js 视图顶部挂载），全部通过；
+     - 纳入 `scripts/check-groups.json` 的 `workflow` 分组。
+- **验证命令与结果**：
+  - `node scripts/run-checks.mjs workflow`：13/13 PASS (100%)
+  - `node scripts/run-checks.mjs all`：139/139 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+
 
 
 

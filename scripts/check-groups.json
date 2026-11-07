@@ -49,7 +49,8 @@
     "check-workflow-restructuring-batch2.mjs",
     "check-workflow-restructuring-batch3.mjs",
     "check-workflow-restructuring-batch4.mjs",
-    "check-ov5-knowledge-citation-chain.mjs"
+    "check-ov5-knowledge-citation-chain.mjs",
+    "check-workflow-step-next-bar.mjs"
   ],
   "dodaf": [
     "check-dodaf-consistency-snapshot-import.mjs",
