@@ -31,6 +31,19 @@ import { renderOv1c, renderOv7 } from "./mappingProductView.js";
 import { normalizeWorkflowProgress } from "../../shared/workflowProgress.js";
 import { renderRailContextualModelFlow } from "./contextualModelFlow.js";
 import { renderSubflowPage } from "./subflowToolbox.js";
+import {
+  formatOriginLabel,
+  renderOriginBadge,
+  calculateEvidenceCoverage,
+  renderCitationsAccordion
+} from "./citationProvenanceView.js";
+
+export {
+  formatOriginLabel,
+  renderOriginBadge,
+  calculateEvidenceCoverage,
+  renderCitationsAccordion
+};
 
 /**
  * Floating research path: numbered circles.
@@ -180,10 +193,21 @@ export function renderInspector(selection, context = {}) {
   const value = (item) => isExternalKnowledge ? escapeHtml(item) : item;
   const facts = (selection.facts || []).map(([key, fact]) => `<div><span>${value(key)}</span><b>${value(fact)}</b></div>`).join("");
   const chips = (selection.refs || []).map((item) => `<span class="chip">${value(item)}</span>`).join("");
+  const citations = Array.isArray(selection.citations) ? selection.citations : [];
+  const originBadge = renderOriginBadge(selection.origin, citations);
+  const citationsHtml = renderCitationsAccordion(citations);
   return `
-    <section class="inspector-section"><h3>说明</h3><p>${value(selection.text)}</p></section>
+    <section class="inspector-section">
+      <div class="entity-origin-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:11px;font-weight:600;color:var(--muted);">要素来源</span>
+        ${originBadge}
+      </div>
+      <h3>说明</h3>
+      <p>${value(selection.text)}</p>
+    </section>
     ${facts ? `<section class="inspector-section"><h3>属性</h3><div class="detail-list">${facts}</div></section>` : ""}
     ${chips ? `<section class="inspector-section"><h3>引用</h3><div class="chip-row">${chips}</div></section>` : ""}
+    ${citationsHtml}
     ${renderTraceabilitySection(selection, context)}
     <section class="inspector-section"><h3>操作</h3><button class="quiet-button" data-inspector-action="edit">标记待修订</button></section>
   `;
@@ -726,9 +750,17 @@ export function renderActivityInspector(selection, context) {
   const output = activity.output || (Array.isArray(selection.facts) ? selection.facts.find((f) => f[0] === "输出")?.[1] : "") || "";
   const duration = activity.duration || (Array.isArray(selection.facts) ? selection.facts.find((f) => f[0] === "预计耗时")?.[1] : "") || "";
   const text = selection.text || activity.text || "";
+  const citations = activity.citations || selection.citations || [];
+  const effectiveOrigin = activity.origin || selection.origin;
+  const originBadge = renderOriginBadge(effectiveOrigin, citations);
+  const citationsAccordionHtml = renderCitationsAccordion(citations);
 
   return `
     <form class="activity-editor" id="ov5ActivityForm">
+      <div class="entity-origin-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:6px 8px;background:var(--subtle,#f3f4f6);border-radius:4px;">
+        <span style="font-size:11px;font-weight:600;color:var(--muted);">要素来源</span>
+        ${originBadge}
+      </div>
       <label>活动名称<input name="title" value="${escapeHtml(title)}"></label>
       <label>活动类型<input name="type" value="${escapeHtml(type)}"></label>
       <label>执行主体 / 平台编组<input name="performer" value="${escapeHtml(activity.performer || activity.resources || "")}" placeholder="如：隐身无人机编队、战区指控所"></label>
@@ -751,21 +783,9 @@ export function renderActivityInspector(selection, context) {
       <label>时间与规则约束<textarea name="constraints" rows="2">${escapeHtml(activity.constraints || "")}</textarea></label>
       <label>活动说明<textarea name="text" rows="3">${escapeHtml(text)}</textarea></label>
       <label>知识依据<input name="refs" value="${escapeHtml(refs)}"></label>
-      ${(activity.citations?.length || selection.citations?.length) ? `
+      ${citationsAccordionHtml ? `
         <div class="activity-citations-panel" data-activity-citations>
-          <label>知识溯源依据（${(activity.citations || selection.citations).length} 条已核验切片）</label>
-          <div class="citation-items-list">
-            ${(activity.citations || selection.citations).map((c) => `
-              <div class="citation-card" data-chunk-id="${escapeHtml(c.chunkId)}">
-                <div class="citation-head">
-                  <strong class="citation-title">📖 ${escapeHtml(c.title || c.chunkTitle || c.chunkId)}</strong>
-                  ${c.score ? `<span class="citation-score">${c.score}% 匹配</span>` : ""}
-                </div>
-                ${c.filePath ? `<small class="citation-source">${escapeHtml(c.filePath)}</small>` : ""}
-                ${c.snippet ? `<p class="citation-snippet">“${escapeHtml(c.snippet)}”</p>` : ""}
-              </div>
-            `).join("")}
-          </div>
+          ${citationsAccordionHtml}
         </div>
       ` : ""}
       <fieldset class="trace-source-field ov1-source-picker">

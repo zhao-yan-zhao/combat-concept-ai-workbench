@@ -567,4 +567,29 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：136/136 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
+---
+
+### T2.3 执行记录 (2026-11-08)
+
+- **任务卡**：M2-T2.3 来源标记与证据覆盖率界面呈现
+- **交付内容**：
+  1. 纯净来源与引用呈现模块（新建 `design-studio/src/citationProvenanceView.js`）：
+     - `renderOriginBadge(origin, citations)`：支持 `[📖 依据]`、`[⚡ 推论]`、`[👤 人工]` 来源标签及自动回退机制；
+     - `calculateEvidenceCoverage(items)`：按规范计算 `证据覆盖率 = 有引用的要素数 / 要素总数`；
+     - `renderCitationsAccordion(citations)`：可展开折叠引用面板（`<details class="citation-accordion">`），清晰呈现文件路径（`filePath`）、标题/章节（`title`）、原文摘要（`snippet`）与匹配度（`score`）；
+  2. 检查器与产品头部集成：
+     - `design-studio/src/ui.js`：在通用 `renderInspector` 和活动检查器 `renderActivityInspector` 顶部呈现来源标签与可折叠引用列表；
+     - `design-studio/src/ov1View.js`：在 OV-1 节点检查器 `renderOv1Inspector` 顶部呈现来源标签与引用列表；
+     - `design-studio/src/ov5MechanismView.js`：在活动卡片 topline 呈现实体来源标签，并在 OV-5 视图头部 pills 呈现证据覆盖率徽标（`.coverage-pill`）；
+  3. 专用回归测试与基准纳入：
+     - 新建 `scripts/check-citation-provenance-ui.mjs`，包含 7 组端到端 UI 呈现与覆盖率断言，100% 通过；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 测试组；
+     - `scripts/smoke-ui.mjs` 自适应异步等待优化，稳健消除高负载并发抖动。
+- **验证命令与结果**：
+  - `node scripts/run-checks.mjs ui-static`：21/21 PASS (100%)
+  - `node scripts/run-checks.mjs ov5`：7/7 PASS (100%)
+  - `node scripts/run-checks.mjs all`：137/137 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+
 

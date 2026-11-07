@@ -12,6 +12,7 @@ import {
 } from "./dodafDraftingView.js";
 import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
 import { renderConceptMap as renderConceptMapPreview } from "./conceptMapView.js";
+import { renderOriginBadge, renderCitationsAccordion } from "./citationProvenanceView.js";
 
 const PANEL_META = {
   context: { eyebrow: "OV-1", title: "任务摘要" },
@@ -720,8 +721,17 @@ export function selectionForOv1(id, model) {
 }
 
 export function renderOv1Inspector(selection) {
+  const citations = Array.isArray(selection.citations) ? selection.citations : [];
+  const effectiveOrigin = selection.origin || (citations.length > 0 ? "cited" : "ai-inferred");
+  const originBadge = renderOriginBadge(effectiveOrigin, citations);
+  const citationsAccordionHtml = renderCitationsAccordion(citations);
+
   return `
     <form class="activity-editor ov1-node-editor ov1-panel-editor" id="ov1NodeForm">
+      <div class="entity-origin-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:6px 8px;background:var(--subtle,#f3f4f6);border-radius:4px;">
+        <span style="font-size:11px;font-weight:600;color:var(--muted);">要素来源</span>
+        ${originBadge}
+      </div>
       <input type="hidden" name="nodeId" value="${escapeHtml(selection.id)}">
       <label>节点名称<input name="label" maxlength="60" value="${escapeHtml(selection.title)}"></label>
       <label>节点说明<textarea name="detail" rows="4" maxlength="800">${escapeHtml(selection.text)}</textarea></label>
@@ -733,6 +743,11 @@ export function renderOv1Inspector(selection) {
       <label>约束条件<textarea name="constraints" rows="2" maxlength="500">${escapeHtml(selection.constraints || "")}</textarea></label>
       <label>预期效果<textarea name="expectedEffects" rows="2" maxlength="500">${escapeHtml(selection.expectedEffects || "")}</textarea></label>
       <label>知识依据<input name="evidenceRefs" maxlength="500" value="${escapeHtml((selection.evidenceRefs || []).join("，"))}"></label>
+      ${citationsAccordionHtml ? `
+        <div class="activity-citations-panel" data-activity-citations>
+          ${citationsAccordionHtml}
+        </div>
+      ` : ""}
       <div class="ov1-position-fields"><label>横向位置<input name="x" type="number" min="0" max="76" step="1" value="${escapeHtml(selection.x)}"></label><label>纵向位置<input name="y" type="number" min="0" max="76" step="1" value="${escapeHtml(selection.y)}"></label></div>
       <div class="editor-actions"><button type="submit">保存节点</button><button type="button" class="quiet-button" data-inspector-action="delete-ov1">删除节点</button></div>
     </form>

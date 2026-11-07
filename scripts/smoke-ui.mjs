@@ -281,16 +281,22 @@ try {
     const btn = document.querySelector('.step-button[data-view="ov1"]') || document.querySelector('[data-view="ov1"]');
     btn?.click();
   })()`);
-  await sleep(1500);
 
-  const ov1Rendered = await evalInPage(`(() => {
+  const ov1Rendered = await evalInPage(`(async () => {
+    for (let i = 0; i < 25; i++) {
+      const root = document.querySelector('#viewRoot');
+      const hasLegend = Boolean(root?.querySelector('[data-dodaf-legend="OV-1"]'));
+      const hasCanvas = Boolean(root?.querySelector('[data-dodaf-product="OV-1"]'));
+      if (hasLegend && hasCanvas) {
+        return { renderedView: root?.dataset?.renderedView, hasLegend, hasCanvas };
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
     const root = document.querySelector('#viewRoot');
-    const hasLegend = Boolean(root?.querySelector('[data-dodaf-legend="OV-1"]'));
-    const hasCanvas = Boolean(root?.querySelector('[data-dodaf-product="OV-1"]'));
     return {
       renderedView: root?.dataset?.renderedView,
-      hasLegend,
-      hasCanvas
+      hasLegend: Boolean(root?.querySelector('[data-dodaf-legend="OV-1"]')),
+      hasCanvas: Boolean(root?.querySelector('[data-dodaf-product="OV-1"]'))
     };
   })()`);
   console.log("[Smoke] OV-1 render check:", JSON.stringify(ov1Rendered));

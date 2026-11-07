@@ -1,6 +1,7 @@
 import { getActivityHierarchy, getAssignableParentActivities } from "./ov5Store.js";
 import { evaluateOodaLoopHealth } from "./oodaStore.js";
 import { renderProjectStorageState } from "./projectStorageView.js";
+import { renderOriginBadge, calculateEvidenceCoverage } from "./citationProvenanceView.js";
 
 function escapeHtml(value) {
   return String(value || "")
@@ -42,6 +43,7 @@ export function renderOv5Workbench(state, context = {}) {
   const scoreClass = oodaHealth.healthScore >= 80 ? "ready" : oodaHealth.healthScore >= 60 ? "review" : "danger";
   const viewMode = state.ov5ViewMode || "kill-web";
   const stressedNodeId = state.ov5StressedNodeId || null;
+  const evidenceCoverage = calculateEvidenceCoverage(activities);
 
   return `
     <section class="surface surface-pad ov5-workbench-surface">
@@ -53,6 +55,7 @@ export function renderOv5Workbench(state, context = {}) {
               <span class="mini-tag ${state.ov5Generating ? "review" : ""}">${state.ov5Generating ? "生成中" : provenance}</span>
               ${evidenceSelection ? `<span class="mini-tag">${escapeHtml(evidenceSelection)}</span>` : ""}
               <span class="mini-tag count-pill">${activities.length} 项活动 · ${edges.length} 条关联</span>
+              <span class="mini-tag coverage-pill" title="有知识依据的活动数量占比">${evidenceCoverage.label}</span>
               <span class="mini-tag ${scoreClass}">OODA ${oodaHealth.healthScore}分</span>
               <span class="mini-tag ${latencyBudget.exceedsBudget ? "review" : ""}">全链 ${latencyBudget.formattedTotal}</span>
               <span class="mini-tag">自主 H:${autonomyStats.hitl}/O:${autonomyStats.hotl}/X:${autonomyStats.hootl}</span>
@@ -781,11 +784,14 @@ export function renderActivityCard(act, selectedId, edges, selectedUpstream = ne
   const autonomy = String(act.autonomy || "HOTL").toUpperCase();
   const inCount = (upstreamMap.get(act.id) || []).length;
   const outCount = (downstreamMap.get(act.id) || []).length;
+  const effectiveOrigin = act.origin || ((act.citations?.length || act.evidenceRefs?.length) ? "cited" : "ai-inferred");
+  const originBadge = renderOriginBadge(effectiveOrigin, act.citations);
 
   return `
     <div class="kw-activity-card ${isSelected ? "selected" : ""} ${isUpstream ? "is-upstream" : ""} ${isDownstream ? "is-downstream" : ""} ${hasFeedbackOut ? "has-feedback-out" : ""}" data-activity="${escapeHtml(act.id)}">
       <div class="card-topline">
         <span class="domain-badge">${escapeHtml(act.domain || "综合")}</span>
+        ${originBadge}
         <span class="autonomy-pill ${autonomy.toLowerCase()}">${autonomy}</span>
         <span class="io-flow-pill" title="上游来源 ${inCount} 项，下游驱动 ${outCount} 项">↑${inCount} ↓${outCount}</span>
         ${act.timingWindow ? `<span class="timing-badge">${escapeHtml(act.timingWindow)}</span>` : ""}

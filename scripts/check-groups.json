@@ -116,7 +116,8 @@
     "check-view-transition-event-binding-fix.mjs",
     "check-workflow-test-mode.mjs",
     "check-refactor-wiring.mjs",
-    "check-recovery-transactions.mjs"
+    "check-recovery-transactions.mjs",
+    "check-citation-provenance-ui.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",
