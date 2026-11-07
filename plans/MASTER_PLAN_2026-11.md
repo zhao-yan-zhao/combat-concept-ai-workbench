@@ -362,3 +362,52 @@ TE.x 在每个里程碑结束时各做一张
 验收命令与输出：……
 遗留/待确认：……
 ```
+
+### T1.1 盘点覆盖性操作 — 2026-11-07
+
+**现状理解**：
+工作台内存在大量会引发模型全量替换、重置或批量删除的动作。目前除 `applyOv1CandidateWithRecoveryPoint`（在阶段 1 补全）以及快照控制器中手动创建快照外，其余绝大部分覆盖性操作均仅依靠浏览器弹窗 `window.confirm` 进行警告，甚至部分操作连确认都没有，更未在内存与服务端建立原子恢复点，导致一旦误操作或生成结果不理想，用户既有研究成果极易丢失。
+
+**改动文件**：
+无（严格遵守 T1.1 规则：只读盘点，不修改任何业务代码）。
+
+**工作台覆盖性操作盘点清单**：
+
+| 序号 | Action / 触发动作 | 文件与行号 | 涉及操作类型 | 影响模型范围 | 目前是否保存恢复点 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | `apply-ov1-candidate` | `dodafBindings.js:355-389` | 应用 AI 候选 | `state.ov1` (节点、连线、图件) | **是**（`saveModelSnapshot` + `projectModelSnapshotSyncController.save`） |
+| 2 | `reset-project-content` | `main.js:855-915` | 项目全量清空重置 | `state` 全量研究数据 (简报/方向/DoDAF/想定/验证/OODA) | **否**（仅 `window.confirm`，直接调用 `resetProjectContent` 清库） |
+| 3 | `restore-model-snapshot` | `modelSnapshotController.js:56-63` | 历史快照恢复 | 恢复覆盖全部 14 个模型产品及简报 | **否**（恢复前未保存当前即时恢复点，导致恢复后再后悔无法退回） |
+| 4 | `apply-architecture-import` | `dodafProductController.js:3160-3198` | 架构包导入覆盖 (`replace-products`) | `state.architecture`, `ov1`~`ov7` | **否**（仅 `window.confirm`，直接覆盖） |
+| 5 | `seed-concept-map-from-planning` | `conceptMapController.js:393-445` | 从任务/兵力规划重新生成概念图 | `state.conceptMap` (图元与图层数据) | **否**（仅 `window.confirm`，直接覆盖） |
+| 6 | `generate-ov5` / `ov5a-generate-ai` | `ov5AiController.js:43-52, 249-290` | 生成/覆盖 OV-5a 作战活动模型与 OODA | `state.ov5`, `state.ooda` | **否**（仅 `window.confirm`，直接覆盖） |
+| 7 | `generate-ooda` | `oodaAiController.js:10-50` | 生成/覆盖 OODA 决策链 | `state.ooda` | **否**（仅 `window.confirm`，直接覆盖） |
+| 8 | `generate-brief` | `briefController.js:21-65` | AI 生成并覆盖概念简报 | `state.brief` (核心构想要素) | **否**（无恢复点） |
+| 9 | `generate-operational-tasks` | `conceptPlanningController.js:550-645` | 生成/覆盖作战任务集 | `state.forceMission.tasks` | **否**（无恢复点） |
+| 10 | `generate-force-mission` | `conceptPlanningController.js:1559-1700` | 生成/覆盖编成与作战兵力 | `state.forceMission` (forces, assignments) | **否**（无恢复点） |
+| 11 | `generate-phase-action` | `conceptPlanningController.js:1855-1930` | 生成/覆盖阶段与行动链 | `state.phaseAction` | **否**（无恢复点） |
+| 12 | `generate-concept-graphic` | `conceptPlanningController.js:1955-2015` | 生成/覆盖高层概念图例大纲 | `state.conceptGraphic` | **否**（无恢复点） |
+| 13 | `seed-dodaf-*` (`pregenerateOv*`) | `dodafProductController.js:2376-2380, 2985-3015` | 从上游种子重置生成 OV 产品 (OV-2/3/4/5a/6b/6c/7) | `state.ov*`, `state.architecture` | **否**（仅 `window.confirm`，直接覆盖） |
+| 14 | `ov5a-apply-template` / `ov5a-apply-f2t2ea` | `dodafProductController.js:2813-2825, 2905-2910` | 应用活动模板覆盖分解 | `state.ov5`, `state.ov5a` | **否**（无恢复点） |
+| 15 | `clear-operational-tasks` | `conceptPlanningController.js:178-185` | 批量清空作战任务 | `state.forceMission.tasks` | **否**（仅 `window.confirm`） |
+| 16 | `clear-force-mission` | `conceptPlanningController.js:211-225` | 批量清空作战力量与兵力编成 | `state.forceMission` | **否**（仅 `window.confirm`） |
+| 17 | `clear-phase-action` | `conceptPlanningController.js:393-400` | 批量清空阶段作战行动 | `state.phaseAction` | **否**（仅 `window.confirm`） |
+| 18 | `ov6a-clear-all-rules` | `dodafProductController.js:853-857` | 批量清空作战规则库 (OV-6a) | `state.ov6a` | **否**（仅 `window.confirm`） |
+| 19 | `ov6b-clear-all-machines` | `dodafProductController.js:1002-1006` | 批量清空全部状态机 (OV-6b) | `state.ov6b` | **否**（仅 `window.confirm`） |
+| 20 | `ov6c-clear-all-sequences` | `dodafProductController.js:1352-1356` | 批量清空全部时序图 (OV-6c) | `state.ov6c` | **否**（仅 `window.confirm`） |
+
+**验收命令与输出**：
+运行全量回归与冒烟测试，确保基线纯净：
+```powershell
+node scripts/run-checks.mjs all
+# 结果：总脚本数: 134, 通过 (PASS): 134, 失败 (FAIL): 0
+
+node scripts/smoke-ui.mjs
+# 结果：0 个未捕获异常，通过
+```
+
+**遗留/待确认**：
+1. 盘点表中序号 1~5 为**高风险核心破坏性动作**（全量模型重置、导入、快照恢复覆盖、规划重构），将在 T1.2 优先实施 `applyWithRecoveryPoint` 事务包装；
+2. 序号 6~14 为各业务模块的 AI 批量生成与模板覆盖动作，后续卡片将按优先级分批（每 3 个一批）接入事务包装；
+3. 序号 15~20 为各模块一键清空按钮，同样需统一走事务包装，让清空操作亦可秒级撤销。
+
