@@ -2832,11 +2832,6 @@ button.primary-btn.compact {
     var(--related-stagger),
     var(--related-stagger);
 }
-.project-rail:hover .step-related-copy::after,
-.project-rail:focus-within .step-related-copy::after {
-  animation: step-related-sheen .55s cubic-bezier(.33, .1, .25, 1) forwards;
-  animation-delay: calc(var(--related-stagger) + 120ms);
-}
 .step-related-label,
 .step-related-separator,
 .step-related-detail { position: relative; z-index: 2; line-height: var(--step-line-h); }

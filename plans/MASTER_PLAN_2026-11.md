@@ -683,6 +683,29 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：141/141 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
+### 2026-11-08 T3.5 真实落地：信息减负与动效清理
+
+- **实施内容**：
+  1. 纯装饰性动效清理与视觉减负：
+     - `design-studio/styles/views-foundation.css`：移除 `brief-btn-sheen`、`brief-progress-shimmer`、`ov1-toolbox-soft-pulse` 纯装饰流动光晕动画与工具箱呼吸动画；
+     - `design-studio/styles/workflow.css`：移除 `step-expand-sheen` 流光动效；
+  2. 全局“减少动效”开关与标准适配：
+     - `design-studio/styles/transitions-modals.css`：引入 `@media (prefers-reduced-motion: reduce)` 以及针对 `body.reduced-motion` 和 `html[data-reduced-motion="true"]` 的全局动效压制规则，将非必要动画与过渡强制降至 `0.001ms`；
+     - `design-studio/index.html`：在顶栏操作区新增 `id="reducedMotionBtn"` 减少动效切换按钮，符合无障碍与研究工具静默化原则；
+     - `design-studio/src/main.js`：添加 `toggle-reduced-motion` 动作处理，通过 `workbench_reduced_motion` localStorage 实现本地持久化与初始化自恢复；
+  3. 复杂面板信息减负与渐进式展开 (Progressive Disclosure)：
+     - `design-studio/src/ui.js` (`renderBriefSidebar`)：概念简报侧边栏核心字段（研究意图、研究目标、核心思路）默认外露，高级约束字段（假设条件、预期效果、主要风险、参考证据）收纳进 `<details class="details-advanced brief-advanced-details">`；
+     - `design-studio/src/ui.js` (`renderActivityInspector`)：OV-5 活动属性检查器核心字段（名称、类型、执行主体、作战域、输入、输出、耗时）默认外露，高级控制字段（自主等级、时效窗口、抗毁机制、执行规则）折叠进 `<details class="details-advanced activity-advanced-details">`；
+     - `design-studio/src/oodaView.js` (`renderOodaInspector`)：OODA 环节点检查器核心字段（环节类型、节点名称、输入、输出、耗时）外露，高级字段（详细说明、判断准则/规则、关联装备、知识引用）折叠进 `<details class="details-advanced ooda-advanced-details">`；
+  4. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-reduced-motion-and-disclosure.mjs`：严格断言装饰光晕清理、全局减少动效规则、以及三大核心面板的渐进展开 HTML 结构；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 组。
+- **验证命令与结果**：
+  - `node scripts/run-checks.mjs ui-static`：23/23 PASS (100%)
+  - `node scripts/run-checks.mjs all`：142/142 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+
 
 
 

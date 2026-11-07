@@ -121,7 +121,8 @@
     "check-refactor-wiring.mjs",
     "check-recovery-transactions.mjs",
     "check-citation-provenance-ui.mjs",
-    "check-glossary-coverage.mjs"
+    "check-glossary-coverage.mjs",
+    "check-reduced-motion-and-disclosure.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",

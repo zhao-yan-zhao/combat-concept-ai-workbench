@@ -776,6 +776,20 @@ async function handleAction(action, source = null) {
     void setWorkflowMode(currentWorkflow().mode === "free" ? "gated" : "free");
     return;
   }
+  if (action === "toggle-reduced-motion") {
+    const isReduced = document.documentElement.getAttribute("data-reduced-motion") === "true";
+    const next = !isReduced;
+    document.documentElement.setAttribute("data-reduced-motion", next ? "true" : "false");
+    document.body?.classList?.toggle("reduced-motion", next);
+    try { localStorage.setItem("workbench_reduced_motion", next ? "true" : "false"); } catch {}
+    const btn = document.getElementById("reducedMotionBtn");
+    if (btn) {
+      btn.setAttribute("aria-checked", next ? "true" : "false");
+      btn.classList.toggle("is-active", next);
+    }
+    showToast(next ? "已开启减少动效模式" : "已恢复标准动效");
+    return;
+  }
   if (action === "minimize-busy-overlay") {
     busyOverlayMinimized = true;
     updateBusyOverlay();
@@ -2053,6 +2067,19 @@ bindAiModalsChrome(getChromeCtx());
 bindOv5aDragAndDrop(getOv5Ctx());
 
 if (typeof window !== "undefined") {
+  try {
+    const isReduced = localStorage.getItem("workbench_reduced_motion") === "true";
+    if (isReduced) {
+      document.documentElement.setAttribute("data-reduced-motion", "true");
+      document.body?.classList?.add("reduced-motion");
+      const btn = document.getElementById("reducedMotionBtn");
+      if (btn) {
+        btn.setAttribute("aria-checked", "true");
+        btn.classList.add("is-active");
+      }
+    }
+  } catch {}
+
   window.__workbench = {
     getState: () => state,
     render,

@@ -1,6 +1,52 @@
 /* ==========================================================================
    Workbench View Transition Animations & Cross-Fade Smooth Motion
    ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+body.reduced-motion,
+html[data-reduced-motion="true"],
+body.reduced-motion *,
+html[data-reduced-motion="true"] * {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+details.details-advanced {
+  margin: 8px 0;
+  border: 1px solid #d9e6de;
+  border-radius: 6px;
+  background: #f8faf8;
+  padding: 6px 10px;
+}
+details.details-advanced summary {
+  color: #3b5a4b;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 3px 0;
+  user-select: none;
+}
+details.details-advanced summary:hover {
+  color: #123324;
+}
+details.details-advanced[open] {
+  padding-bottom: 10px;
+}
+details.details-advanced[open] summary {
+  margin-bottom: 10px;
+  border-bottom: 1px dashed #d9e6de;
+}
+
 @keyframes workbench-view-out {
   from {
     opacity: 1;
@@ -402,6 +448,18 @@
 .ov2-panel-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 1px solid rgba(148, 163, 184, .3); border-radius: 5px; background: rgba(2, 6, 23, .45); color: var(--muted); cursor: pointer; transition: all .15s ease; flex: 0 0 24px; box-sizing: border-box; }
 .ov2-panel-btn:hover { background: rgba(148, 163, 184, .18); border-color: rgba(56, 189, 248, .55); color: #38bdf8; }
 .ov2-expand-sidebar-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid rgba(56, 189, 248, .4); border-radius: 6px; background: rgba(14, 116, 144, .25); color: #38bdf8; font-size: 11px; font-weight: 600; cursor: pointer; transition: all .15s ease; }
+
+/* Reduced-motion toggle switch */
+.menubar-actions .reduced-motion-toggle { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 4px 7px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); box-shadow: none; font-weight: 700; transition: color .2s ease, background .2s ease, opacity .2s ease; cursor: pointer; }
+.menubar-actions .reduced-motion-toggle:hover { background: rgba(61, 255, 197, .08); color: #eafff6; }
+.menubar-actions .reduced-motion-toggle.is-active,
+.menubar-actions .reduced-motion-toggle[aria-checked="true"] { color: #b8ffe2; }
+.reduced-motion-track { position: relative; width: 32px; height: 18px; flex: 0 0 32px; border: 1px solid #587064; border-radius: 999px; background: #26352f; transition: background .22s ease, border-color .22s ease, box-shadow .22s ease; }
+.reduced-motion-track::after { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #d8e7df; box-shadow: 0 1px 2px rgba(0, 0, 0, .32); content: ""; transition: transform .22s cubic-bezier(.2, .8, .2, 1), background .22s ease; }
+.menubar-actions .reduced-motion-toggle[aria-checked="true"] .reduced-motion-track,
+.menubar-actions .reduced-motion-toggle.is-active .reduced-motion-track { border-color: var(--cyan); background: #159a70; box-shadow: 0 0 10px rgba(61, 255, 197, .24); }
+.menubar-actions .reduced-motion-toggle[aria-checked="true"] .reduced-motion-track::after,
+.menubar-actions .reduced-motion-toggle.is-active .reduced-motion-track::after { background: #f4fffa; transform: translateX(14px); }
 .ov2-expand-sidebar-btn:hover { background: rgba(14, 116, 144, .4); border-color: #38bdf8; color: #fff; }
 .ov2-canvas-head-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 

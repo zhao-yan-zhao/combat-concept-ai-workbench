@@ -33,10 +33,13 @@ export function renderOodaInspector(selection) {
       <label>输入信息<textarea name="input" rows="2">${selection.input}</textarea></label>
       <label>输出信息<textarea name="output" rows="2">${selection.output}</textarea></label>
       <label>预计耗时<input name="duration" value="${selection.duration || selection.facts?.[1]?.[1] || ""}"></label>
-      <label>行为说明<textarea name="text" rows="3">${selection.text}</textarea></label>
-      <label>决策规则<textarea name="rule" rows="3">${selection.rule}</textarea></label>
-      <label>关联装备（以顿号或逗号分隔）<input name="equipmentRefs" value="${escapeHtml((selection.equipmentRefs || []).join("、"))}" maxlength="1600"></label>
-      <label>知识依据（以顿号或逗号分隔）<input name="knowledgeRefs" value="${escapeHtml((selection.knowledgeRefs || []).join("、"))}" maxlength="1600"></label>
+      <details class="details-advanced ooda-advanced-details">
+        <summary>高级属性 (行为说明、决策规则、装备与知识依据)</summary>
+        <label>行为说明<textarea name="text" rows="3">${selection.text}</textarea></label>
+        <label>决策规则<textarea name="rule" rows="3">${selection.rule}</textarea></label>
+        <label>关联装备（以顿号或逗号分隔）<input name="equipmentRefs" value="${escapeHtml((selection.equipmentRefs || []).join("、"))}" maxlength="1600"></label>
+        <label>知识依据（以顿号或逗号分隔）<input name="knowledgeRefs" value="${escapeHtml((selection.knowledgeRefs || []).join("、"))}" maxlength="1600"></label>
+      </details>
       <div class="editor-actions"><button type="submit">保存节点</button><button type="button" class="quiet-button" data-inspector-action="delete-ooda">删除</button></div>
     </form>
   `;

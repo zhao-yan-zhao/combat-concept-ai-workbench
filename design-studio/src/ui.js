@@ -297,7 +297,7 @@ export function renderBriefSidebar(state) {
   const generating = Boolean(state.briefGenerating);
   const reveal = Boolean(state.briefDraftReveal);
   const formClass = ["brief-editor", "brief-sidebar-editor", generating ? "is-generating" : "", reveal ? "is-draft-reveal" : ""].filter(Boolean).join(" ");
-  return `<form class="${formClass}" id="briefEditorForm" aria-busy="${generating ? "true" : "false"}">${generating ? `<div class="brief-generate-progress" role="status" aria-live="polite"><span class="brief-generate-progress-bar"></span><span class="brief-generate-progress-label">\u6b63\u5728\u751f\u6210 AI \u8349\u6848\u2026</span></div>` : ""}${reveal ? `<div class="brief-draft-reveal-note" role="status">\u8349\u6848\u5df2\u5199\u5165\uff0c\u8bf7\u590d\u6838\u5404\u5b57\u6bb5</div>` : ""}<label><span>\u7814\u7a76\u610f\u56fe</span><textarea name="intent" rows="2" ${generating ? "readonly" : ""}>${escapeHtml(state.briefIntent || "")}</textarea></label><label><span>\u7814\u7a76\u76ee\u6807</span><textarea name="objective" rows="2" ${generating ? "readonly" : ""}>${escapeHtml(brief.objective)}</textarea></label><label><span>\u6838\u5fc3\u601d\u8def</span><textarea name="approach" rows="3" ${generating ? "readonly" : ""}>${escapeHtml(brief.approach)}</textarea></label><label><span>\u5173\u952e\u5047\u8bbe</span><textarea name="assumptions" rows="2" ${generating ? "readonly" : ""}>${escapeHtml(brief.assumptions)}</textarea></label><label><span>\u9884\u671f\u6548\u679c</span><textarea name="expectedEffects" rows="2" ${generating ? "readonly" : ""}>${escapeHtml(brief.expectedEffects)}</textarea></label><label><span>\u4e3b\u8981\u98ce\u9669</span><textarea name="risk" rows="2" ${generating ? "readonly" : ""}>${escapeHtml(brief.risk)}</textarea></label><label class="brief-evidence-toggle"><input type="checkbox" name="includeEvidence" ${state.briefIncludeEvidence ? "checked" : ""} ${generating ? "disabled" : ""}> <span>\u5f15\u7528 Vault \u8bc1\u636e</span></label><div class="editor-actions"><button class="quiet-button" type="submit" ${generating ? "disabled" : ""}>\u4fdd\u5b58</button><button type="button" class="brief-generate-btn${generating ? " is-busy" : ""}" data-action="generate-brief" ${generating ? "disabled" : ""}>${generating ? "\u751f\u6210\u4e2d\u2026" : "AI \u8349\u6848"}</button></div>${renderBriefDirectionPanel(state)}</form>`;
+  return `<form class="${formClass}" id="briefEditorForm" aria-busy="${generating ? "true" : "false"}">${generating ? `<div class="brief-generate-progress" role="status" aria-live="polite"><span class="brief-generate-progress-bar"></span><span class="brief-generate-progress-label">正在生成 AI 草案…</span></div>` : ""}${reveal ? `<div class="brief-draft-reveal-note" role="status">草案已写入，请复核各字段</div>` : ""}<label><span>研究意图</span><textarea name="intent" rows="2" ${generating ? "readonly" : ""}>${escapeHtml(state.briefIntent || "")}</textarea></label><label><span>研究目标</span><textarea name="objective" rows="2" ${generating ? "readonly" : ""}>${escapeHtml(brief.objective)}</textarea></label><label><span>核心思路</span><textarea name="approach" rows="3" ${generating ? "readonly" : ""}>${escapeHtml(brief.approach)}</textarea></label><details class="details-advanced brief-advanced-details"><summary>高级约束与预期（假设、效果、风险、证据）</summary><label><span>关键假设</span><textarea name="assumptions" rows="2" ${generating ? "readonly" : ""}>${escapeHtml(brief.assumptions)}</textarea></label><label><span>预期效果</span><textarea name="expectedEffects" rows="2" ${generating ? "readonly" : ""}>${escapeHtml(brief.expectedEffects)}</textarea></label><label><span>主要风险</span><textarea name="risk" rows="2" ${generating ? "readonly" : ""}>${escapeHtml(brief.risk)}</textarea></label><label class="brief-evidence-toggle"><input type="checkbox" name="includeEvidence" ${state.briefIncludeEvidence ? "checked" : ""} ${generating ? "disabled" : ""}> <span>引用 Vault 证据</span></label></details><div class="editor-actions"><button class="quiet-button" type="submit" ${generating ? "disabled" : ""}>保存</button><button type="button" class="brief-generate-btn${generating ? " is-busy" : ""}" data-action="generate-brief" ${generating ? "disabled" : ""}>${generating ? "生成中…" : "AI 草案"}</button></div>${renderBriefDirectionPanel(state)}</form>`;
 }
 
 /** Compact concept-direction picker for the research-baseline sidebar. */
@@ -771,22 +771,25 @@ export function renderActivityInspector(selection, context) {
       <label>作战域<select name="domain">
         ${["综合", "太空", "空中", "水面", "水下", "陆基", "电磁", "网络"].map((d) => `<option value="${d}" ${(activity.domain || "综合") === d ? "selected" : ""}>${d}域</option>`).join("")}
       </select></label>
-      <label>自主决策等级<select name="autonomy">
-        <option value="HITL" ${activity.autonomy === "HITL" ? "selected" : ""}>人在回路 (HITL) - 人工裁决与交战授权</option>
-        <option value="HOTL" ${activity.autonomy === "HOTL" || !activity.autonomy ? "selected" : ""}>人上回路 (HOTL) - 机器编组协同·人工监控否决</option>
-        <option value="HOOTL" ${activity.autonomy === "HOOTL" ? "selected" : ""}>全自主回路 (HOOTL) - 微秒级边缘防御与避障</option>
-      </select></label>
-      <label>时效窗口 / 预算<input name="timingWindow" value="${escapeHtml(activity.timingWindow || activity.duration || "")}" placeholder="如：15-30m、5s"></label>
       <label>输入信息<textarea name="input" rows="2">${escapeHtml(input)}</textarea></label>
       <label>输出信息<textarea name="output" rows="2">${escapeHtml(output)}</textarea></label>
       <label>预计耗时<input name="duration" value="${escapeHtml(duration)}"></label>
-      <label>父活动<select name="parentId"><option value="">无（顶层活动）</option>${parentOptions}</select></label>
-      <label>资源消耗 / 需求<textarea name="resources" rows="2">${escapeHtml(activity.resources || "")}</textarea></label>
-      <label>抗毁 / 降级备用机制<textarea name="resilienceFallback" rows="2" placeholder="如：卫星受阻时转机间战术自组网交接">${escapeHtml(activity.resilienceFallback || "")}</textarea></label>
-      <label>前置条件<textarea name="preconditions" rows="2">${escapeHtml(activity.preconditions || "")}</textarea></label>
-      <label>时间与规则约束<textarea name="constraints" rows="2">${escapeHtml(activity.constraints || "")}</textarea></label>
-      <label>活动说明<textarea name="text" rows="3">${escapeHtml(text)}</textarea></label>
-      <label>知识依据<input name="refs" value="${escapeHtml(refs)}"></label>
+      <details class="details-advanced activity-advanced-details">
+        <summary>高级属性与约束 (自主等级、时效窗口、抗毁机制、前置条件与规则)</summary>
+        <label>自主决策等级<select name="autonomy">
+          <option value="HITL" ${activity.autonomy === "HITL" ? "selected" : ""}>人在回路 (HITL) - 人工裁决与交战授权</option>
+          <option value="HOTL" ${activity.autonomy === "HOTL" || !activity.autonomy ? "selected" : ""}>人上回路 (HOTL) - 机器编组协同·人工监控否决</option>
+          <option value="HOOTL" ${activity.autonomy === "HOOTL" ? "selected" : ""}>全自主回路 (HOOTL) - 微秒级边缘防御与避障</option>
+        </select></label>
+        <label>时效窗口 / 预算<input name="timingWindow" value="${escapeHtml(activity.timingWindow || activity.duration || "")}" placeholder="如：15-30m、5s"></label>
+        <label>父活动<select name="parentId"><option value="">无（顶层活动）</option>${parentOptions}</select></label>
+        <label>资源消耗 / 需求<textarea name="resources" rows="2">${escapeHtml(activity.resources || "")}</textarea></label>
+        <label>抗毁 / 降级备用机制<textarea name="resilienceFallback" rows="2" placeholder="如：卫星受阻时转机间战术自组网交接">${escapeHtml(activity.resilienceFallback || "")}</textarea></label>
+        <label>前置条件<textarea name="preconditions" rows="2">${escapeHtml(activity.preconditions || "")}</textarea></label>
+        <label>时间与规则约束<textarea name="constraints" rows="2">${escapeHtml(activity.constraints || "")}</textarea></label>
+        <label>活动说明<textarea name="text" rows="3">${escapeHtml(text)}</textarea></label>
+        <label>知识依据<input name="refs" value="${escapeHtml(refs)}"></label>
+      </details>
       ${citationsAccordionHtml ? `
         <div class="activity-citations-panel" data-activity-citations>
           ${citationsAccordionHtml}

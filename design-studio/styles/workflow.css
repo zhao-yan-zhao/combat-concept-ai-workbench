@@ -301,7 +301,7 @@
 /* play sheen once after each chip finishes sliding in */
 .project-rail:hover .step-expand::after,
 .project-rail:focus-within .step-expand::after {
-  animation: step-expand-sheen .55s cubic-bezier(.33, .1, .25, 1) forwards;
+  animation: none;
   animation-delay: calc(var(--step-stagger) + 120ms);
 }
 .project-rail:hover .step-node.locked .step-expand,
@@ -433,17 +433,6 @@
   0%, 100% { opacity: .55; transform: scale(0.92); }
   50% { opacity: 1; transform: scale(1.05); }
 }
-@keyframes step-expand-sheen {
-  0% {
-    transform: translate3d(-110%, 0, 0);
-    opacity: 0;
-  }
-  12% { opacity: 1; }
-  78% { opacity: 1; }
-  100% {
-    transform: translate3d(320%, 0, 0);
-    opacity: 0;
-  }
 }
 @keyframes step-expand-active-glow {
   0%, 100% {
