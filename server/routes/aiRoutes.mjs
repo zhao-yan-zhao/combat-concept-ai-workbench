@@ -125,7 +125,13 @@ export function createAiHandlers(runtime) {
         const aiDraft = await callOpenAi(input, base);
         publish(job, { type: "done", output: mergeAiDraft(base, aiDraft), fallback: "sync" });
       } catch (fallbackError) {
-        publish(job, { type: "error", message: String(fallbackError?.message || error?.message || "AI 流式生成失败") });
+        publish(job, {
+          type: "error",
+          message: String(fallbackError?.message || error?.message || "AI 流式生成失败"),
+          name: fallbackError?.name || error?.name,
+          validationErrors: fallbackError?.validationErrors || error?.validationErrors,
+          rawOutput: fallbackError?.rawOutput || error?.rawOutput
+        });
       }
     } finally {
       job.done = true;
@@ -172,6 +178,15 @@ export function createAiHandlers(runtime) {
     } catch (error) {
       const status = Number(error?.statusCode) || 500;
       const message = String(error?.message || "AI 生成失败").slice(0, 1200);
+      if (error?.name === "SchemaValidationError" || error?.validationErrors || error?.rawOutput) {
+        send(response, status, JSON.stringify({
+          error: error.message,
+          name: error.name || "SchemaValidationError",
+          validationErrors: error.validationErrors || [],
+          rawOutput: error.rawOutput || ""
+        }), "application/json;charset=utf-8");
+        return;
+      }
       send(response, status, message, "text/plain;charset=utf-8");
     }
   }

@@ -1,6 +1,7 @@
 /** OpenAI-compatible generation helpers. */
 
 import { normalizeDodafOv1 } from "../shared/dodaf/products.js";
+import { validateSchema } from "../shared/schemaValidator.js";
 
 export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromptOverrides = () => ({}) }) {
   const getConfig = () => getAiServiceConfig();
@@ -11,6 +12,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     const body = makeGenerationRequest(input, base, false);
     const timeoutMs = generationTimeoutMs(input);
     const primaryUrl = resolveApiUrl(getConfig().baseUrl, undefined, isResearchChat);
+    const targetSchema = resolveDraftSchema(input.workflow?.outputSchema, isResearchChat);
     let apiResponse;
     try {
       const result = await postOpenAi(primaryUrl, body, { timeoutMs, isResearchChat });
@@ -20,7 +22,68 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     }
     if (!apiResponse.ok) throw new Error(await apiResponse.text());
     const data = await apiResponse.json();
-    return parseJsonObject(extractOutputText(data));
+    const rawText1 = extractOutputText(data);
+    let draft = parseJsonObject(rawText1);
+
+    // M5-T5.2 结构校验与自动重试 1 次
+    const validation = validateSchema(draft, targetSchema);
+    if (!validation.valid) {
+      // 触发自动纠错重试 1 次
+      const correctionPrompt = `【Schema结构校验未通过】：上一轮输出的 JSON 存在以下 ${validation.errors.length} 处格式错误：\n${validation.errors.slice(0, 6).map((e) => `- ${e}`).join("\n")}\n请严格根据 Schema 规范修正上述字段，重新完整输出纯 JSON 对象。`;
+      const retryBody = {
+        ...body,
+        messages: Array.isArray(body.messages)
+          ? [
+              ...body.messages,
+              { role: "assistant", content: rawText1 },
+              { role: "user", content: correctionPrompt }
+            ]
+          : body.messages,
+        input: body.input ? `${body.input}\n\n${correctionPrompt}` : correctionPrompt
+      };
+
+      try {
+        const retryResult = await postOpenAi(primaryUrl, retryBody, { timeoutMs, isResearchChat });
+        if (retryResult.response.ok) {
+          const retryData = await retryResult.response.json();
+          const rawText2 = extractOutputText(retryData);
+          const draft2 = parseJsonObject(rawText2);
+          const validation2 = validateSchema(draft2, targetSchema);
+          if (validation2.valid) {
+            draft = draft2;
+            Object.defineProperty(draft, "_rawOutput", { value: rawText2, writable: true, configurable: true, enumerable: false });
+            return draft;
+          }
+          const schemaErr = new Error(`AI 输出未能通过 Schema 结构校验 (已自动重试 1 次仍未通过): ${validation2.errors.slice(0, 3).join("; ")}`);
+          schemaErr.name = "SchemaValidationError";
+          schemaErr.statusCode = 422;
+          schemaErr.validationErrors = validation2.errors;
+          schemaErr.rawOutput = rawText2;
+          schemaErr.draft = draft2;
+          throw schemaErr;
+        }
+      } catch (retryError) {
+        if (retryError.name === "SchemaValidationError") throw retryError;
+        const schemaErr = new Error(`AI 输出未能通过 Schema 结构校验 (自动纠错重试未成功): ${validation.errors.slice(0, 3).join("; ")}`);
+        schemaErr.name = "SchemaValidationError";
+        schemaErr.statusCode = 422;
+        schemaErr.validationErrors = validation.errors;
+        schemaErr.rawOutput = rawText1;
+        schemaErr.draft = draft;
+        throw schemaErr;
+      }
+
+      const schemaErr = new Error(`AI 输出未能通过 Schema 结构校验 (已重试 1 次): ${validation.errors.slice(0, 3).join("; ")}`);
+      schemaErr.name = "SchemaValidationError";
+      schemaErr.statusCode = 422;
+      schemaErr.validationErrors = validation.errors;
+      schemaErr.rawOutput = rawText1;
+      schemaErr.draft = draft;
+      throw schemaErr;
+    }
+
+    Object.defineProperty(draft, "_rawOutput", { value: rawText1, writable: true, configurable: true, enumerable: false });
+    return draft;
   }
 
   /** Structured planning drafts need more wall time than short chat replies. */
@@ -438,45 +501,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     ].join("\n");
 
     const instructions = useOverrides ? resolvePrompt("ai.generate.instructions", "你是专业、克制、可追溯的作战概念研究助手。只返回合法 JSON，不输出 Markdown 代码块。") : "你是专业、克制、可追溯的作战概念研究助手。只返回合法 JSON，不输出 Markdown 代码块。";
-    const schema = isOperationalConceptGraphic
-      ? operationalConceptGraphicSchema()
-      : isCombatFocusOptions
-        ? combatFocusOptionsSchema()
-        : isOperationalTaskDraft
-          ? operationalTaskDraftSchema()
-        : isForceMissionPlan
-          ? forceMissionPlanSchema()
-          : isOrganizationRelationshipDraft
-            ? organizationRelationshipDraftSchema()
-          : isResourceFlowDraft
-            ? resourceFlowDraftSchema()
-          : isPhaseActionConcept
-            ? phaseActionConceptSchema()
-            : isRuleLibraryChangeSet
-            ? ruleLibraryChangeSetSchema()
-            : isTaskOrganizationDraft
-              ? taskOrganizationDraftSchema()
-            : isRuleLibraryDraft
-              ? ruleLibraryDraftSchema()
-            : isSequenceDraft
-              ? sequenceDraftSchema()
-              : isStateMachineDraft
-                ? stateMachineDraftSchema()
-                : isActivityDecompositionDraft
-                  ? activityDecompositionDraftSchema()
-                  : isTaskActivityMappingDraft
-                    ? taskActivityMappingDraftSchema()
-                    : isStateActivityMappingDraft
-                      ? stateActivityMappingDraftSchema()
-              : isConceptGraphicPlan
-                ? conceptGraphicPlanSchema()
-                : isConceptMapInitialPlan
-                  ? conceptMapInitialPlanSchema()
-                  : isResearchChat
-                    ? researchChatAnswerSchema()
-                    : isConceptBrief
-                      ? conceptBriefSchema()
-                      : genericAiDraftSchema();
+    const schema = resolveDraftSchema(input?.workflow?.outputSchema, isResearchChat);
 
     const temperature = typeof input?.temperature === "number"
       ? input.temperature
@@ -518,6 +543,32 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       },
       store: false
     };
+  }
+
+  function resolveDraftSchema(outputSchema, isResearchChat = false) {
+    if (isResearchChat) return researchChatAnswerSchema();
+    switch (outputSchema) {
+      case "OperationalConceptGraphic": return operationalConceptGraphicSchema();
+      case "CombatFocusOptions": return combatFocusOptionsSchema();
+      case "OperationalTaskDraft": return operationalTaskDraftSchema();
+      case "ForceMissionPlan": return forceMissionPlanSchema();
+      case "OrganizationRelationshipDraft": return organizationRelationshipDraftSchema();
+      case "ResourceFlowDraft": return resourceFlowDraftSchema();
+      case "PhaseActionConcept": return phaseActionConceptSchema();
+      case "RuleLibraryChangeSet": return ruleLibraryChangeSetSchema();
+      case "TaskOrganizationDraft": return taskOrganizationDraftSchema();
+      case "RuleLibraryDraft": return ruleLibraryDraftSchema();
+      case "SequenceDraft": return outputSchema === "SequenceDraft" ? sequenceDraftSchema() : genericAiDraftSchema();
+      case "StateMachineDraft": return stateMachineDraftSchema();
+      case "ActivityDecompositionDraft": return activityDecompositionDraftSchema();
+      case "TaskActivityMappingDraft": return taskActivityMappingDraftSchema();
+      case "StateActivityMappingDraft": return stateActivityMappingDraftSchema();
+      case "ConceptGraphicPlan": return conceptGraphicPlanSchema();
+      case "ConceptMapInitialPlan": return conceptMapInitialPlanSchema();
+      case "ScenarioDraft": return scenarioDraftSchema();
+      case "ConceptBrief": return conceptBriefSchema();
+      default: return genericAiDraftSchema();
+    }
   }
 
   function buildResearchChatMessages(input, systemInstructions, promptContent) {
@@ -1819,6 +1870,65 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       }
     };
   }
+
+  function scenarioDraftSchema() {
+    return {
+      type: "object",
+      additionalProperties: false,
+      required: ["title", "summary", "entities", "timeline", "narrative"],
+      properties: {
+        title: { type: "string", maxLength: 120 },
+        summary: { type: "string", maxLength: 600 },
+        entities: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["id", "label", "side"],
+            properties: {
+              id: { type: "string", maxLength: 80 },
+              label: { type: "string", maxLength: 120 },
+              role: { type: "string", maxLength: 80 },
+              side: { type: "string", maxLength: 40 },
+              position: { type: "array" },
+              platform: { type: "string", maxLength: 120 },
+              task: { type: "string", maxLength: 300 }
+            }
+          }
+        },
+        areas: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["id", "label"],
+            properties: {
+              id: { type: "string", maxLength: 80 },
+              label: { type: "string", maxLength: 120 },
+              type: { type: "string", maxLength: 80 },
+              position: { type: "array" },
+              size: { type: "number" },
+              geometryType: { type: "string", maxLength: 80 },
+              points: { type: "array" }
+            }
+          }
+        },
+        timeline: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["time", "title", "description"],
+            properties: {
+              time: { type: "string", maxLength: 40 },
+              phase: { type: "string", maxLength: 80 },
+              title: { type: "string", maxLength: 160 },
+              description: { type: "string", maxLength: 800 },
+              impact: { type: "string", maxLength: 400 }
+            }
+          }
+        },
+        narrative: { type: "string", maxLength: 1200 }
+      }
+    };
+  }
   
   function operationalConceptGraphicSchema() {
     const text = { type: "string" };
@@ -2114,9 +2224,13 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     mergeAiDraft,
     listPromptDefinitions,
     fetchUpstreamModels,
-    sanitizeActivityDecompositionCitations
+    sanitizeActivityDecompositionCitations,
+    resolveDraftSchema,
+    validateDraft: (draft, schema) => validateSchema(draft, schema)
   };
 }
+
+export { validateSchema };
 
 function generationPromptId(schema, researchChat = false) {
   if (researchChat) return "ai.generate.research-chat";

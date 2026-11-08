@@ -843,6 +843,30 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：149/149 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
+### 2026-11-08 T5.2 真实落地：结构校验与自动重试机制
+
+- **实施内容**：
+  1. 纯净轻量 JSON Schema 校验器 (`shared/schemaValidator.js`)：
+     - 零外部 npm 依赖，严格支持 `type`、`required`、`properties`、`items`、`minItems`/`maxItems`、`minimum`/`maximum`、`enum` 与字符串长度递归校验；
+     - 提供结构化校验结果 `{ valid: boolean, errors: string[] }`，精确定位字段路径与语义错误；
+  2. 服务端输出校验与自动纠错重试 (`server/openaiClient.mjs`)：
+     - `resolveDraftSchema(outputSchema, isResearchChat)`：统一对齐各输出 Schema 契约；
+     - 模型生成后先经校验：初次通过则直接返回，并附加 `_rawOutput` 原始输出元数据；
+     - 初次校验未通过时：自动向大模型发起第 2 次纠错请求（Correction Retry），将错误清单精准提示给模型并要求修正重新输出；
+     - 若重试 1 次后仍未通过：抛出结构化 `SchemaValidationError` (HTTP 422)，携带详细错误清单与原始输出 `rawOutput`；
+  3. API 路由层错误与原始输出透传 (`server/routes/aiRoutes.mjs`)：
+     - `handleGenerate` 与 `handleGenerateStreamJob` 捕获到 `SchemaValidationError` 时，向客户端返回 JSON 格式的可读错误，完整透传 `error`、`validationErrors` 与 `rawOutput` 供前端排查与诊断；
+  4. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m5-schema-validation-retry.mjs`，覆盖校验器全规则、初次通过场景、初次失败纠错重试成功场景、重试后仍失败抛出 422 异常并保留 `rawOutput` 场景；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
+- **验证命令与结果**：
+  - `node scripts/check-m5-schema-validation-retry.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：31/31 PASS (100%)
+  - `node scripts/run-checks.mjs server`：23/23 PASS (100%)
+  - `node scripts/run-checks.mjs all`：150/150 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+
 
 
 
