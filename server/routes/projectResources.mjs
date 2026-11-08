@@ -72,6 +72,15 @@ export function createProjectResourceHandlers(runtime) {
       sendJson(response, 400, { error: error.message || "项目审计请求无效" });
     }
   }
+
+  async function handleRecordProjectAudit(request, response, projectId) {
+    try {
+      const input = await readAuthorizedProjectInput(request);
+      sendJson(response, 201, await projectRepository.recordAudit(projectId, input));
+    } catch (error) {
+      sendJson(response, error.statusCode || 400, { error: error.message || "记录项目审计事件失败" });
+    }
+  }
   
   async function handleProjectCollaboration(response, projectId) {
     try {
@@ -314,6 +323,7 @@ export function createProjectResourceHandlers(runtime) {
     handleProjectReset,
     handleProjectBrief,
     handleProjectAudit,
+    handleRecordProjectAudit,
     handleProjectCollaboration,
     handleProjectCollaborationReview,
     handleProjectCollaborationDecision,

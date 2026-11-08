@@ -484,6 +484,7 @@ function renderReport(state) {
   const obsidianArchive = state.obsidianArchive;
   const templates = listReportTemplates();
   const selectedTemplate = report.reportTemplate;
+  const projectClassification = state.project?.classification || state.project?.brief?.classification || "内部";
   return `
     <section class="surface surface-pad">
       <div class="section-heading"><div><h2>成果报告</h2><p>将概念、活动、OODA、想定和验证结论汇总为可归档成果。</p></div><span class="mini-tag">${state.ov5.activities.length} 项活动 · ${evidenceCount} 条证据</span></div>
@@ -491,6 +492,7 @@ function renderReport(state) {
       <div class="report-layout">
         <div class="export-list">
           <article class="export-item report-template-selector"><div><strong>导出模板</strong><span>${escapeHtml(selectedTemplate.description)}；归档后固定到该报告版本。</span></div><label><span class="sr-only">导出模板</span><select data-report-template>${templates.map((template) => `<option value="${escapeHtml(template.id)}" ${template.id === selectedTemplate.id ? "selected" : ""}>${escapeHtml(template.label)}</option>`).join("")}</select></label></article>
+          <article class="export-item report-classification-selector"><div><strong>密级标识</strong><span>项目级密级标注，导出文档页眉页脚与审计日志统一携带。</span></div><div class="classification-control-group" style="display:flex;gap:6px;align-items:center;"><label><span class="sr-only">密级预设</span><select data-report-classification-preset>${["内部", "公开", "受限", "机密"].map((level) => `<option value="${escapeHtml(level)}" ${projectClassification === level ? "selected" : ""}>${escapeHtml(level)}</option>`).join("")}<option value="custom" ${!["内部", "公开", "受限", "机密"].includes(projectClassification) ? "selected" : ""}>自定义…</option></select></label><input type="text" data-report-classification class="text-input mini-input" value="${escapeHtml(projectClassification)}" placeholder="密级标注" maxlength="40" style="${["内部", "公开", "受限", "机密"].includes(projectClassification) ? "display:none;width:110px;" : "width:110px;"}"></div></article>
           <article class="export-item"><div><strong>研究报告</strong><span>概念简报、模型、部署桥接、红方审阅、成熟度与证据</span></div><button class="quiet-button" data-export="markdown">Markdown</button></article>
           <article class="export-item"><div><strong>想定数据包</strong><span>活动、时序、部署状态、证据摘要与成熟度</span></div><button class="quiet-button" data-export="json">JSON</button></article>
           <article class="export-item"><div><strong>结构化报告</strong><span>面向系统交换的概念、模型、想定与验证 XML</span></div><button class="quiet-button" data-export="xml">XML</button></article>

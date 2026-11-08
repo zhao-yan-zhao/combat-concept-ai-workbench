@@ -1,4 +1,4 @@
-﻿param(
+param(
     [Parameter(Mandatory = $true)]
     [string]$InputPath,
 
@@ -123,10 +123,12 @@ try {
     $word = New-WordApplication
     $document = $word.Documents.Add()
     $title = "$(As-Text (Get-PropertyValue $project 'title') '作战概念研究') $templateTitle"
-    $document.Sections.Item(1).Headers.Item(1).Range.Text = "作战概念研究工作台 | $templateTitle"
+    $classification = As-Text (Get-PropertyValue $payload 'classification') (As-Text (Get-PropertyValue $project 'classification') '内部')
+    $document.Sections.Item(1).Headers.Item(1).Range.Text = "作战概念研究工作台 | $templateTitle | 密级标识：$classification"
     $null = $document.Sections.Item(1).Footers.Item(1).PageNumbers.Add()
 
     Add-Paragraph $document $title $wdStyleTitle
+    Add-Paragraph $document "密级标识：$classification"
     Add-Paragraph $document "报告模板：$templateLabel"
     Add-Paragraph $document "报告版本：$(As-Text (Get-PropertyValue $reportVersion 'label') '未归档草稿')"
     Add-Paragraph $document "生成时间：$(As-Text (Get-PropertyValue $payload 'generatedAt'))"

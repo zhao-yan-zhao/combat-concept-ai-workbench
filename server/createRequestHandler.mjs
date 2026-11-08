@@ -94,9 +94,15 @@ export function createRequestHandler(runtime) {
         return;
       }
       const projectAuditMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/audit$/);
-      if (projectAuditMatch && request.method === "GET") {
-        await projects.handleProjectAudit(request, response, decodeProjectId(projectAuditMatch[1]), url.searchParams.get("limit"));
-        return;
+      if (projectAuditMatch) {
+        if (request.method === "GET") {
+          await projects.handleProjectAudit(request, response, decodeProjectId(projectAuditMatch[1]), url.searchParams.get("limit"));
+          return;
+        }
+        if (request.method === "POST") {
+          await projects.handleRecordProjectAudit(request, response, decodeProjectId(projectAuditMatch[1]));
+          return;
+        }
       }
       const projectCollaborationMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/collaboration$/);
       if (projectCollaborationMatch && request.method === "GET") {

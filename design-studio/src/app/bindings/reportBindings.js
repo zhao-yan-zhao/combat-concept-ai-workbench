@@ -4,6 +4,7 @@ import { deleteReportVersion, saveReportVersion } from "../../reportVersionStore
 import { requestReportDocx, requestReportPdf, requestReportPptx } from "../../reportDocumentClient.js";
 import { createReportIntegrity, verifyReportIntegrity } from "../../reportIntegrity.js";
 import { downloadBlob } from "../domUtils.js";
+import { recordProjectAudit, updateProject } from "../../projectBriefClient.js";
 
 /**
  * Bind report export, template selection, and version archive events.
@@ -35,6 +36,29 @@ export function bindReportEvents(ctx) {
       state.reportTemplate = saveReportTemplate(control.value);
       render();
     }, "report-template:change");
+  });
+
+  document.querySelectorAll("[data-report-classification-preset]").forEach((control) => {
+    addEventListenerOnce(control, "change", () => {
+      const val = control.value;
+      const input = document.querySelector("[data-report-classification]");
+      if (val === "custom") {
+        if (input) {
+          input.style.display = "";
+          input.focus();
+        }
+      } else {
+        if (input) input.style.display = "none";
+        void updateProjectClassification(ctx, val);
+      }
+    }, "report-classification-preset:change");
+  });
+
+  document.querySelectorAll("[data-report-classification]").forEach((input) => {
+    addEventListenerOnce(input, "change", () => {
+      const val = input.value.trim() || "内部";
+      void updateProjectClassification(ctx, val);
+    }, "report-classification:change");
   });
 
   document.querySelectorAll("[data-version-export]").forEach((button) => {
@@ -79,9 +103,11 @@ export function handleReportAction(action, source, ctx) {
 }
 
 export function exportArtifact(type, ctx) {
-  const { downloadArtifact } = ctx;
-  const artifact = buildExportArtifact(type, exportContext(ctx));
+  const { downloadArtifact, state } = ctx;
+  const context = exportContext(ctx);
+  const artifact = buildExportArtifact(type, context);
   downloadArtifact(artifact);
+  void recordExportAudit(ctx, { format: type, templateId: state.reportTemplate?.id, classification: context.project?.classification || state.project?.classification });
 }
 
 export async function exportWordReport(ctx) {
@@ -95,6 +121,7 @@ export async function exportWordReportPayload(payload, ctx) {
     const document = await requestReportDocx(payload);
     downloadBlob(document.blob, document.filename);
     showToast("Word 报告已生成");
+    void recordExportAudit(ctx, { format: "docx", templateId: payload.reportTemplate?.id, classification: payload.classification });
   } catch (error) {
     const artifact = buildExportArtifactFromPayload("rtf", payload);
     downloadArtifact(artifact);
@@ -116,6 +143,7 @@ export async function exportPdfReportPayload(payload, ctx) {
     printWindow?.close();
     downloadBlob(document.blob, document.filename);
     showToast("PDF 报告已生成");
+    void recordExportAudit(ctx, { format: "pdf", templateId: payload.reportTemplate?.id, classification: payload.classification });
   } catch (error) {
     if (!printWindow) {
       showToast("PDF 服务不可用，请允许弹窗后重试");
@@ -138,6 +166,7 @@ export async function exportPptxReportPayload(payload, ctx) {
     const document = await requestReportPptx(payload);
     downloadBlob(document.blob, document.filename);
     showToast("PPTX 研究汇报已生成");
+    void recordExportAudit(ctx, { format: "pptx", templateId: payload.reportTemplate?.id, classification: payload.classification });
   } catch (error) {
     showToast("PPTX 服务不可用，请在活动桌面会话中启动 Workbench server 后重试");
   }
@@ -163,6 +192,7 @@ export function exportReportVersion(type, versionId, ctx) {
     return;
   }
   downloadArtifact(buildExportArtifactFromPayload(type, version.payload));
+  void recordExportAudit(ctx, { format: `${type}-archive`, templateId: version.payload?.reportTemplate?.id, classification: version.payload?.classification });
 }
 
 export async function verifyArchivedReportVersion(versionId, ctx) {
@@ -288,4 +318,38 @@ export function exportContext(ctx) {
       modelSnapshots: state.modelSnapshotStorage
     }
   };
+}
+
+
+export async function updateProjectClassification(ctx, classification) {
+  const { state, render, project, showToast } = ctx;
+  const level = String(classification || "").trim() || "内部";
+  if (state.project) state.project.classification = level;
+  if (project) project.classification = level;
+  try {
+    const projectId = project?.id || state.project?.id || "default";
+    await updateProject(projectId, { classification: level });
+    showToast(`项目密级已标注为：${level}`);
+  } catch (error) {
+    console.warn("更新项目密级失败:", error);
+  }
+  render();
+}
+
+export async function recordExportAudit(ctx, { format, templateId, classification }) {
+  const { state, project } = ctx;
+  const projectId = project?.id || state?.project?.id || "default";
+  const level = classification || state?.project?.classification || state?.project?.brief?.classification || "内部";
+  const template = templateId || state?.reportTemplate?.id || "tactic-doc";
+  try {
+    await recordProjectAudit(projectId, {
+      action: "report.exported",
+      format,
+      templateId: template,
+      classification: level,
+      summary: `导出成果报告（格式：${format}，模板：${template}，密级：${level}）`
+    });
+  } catch (error) {
+    console.warn("记录导出审计日志失败:", error);
+  }
 }

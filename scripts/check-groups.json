@@ -125,7 +125,8 @@
     "check-reduced-motion-and-disclosure.mjs",
     "check-empty-states-actionable.mjs",
     "check-command-palette.mjs",
-    "check-m4-report-templates.mjs"
+    "check-m4-report-templates.mjs",
+    "check-report-classification-and-audit.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",

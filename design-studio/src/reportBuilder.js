@@ -86,11 +86,13 @@ export function buildReportPayload({ project, brief, inspiration, direction, for
   const ov6c = persistedOv6c || buildOv6cModel({ ooda, scenario });
   const ov1c = buildOv1cModel({ forceMission, ov5, ov1c: persistedOv1c || { mappings: [] } });
   const ov7 = buildOv7Model({ ov5, ov6b, ov7: persistedOv7 || { mappings: [] } });
+  const classification = inline(project?.classification || project?.brief?.classification || "内部") || "内部";
   return {
     generatedAt: new Date().toISOString(),
+    classification,
     reportTemplate: getReportTemplate(reportTemplate),
     standard: "DoDAF-2.02-DM2",
-    project: { title: project.title, direction, brief: reportBrief, citations: project.citations },
+    project: { id: project?.id, title: project.title, kind: project?.kind, classification, direction, brief: reportBrief, citations: project.citations },
     inspiration: toInspirationReportSnapshot(inspiration),
     ov1: ov1Snapshot,
     ov1c,
@@ -189,6 +191,8 @@ export function buildMarkdownReport(payload) {
     `Template purpose: ${inline(template.description)}`,
     "",
     `# ${inline(payload.project.title)} ${inline(template.documentTitle)}`,
+    "",
+    `> **密级标识**：${inline(payload.classification || "内部")}`,
     "",
     `报告版本：${inline(payload.reportVersion?.label || "未归档草稿")}`,
     payload.reportVersion?.savedAt ? `归档时间：${inline(payload.reportVersion.savedAt)}` : "",
@@ -293,7 +297,10 @@ export function buildMarkdownReport(payload) {
     ...renderModelGovernanceSection(payload.modelGovernance),
     "",
     "## 概念引用",
-    ...payload.project.citations.map((citation) => `- ${inline(citation.title)}：${inline(citation.text)}（${inline(citation.ref)}）`)
+    ...payload.project.citations.map((citation) => `- ${inline(citation.title)}：${inline(citation.text)}（${inline(citation.ref)}）`),
+    "",
+    "---",
+    `*密级标识：${inline(payload.classification || "内部")} · 作战概念研究工作台*`
   ];
   return lines.join("\n");
 }
@@ -304,6 +311,8 @@ function buildTacticDocMarkdown(payload, template) {
     `Template purpose: ${inline(template.description)}`,
     "",
     `# ${inline(payload.project.title)} ${inline(template.documentTitle)}`,
+    "",
+    `> **密级标识**：${inline(payload.classification || "内部")}`,
     "",
     `报告版本：${inline(payload.reportVersion?.label || "未归档草稿")}`,
     payload.reportVersion?.savedAt ? `归档时间：${inline(payload.reportVersion.savedAt)}` : "",
@@ -373,7 +382,10 @@ function buildTacticDocMarkdown(payload, template) {
     ...payload.validationMaturity.checks.map((check) => `- [${inline(check.statusLabel)}] ${inline(check.label)}：${inline(check.detail)}`),
     "",
     "## 九、溯源证据与引用附录",
-    ...renderKnowledgeSection(payload.knowledge)
+    ...renderKnowledgeSection(payload.knowledge),
+    "",
+    "---",
+    `*密级标识：${inline(payload.classification || "内部")} · 作战概念研究工作台*`
   ];
   return lines.filter((line) => line !== null && line !== undefined).join("\n");
 }
@@ -384,6 +396,8 @@ function buildScenarioDocMarkdown(payload, template) {
     `Template purpose: ${inline(template.description)}`,
     "",
     `# ${inline(payload.project.title)} ${inline(template.documentTitle)}`,
+    "",
+    `> **密级标识**：${inline(payload.classification || "内部")}`,
     "",
     `报告版本：${inline(payload.reportVersion?.label || "未归档草稿")}`,
     payload.reportVersion?.savedAt ? `归档时间：${inline(payload.reportVersion.savedAt)}` : "",
@@ -420,7 +434,10 @@ function buildScenarioDocMarkdown(payload, template) {
     ...renderOv1Section(payload.ov1),
     "### 验证与一致性核对",
     ...renderValidationSection(payload.validation),
-    ...renderKnowledgeSection(payload.knowledge)
+    ...renderKnowledgeSection(payload.knowledge),
+    "",
+    "---",
+    `*密级标识：${inline(payload.classification || "内部")} · 作战概念研究工作台*`
   ];
   return lines.filter((line) => line !== null && line !== undefined).join("\n");
 }
@@ -431,6 +448,8 @@ function buildWargameReviewMarkdown(payload, template) {
     `Template purpose: ${inline(template.description)}`,
     "",
     `# ${inline(payload.project.title)} ${inline(template.documentTitle)}`,
+    "",
+    `> **密级标识**：${inline(payload.classification || "内部")}`,
     "",
     `报告版本：${inline(payload.reportVersion?.label || "未归档草稿")}`,
     payload.reportVersion?.savedAt ? `归档时间：${inline(payload.reportVersion.savedAt)}` : "",
@@ -469,21 +488,28 @@ function buildWargameReviewMarkdown(payload, template) {
     ...renderDerivedTransitions(payload.ov6b),
     "",
     "## 六、参考依据与数据来源",
-    ...renderKnowledgeSection(payload.knowledge)
+    ...renderKnowledgeSection(payload.knowledge),
+    "",
+    "---",
+    `*密级标识：${inline(payload.classification || "内部")} · 作战概念研究工作台*`
   ];
   return lines.filter((line) => line !== null && line !== undefined).join("\n");
 }
 
 export function buildRtfReport(payload) {
+  const classification = payload.classification || payload.project?.classification || "内部";
+  const headerRtf = `{\\header \\qr \\fs18 \\i ${rtf(`密级标识：${classification}`)} \\par}`;
+  const footerRtf = `{\\footer \\qc \\fs18 \\i ${rtf(`密级标识：${classification}`)} \\par}`;
   const lines = buildMarkdownReport(payload).split("\n");
   return [
-    "{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Calibri;}}\\paperw11906\\paperh16838\\margl1440\\margr1440\\margt1440\\margb1440\\fs22",
+    `{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Calibri;}}\\paperw11906\\paperh16838\\margl1440\\margr1440\\margt1440\\margb1440\\fs22\n${headerRtf}\n${footerRtf}`,
     ...lines.map(renderRtfLine),
     "}"
   ].join("\n");
 }
 
 function renderRtfLine(line) {
+  if (line.startsWith("> **密级标识**：")) return `\\pard\\qc\\b\\fs22 ${rtf(line.replace(/^>\s*/, ""))}\\b0\\fs22\\par`;
   if (line.startsWith("# ")) return `\\pard\\qc\\b\\fs32 ${rtf(line.slice(2))}\\b0\\fs22\\par`;
   if (line.startsWith("## ")) return `\\pard\\sb240\\sa120\\b\\fs28 ${rtf(line.slice(3))}\\b0\\fs22\\par`;
   if (line.startsWith("### ")) return `\\pard\\sb160\\sa80\\b\\fs24 ${rtf(line.slice(4))}\\b0\\fs22\\par`;
@@ -493,6 +519,7 @@ function renderRtfLine(line) {
 export function buildXmlReport(payload) {
   const template = getReportTemplate(payload.reportTemplate);
   const project = payload.project || {};
+  const classification = payload.classification || project.classification || "内部";
   const ov1 = payload.ov1 || {};
   const ov2 = payload.ov2 || {};
   const ov3 = payload.ov3 || {};
@@ -514,10 +541,12 @@ export function buildXmlReport(payload) {
   const traceability = payload.traceability || {};
   const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    `<combatConceptResearchReport schemaVersion="1" generatedAt="${xml(payload.generatedAt)}" reportVersion="${xml(payload.reportVersion?.label || "draft")}" reportTemplateId="${xml(template.id)}">`,
+    `<combatConceptResearchReport schemaVersion="1" generatedAt="${xml(payload.generatedAt)}" reportVersion="${xml(payload.reportVersion?.label || "draft")}" reportTemplateId="${xml(template.id)}" classification="${xml(classification)}">`,
     `  <reportTemplate id="${xml(template.id)}"><label>${xml(template.label)}</label><documentTitle>${xml(template.documentTitle)}</documentTitle><description>${xml(template.description)}</description></reportTemplate>`,
+    `  <classification>${xml(classification)}</classification>`,
     "  <project>",
     xmlElement("title", project.title, 2),
+    xmlElement("classification", classification, 2),
     xmlElement("direction", project.direction, 2),
     xmlElement("objective", project.brief?.objective, 2),
     xmlElement("approach", project.brief?.approach, 2),

@@ -63,6 +63,14 @@ export async function loadProjectAudit(projectId, limit = 20) {
   return request(`${PROJECT_API_ROOT}/${encodeURIComponent(projectId)}/audit?limit=${encodeURIComponent(limit)}`);
 }
 
+export async function recordProjectAudit(projectId, { action = "report.exported", format, templateId, classification, summary } = {}) {
+  return request(`${PROJECT_API_ROOT}/${encodeURIComponent(projectId)}/audit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, format, templateId, classification, summary })
+  });
+}
+
 export async function loadProjectCollaboration(projectId) {
   return request(`${PROJECT_API_ROOT}/${encodeURIComponent(projectId)}/collaboration`);
 }
