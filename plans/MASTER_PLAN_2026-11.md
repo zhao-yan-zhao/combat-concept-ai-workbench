@@ -771,6 +771,30 @@ node scripts/smoke-ui.mjs
 - **验证命令与结果**：
   - 文件已生成：`plans/USABILITY_TEST_SCRIPT.md`，内容完整符合规范。
 
+### 2026-11-08 T4.1 真实落地：默认成果模板与项目类型适配
+
+- **实施内容**：
+  1. 三套成果模板规范与章节定义 (`design-studio/src/reportTemplateStore.js`)：
+     - `tactic-doc`（战法说明）：覆盖 9 大可编辑章节（一、问题与背景 → 二、对手体系分析 → 三、战法核心思想 → 四、力量运用与编组 → 五、实施阶段与时序 → 六、制胜机理与因果协同 OV-5/OODA → 七、风险评估与反制应对 → 八、评估结论与效能指标 → 九、溯源证据与引用附录）；
+     - `scenario-doc`（想定文书）：覆盖 6 大可编辑章节（一、想定背景与初始态势 → 二、作战环境与时空边界 → 三、双方企图与作战编成 → 四、阶段设定与裁决节点 → 五、推演与交战规则 ROE/OV-6a → 六、附件与态势图件 OV-1/OV-2）；
+     - `wargame-review`（推演复盘）：覆盖 6 大可编辑章节（一、推演概况与参演编组 → 二、各阶段推进结果与战损 → 三、关键决策点与对抗博弈 → 四、执行偏差与成因深度剖析 → 五、体系机理与战法改进建议 → 六、参考依据与数据来源）；
+     - 保留 `research-standard`、`review-evidence`、`exchange-baseline` 既有通用模板，确保 100% 向后兼容；
+  2. 基于 `project.kind` 的默认模板智能解析：
+     - 提供 `resolveDefaultTemplateId(projectKind)`，战法设计项目默认解析为 `tactic-doc`，想定推演项目默认解析为 `scenario-doc`；
+     - 在 `design-studio/src/app/createInitialState.js` 中接入 `loadReportTemplate(project?.kind)`，项目初始化与创建时自动应用最契合的模板；
+  3. 报告导出生成器章节适配与鲁棒性增强 (`design-studio/src/reportBuilder.js`)：
+     - 新增 `buildTacticDocMarkdown`、`buildScenarioDocMarkdown`、`buildWargameReviewMarkdown` 专业大纲渲染流；
+     - 增强 `renderScenarioSection` 的防御式空值保护，支持自由结构与灵活演化；
+     - 自动联动 Word (RTF) 格式大纲分级标题导出；
+  4. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m4-report-templates.mjs`：全量覆盖三套新模板的字段定义、默认解析、9/6/6 章节标题渲染及 RTF 导出；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 组。
+- **验证命令与结果**：
+  - `node scripts/run-checks.mjs ui-static`：26/26 PASS (100%)
+  - `node scripts/run-checks.mjs all`：145/145 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+
 
 
 

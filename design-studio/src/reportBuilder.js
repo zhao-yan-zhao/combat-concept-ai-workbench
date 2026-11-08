@@ -175,6 +175,15 @@ export function buildReportPayload({ project, brief, inspiration, direction, for
 
 export function buildMarkdownReport(payload) {
   const template = getReportTemplate(payload.reportTemplate);
+  if (template.id === "tactic-doc") {
+    return buildTacticDocMarkdown(payload, template);
+  }
+  if (template.id === "scenario-doc") {
+    return buildScenarioDocMarkdown(payload, template);
+  }
+  if (template.id === "wargame-review") {
+    return buildWargameReviewMarkdown(payload, template);
+  }
   const lines = [
     `Report template: ${inline(template.label)} (${inline(template.id)})`,
     `Template purpose: ${inline(template.description)}`,
@@ -287,6 +296,182 @@ export function buildMarkdownReport(payload) {
     ...payload.project.citations.map((citation) => `- ${inline(citation.title)}：${inline(citation.text)}（${inline(citation.ref)}）`)
   ];
   return lines.join("\n");
+}
+
+function buildTacticDocMarkdown(payload, template) {
+  const lines = [
+    `Report template: ${inline(template.label)} (${inline(template.id)})`,
+    `Template purpose: ${inline(template.description)}`,
+    "",
+    `# ${inline(payload.project.title)} ${inline(template.documentTitle)}`,
+    "",
+    `报告版本：${inline(payload.reportVersion?.label || "未归档草稿")}`,
+    payload.reportVersion?.savedAt ? `归档时间：${inline(payload.reportVersion.savedAt)}` : "",
+    `生成时间：${payload.generatedAt}`,
+    "",
+    "## 一、问题与背景",
+    `- 作战意图与目标：${inline(payload.project.brief.objective)}`,
+    `- 核心突破思路：${inline(payload.project.brief.approach)}`,
+    `- 关键前提与假设：${inline(payload.project.brief.assumptions || "无特定假设")}`,
+    `- 预期效果：${inline(payload.project.brief.expectedEffects || "待定")}`,
+    "",
+    "## 二、对手体系分析",
+    `- 主要战术风险：${inline(payload.project.brief.risk || "未记录明显风险")}`,
+    ...renderOv4Section(payload.ov4),
+    "",
+    "## 三、战法核心思想",
+    `- 战法聚焦方向：${inline(payload.project.direction)}`,
+    ...renderInspirationSection(payload.inspiration),
+    "",
+    "## 四、力量运用与编组",
+    "### 组织编成与协同关系 (OV-4)",
+    ...renderOv4Section(payload.ov4),
+    "### 任务与活动映射 (OV-1c)",
+    ...renderMappingSection(payload.ov1c, "task"),
+    "",
+    "## 五、实施阶段与时序",
+    ...renderOv6cSection(payload.ov6c),
+    "",
+    "## 六、制胜机理与因果协同 (OV-5/OODA)",
+    "### OV-5a 作战活动工序分解",
+    ...renderActivityDecompositions(payload.ov5a, payload.ov5.activities),
+    "### OV-5b 杀伤网因果链路与活动模型",
+    `- 生成来源：${generationLabel(payload.ov5.provenance)}`,
+    ...evidenceSelectionLines(payload.ov5.provenance?.evidenceSelection),
+    "| 活动 | 类型 | 输入 | 输出 | 耗时 | 知识依据 |",
+    "| --- | --- | --- | --- | --- | --- |",
+    ...payload.ov5.activities.map((activity) => {
+      const citeStr = (activity.citations || []).map((c) => c.title || c.chunkId).filter(Boolean).join("、") || (activity.refs || []).join("、");
+      return `| ${cell(activity.title)} | ${cell(activity.type)} | ${cell(activity.input)} | ${cell(activity.output)} | ${cell(activity.duration)} | ${cell(citeStr)} |`;
+    }),
+    "",
+    `活动关联：${payload.ov5.edges.map((edge) => `${edge.sourceId} -> ${edge.targetId}（${edge.type}）`).join("；") || "未定义"}`,
+    "",
+    "### OODA 决策循环与时效分析",
+    `- 生成来源：${generationLabel(payload.ooda.provenance)}`,
+    `- 周期估算：${payload.ooda.durationMinutes || "待估算"} 分钟`,
+    ...payload.ooda.lanes.flatMap((lane) => [
+      `#### ${inline(lane.subtitle)}（${inline(lane.title)}）`,
+      ...(lane.nodes.length ? lane.nodes.map((node) => `- ${inline(node.title)}：输入 ${inline(node.input)}；输出 ${inline(node.output)}；耗时 ${inline(node.duration)}；规则 ${inline(node.rule)}；关联装备 ${inline((node.equipmentRefs || []).join("、") || "未关联")}；知识依据 ${inline((node.knowledgeRefs || []).join("、") || "未关联")}`) : ["- 未定义节点"])
+    ]),
+    "### 作战交战规则与协同约束 (OV-6a)",
+    ...renderDerivedRules(payload.ov6a),
+    "",
+    "## 七、风险评估与反制应对",
+    "### 状态迁移与异常处置 (OV-6b)",
+    ...renderDerivedTransitions(payload.ov6b),
+    "### 红方对抗质询与反制分析",
+    `- 红方质询：${inline(payload.validation?.redTeam || "未运行红方质询")}`,
+    "",
+    "## 八、评估结论与效能指标",
+    ...renderValidationSection(payload.validation),
+    ...renderTraceabilityDiagnosticsSection(payload.validation?.traceabilityDiagnostics),
+    ...renderOodaDiagnosticsSection(payload.validation?.oodaDiagnostics),
+    ...renderFlowDiagnosticsSection(payload.validation?.flowDiagnostics),
+    "### 验证成熟度",
+    `- 当前结论：${inline(payload.validationMaturity.label)}（${payload.validationMaturity.readyCount}/${payload.validationMaturity.totalCount} 项已满足）`,
+    ...payload.validationMaturity.checks.map((check) => `- [${inline(check.statusLabel)}] ${inline(check.label)}：${inline(check.detail)}`),
+    "",
+    "## 九、溯源证据与引用附录",
+    ...renderKnowledgeSection(payload.knowledge)
+  ];
+  return lines.filter((line) => line !== null && line !== undefined).join("\n");
+}
+
+function buildScenarioDocMarkdown(payload, template) {
+  const lines = [
+    `Report template: ${inline(template.label)} (${inline(template.id)})`,
+    `Template purpose: ${inline(template.description)}`,
+    "",
+    `# ${inline(payload.project.title)} ${inline(template.documentTitle)}`,
+    "",
+    `报告版本：${inline(payload.reportVersion?.label || "未归档草稿")}`,
+    payload.reportVersion?.savedAt ? `归档时间：${inline(payload.reportVersion.savedAt)}` : "",
+    `生成时间：${payload.generatedAt}`,
+    "",
+    "## 一、想定背景与初始态势",
+    `- 作战构想背景：${inline(payload.project.brief.objective)}`,
+    `- 核心行动方案：${inline(payload.project.brief.approach)}`,
+    ...renderScenarioSection(payload.scenario),
+    "",
+    "## 二、作战环境与时空边界",
+    `- 空间边界参考：抽象百分比网格与相对坐标系`,
+    ...renderDeploymentBridgeSection(payload.deploymentBridge),
+    "",
+    "## 三、双方企图与作战编成",
+    "### 作战组织与指挥架构 (OV-4)",
+    ...renderOv4Section(payload.ov4),
+    "### 作战资源流与交互需求 (OV-2 / OV-3)",
+    ...renderOv2Section(payload.ov2),
+    ...renderOv3Section(payload.ov3),
+    "",
+    "## 四、阶段设定与裁决节点",
+    ...renderOv6cSection(payload.ov6c),
+    ...renderMappingSection(payload.ov7, "state"),
+    "",
+    "## 五、推演与交战规则 (ROE/OV-6a)",
+    "### 交战规则与动作约束 (OV-6a)",
+    ...renderDerivedRules(payload.ov6a),
+    "### 状态迁移与裁决逻辑 (OV-6b)",
+    ...renderDerivedTransitions(payload.ov6b),
+    "",
+    "## 六、附件与态势图件 (OV-1/OV-2)",
+    "### 高层作战概念图 (OV-1)",
+    ...renderOv1Section(payload.ov1),
+    "### 验证与一致性核对",
+    ...renderValidationSection(payload.validation),
+    ...renderKnowledgeSection(payload.knowledge)
+  ];
+  return lines.filter((line) => line !== null && line !== undefined).join("\n");
+}
+
+function buildWargameReviewMarkdown(payload, template) {
+  const lines = [
+    `Report template: ${inline(template.label)} (${inline(template.id)})`,
+    `Template purpose: ${inline(template.description)}`,
+    "",
+    `# ${inline(payload.project.title)} ${inline(template.documentTitle)}`,
+    "",
+    `报告版本：${inline(payload.reportVersion?.label || "未归档草稿")}`,
+    payload.reportVersion?.savedAt ? `归档时间：${inline(payload.reportVersion.savedAt)}` : "",
+    `生成时间：${payload.generatedAt}`,
+    "",
+    "## 一、推演概况与参演编组",
+    `- 作战概念方向：${inline(payload.project.direction)}`,
+    `- 预设作战目标：${inline(payload.project.brief.objective)}`,
+    ...renderScenarioSection(payload.scenario),
+    ...renderOv4Section(payload.ov4),
+    "",
+    "## 二、各阶段推进结果与战损",
+    ...renderOv6cSection(payload.ov6c),
+    "### 关键活动因果达成度",
+    ...renderActivityDecompositions(payload.ov5a, payload.ov5.activities),
+    "",
+    "## 三、关键决策点与对抗博弈",
+    `- OODA 决策循环耗时：${payload.ooda.durationMinutes || "待估算"} 分钟`,
+    ...payload.ooda.lanes.flatMap((lane) => [
+      `### ${inline(lane.subtitle)}（${inline(lane.title)}）决策节点`,
+      ...(lane.nodes.length ? lane.nodes.map((node) => `- ${inline(node.title)}：判断规则 ${inline(node.rule)}；响应耗时 ${inline(node.duration)}`) : ["- 未定义节点"])
+    ]),
+    `- 红方质询与博弈结论：${inline(payload.validation?.redTeam || "无")}`,
+    "",
+    "## 四、执行偏差与成因深度剖析",
+    ...renderValidationSection(payload.validation),
+    ...renderTraceabilityDiagnosticsSection(payload.validation?.traceabilityDiagnostics),
+    ...renderFlowDiagnosticsSection(payload.validation?.flowDiagnostics),
+    "",
+    "## 五、体系机理与战法改进建议",
+    "### 验证成熟度状态",
+    `- 当前结论：${inline(payload.validationMaturity.label)}（${payload.validationMaturity.readyCount}/${payload.validationMaturity.totalCount} 项已满足）`,
+    ...payload.validationMaturity.checks.map((check) => `- [${inline(check.statusLabel)}] ${inline(check.label)}：${inline(check.detail)}`),
+    "### 规则与流转优化建议",
+    ...renderDerivedRules(payload.ov6a),
+    ...renderDerivedTransitions(payload.ov6b),
+    "",
+    "## 六、参考依据与数据来源",
+    ...renderKnowledgeSection(payload.knowledge)
+  ];
+  return lines.filter((line) => line !== null && line !== undefined).join("\n");
 }
 
 export function buildRtfReport(payload) {
@@ -967,20 +1152,22 @@ function renderXmlProjectRepository(repository) {
 
 function renderScenarioSection(scenario) {
   if (!scenario) return ["- 尚未生成自动想定。"];
-  const data = scenario.deploymentData;
+  const data = scenario.deploymentData || {};
+  const entities = Array.isArray(data.entities) ? data.entities : [];
+  const timeline = Array.isArray(data.timeline) ? data.timeline : [];
   return [
-    `- 想定编号：${inline(scenario.id)}`,
-    `- 实体数量：${data.entities.length}`,
-    `- 事件数量：${data.timeline.length}`,
+    `- 想定编号：${inline(scenario.id || "scenario-draft")}`,
+    `- 实体数量：${entities.length}`,
+    `- 事件数量：${timeline.length}`,
     `- 空间建议：${scenario.deploymentPlan ? `${inline(scenario.deploymentPlan.mode)} / ${inline(scenario.deploymentPlan.state)} / 调整 ${scenario.deploymentPlan.adjustedEntityIds?.length || 0} 个实体` : "未生成"}`,
     `- 空间输出：GeoJSON / ${inline(data.geojson?.properties?.coordinateReference || "未生成")} / ${data.geojson?.features?.length || 0} 个要素`,
     ...renderSimulationSummarySection(scenario.simulation),
     "",
     "### 初始实体",
-    ...data.entities.map((entity) => `- ${inline(entity.label)}（${inline(entity.role)}，${entity.position.join("%, ")}%，来源活动：${inline(entity.sourceActivityId || "模型默认")}，知识依据：${inline((entity.sourceKnowledgeRefs || []).join("、") || "未关联")}）`),
+    ...(entities.length ? entities.map((entity) => `- ${inline(entity.label)}（${inline(entity.role)}，${(entity.position || []).join("%, ")}%，来源活动：${inline(entity.sourceActivityId || "模型默认")}，知识依据：${inline((entity.sourceKnowledgeRefs || []).join("、") || "未关联")}）`) : ["- 暂无实体"]),
     "",
     "### 事件序列",
-    ...data.timeline.map((event) => `- ${inline(event.time)} ${inline(event.title)}：${inline(event.description)}`)
+    ...(timeline.length ? timeline.map((event) => `- ${inline(event.time)} ${inline(event.title)}：${inline(event.description)}`) : ["- 暂无事件"])
   ];
 }
 

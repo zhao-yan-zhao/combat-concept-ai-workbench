@@ -124,7 +124,8 @@
     "check-glossary-coverage.mjs",
     "check-reduced-motion-and-disclosure.mjs",
     "check-empty-states-actionable.mjs",
-    "check-command-palette.mjs"
+    "check-command-palette.mjs",
+    "check-m4-report-templates.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",

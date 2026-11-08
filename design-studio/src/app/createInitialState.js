@@ -266,7 +266,7 @@ export function createInitialWorkbenchState(activeProjectId = resolveActiveProje
     redTeamHealth: { status: "unknown" },
     reportVersions,
     reportArchiving: false,
-    reportTemplate: loadReportTemplate(),
+    reportTemplate: loadReportTemplate(project?.kind),
     reportStorage: { status: "checking", mode: "local", label: "正在检查报告归档", localSaved: reportVersions.length > 0 },
     modelSnapshots,
     modelSnapshotStorage: { status: "checking", mode: "local", label: "正在检查模型快照", localSaved: modelSnapshots.length > 0 },
