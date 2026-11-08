@@ -244,7 +244,7 @@
 - [x] **T6.1 多方案分支**：基于快照派生方案 B/C，用 `modelComparisonBuilder` 并排对比，用 `schemeScoring` 比较评分。（2026-11-08 已落地）
 - [x] **T6.2 红队意见追踪**：每条意见关联具体要素，带"接受 / 驳回（需填理由）/ 已修订"状态，结果进入报告。（2026-11-08 已落地）
 - [x] **T6.3 推演结果回收**：仿真适配器的结果回填到阶段与活动，生成偏差清单，进入复盘模板。（2026-11-08 已落地）
-- **T6.4 一致性问题一键定位**：每个问题都提供跳转定位；能自动修的给出修复建议，经人工确认后应用，并走 M1 的事务包装。
+- [x] **T6.4 一致性问题一键定位**：每个问题都提供跳转定位；能自动修的给出修复建议，经人工确认后应用，并走 M1 的事务包装。（2026-11-09 已落地）
 
 ### M7 功能补强：让两条主线真正"能干活"
 
@@ -962,6 +962,38 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs ui-static`：37/37 PASS (100%)
   - `node scripts/run-checks.mjs all`：156/156 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+### 2026-11-09 T6.4 真实落地：一致性问题一键定位与自动修复（跳转定位、修复方案与事务包装闭环）
+
+- **实施内容**：
+  1. 一致性定位与自动修复核心引擎 (`design-studio/src/consistencyLocatorStore.js`)：
+     - 新建模块，导出 `enrichIssuesWithLocatorAndRepair(issues, models)` 与 `applyIssueRepair(state, issue)`；
+     - 自动为验证检出的每个一致性问题（Issue）注入目标视图（`targetView`: `ov5 | ooda | scenario | ov1`）、视图中文标签（`targetViewLabel`）、目标要素信息（`targetElementId`, `targetElementName`）；
+     - 识别可自动修复规则并生成结构化修复方案（`repairPlan`: 涵盖活动输入输出规范化 `fill-activity-io`、前序协同关系自动连边 `link-activity-upstream`、OODA 节点输入输出与时延补全 `fill-ooda-io` / `fill-ooda-duration`、未关联实体主责活动绑定 `link-entity-activity`）；
+  2. 验证存储与设计规则接入 (`design-studio/src/validationStore.js`)：
+     - `generateValidation` 在生成 issues 后，自动调用 `enrichIssuesWithLocatorAndRepair` 丰富定位与修复元数据；
+  3. 视图交互与检查器增强 (`design-studio/src/validationView.js`)：
+     - 升级问题渲染组件 `renderIssueCard`：卡片清晰呈现目标视图与要素胶囊（`🎯 [OV-5] 活动: “...”`）；
+     - 提供 `[🎯 定位]` 按钮（`data-action="locate-validation-issue"`），支持一键跨视图精准跳转聚焦；
+     - 对可修复问题呈现建议说明框与 `[💡 一键修复]` 按钮（`data-action="repair-validation-issue"`）；
+     - 升级 `selectionForValidationIssue`，注入 `kind: "issue"` 与结构化 facts（检查类型、定位视图、目标要素、修复方案）；
+  4. 控制器事务闭环与持久化流转 (`design-studio/src/validationController.js`, `wireControllers.js`, `main.js`)：
+     - 控制器响应 `locate-validation-issue`：自动切换 `state.activeView`，同步更新 `state.selection` 并在对应视图中选中高亮要素，弹出操作反馈；
+     - 控制器响应 `repair-validation-issue`：二次确认后，**严格统一走 M1 `applyWithRecoveryPoint` 事务包装**，自动创建本地与服务端快照恢复点，记录 `undoStack`；
+     - 修复完成后自动触发对应领域的持久化（`persistOv5` / `persistOodaModel` / `persistScenario`）与服务端同步（`syncOv5` / `syncOoda` / `syncScenario`），并重新运行轻量验证刷新问题列表；
+     - `main.js` 中将点击源节点 `source` 传入 `await validationController.handleAction(action, source)`；
+  5. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m6-consistency-repair.mjs`：全量覆盖定位元数据注入、可修复方案识别、确定性修复应用、重新验证问题消除与质量提升、控制器事务回滚与持久化流转、前端视图与控制器静态契约；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
+- **验证命令与结果**：
+  - `node scripts/check-m6-consistency-repair.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：38/38 PASS (100%)
+  - `node scripts/run-checks.mjs all`：157/157 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+> **M6 里程碑（研究闭环）全量圆满收官！**
+> 4 项任务卡全部 100% 落地闭环（T6.1 多方案分支派生与排行榜并排对比、T6.2 红队意见要素关联与状态机追踪、T6.3 推演结果回填阶段与活动及偏差清单提炼、T6.4 一致性问题一键定位跳转与事务自动修复）。
+
 
 
 

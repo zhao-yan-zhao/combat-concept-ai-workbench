@@ -28,6 +28,7 @@ import { createAiConfigController } from "../aiConfigController.js";
 import { createAiPromptController } from "../aiPromptController.js";
 import { createDeploymentController } from "../deploymentController.js";
 import { createConceptMapController } from "../conceptMapController.js";
+import { applyWithRecoveryPoint } from "./recoveryTransaction.js";
 import { createConceptPlanningController } from "../conceptPlanningController.js";
 import { createPhaseActionChatController } from "../phaseActionChatController.js";
 import { createForceMissionChatController } from "../forceMissionChatController.js";
@@ -470,7 +471,15 @@ export function wireControllers({
     getState: () => state,
     render,
     notify: showToast,
-    syncValidation: projectValidationSyncController.sync
+    syncValidation: projectValidationSyncController.sync,
+    syncOv5: (...args) => projectOv5SyncController.sync(...args),
+    syncOoda: (...args) => projectOodaSyncController.sync(...args),
+    syncScenario: (...args) => projectScenarioSyncController.sync(...args),
+    applyWithRecoveryPoint: (meta, mutate) => applyWithRecoveryPoint(
+      { state, render, showToast, projectModelSnapshotSyncController },
+      meta,
+      mutate
+    )
   });
 
   const knowledgeController = createKnowledgeController({

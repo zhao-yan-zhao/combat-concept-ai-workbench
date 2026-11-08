@@ -21,7 +21,7 @@ export function renderValidation(state) {
       ${stale ? `<div class="validation-stale-banner" role="status"><strong>验证结果已过期</strong><p>${escapeHtml(result.staleReason || "上游模型已变更，下列评分与问题仅供参考。请重新运行设计验证。")}</p><button type="button" data-action="run-validation">立即重跑</button></div>` : ""}
       <div class="validation-grid ${stale ? "is-stale" : ""}">
         <div><h3>规则评分${stale ? "（参考）" : ""}</h3><div class="score-list">${result.scores.map((item) => `<div class="score-line"><span>${item.label}</span><div class="score-bar" style="--score:${item.score}%"><span></span></div><b>${item.score}</b></div>`).join("")}</div>${renderTraceabilityDiagnostics(result.traceabilityDiagnostics)}${renderOodaDiagnostics(result.oodaDiagnostics)}${renderFlowDiagnostics(result.flowDiagnostics)}${renderSimulationDiagnostics(result.simulationDiagnostics)}</div>
-        <div><h3>${result.issues.length ? (stale ? "过期问题与修正建议" : "验证问题与修正建议") : "规则检查通过"}</h3><div class="issue-list">${result.issues.length ? result.issues.map((item) => `<button class="issue ${item.level === "high" ? "alert" : ""} ${stale ? "stale" : ""}" data-validation-issue="${item.id}"><i></i><div><strong>${item.title}</strong><p>${item.text}</p></div></button>`).join("") : `<div class="idea-prompt"><p>当前模型未发现阻断性规则问题，可进入红方质询或导出成果。</p></div>`}</div></div>
+        <div><h3>${result.issues.length ? (stale ? "过期问题与修正建议" : "验证问题与修正建议") : "规则检查通过"}</h3><div class="issue-list">${result.issues.length ? result.issues.map((item) => renderIssueCard(item, stale)).join("") : `<div class="idea-prompt"><p>当前模型未发现阻断性规则问题，可进入红方质询或导出成果。</p></div>`}</div></div>
       </div>
     </section>
     ${renderRedTeamReview(result, state.redTeamRunning, state.redTeamHealth)}
@@ -164,16 +164,51 @@ function renderRedTeamService(health) {
   return `<div class="red-team-service"><div><span class="status-tag ${statusClass}">${escapeHtml(label)}</span><small>${escapeHtml(detail)}</small></div><button class="quiet-button" data-action="refresh-red-team-health" ${checking ? "disabled" : ""}>刷新状态</button></div>`;
 }
 
+function renderIssueCard(item, stale) {
+  const targetLabel = item.targetViewLabel || item.targetView || "模型";
+  const elementLabel = item.targetElementName ? `“${escapeHtml(item.targetElementName)}”` : "";
+  const locatorBadge = `<span class="coverage-pill" style="font-size:10px; padding:1px 6px; background:#e0f2fe; color:#0369a1; border-radius:10px; margin-right:4px;">🎯 ${escapeHtml(targetLabel)}${elementLabel ? `: ${elementLabel}` : ""}</span>`;
+
+  const repairBadge = item.repairable && item.repairPlan
+    ? `<div style="margin-top:6px; padding:4px 8px; border-radius:4px; background:#f0fdf4; border:1px solid #bbf7d0; font-size:11px; color:#166534; display:flex; justify-content:space-between; align-items:center;">
+        <span>💡 建议: ${escapeHtml(item.repairPlan.label)}</span>
+        <button type="button" class="primary-button" data-action="repair-validation-issue" data-issue-id="${escapeHtml(item.id)}" style="font-size:11px; padding:2px 8px; margin-left:6px; cursor:pointer;">一键修复</button>
+      </div>`
+    : "";
+
+  return `
+    <div class="issue-card-wrapper" style="margin-bottom:8px; border:1px solid var(--border-color, #e5e7eb); border-radius:6px; padding:8px; background:var(--bg-card, #fff);">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">
+        <button class="issue ${item.level === "high" ? "alert" : ""} ${stale ? "stale" : ""}" data-validation-issue="${escapeHtml(item.id)}" style="flex:1; border:none; background:transparent; padding:0; text-align:left; cursor:pointer;">
+          <strong>${escapeHtml(item.title)}</strong>
+        </button>
+        <button type="button" class="quiet-button" data-action="locate-validation-issue" data-issue-id="${escapeHtml(item.id)}" title="跳转定位到此要素" style="font-size:11px; padding:1px 6px; cursor:pointer;">🎯 定位</button>
+      </div>
+      <p style="margin:4px 0; font-size:12px; color:var(--text-muted, #4b5563);">${escapeHtml(item.text)}</p>
+      <div style="margin-top:4px;">${locatorBadge}</div>
+      ${repairBadge}
+    </div>
+  `;
+}
+
 export function selectionForValidationIssue(issueId, result) {
   const issue = result?.issues.find((item) => item.id === issueId);
   if (!issue) return null;
+  const targetLabel = issue.targetViewLabel || issue.targetView || "模型";
   return {
     id: issue.id,
+    kind: "issue",
     title: issue.title,
     status: issue.level === "high" ? "高优先级问题" : "待修订问题",
     text: issue.text,
-    facts: [["检查类型", "静态规则"], ["关联节点", issue.sourceId || "模型级"], ["建议", "修订后重新运行验证"]],
-    refs: ["多方案评估框架"]
+    facts: [
+      ["检查类型", "静态一致性规则"],
+      ["定位视图", targetLabel],
+      ["目标要素", issue.targetElementName || issue.sourceId || "模型级"],
+      ["修复方案", issue.repairPlan ? issue.repairPlan.label : "需人工核对修订"]
+    ],
+    refs: ["多方案评估框架"],
+    issueData: issue
   };
 }
 

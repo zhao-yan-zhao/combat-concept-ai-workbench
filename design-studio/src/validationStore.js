@@ -6,6 +6,7 @@ import { buildOv3Model } from "./ov3Builder.js";
 import { buildOv6cModel } from "./ov6cBuilder.js";
 import { buildOv4Model } from "./ov4Builder.js";
 import { buildOv5aModel, buildOv6aModel, buildOv6bModel } from "./dodafOperationalBuilders.js";
+import { enrichIssuesWithLocatorAndRepair } from "./consistencyLocatorStore.js";
 
 export function hasPersistedValidation(ov5Model, oodaModel, scenario, ov1Model) {
   try {
@@ -123,6 +124,8 @@ export function generateValidation(ov5Model, oodaModel, scenario, ov1Model, cont
     });
   }
 
+  const enrichedIssues = enrichIssuesWithLocatorAndRepair(issues, { ov5Model, oodaModel, scenario, ov1Model });
+
   const result = {
     version: 1,
     id: `validation-${Date.now()}`,
@@ -139,7 +142,7 @@ export function generateValidation(ov5Model, oodaModel, scenario, ov1Model, cont
       { label: "跨视图追溯", score: traceabilityDiagnostics.score },
       { label: "活动交换契约", score: flowDiagnostics.score }
     ],
-    issues,
+    issues: enrichedIssues,
     oodaDiagnostics,
     traceabilityDiagnostics,
     flowDiagnostics,
