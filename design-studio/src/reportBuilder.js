@@ -286,8 +286,13 @@ export function buildMarkdownReport(payload) {
     ...renderFlowDiagnosticsSection(payload.validation?.flowDiagnostics),
     "",
     "### 验证成熟度",
-    `- 当前结论：${inline(payload.validationMaturity.label)}（${payload.validationMaturity.readyCount}/${payload.validationMaturity.totalCount} 项已满足）`,
-    ...payload.validationMaturity.checks.map((check) => `- [${inline(check.statusLabel)}] ${inline(check.label)}：${inline(check.detail)}`),
+    ...(() => {
+      const maturity = payload.validationMaturity || { label: "待完善", readyCount: 0, totalCount: 0, checks: [] };
+      return [
+        `- 当前结论：${inline(maturity.label)}（${maturity.readyCount}/${maturity.totalCount} 项已满足）`,
+        ...(maturity.checks || []).map((check) => `- [${inline(check.statusLabel)}] ${inline(check.label)}：${inline(check.detail)}`)
+      ];
+    })(),
     "",
     "## 协同审阅",
     ...renderCollaborationSection(payload.collaboration),
@@ -386,8 +391,13 @@ function buildTacticDocMarkdown(payload, template) {
     ...renderOodaDiagnosticsSection(payload.validation?.oodaDiagnostics),
     ...renderFlowDiagnosticsSection(payload.validation?.flowDiagnostics),
     "### 验证成熟度",
-    `- 当前结论：${inline(payload.validationMaturity.label)}（${payload.validationMaturity.readyCount}/${payload.validationMaturity.totalCount} 项已满足）`,
-    ...payload.validationMaturity.checks.map((check) => `- [${inline(check.statusLabel)}] ${inline(check.label)}：${inline(check.detail)}`),
+    ...(() => {
+      const maturity = payload.validationMaturity || { label: "待完善", readyCount: 0, totalCount: 0, checks: [] };
+      return [
+        `- 当前结论：${inline(maturity.label)}（${maturity.readyCount}/${maturity.totalCount} 项已满足）`,
+        ...(maturity.checks || []).map((check) => `- [${inline(check.statusLabel)}] ${inline(check.label)}：${inline(check.detail)}`)
+      ];
+    })(),
     "",
     "## 九、溯源证据与引用附录",
     ...renderKnowledgeSection(payload.knowledge),
@@ -489,8 +499,13 @@ function buildWargameReviewMarkdown(payload, template) {
     "",
     "## 五、体系机理与战法改进建议",
     "### 验证成熟度状态",
-    `- 当前结论：${inline(payload.validationMaturity.label)}（${payload.validationMaturity.readyCount}/${payload.validationMaturity.totalCount} 项已满足）`,
-    ...payload.validationMaturity.checks.map((check) => `- [${inline(check.statusLabel)}] ${inline(check.label)}：${inline(check.detail)}`),
+    ...(() => {
+      const maturity = payload.validationMaturity || { label: "待完善", readyCount: 0, totalCount: 0, checks: [] };
+      return [
+        `- 当前结论：${inline(maturity.label)}（${maturity.readyCount}/${maturity.totalCount} 项已满足）`,
+        ...(maturity.checks || []).map((check) => `- [${inline(check.statusLabel)}] ${inline(check.label)}：${inline(check.detail)}`)
+      ];
+    })(),
     "### 规则与流转优化建议",
     ...renderDerivedRules(payload.ov6a),
     ...renderDerivedTransitions(payload.ov6b),
@@ -1320,15 +1335,18 @@ function renderRedTeamReviewSection(validation) {
 
 function renderKnowledgeSection(knowledge) {
   if (!knowledge) return ["- 尚未连接 Obs 知识库。"];
+  const referencedTerms = Array.isArray(knowledge.referencedTerms) ? knowledge.referencedTerms : [];
+  const entries = Array.isArray(knowledge.evidence?.entries) ? knowledge.evidence.entries : [];
+  const unresolvedTerms = Array.isArray(knowledge.evidence?.unresolvedTerms) ? knowledge.evidence.unresolvedTerms : [];
   return [
     `- 知识库：${inline(knowledge.name)}`,
-    `- 已导入：${knowledge.fileCount} 篇笔记，${knowledge.chunkCount} 个片段`,
+    `- 已导入：${knowledge.fileCount || 0} 篇笔记，${knowledge.chunkCount || 0} 个片段`,
     `- 敏感控制：报告引用排除 ${knowledge.sensitiveExcludedCount || 0} 个敏感片段；按片段显式授权 ${knowledge.sensitiveCitationApprovalCount || 0} 个`,
     ...(knowledge.approvedCitations?.length ? [`- 已授权敏感引用：${knowledge.approvedCitations.map((approval) => `${inline(approval.documentId)}（${inline(approval.approvedBy?.label || approval.approvedBy?.id)}，${inline(approval.approvedAt)}${approval.expiresAt ? `，至 ${inline(approval.expiresAt)}` : ""}）`).join("；")}`] : []),
     `- 知识关系图：${knowledge.graph?.nodeCount || 0} 个节点，${knowledge.graph?.edgeCount || 0} 条关系（双链 ${knowledge.graph?.linkEdgeCount || 0}，共享标签 ${knowledge.graph?.tagEdgeCount || 0}）`,
-    `- 模型引用：${knowledge.referencedTerms.length ? knowledge.referencedTerms.map(inline).join("、") : "未标注"}`,
-    `- 已匹配证据：${knowledge.evidence.entries.length ? knowledge.evidence.entries.map((item) => `${inline(item.title)}（${item.matchedTerms.map(inline).join("、")}）`).join("；") : "未匹配到 Vault 片段"}`,
-    ...(knowledge.evidence.unresolvedTerms.length ? [`- 待补充证据：${knowledge.evidence.unresolvedTerms.map(inline).join("、")}`] : [])
+    `- 模型引用：${referencedTerms.length ? referencedTerms.map(inline).join("、") : "未标注"}`,
+    `- 已匹配证据：${entries.length ? entries.map((item) => `${inline(item.title)}（${(item.matchedTerms || []).map(inline).join("、")}）`).join("；") : "未匹配到 Vault 片段"}`,
+    ...(unresolvedTerms.length ? [`- 待补充证据：${unresolvedTerms.map(inline).join("、")}`] : [])
   ];
 }
 

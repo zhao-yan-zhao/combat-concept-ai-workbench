@@ -795,15 +795,30 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：147/147 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
+### 2026-11-08 T4.4 真实落地：Obsidian 回写（新笔记、元数据与双链）
 
-
-
-
-
-
-
-
-
+- **实施内容**：
+  1. YAML Frontmatter 四要素与全量元数据生成 (`design-studio/src/obsidianArchiveBuilder.js`)：
+     - `frontmatter(type, title, generatedAt, payload, fields)`：严格输出 YAML frontmatter，完整包含项目要素（`project_id`、`project_title`、`project_kind`）、版本要素（`report_version`）、时间要素（`generated_at`）、引用列表（`citations:` 数组），以及密级标识（`classification`）与模板标识（`template_id`）；
+  2. 双向链接系统全面贯通 (`design-studio/src/obsidianArchiveBuilder.js`)：
+     - `IndexNote`（`研究归档.md`）：包含 `[[ConceptBrief]]`、全量作战活动 `[[OV5-...]]`、OODA 节点 `[[OODA-...]]` 与 `[[知识来源反向链接.md]]` 的结构化索引；
+     - `ConceptBrief.md`：正文生成 `[[知识依据]]` 双向链接，并建立下级活动与决策链链接；
+     - `OV5-*.md`：自动关联来源简报 `[[ConceptBrief]]`、关联决策节点 `[[OODA-...]]` 与依据片段 `[[...]]`；
+     - `OODA-*.md`：自动关联所属作战活动 `[[OV5-...]]` 与知识依据；
+     - `知识来源反向链接.md`：建立可公开引用证据与使用该证据的作战活动双向链路；
+  3. 知识库安全写入与绝不修改已有笔记铁律 (`design-studio/src/obsidianArchiveClient.js`)：
+     - 归档前探测目标目录与文件是否存在，遇到同名笔记自动安全派生为 `_1.md`、`_2.md`；
+     - 严格保证已有笔记绝不被静默覆盖或篡改；
+  4. 报告构建器极端场景防御增强 (`design-studio/src/reportBuilder.js`)：
+     - 为 `validationMaturity`、`knowledge.referencedTerms` 与 `knowledge.evidence` 提供防御性回退，彻底杜绝解构 TypeError；
+  5. 自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m4-obsidian-writeback.mjs`，包含静态契约检查、Frontmatter 四要素验证、双链提取测试以及绝不覆盖同名笔记的安全派生运行时测试；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
+- **验证命令与结果**：
+  - `node scripts/check-m4-obsidian-writeback.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：29/29 PASS (100%)
+  - `node scripts/run-checks.mjs all`：148/148 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
 
 
