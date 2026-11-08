@@ -259,7 +259,7 @@
 | **T7.1 论证链与关键假设** | 制胜机理挂接论证链、关键假设清单与置信度排序、失效波及分析 | **雏形** | `state.brief.assumptions` 仅为单段纯文本；`ov5MechanismView.js` 展示了制胜机理和活动链但无独立论证链结构；评估页缺少假设失效波及矩阵 | `design-studio/src/briefStore.js`, `ov5MechanismView.js`, `validationStore.js`, `schemeScoring.js` | **补全增强**：扩展制胜机理挂接结构化 `argumentChain`，提供假设清单与波及推演 |
 | **T7.2 对抗循环** | 红队提出对手反制，我方应对或接受风险闭环，生成风险反制章 | **雏形** | M6-T6.2 已建立红队意见（`findings`）、状态机（`accepted/rejected/revised`）与要素绑定，但未形成对手反制（countermeasure）与我方应对（response）闭环对偶结构 | `design-studio/src/redTeamStore.js`, `redTeamController.js`, `redTeamView.js`, `reportBuilder.js` | **补全增强**：在已有红队审查框架上扩展对抗链条与未闭合看板 |
 | **T7.3 战例借鉴** | 知识库检索历史相似战例，生成可借鉴点/不适用点对照卡并引用 | **雏形** | M2 知识检索（`knowledge.js`）与灵感建议（`inspirationStore.js`）已具备检索与推荐能力，但缺少战例对照卡片（借鉴点/不适用点）数据契约与卡片视图 | `shared/knowledge.js`, `design-studio/src/inspirationStore.js`, `inspirationView.js` | **补全增强**：复用检索与灵感卡片，接入战例对比模板与论证链引用 |
-| **T7.4 战法库** | 已确认战法跨项目复用库，存入/复制起点 | **无** | 仅有单项目内的多方案对比（`schemeStore.js`）与快照，无跨项目持久化的独立战法库（Tactics Library） | `server/routes/projects.mjs`, `design-studio/src/schemeStore.js` | **新建**：按标准持久化与独立路由设计轻量战法库 |
+| **T7.4 战法库** | 已确认战法跨项目复用库，存入/复制起点 | **已完成** | 独立持久化仓储 `server/tacticsLibraryStore.mjs`（`data/tactics-library.json`）、路由 `GET/POST/DELETE /api/tactics-library`、前端弹窗与深拷贝绝对解耦复制 | `server/tacticsLibraryStore.mjs`, `design-studio/src/tacticsLibraryView.js`, `tacticsLibraryClient.js` | **已完成**（2026-11-09） |
 | **T7.5 红蓝分立与信息隔离** | 导演部/红方/蓝方视角与信息过滤，协同权限映射 | **雏形** | 已有协作身份与角色框架（`projectCollaborationPolicy.mjs`，`collaborationController.js`），但未与想定中的红/蓝/导演部视角及要素可见性过滤联动 | `server/projectCollaborationPolicy.mjs`, `design-studio/src/scenarioStore.js`, `scenarioView.js` | **补全增强**：建立视角映射与要素过滤管道 |
 | **T7.6 推演回合与导调** | 回合制推进（意图提交、事件注入卡库、导调裁决建议、进入下回合） | **雏形** | 已有静态想定部署（`scenarioStore.js`）与外部仿真结果适配（`simulationAdapter.js`），但缺少回合交互循环、预置事件卡库与导调裁决 | `design-studio/src/scenarioStore.js`, `scenarioView.js`, `simulationAdapter.js`, `simulationRecycleStore.js` | **补全增强**：在想定与仿真适配层扩展回合制推进引擎与导调看板 |
 | **T7.7 推演日志与时间线** | 回合推演流水线记录与 what-if 分支派生 | **雏形** | 已有推演结果记录与快照分支能力（`modelSnapshotStore.js`），但无回合级时序流水线（Turn Timeline）呈现与一键派生 | `design-studio/src/simulationRecycleStore.js`, `modelSnapshotStore.js`, `scenarioView.js` | **补全增强**：串联回合日志与快照派生 |
@@ -288,9 +288,9 @@
   - 在知识库中检索与当前作战问题相似的历史战例（复用 M2 的检索与引用机制）。
   - 每个战例生成一张"可借鉴点 / 不适用点"对照卡，可以一键引用到制胜论证链证据支撑中。
 
-**T7.4 战法库（跨项目复用）**
+- [x] **T7.4 战法库（跨项目复用）**（2026-11-09 已落地）
 - 已确认的战法可以"存入战法库"，保存核心思想、适用条件、论证链摘要和引用。
-- 新建项目时可以从战法库引用某个战法作为起点，引用方式是复制，不建立联动。
+- 新建项目时可以从战法库引用某个战法作为起点，引用方式是复制（纯深拷贝解耦），严禁建立脆弱联动。已提供仓储持久化、REST API与全功能检索模态框。
 
 #### B. 想定推演线
 

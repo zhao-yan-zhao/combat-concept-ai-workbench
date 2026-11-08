@@ -476,6 +476,58 @@ export function createRequestHandler(runtime) {
         }
         return;
       }
+      if (url.pathname.startsWith("/api/tactics-library")) {
+        const store = runtime.tacticsLibraryStore;
+        if (!store) {
+          send(response, 503, "战法库服务不可用", "text/plain;charset=utf-8");
+          return;
+        }
+
+        // GET /api/tactics-library
+        if (request.method === "GET" && url.pathname === "/api/tactics-library") {
+          try {
+            const category = url.searchParams.get("category") || "";
+            const search = url.searchParams.get("search") || "";
+            const tactics = await store.listTactics({ category, search });
+            sendJson(response, 200, { tactics, count: tactics.length });
+          } catch (error) {
+            send(response, 500, error.message, "text/plain;charset=utf-8");
+          }
+          return;
+        }
+
+        // POST /api/tactics-library (存入新战法)
+        if (request.method === "POST" && url.pathname === "/api/tactics-library") {
+          try {
+            const input = await readJson(request);
+            const saved = await store.saveTactic(input);
+            sendJson(response, 200, { tactic: saved, success: true });
+          } catch (error) {
+            send(response, 400, error.message, "text/plain;charset=utf-8");
+          }
+          return;
+        }
+
+        // GET/DELETE /api/tactics-library/:id
+        const matchTacticId = url.pathname.match(/^\/api\/tactics-library\/([^/]+)$/);
+        if (matchTacticId) {
+          const tacticId = decodeURIComponent(matchTacticId[1]);
+          if (request.method === "GET") {
+            const item = await store.getTactic(tacticId);
+            if (!item) {
+              send(response, 404, `未找到标识为 [${tacticId}] 的战法条目`, "text/plain;charset=utf-8");
+            } else {
+              sendJson(response, 200, { tactic: item });
+            }
+            return;
+          }
+          if (request.method === "DELETE") {
+            const ok = await store.deleteTactic(tacticId);
+            sendJson(response, 200, { success: ok });
+            return;
+          }
+        }
+      }
       if (request.method === "GET" && url.pathname === "/api/theme-config") {
         sendJson(response, 200, { theme: getThemeConfig(), configurationWrite: aiConfigWriteAuthorizer.getStatus() });
         return;

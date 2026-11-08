@@ -16,6 +16,7 @@ import { createOpenAiClient } from "./openaiClient.mjs";
 import { loadThemeConfig, saveThemeConfig } from "./themeConfig.mjs";
 import { createCmoDatabaseService } from "./cmoDatabase.mjs";
 import { loadAiPromptData, loadAiPromptOverrides, rollbackAiPromptVersion, saveAiPromptOverrides } from "./aiPromptConfig.mjs";
+import { createTacticsLibraryStore } from "./tacticsLibraryStore.mjs";
 
 const mimeTypes = {
   ".html": "text/html;charset=utf-8",
@@ -72,6 +73,9 @@ export async function createRuntime() {
     knowledgeRetrievalMode,
     externalVectorAdapter
   });
+  const tacticsLibraryStore = createTacticsLibraryStore({
+    filePath: process.env.TACTICS_LIBRARY_PATH || join(root, "data", "tactics-library.json")
+  });
   const serveStatic = createStaticFileServer({ root, mimeTypes });
 
   const getAiApiKey = () => process.env.OPENAI_API_KEY || storedAiApiKey;
@@ -119,6 +123,7 @@ export async function createRuntime() {
     setStoredAiApiKey(value) { storedAiApiKey = value; },
     readAuthorizedProjectInput,
     openAi,
+    tacticsLibraryStore,
     saveAiServiceConfig,
     saveThemeConfig,
     saveAiPromptOverrides,

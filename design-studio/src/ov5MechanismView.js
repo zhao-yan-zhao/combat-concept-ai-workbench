@@ -910,6 +910,8 @@ function renderArgumentChainPerspective({ activities, state, model, activityById
           </p>
         </div>
         <div style="display:flex; gap:8px;">
+          <button type="button" class="quiet-button compact-btn" data-action="save-to-tactics-library" title="将当前战法核心思想与论证链存入跨项目战法复用库">💾 存入战法库</button>
+          <button type="button" class="quiet-button compact-btn" data-action="open-tactics-library" title="浏览跨项目战法库">📚 战法库</button>
           <button type="button" class="quiet-button compact-btn" data-action="add-chain-assumption">+ 新增关键假设</button>
         </div>
       </div>

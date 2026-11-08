@@ -28,6 +28,12 @@ import { buildModelComparisonArtifact } from "./modelComparisonBuilder.js";
 import { getCmoCatalogStatus } from "./cmoCatalogClient.js";
 import { applyTheme, getThemeConfig } from "./themeConfigClient.js";
 import { createProject, deleteProject, loadProjects, resetProjectContent, updateProject } from "./projectBriefClient.js";
+import {
+  fetchTacticsLibrary,
+  saveCurrentProjectToLibrary,
+  deleteTacticFromLibrary,
+  buildForkedProjectData
+} from "./tacticsLibraryClient.js";
 import { ensureClientStoragePurged, purgeProjectClientStorage } from "./clientStoragePurge.js";
 import { applyWithRecoveryPoint } from "./app/recoveryTransaction.js";
 
@@ -841,6 +847,114 @@ async function handleAction(action, source = null) {
   }
   if (action === "close-provenance-popover") {
     source?.closest?.(".derived-provenance-dropdown")?.removeAttribute("open");
+    return;
+  }
+  if (action === "open-tactics-library") {
+    state.tacticsLibraryOpen = true;
+    closeMenubarMenus();
+    try {
+      const data = await fetchTacticsLibrary({
+        category: state.tacticsLibraryActiveCategory || "all",
+        search: state.tacticsLibrarySearchQuery || ""
+      });
+      state.tacticsLibraryList = data.items || [];
+    } catch (err) {
+      showToast("战法库加载失败: " + err.message);
+    }
+    render({ skipViewRoot: true });
+    return;
+  }
+  if (action === "close-tactics-library") {
+    state.tacticsLibraryOpen = false;
+    render({ skipViewRoot: true });
+    return;
+  }
+  if (action === "filter-tactics-category") {
+    const category = source?.dataset?.category || "all";
+    state.tacticsLibraryActiveCategory = category;
+    try {
+      const data = await fetchTacticsLibrary({
+        category,
+        search: state.tacticsLibrarySearchQuery || ""
+      });
+      state.tacticsLibraryList = data.items || [];
+    } catch (err) {
+      showToast("战法库筛选失败: " + err.message);
+    }
+    render({ skipViewRoot: true });
+    return;
+  }
+  if (action === "search-tactics-library") {
+    const query = source?.value !== undefined ? source.value : (document.querySelector(".tactics-search-input")?.value || "");
+    state.tacticsLibrarySearchQuery = query;
+    try {
+      const data = await fetchTacticsLibrary({
+        category: state.tacticsLibraryActiveCategory || "all",
+        search: query
+      });
+      state.tacticsLibraryList = data.items || [];
+    } catch (err) {
+      showToast("战法库搜索失败: " + err.message);
+    }
+    render({ skipViewRoot: true });
+    return;
+  }
+  if (action === "save-to-tactics-library") {
+    try {
+      const result = await saveCurrentProjectToLibrary(state);
+      showToast(`已成功将当前战法【${result.item?.name || "作战概念战法"}】存入战法库！`);
+      if (state.tacticsLibraryOpen) {
+        const data = await fetchTacticsLibrary({
+          category: state.tacticsLibraryActiveCategory || "all",
+          search: state.tacticsLibrarySearchQuery || ""
+        });
+        state.tacticsLibraryList = data.items || [];
+        render({ skipViewRoot: true });
+      }
+    } catch (err) {
+      showToast("存入战法库失败: " + err.message);
+    }
+    return;
+  }
+  if (action === "fork-tactic-as-project") {
+    const tacticId = source?.dataset?.tacticId;
+    if (!tacticId) return;
+    const list = state.tacticsLibraryList || [];
+    const tactic = list.find((t) => t.id === tacticId);
+    if (!tactic) {
+      showToast("未找到指定战法模板");
+      return;
+    }
+    const newId = `tactic-fork-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const newTitle = `${tactic.name} (复用副本)`;
+    const newProjectPayload = buildForkedProjectData(tactic, newId, newTitle);
+
+    try {
+      const result = await createProject(newProjectPayload);
+      state.tacticsLibraryOpen = false;
+      showToast(`已基于战法【${tactic.name}】创建独立解耦新项目！`);
+      switchProject(result.project.id, getProjectCtx());
+    } catch (err) {
+      showToast("以战法创建项目失败: " + err.message);
+    }
+    return;
+  }
+  if (action === "delete-tactic-from-library") {
+    const tacticId = source?.dataset?.tacticId;
+    if (!tacticId) return;
+    if (!window.confirm("确定要从战法库中移除该战法吗？（已复用创建的项目不受影响）")) return;
+    try {
+      await deleteTacticFromLibrary(tacticId);
+      showToast("战法已从战法库移除");
+      const data = await fetchTacticsLibrary({
+        category: state.tacticsLibraryActiveCategory || "all",
+        search: state.tacticsLibrarySearchQuery || ""
+      });
+      state.tacticsLibraryList = data.items || [];
+      render({ skipViewRoot: true });
+    } catch (err) {
+      showToast("删除战法失败: " + err.message);
+    }
     return;
   }
   if (handleConceptPlanningAction(action, source, getConceptPlanningCtx())) return;

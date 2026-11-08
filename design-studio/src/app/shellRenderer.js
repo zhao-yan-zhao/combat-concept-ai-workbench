@@ -4,6 +4,7 @@ import { renderProjectManager, renderProjectEntry } from "../projectManagerView.
 import { renderCollaborationLoginGate } from "../collaborationView.js";
 import { renderAiConfigPanel } from "../aiConfigView.js";
 import { renderAiPromptPanel } from "../aiPromptView.js";
+import { renderTacticsLibraryModal } from "../tacticsLibraryView.js";
 
 /**
  * Render Studio Shell chrome elements (trees, headers, footers, buttons, and system panels).
@@ -148,6 +149,18 @@ export function renderStudioShell(ctx) {
   if (workflowGateElem && workflowGateElem.dataset.renderedMarkup !== workflowGateMarkup) {
     workflowGateElem.innerHTML = workflowGateMarkup;
     workflowGateElem.dataset.renderedMarkup = workflowGateMarkup;
+  }
+
+  const tacticsLibraryMarkup = renderTacticsLibraryModal({
+    open: Boolean(state.tacticsLibraryOpen),
+    tactics: state.tacticsLibraryList || [],
+    searchQuery: state.tacticsLibrarySearchQuery || "",
+    activeCategory: state.tacticsLibraryActiveCategory || "all"
+  });
+  const tacticsLibraryElem = $("#tacticsLibraryRoot");
+  if (tacticsLibraryElem && tacticsLibraryElem.dataset.renderedMarkup !== tacticsLibraryMarkup) {
+    tacticsLibraryElem.innerHTML = tacticsLibraryMarkup;
+    tacticsLibraryElem.dataset.renderedMarkup = tacticsLibraryMarkup;
   }
 
   renderOv1ToolboxFloatHost();
