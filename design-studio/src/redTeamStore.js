@@ -15,7 +15,11 @@ export function createLocalRedTeamReview(validationResult, evidence = []) {
     },
     status: "pending",
     rejectionRationale: "",
-    disposedAt: null
+    disposedAt: null,
+    countermeasure: `对手可能针对“${issue.title}”实施电磁压制或机动反制，破坏预定闭环。`,
+    responseMode: "none",
+    ourResponse: "",
+    acceptedRiskRationale: ""
   }));
 
   if (!findings.length) {
@@ -33,7 +37,11 @@ export function createLocalRedTeamReview(validationResult, evidence = []) {
       },
       status: "pending",
       rejectionRationale: "",
-      disposedAt: null
+      disposedAt: null,
+      countermeasure: "对手可能通过虚假情报注入干扰指挥认知，误导体系响应窗口。",
+      responseMode: "none",
+      ourResponse: "",
+      acceptedRiskRationale: ""
     });
   }
 
@@ -100,6 +108,68 @@ export function updateFindingTargetElement(validationResult, findingId, targetEl
   return validationResult;
 }
 
+/**
+ * M7-T7.2 判断对抗循环是否闭环
+ * 闭环条件：选择“针对应对”且填写了应对措施，或选择“接受风险”且填写了可控理由
+ */
+export function isCountermeasureClosed(finding) {
+  if (!finding || typeof finding !== "object") return false;
+  if (finding.responseMode === "counteract" && String(finding.ourResponse || "").trim().length > 0) {
+    return true;
+  }
+  if (finding.responseMode === "accept-risk" && String(finding.acceptedRiskRationale || "").trim().length > 0) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 汇总统计对抗反制闭环指标
+ */
+export function calculateCountermeasureClosure(review) {
+  const findings = Array.isArray(review?.findings) ? review.findings : [];
+  const total = findings.length;
+  const closed = findings.filter(isCountermeasureClosed).length;
+  const unclosed = total - closed;
+  const closureRate = total > 0 ? Math.round((closed / total) * 100) : 100;
+  const unclosedFindings = findings.filter((f) => !isCountermeasureClosed(f));
+  return {
+    total,
+    closed,
+    unclosed,
+    closureRate,
+    unclosedFindings
+  };
+}
+
+/**
+ * 更新对抗反制与应对设定
+ */
+export function updateFindingCountermeasure(validationResult, findingId, { countermeasure, responseMode, ourResponse, acceptedRiskRationale } = {}) {
+  if (!validationResult?.redTeamReview) {
+    throw new Error("当前验证结果中不存在红方审阅报告");
+  }
+  const findings = validationResult.redTeamReview.findings || [];
+  const target = findings.find((item) => item.id === findingId);
+  if (!target) {
+    throw new Error(`未找到 ID 为 [${findingId}] 的红方审阅意见`);
+  }
+
+  if (countermeasure !== undefined) target.countermeasure = String(countermeasure).trim().slice(0, 300);
+  if (responseMode !== undefined) {
+    const validModes = ["counteract", "accept-risk", "none"];
+    if (!validModes.includes(responseMode)) {
+      throw new Error(`无效的应对模式: ${responseMode}`);
+    }
+    target.responseMode = responseMode;
+  }
+  if (ourResponse !== undefined) target.ourResponse = String(ourResponse).trim().slice(0, 500);
+  if (acceptedRiskRationale !== undefined) target.acceptedRiskRationale = String(acceptedRiskRationale).trim().slice(0, 500);
+
+  persistValidation(validationResult);
+  return validationResult;
+}
+
 function normalizeReview(review) {
   return {
     mode: review.mode === "ai" ? "ai" : "fallback",
@@ -118,7 +188,12 @@ function normalizeReview(review) {
       targetElement: normalizeTargetElement(item.targetElement, item.title, item.analysis),
       status: ["pending", "accepted", "rejected", "revised"].includes(item.status) ? item.status : "pending",
       rejectionRationale: String(item.rejectionRationale || "").slice(0, 500),
-      disposedAt: item.disposedAt ? String(item.disposedAt) : null
+      disposedAt: item.disposedAt ? String(item.disposedAt) : null,
+      // M7-T7.2 对抗循环：反制 → 应对 / 接受风险
+      countermeasure: String(item.countermeasure || item.analysis || "对手可能实施干扰阻断与机动规避").slice(0, 300),
+      responseMode: ["counteract", "accept-risk", "none"].includes(item.responseMode) ? item.responseMode : (item.ourResponse ? "counteract" : (item.acceptedRiskRationale ? "accept-risk" : "none")),
+      ourResponse: String(item.ourResponse || "").slice(0, 500),
+      acceptedRiskRationale: String(item.acceptedRiskRationale || "").slice(0, 500)
     })) : []
   };
 }

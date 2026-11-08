@@ -280,9 +280,9 @@
   - 评估页提示：如果某个低置信度假设被推翻，哪些部分会失效（级联波及矩阵推演）。
   - 数据结构变更已完成先停下报告并闭环落地。
 
-**T7.2 对抗循环：反制 → 应对**
-- 在现有红队审查的基础上扩展：红队针对战法提出"对手可能的反制"，每条反制都必须有"我方应对"或"接受风险（填理由）"。
-- 还有反制没处理时，评估页显示未闭合数量；战法说明中自动生成"风险与反制"一章。
+- [x] **T7.2 对抗循环：反制 → 应对**（2026-11-09 已落地）
+  - 在现有红队审查的基础上扩展：红队针对战法提出"对手可能的反制"，每条反制都必须有"我方应对"或"接受风险（填理由）"。
+  - 还有反制没处理时，评估页显示未闭合数量并警示阻断；战法说明中自动生成"风险与反制"总表并支持 XML 结构化导出。
 
 **T7.3 战例借鉴**
 - 在知识库中检索与当前作战问题相似的历史战例（复用 M2 的检索与引用机制）。
@@ -1046,6 +1046,34 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs ui-static`：39/39 PASS (100%)
   - `node scripts/run-checks.mjs all`：158/158 PASS (100% 全绿)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+### 2026-11-09 T7.2 真实落地：战法对抗循环（反制 → 应对 / 接受风险闭环）
+
+- **实施内容**：
+  1. 对抗循环数据模型与闭环判定扩展 (`design-studio/src/redTeamStore.js`)：
+     - 为每条红方审阅意见（Finding）注入对抗对偶属性：`countermeasure`（对手可能反制）、`responseMode`（`"counteract" | "accept-risk" | "none"`）、`ourResponse`（我方应对举措）、`acceptedRiskRationale`（接受风险必填论证理由）；
+     - 导出 `isCountermeasureClosed(finding)`：严格校验选择“针对应对”且填写了应对举措，或选择“接受风险”且留存了审计论证理由，方判定为闭环；
+     - 导出 `calculateCountermeasureClosure(review)`：统计总数、闭环数、未闭合数及闭环率；
+     - 导出 `updateFindingCountermeasure(validationResult, findingId, updates)` 并触发持久化与同步；
+  2. 评估页看板与对抗闭环交互增强 (`design-studio/src/validationView.js` & `redTeamController.js`)：
+     - 评估页红方看板顶部醒目呈现对抗反制闭环统计；若存在未闭合反制，展示红色/黄色告警横幅（`⚠️ 尚有 X 项对手反制待闭环`）；
+     - 卡片内嵌 **“⚔️ 对抗循环：对手可能反制 → 我方应对”** 面板，支持切换模式、编辑我方战术应对措施或填写接受风险理由，留存审计痕迹；
+     - 控制器响应 `set-countermeasure-mode`、`save-countermeasure-response`、`save-countermeasure-risk`；
+  3. 设计规则引擎与一键修复闭环 (`design-studio/src/validationStore.js` & `consistencyLocatorStore.js`)：
+     - `generateValidation` 自动核查红方未闭合反制，精准检出 `对手反制未完成应对` Issue；
+     - `consistencyLocatorStore.js` 识别反制问题并提供 `fill-countermeasure-response` 一键自动修复建议；
+  4. 报告导出引擎升级 (`design-studio/src/reportBuilder.js`)：
+     - 战法说明书（`tactic-doc`）“七、风险评估与反制应对”自动生成“对抗循环：风险与反制对照总表”，清晰输出对手反制、我方举措与闭环状态；
+     - XML 报告结构化输出 `<countermeasure>`, `<responseMode>`, `<ourResponse>`, `<acceptedRiskRationale>`；
+  5. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m7-adversarial-countermeasures.mjs`：7 项专项断言 100% 通过；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
+- **验证命令与结果**：
+  - `node scripts/check-m7-adversarial-countermeasures.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：40/40 PASS (100%)
+  - `node scripts/run-checks.mjs all`：159/159 PASS (100% 全绿)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 
 
 

@@ -8,6 +8,7 @@ import { buildOv4Model } from "./ov4Builder.js";
 import { buildOv5aModel, buildOv6aModel, buildOv6bModel } from "./dodafOperationalBuilders.js";
 import { enrichIssuesWithLocatorAndRepair } from "./consistencyLocatorStore.js";
 import { evaluateAssumptionImpact, normalizeArgumentChain } from "./argumentChainStore.js";
+import { isCountermeasureClosed, calculateCountermeasureClosure } from "./redTeamStore.js";
 
 export function hasPersistedValidation(ov5Model, oodaModel, scenario, ov1Model) {
   try {
@@ -143,6 +144,23 @@ export function generateValidation(ov5Model, oodaModel, scenario, ov1Model, cont
     });
   }
 
+  // M7-T7.2 对抗循环：红方反制闭环核查
+  const redTeamReview = context?.redTeamReview || context?.validationResult?.redTeamReview;
+  let countermeasureClosure = null;
+  if (redTeamReview && Array.isArray(redTeamReview.findings)) {
+    countermeasureClosure = calculateCountermeasureClosure(redTeamReview);
+    redTeamReview.findings.forEach((finding) => {
+      if (!isCountermeasureClosed(finding)) {
+        issues.push(createIssue(
+          finding.severity === "high" ? "high" : "medium",
+          "对手反制未完成应对",
+          `红方提出之对手反制“${finding.title}”尚未形成我方战术应对举措或完成风险接受审计确认。`,
+          finding.id
+        ));
+      }
+    });
+  }
+
   const enrichedIssues = enrichIssuesWithLocatorAndRepair(issues, { ov5Model, oodaModel, scenario, ov1Model });
 
   const result = {
@@ -152,6 +170,7 @@ export function generateValidation(ov5Model, oodaModel, scenario, ov1Model, cont
     inputSignature: createInputSignature(ov5Model, oodaModel, scenario, ov1Model),
     oodaDuration,
     assumptionImpacts,
+    countermeasureClosure,
     scores: [
       { label: "活动连通性", score: Math.max(0, 100 - countIssues(issues, "活动关联") * 22) },
       { label: "信息闭环", score: Math.max(0, 100 - countIssues(issues, "输入输出") * 26) },

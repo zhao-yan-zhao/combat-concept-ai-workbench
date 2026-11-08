@@ -1072,7 +1072,7 @@ function renderXmlRedTeamReview(review) {
   return [
     `    <redTeamReview mode="${xml(review.mode)}" provider="${xml(review.provider)}" model="${xml(review.model)}" generatedAt="${xml(review.generatedAt)}"${evidenceSelectionAttributes(review.evidenceSelection)}>`,
     xmlElement("summary", review.summary, 3),
-    ...(review.findings || []).map((finding) => `      <finding severity="${xml(finding.severity)}" status="${xml(finding.status || "pending")}" targetType="${xml(finding.targetElement?.type || "activity")}" targetName="${xml(finding.targetElement?.name || "")}"><title>${xml(finding.title)}</title><analysis>${xml(finding.analysis)}</analysis><recommendation>${xml(finding.recommendation)}</recommendation>${finding.status === "rejected" && finding.rejectionRationale ? `<rejectionRationale>${xml(finding.rejectionRationale)}</rejectionRationale>` : ""}<evidenceRefs>${(finding.evidenceRefs || []).map((ref) => `<reference>${xml(ref)}</reference>`).join("")}</evidenceRefs></finding>`),
+    ...(review.findings || []).map((finding) => `      <finding severity="${xml(finding.severity)}" status="${xml(finding.status || "pending")}" targetType="${xml(finding.targetElement?.type || "activity")}" targetName="${xml(finding.targetElement?.name || "")}"><title>${xml(finding.title)}</title><analysis>${xml(finding.analysis)}</analysis><recommendation>${xml(finding.recommendation)}</recommendation><countermeasure>${xml(finding.countermeasure || "")}</countermeasure><responseMode>${xml(finding.responseMode || "none")}</responseMode><ourResponse>${xml(finding.ourResponse || "")}</ourResponse><acceptedRiskRationale>${xml(finding.acceptedRiskRationale || "")}</acceptedRiskRationale>${finding.status === "rejected" && finding.rejectionRationale ? `<rejectionRationale>${xml(finding.rejectionRationale)}</rejectionRationale>` : ""}<evidenceRefs>${(finding.evidenceRefs || []).map((ref) => `<reference>${xml(ref)}</reference>`).join("")}</evidenceRefs></finding>`),
     "    </redTeamReview>"
   ];
 }
@@ -1438,11 +1438,36 @@ function renderRedTeamReviewSection(validation) {
         `- 建议：${inline(finding.recommendation)}`,
         `- 证据：${finding.evidenceRefs.length ? finding.evidenceRefs.map(inline).join("、") : "未引用"}`
       ];
+      if (finding.countermeasure) {
+        baseLines.push(`- 对手反制：${inline(finding.countermeasure)}`);
+        const respText = finding.responseMode === "counteract"
+          ? `【我方应对】${inline(finding.ourResponse || "待制定")}`
+          : finding.responseMode === "accept-risk"
+            ? `【接受风险论证】${inline(finding.acceptedRiskRationale || "待补充理由")}`
+            : "【待闭环】尚未指定应对举措或接受风险论证";
+        baseLines.push(`- 应对方案：${respText}`);
+      }
       if (finding.status === "rejected" && finding.rejectionRationale) {
         baseLines.push(`- 驳回理由：${inline(finding.rejectionRationale)}`);
       }
       return baseLines;
-    }) : ["- 未返回具体质询项。"])
+    }) : ["- 未返回具体质询项。"]),
+    ...(findings.length ? [
+      "",
+      "### 对抗循环：风险与反制对照总表",
+      "| 序号 | 关联要素 | 对手潜在反制手段 | 我方应对举措 / 接受风险论证 | 闭环状态 |",
+      "| :--- | :--- | :--- | :--- | :---: |",
+      ...findings.map((f) => {
+        const isClosed = (f.responseMode === "counteract" && f.ourResponse) || (f.responseMode === "accept-risk" && f.acceptedRiskRationale);
+        const resp = f.responseMode === "counteract"
+          ? `[应对] ${inline(f.ourResponse)}`
+          : f.responseMode === "accept-risk"
+            ? `[接受风险] ${inline(f.acceptedRiskRationale)}`
+            : "待补充应对措施";
+        const elemName = f.targetElement?.name ? inline(f.targetElement.name) : "总体概念";
+        return `| ${inline(f.id)} | ${elemName} | ${inline(f.countermeasure || f.title)} | ${resp} | ${isClosed ? "已闭环" : "未闭合"} |`;
+      })
+    ] : [])
   ];
 }
 

@@ -138,7 +138,8 @@
     "check-m6-red-team-tracking.mjs",
     "check-m6-simulation-result-recycle.mjs",
     "check-m6-consistency-repair.mjs",
-    "check-m7-argument-chain-and-assumptions.mjs"
+    "check-m7-argument-chain-and-assumptions.mjs",
+    "check-m7-adversarial-countermeasures.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",

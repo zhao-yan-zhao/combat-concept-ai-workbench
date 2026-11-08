@@ -1,6 +1,6 @@
 import { selectEvidenceForAi } from "./evidenceSelectionStore.js";
 import { generateRedTeamReview, getRedTeamHealth } from "./redTeamClient.js";
-import { applyRedTeamReview, createLocalRedTeamReview, updateFindingDisposition } from "./redTeamStore.js";
+import { applyRedTeamReview, createLocalRedTeamReview, updateFindingDisposition, updateFindingCountermeasure } from "./redTeamStore.js";
 
 export function createRedTeamController({ getState, render, notify, syncValidation }) {
   return {
@@ -54,6 +54,51 @@ export function createRedTeamController({ getState, render, notify, syncValidati
         updateFindingDisposition(state.validationResult, findingId, { status: "rejected", rejectionRationale: rationale });
         void syncValidation?.(state.validationResult, { source: "disposition-reject" });
         notify("已驳回该红方意见，驳回理由已留存");
+        render();
+        return true;
+      }
+      if (action === "set-countermeasure-mode") {
+        const findingId = element?.dataset?.findingId || element?.closest?.("[data-finding-id]")?.dataset?.findingId || "";
+        const mode = element?.dataset?.mode;
+        if (!findingId || !state.validationResult) return true;
+        updateFindingCountermeasure(state.validationResult, findingId, { responseMode: mode });
+        void syncValidation?.(state.validationResult, { source: "countermeasure-mode" });
+        render();
+        return true;
+      }
+      if (action === "save-countermeasure-response") {
+        const findingId = element?.dataset?.findingId || element?.closest?.("[data-finding-id]")?.dataset?.findingId || "";
+        if (!findingId || !state.validationResult) return true;
+        const textarea = typeof document !== "undefined" ? document.querySelector(`.countermeasure-response-input[data-finding-id="${findingId}"]`) : null;
+        const respText = textarea ? textarea.value : "";
+        if (!String(respText).trim()) {
+          notify("请输入具体的我方应对举措以达成闭环");
+          return true;
+        }
+        updateFindingCountermeasure(state.validationResult, findingId, {
+          responseMode: "counteract",
+          ourResponse: respText
+        });
+        void syncValidation?.(state.validationResult, { source: "countermeasure-save-resp" });
+        notify("已成功记录我方应对战术举措");
+        render();
+        return true;
+      }
+      if (action === "save-countermeasure-risk") {
+        const findingId = element?.dataset?.findingId || element?.closest?.("[data-finding-id]")?.dataset?.findingId || "";
+        if (!findingId || !state.validationResult) return true;
+        const textarea = typeof document !== "undefined" ? document.querySelector(`.countermeasure-risk-input[data-finding-id="${findingId}"]`) : null;
+        const riskText = textarea ? textarea.value : "";
+        if (!String(riskText).trim()) {
+          notify("接受风险失败：必须填写接受风险的可控理由留存审计痕迹");
+          return true;
+        }
+        updateFindingCountermeasure(state.validationResult, findingId, {
+          responseMode: "accept-risk",
+          acceptedRiskRationale: riskText
+        });
+        void syncValidation?.(state.validationResult, { source: "countermeasure-save-risk" });
+        notify("已确认接受对抗风险，论证理由已留存");
         render();
         return true;
       }

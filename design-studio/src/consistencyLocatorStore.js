@@ -17,6 +17,7 @@ export const VIEW_TARGET_CONFIG = {
   ov1: { label: "OV-1 总体概念图", viewId: "ov1" },
   ooda: { label: "OODA 决策循环", viewId: "ooda" },
   scenario: { label: "想定态势与实体", viewId: "scenario" },
+  validation: { label: "设计验证与对抗闭环", viewId: "validation" },
   "phase-action": { label: "阶段与行动链", viewId: "phase-action" },
   "force-mission": { label: "力量与任务编成", viewId: "force-mission" }
 };
@@ -88,6 +89,16 @@ export function enrichIssuesWithLocatorAndRepair(issues, models = {}) {
           targetId: targetElementId
         };
       }
+    } else if (issue.title.includes("反制")) {
+      targetView = "validation";
+      targetElementName = `对手反制 (${targetElementId})`;
+      repairable = true;
+      repairPlan = {
+        type: "fill-countermeasure-response",
+        label: "补充标准抗干扰与机动应对",
+        description: "为该对手反制补充标准战术应对措施：启用跳频跳时多信道冗余，并在末段实施大过载佯动机动规避拦截。",
+        targetId: targetElementId
+      };
     } else if (issue.title.includes("活动") || issue.title.includes("输入输出")) {
       targetView = "ov5";
       const act = activityMap.get(targetElementId);
@@ -260,6 +271,23 @@ export function applyIssueRepair(state, issue) {
       });
       state.ov5.argumentChain = { ...state.ov5.argumentChain, assumptions };
       return { modifiedDomain: "ov5", detail: `已为关键假设补全失效推论说明。` };
+    }
+  }
+
+  if (type === "fill-countermeasure-response") {
+    if (state.validationResult?.redTeamReview?.findings) {
+      const findings = state.validationResult.redTeamReview.findings.map((f) => {
+        if (f.id === targetId) {
+          return {
+            ...f,
+            responseMode: "counteract",
+            ourResponse: "启用跳频跳时多信道冗余通联，并在突防阶段实施大过载佯动机动，化解对手反制拦截。"
+          };
+        }
+        return f;
+      });
+      state.validationResult.redTeamReview = { ...state.validationResult.redTeamReview, findings };
+      return { modifiedDomain: "validation", detail: "已为对手反制自动补全战术应对措施。" };
     }
   }
 

@@ -1,4 +1,5 @@
 import { renderProjectStorageState } from "./projectStorageView.js";
+import { isCountermeasureClosed, calculateCountermeasureClosure } from "./redTeamStore.js";
 
 export function renderValidation(state) {
   const result = state.validationResult;
@@ -62,13 +63,14 @@ function renderRedTeamReview(result, running, health) {
   const pendingCount = findings.filter((f) => !f.status || f.status === "pending").length;
   const closedCount = acceptedCount + revisedCount + rejectedCount;
   const rate = findings.length ? Math.round((closedCount / findings.length) * 100) : 100;
+  const cmClosure = calculateCountermeasureClosure(review);
 
   return `
     <section class="surface surface-pad">
       <div class="section-heading">
         <div>
-          <h2>红方质询与意见处置追踪</h2>
-          <p>生成时间：${new Date(review.generatedAt).toLocaleString("zh-CN", { hour12: false })}</p>
+          <h2>红方质询与对抗循环追踪 (T7.2)</h2>
+          <p>生成时间：${new Date(review.generatedAt).toLocaleString("zh-CN", { hour12: false })} · 对抗反制闭环率：${cmClosure.closureRate}%</p>
         </div>
         <div class="activity-toolbar">
           <span class="status-tag ${review.mode === "ai" ? "" : "review"}">${modeLabel}</span>
@@ -80,8 +82,8 @@ function renderRedTeamReview(result, running, health) {
 
       <div class="red-team-tracking-summary">
         <div class="tracking-summary-label">
-          <strong>审阅处置闭环率：${rate}%</strong>
-          <span>共 ${findings.length} 条质询 · 已闭环 ${closedCount} 条</span>
+          <strong>审阅处置闭环率：${rate}% · 对抗反制闭环：${cmClosure.closed}/${cmClosure.total}</strong>
+          <span>${cmClosure.unclosed > 0 ? `<b style="color:#dc2626;">尚有 ${cmClosure.unclosed} 项对手反制待闭环</b>` : `<span style="color:#16a34a;">✔ 全部反制已闭环</span>`}</span>
         </div>
         <div class="tracking-summary-pills">
           <span class="tracking-pill revised">已修订 ${revisedCount}</span>
@@ -90,6 +92,20 @@ function renderRedTeamReview(result, running, health) {
           <span class="tracking-pill pending">待处置 ${pendingCount}</span>
         </div>
       </div>
+
+      ${cmClosure.unclosed > 0 ? `
+        <div class="countermeasure-alert-banner" role="status" style="margin-top:10px; padding:8px 12px; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; color:#b91c1c; font-size:12px; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <strong>⚠️ 对抗循环未完全闭环（${cmClosure.unclosed} 项未处理）：</strong>
+            <span>红方提出之对手反制手段必须逐一形成我方战术应对或填写接受风险论证理由，战法方可具备抗制胜机理。</span>
+          </div>
+          <span class="mini-tag" style="background:#fee2e2; color:#b91c1c;">闭环率: ${cmClosure.closureRate}%</span>
+        </div>
+      ` : `
+        <div class="countermeasure-alert-banner" role="status" style="margin-top:10px; padding:8px 12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; color:#15803d; font-size:12px;">
+          <strong>✔ 对抗循环已达成完整闭环：</strong>全部 ${cmClosure.total} 项对手反制手段均已制定具体应对举措或完成可承受风险审计确认。
+        </div>
+      `}
 
       <div class="red-team-list">
         ${findings.map((item) => {
@@ -102,6 +118,7 @@ function renderRedTeamReview(result, running, health) {
           };
           const curStatus = statusMap[status] || statusMap.pending;
           const target = item.targetElement || { name: "关键作战机理要素", type: "activity" };
+          const closed = isCountermeasureClosed(item);
           return `
             <article class="red-team-finding ${item.severity} is-${status}">
               <div class="finding-header">
@@ -122,6 +139,48 @@ function renderRedTeamReview(result, running, health) {
                   <strong>驳回理由：</strong>${escapeHtml(item.rejectionRationale)}
                 </div>
               ` : ""}
+
+              <!-- 对抗循环：对手反制 → 我方应对 / 接受风险 -->
+              <div class="finding-countermeasure-box" style="margin-top:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <strong style="font-size:12px; color:#1e293b;">⚔️ 对抗循环：对手可能反制 → 我方应对</strong>
+                  <span class="mini-tag" style="background:${closed ? "#dcfce7" : "#fee2e2"}; color:${closed ? "#15803d" : "#dc2626"}; font-size:11px; font-weight:700;">
+                    ${closed ? "✔ 反制已闭环" : "⚠️ 反制待闭环"}
+                  </span>
+                </div>
+                <div style="font-size:12px; color:#334155; margin-bottom:8px; line-height:1.4;">
+                  <strong>对手反制手段：</strong>${escapeHtml(item.countermeasure || item.analysis)}
+                </div>
+
+                <div class="countermeasure-edit-panel" style="font-size:11px;">
+                  <div style="display:flex; gap:6px; margin-bottom:6px; align-items:center;">
+                    <span style="color:#64748b; font-weight:600;">应对策略：</span>
+                    <button type="button" class="quiet-button compact-btn ${item.responseMode === "counteract" ? "active" : ""}" data-action="set-countermeasure-mode" data-finding-id="${escapeHtml(item.id)}" data-mode="counteract" style="${item.responseMode === "counteract" ? "background:#e0f2fe; color:#0369a1; font-weight:700;" : ""}">🛡️ 针对应对</button>
+                    <button type="button" class="quiet-button compact-btn ${item.responseMode === "accept-risk" ? "active" : ""}" data-action="set-countermeasure-mode" data-finding-id="${escapeHtml(item.id)}" data-mode="accept-risk" style="${item.responseMode === "accept-risk" ? "background:#fef3c7; color:#92400e; font-weight:700;" : ""}">⚖️ 接受风险</button>
+                  </div>
+
+                  ${item.responseMode === "counteract" ? `
+                    <div style="margin-top:6px;">
+                      <label style="display:block; margin-bottom:2px; font-weight:600; color:#0369a1;">我方战术应对举措：</label>
+                      <textarea class="countermeasure-response-input" data-finding-id="${escapeHtml(item.id)}" rows="2" style="width:100%; box-sizing:border-box; font-size:11px; padding:4px 6px; border:1px solid #93c5fd; border-radius:4px; background:#fff;" placeholder="阐明我方如何化解、突破或反压制对手的反制举措...">${escapeHtml(item.ourResponse || "")}</textarea>
+                      <div style="display:flex; justify-content:flex-end; margin-top:4px;">
+                        <button type="button" class="quiet-button compact-btn" data-action="save-countermeasure-response" data-finding-id="${escapeHtml(item.id)}">保存应对措施</button>
+                      </div>
+                    </div>
+                  ` : item.responseMode === "accept-risk" ? `
+                    <div style="margin-top:6px;">
+                      <label style="display:block; margin-bottom:2px; font-weight:600; color:#b45309;">接受风险理由论证（必填，留存审计痕迹）：</label>
+                      <textarea class="countermeasure-risk-input" data-finding-id="${escapeHtml(item.id)}" rows="2" style="width:100%; box-sizing:border-box; font-size:11px; padding:4px 6px; border:1px solid #fcd34d; border-radius:4px; background:#fff;" placeholder="论证说明该对抗反制在当前战役阶段为何可控、残留风险为何可承受...">${escapeHtml(item.acceptedRiskRationale || "")}</textarea>
+                      <div style="display:flex; justify-content:flex-end; margin-top:4px;">
+                        <button type="button" class="quiet-button compact-btn" data-action="save-countermeasure-risk" data-finding-id="${escapeHtml(item.id)}">确认接受风险</button>
+                      </div>
+                    </div>
+                  ` : `
+                    <div style="color:#94a3b8; font-style:italic; padding:4px 0;">请点击上方按钮选择“针对应对”输入战术举措，或选择“接受风险”填报论证理由以闭环。</div>
+                  `}
+                </div>
+              </div>
+
               <div class="finding-actions">
                 <button type="button" class="quiet-button compact-btn action-accept" data-action="accept-red-team-finding" data-finding-id="${escapeHtml(item.id)}" title="接受此意见，后续安排修订">接受</button>
                 <button type="button" class="quiet-button compact-btn action-revise" data-action="revise-red-team-finding" data-finding-id="${escapeHtml(item.id)}" title="标记此意见已在当前模型中完成修订">已修订</button>
