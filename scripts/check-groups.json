@@ -131,7 +131,8 @@
     "check-m4-obsidian-writeback.mjs",
     "check-m5-golden-cases.mjs",
     "check-m5-schema-validation-retry.mjs",
-    "check-m5-prompt-evaluator.mjs"
+    "check-m5-prompt-evaluator.mjs",
+    "check-m5-offline-and-local-model.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",

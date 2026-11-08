@@ -1,4 +1,5 @@
 import { escapeHtml } from "./app/domUtils.js";
+import { resolveAiActionLabel } from "./app/aiAvailability.js";
 import { isConceptGraphicPlanConfirmed } from "./conceptGraphicStore.js";
 import { renderPlanningMigrationBanner } from "./planningContext.js";
 
@@ -41,7 +42,7 @@ export function renderConceptGraphic(state) {
     ${upstreamReady ? "" : `<p class="planning-banner">请先确认兵力与任务、阶段与行动，并确认作战概念图研究参考。完成后将自动汇总本步草案。</p>`}
 
     <div class="planning-actions">
-      <button type="button" data-action="generate-concept-graphic" ${generating || !upstreamReady ? "disabled" : ""}>${generating ? "正在汇总…" : nodes.length ? "按规划重生成总体概念图" : "汇总生成总体作战概念图"}</button>
+      <button type="button" data-action="generate-concept-graphic" ${generating || !upstreamReady ? "disabled" : ""}>${resolveAiActionLabel(state, nodes.length ? "按规划重生成总体概念图" : "汇总生成总体作战概念图", "正在汇总…", generating)}</button>
       <button type="button" class="quiet-button" data-action="confirm-concept-graphic" ${generating || !nodes.length || confirmed ? "disabled" : ""}>确认总体概念图并进入高层作战概念图</button>
     </div>
 

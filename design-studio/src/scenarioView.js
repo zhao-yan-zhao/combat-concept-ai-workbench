@@ -1,4 +1,5 @@
 import { renderDeploymentIntegration } from "./deploymentView.js";
+import { resolveAiActionLabel } from "./app/aiAvailability.js";
 import { renderProjectStorageState } from "./projectStorageView.js";
 import { getScenarioFreshness } from "./scenarioStore.js";
 import { renderSimulationAdapter } from "./simulationAdapterView.js";
@@ -67,7 +68,7 @@ export function renderScenario(state) {
           </div>
           <div class="scenario-actions-bar">
             <button type="button" class="primary-btn scenario-action-primary" data-action="generate-scenario">
-              ${freshness.stale ? "重新编译想定" : scenario ? "AI 重新编译" : "AI 编译生成想定"}
+              ${resolveAiActionLabel(state, freshness.stale ? "重新编译想定" : scenario ? "AI 重新编译" : "AI 编译生成想定", "正在编译…", generating)}
             </button>
             <button type="button" class="quiet-button" data-action="run-validation" title="执行确定性规则与红方对抗质询">
               运行效能验证
@@ -138,7 +139,7 @@ export function renderScenario(state) {
           ${!scenario ? `
             <div class="scenario-empty-hint idea-prompt">
               <p><strong>全要素想定说明：</strong>系统将自动综合前序成果，生成红蓝双方推演实体（含搭载平台装备属性）、任务几何区域（圆形/多边形/巡逻走廊）以及跨阶段的动态对抗事件序列，并可导出为 <code>deployment_data</code> 与 <code>GeoJSON</code>。</p>
-              <button data-action="generate-scenario" class="primary-button" style="margin-top:10px;">AI 编译生成想定</button>
+              <button data-action="generate-scenario" class="primary-button" style="margin-top:10px;">${resolveAiActionLabel(state, "AI 编译生成想定", "正在编译…", generating)}</button>
             </div>
           ` : `
             ${scenario.summary ? `<div class="scenario-summary-card"><p>${escapeHtml(scenario.summary)}</p></div>` : ""}

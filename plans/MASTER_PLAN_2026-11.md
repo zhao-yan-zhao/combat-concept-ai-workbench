@@ -843,31 +843,31 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：149/149 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
-### 2026-11-08 T5.3 真实落地：评测脚本（eval-prompts.mjs）与指标评测引擎
+### 2026-11-08 T5.4 真实落地：本地模型与离线运行支持
 
 - **实施内容**：
-  1. 提示词质量与输出评测核心引擎 (`eval/evaluator.mjs`)：
-     - **结构合法率 (Schema Validity Rate)**：接入 `validateSchema` 与 `resolveDraftSchema`，严格核验模型输出的类型、属性、嵌套结构与枚举值；
-     - **引用合法率 (Citation Validity Rate)**：自动深度提取输出中的显式引用（`citations`、`evidenceRefs`）及正文引用标记（`[ev-xx]`），对照输入证据白名单比对；对未声明或伪造的证据标记为“幻觉引用”，实现科研级零捏造证据溯源；
-     - **关键字段完整率 (Field Completeness Rate)**：逐项判定 `requiredFields` 必填字段、`minCounts` 集合最小数量约束及 `minLengths` 文本最小长度；
-     - **语义质量与安全边界检查 (Semantic Quality)**：关键词白名单覆盖及违规词黑名单拦截（严格保证抽象网格，绝无真实地理经纬度敏感词）；
-     - **多维指标聚合与评分 (aggregateResults)**：产出结构合法率、引用合法率、完整率、语义达标率与综合评分，支持按战法/机理/想定及按 PromptId 细分统计；
-     - **控制台报告排版 (formatConsoleReport)**：支持表格化用例明细与核心指标汇总看板展示；
-  2. 独立人工触发评测运行脚本 (`scripts/eval-prompts.mjs`)：
-     - 支持 `--live`（真实大模型在线生成并评测）、`--golden`（基准离线评测黄金用例库）、`--category`、`--prompt`、`--case` 细粒度筛选；
-     - 支持 `--save` 将评测明细 JSON 持久化至 `eval/results/`；
-     - 本脚本定位为按需触发的真实评测工具，不进全量自动回归 `run-checks`；
-  3. 黄金用例库数据对齐：
-     - 对 `tactic-force-01~06` 完善 4 概念单元 + 4 作战编成包及平台规格数据，实现 30 条黄金用例在 DoDAF 元模型 Schema 校验下的 100% 结构合法率；
-  4. 专用自动化回归测试与基线纳入：
-     - 新建 `scripts/check-m5-prompt-evaluator.mjs`，覆盖证据提取、零幻觉判定、完整率统计、语义黑白名单核验、30 条黄金用例 100% 达标测试与 CLI 冒烟；
+  1. 本地大模型与自定义端点支持 (`server/aiServiceConfig.mjs`)：
+     - 核实并强化 `baseUrl` 归一化校验：全面支持 `http://127.0.0.1:11434/v1`、`http://localhost:8000/v1` 等本地离线端点，且不强制联网与外部鉴权；
+     - 预设 Gemini 本地网关 (`http://127.0.0.1:8045/v1`) 与自定义端点完全解耦外网连通性；
+  2. 全局 100% 离线资源审计与外链清零：
+     - 全量审计所有 HTML、CSS 与前端脚本，消除原型遗留的 `unpkg.com` 外部 CDN 依赖，全面替换为本地离线垫片 (`prototypes/ov-validation-demo/lucide-local.js`)；
+     - 工作台核心 (`design-studio/`) 的 Mermaid、Sequence Diagrams、Underscore 库 100% 本地自包含；
+  3. AI 服务可用性感知与统一按钮降级机制 (`design-studio/src/app/aiAvailability.js`)：
+     - 导出 `isAiAvailable(state)` 与 `resolveAiActionLabel(state, defaultLabel, busyLabel, busy)`；
+     - 当检测到 AI 未配置或处于 `mock-fallback` 时，将主流程步骤中的生成按钮统一自适应呈现为 **"AI 不可用，可手工起草"**；
+     - 覆盖 `phaseActionView`、`conceptGraphicView`、`scenarioView`、`ov5MechanismView`、`subflowToolbox` 与 `workflowGate` 固定条；
+  4. 本地标准起草模板入口 (`design-studio/src/app/localDraftTemplates.js`)：
+     - 提供 `createLocalPhaseActionTemplate`、`createLocalForceMissionTemplate`、`createLocalConceptGraphicTemplate` 与 `createLocalScenarioTemplate`；
+     - 在 AI 离线/不可用或用户选择手工起草时，直接提供 100% 符合 DoDAF 2.0 / DM2 元模型与 Schema 校验的初始规范模板，消除冷启动卡点；
+  5. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m5-offline-and-local-model.mjs`，包含本地端点保存重载、全量零外链标签静态审计、AI 可用性门禁降级文案与 4 套本地模板的 Schema 校验断言；
      - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
 - **验证命令与结果**：
-  - `node scripts/eval-prompts.mjs`：30/30 用例全绿，结构合法率 100%，引用合法率 100%，完整率 100%，均分 100 分；
-  - `node scripts/check-m5-prompt-evaluator.mjs`：100% PASS
-  - `node scripts/run-checks.mjs ui-static`：32/32 PASS (100%)
-  - `node scripts/run-checks.mjs all`：151/151 PASS (100%)
+  - `node scripts/check-m5-offline-and-local-model.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：33/33 PASS (100%)
+  - `node scripts/run-checks.mjs all`：152/152 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 
 
 

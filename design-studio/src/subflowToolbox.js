@@ -1,4 +1,5 @@
 import { escapeHtml } from "./app/domUtils.js";
+import { resolveAiActionLabel } from "./app/aiAvailability.js";
 import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
 
 /**
@@ -74,7 +75,8 @@ export function renderSubflowToolboxRail(viewId, state = {}) {
   const config = SUBFLOW_TOOLS[viewId];
   if (!config || usesNativeToolbox(viewId) || !isSubflowToolboxOpen(viewId, state)) return "";
   const busy = isBusy(viewId, state);
-  const [aiAction, aiLabel, aiIcon] = config.ai;
+  const [aiAction, rawAiLabel, aiIcon] = config.ai;
+  const aiLabel = resolveAiActionLabel(state, rawAiLabel, "正在生成…", busy);
   const resolvedIcon = aiIcon || (aiAction?.includes("chat") ? "chat" : "sparkle");
   const items = [
     { action: aiAction, title: aiLabel, label: aiLabel, icon: resolvedIcon, attention: true, disabled: busy },

@@ -1,4 +1,5 @@
 import { escapeHtml } from "./app/domUtils.js";
+import { resolveAiActionLabel } from "./app/aiAvailability.js";
 import {
   getSelectedCombatFocuses,
   hasSelectedCombatFocus,
@@ -78,7 +79,7 @@ export function renderPhaseAction(state) {
     ${showResearchBench ? `
     <div class="phase-workbench ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}" aria-label="阶段与行动研究台">
       <div class="phase-main-stage">
-        ${renderPhaseChain({ phases, transitions, focusId, busy, focusConfirmed, generating, confirmed, chatGenerating, generation: plan.generation || {} })}
+        ${renderPhaseChain({ phases, transitions, focusId, busy, focusConfirmed, generating, confirmed, chatGenerating, generation: plan.generation || {}, state })}
         ${renderPhaseDetail({
           phases,
           focus,
@@ -113,7 +114,7 @@ export function renderPhaseAction(state) {
           ? "已选择聚焦，请确认后自动生成阶段草案。"
           : "请先多选作战聚焦并确认，再生成阶段草案。"}</p>
       ${focusConfirmed ? `<div class="planning-actions phase-empty-actions">
-        <button type="button" data-action="generate-phase-action" ${busy ? "disabled" : ""}>${generating ? "正在生成阶段…" : "根据已确认聚焦生成阶段草案"}</button>
+        <button type="button" data-action="generate-phase-action" ${busy ? "disabled" : ""}>${resolveAiActionLabel(state, "根据已确认聚焦生成阶段草案", "正在生成阶段…", generating)}</button>
       </div>` : ""}
     </div>
     `}
@@ -217,7 +218,7 @@ function renderCombatFocusBlock({
     </section>`;
 }
 
-function renderPhaseChain({ phases, transitions, focusId, busy, focusConfirmed, generating, confirmed = false, chatGenerating = false, generation = {} }) {
+function renderPhaseChain({ phases, transitions, focusId, busy, focusConfirmed, generating, confirmed = false, chatGenerating = false, generation = {}, state = {} }) {
   const source = String(generation.source || "").trim();
   const sourceLabel = source === "ai"
     ? "来源 AI"
@@ -258,7 +259,7 @@ function renderPhaseChain({ phases, transitions, focusId, busy, focusConfirmed, 
         </div>
         <div class="planning-actions phase-chain-actions">
           <button type="button" class="primary-button" data-action="confirm-phase-action" ${busy || chatGenerating || !phases.length || confirmed ? "disabled" : ""}>${confirmed ? "已确认 · 去规则绑定" : "确认阶段与行动"}</button>
-          <button type="button" class="quiet-button" data-action="generate-phase-action" ${busy || !focusConfirmed ? "disabled" : ""}>${generating ? "正在生成…" : "重生成阶段草案"}</button>
+          <button type="button" class="quiet-button" data-action="generate-phase-action" ${busy || !focusConfirmed ? "disabled" : ""}>${resolveAiActionLabel(state, "重生成阶段草案", "正在生成…", generating)}</button>
           ${phases.length ? `<button type="button" class="quiet-button danger-quiet" data-action="clear-all-phases" ${busy ? "disabled" : ""} title="清空已生成的全部阶段与行动">清空全部阶段</button>` : ""}
         </div>
       </aside>`;

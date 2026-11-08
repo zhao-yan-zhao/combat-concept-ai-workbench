@@ -1,4 +1,5 @@
 import { getActivityHierarchy, getAssignableParentActivities } from "./ov5Store.js";
+import { resolveAiActionLabel } from "./app/aiAvailability.js";
 import { evaluateOodaLoopHealth } from "./oodaStore.js";
 import { renderProjectStorageState } from "./projectStorageView.js";
 import { renderOriginBadge, calculateEvidenceCoverage } from "./citationProvenanceView.js";
@@ -62,7 +63,7 @@ export function renderOv5Workbench(state, context = {}) {
             </div>
           </div>
           <div class="ov5-header-primary-actions">
-            <button type="button" class="ov5-btn-primary" data-action="generate-ov5" ${state.ov5Generating ? "disabled" : ""}>${state.ov5Generating ? "正在生成" : "AI 重建活动网"}</button>
+            <button type="button" class="ov5-btn-primary" data-action="generate-ov5" ${state.ov5Generating ? "disabled" : ""}>${resolveAiActionLabel(state, "AI 重建活动网", "正在生成", state.ov5Generating)}</button>
             ${activities.length > 0 ? `<button class="quiet-button ov5-btn-next" type="button" data-view="ov1" title="进入总体概念表达阶段">提炼总体图 →</button>` : ""}
           </div>
         </div>
