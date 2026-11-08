@@ -820,6 +820,30 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：148/148 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
+### 2026-11-08 T5.1 真实落地：评测集扩充（30 条黄金用例）
+
+- **实施内容**：
+  1. 黄金用例库规范与目录拓扑建设 (`eval/cases/<promptId>/<caseId>.json`)：
+     - 覆盖 6 个核心提示词目录：`ai.generate.concept-brief`、`ai.generate.force-mission`、`ai.generate.activity-decomposition`、`ai.generate.ov1-graphic`、`ai.generate.scenario`、`ai.generate.phase-action`；
+     - 全量建设 30 条黄金评测用例，严格按 10:10:10 均衡分布：
+       * **战法类 (tactic，10 条)**：4 条概念简报 (`tactic-brief-01~04`)、6 条兵力与作战编成规划 (`tactic-force-01~06`)；
+       * **机理类 (mechanism，10 条)**：5 条 OV-5a 活动工序树分解 (`mech-decomp-01~05`)、5 条 OV-1 概念图五节点闭环 (`mech-ov1-01~05`)；
+       * **想定类 (scenario，10 条)**：6 条仿真推演想定草案 (`scenario-draft-01~06`)、4 条四阶段作战行动时序与转换条件 (`scenario-phase-01~04`)；
+  2. 统一结构化数据契约与硬性质量断言：
+     - 每个用例包含 `id`、`category`、`promptId`、`schema`、`name`、`description`、`input`、`expectedAssertions`（必填根字段、关键词白名单、违禁词黑名单）与 `goldenReference` 真实黄金参考数据；
+     - 严格遵守作战概念研究工具安全边界：纯抽象相对网格与标准 DoDAF 2.0 / DM2 元模型，绝无真实经纬度或涉密参数；
+  3. 评测集检索与加载模块 (`eval/caseLoader.mjs`)：
+     - 提供 `loadAllCases()`、`getCasesByCategory(cat)`、`getCasesByPromptId(pid)`、`getCaseById(id)` 与 `validateGoldenCase(caseData)`；
+  4. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m5-golden-cases.mjs`，全量核验目录覆盖、30 条用例规模与分类统计、契约合法性与黑白名单断言；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
+- **验证命令与结果**：
+  - `node scripts/check-m5-golden-cases.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：30/30 PASS (100%)
+  - `node scripts/run-checks.mjs all`：149/149 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+
 
 
 

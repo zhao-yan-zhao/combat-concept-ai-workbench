@@ -1,0 +1,114 @@
+{
+  "id": "scenario-draft-04",
+  "category": "scenario",
+  "promptId": "ai.generate.scenario",
+  "schema": "ScenarioDraft",
+  "name": "无人集群饱和攻击要地拦截想定",
+  "description": "验证基地防空面对多批次低成本无人自杀机集群时的弹药消耗与拦截率",
+  "input": {
+    "workflow": {
+      "title": "仿真想定",
+      "outputSchema": "ScenarioDraft"
+    },
+    "analysis": {
+      "scenarioScope": "要地蜂群防御",
+      "phaseAction": {
+        "phases": [
+          {
+            "name": "饱和抗击",
+            "timeWindow": "T+00:00-T+00:15"
+          }
+        ]
+      },
+      "forces": []
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "title",
+      "summary",
+      "entities",
+      "timeline",
+      "narrative"
+    ],
+    "minCounts": {
+      "entities": 2,
+      "timeline": 2
+    },
+    "keywords": [
+      "friendly",
+      "hostile"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "title": "无人蜂群饱和空袭要地综合拦截想定",
+    "summary": "面对红方三批次共计百架规模小型无人机蜂群空袭，蓝方组合运用微波定向能、近防弹炮与网捕系统实施多层防御。",
+    "entities": [
+      {
+        "id": "ent-blue-base-guard",
+        "label": "基地近程综合防空系统",
+        "role": "action",
+        "side": "friendly",
+        "position": [
+          20,
+          70
+        ],
+        "platform": "高炮导弹微波综合防御车",
+        "task": "守卫跑道及指挥枢纽"
+      },
+      {
+        "id": "ent-red-swarm-wave",
+        "label": "红方自杀式无人蜂群编队",
+        "role": "opponent",
+        "side": "hostile",
+        "position": [
+          65,
+          75
+        ],
+        "platform": "微型巡飞弹集群",
+        "task": "密集突防瘫痪雷达天线"
+      }
+    ],
+    "areas": [
+      {
+        "id": "area-base-protect",
+        "label": "要地核心防空内圈",
+        "type": "patrol",
+        "position": [
+          20,
+          70
+        ],
+        "size": 60,
+        "geometryType": "circle",
+        "points": [
+          {
+            "latitude": 0,
+            "longitude": 0,
+            "label": "基地中心"
+          }
+        ]
+      }
+    ],
+    "timeline": [
+      {
+        "time": "T+00:04",
+        "phase": "饱和抗击",
+        "title": "高功率微波连续照射",
+        "description": "定向能系统使首波蜂群航电短路坠落",
+        "impact": "消解30%进攻规模"
+      },
+      {
+        "time": "T+00:09",
+        "phase": "饱和抗击",
+        "title": "转管速射炮拦截漏网目标",
+        "description": "密集阵雷达自动装订引信实施幕帘射击",
+        "impact": "残余蜂群全数被摧毁"
+      }
+    ],
+    "narrative": "揭示定向能面杀伤手段与传统动能防空速射武器在抵御密集集群攻击时的互补优势。"
+  }
+}

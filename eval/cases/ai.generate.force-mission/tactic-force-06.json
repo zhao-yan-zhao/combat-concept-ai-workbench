@@ -1,0 +1,102 @@
+{
+  "id": "tactic-force-06",
+  "category": "tactic",
+  "promptId": "ai.generate.force-mission",
+  "schema": "ForceMissionPlan",
+  "name": "无人异构集群与母艇母机立体协同编组",
+  "description": "验证母舰平台投放水下微型潜航器与巡飞弹协同作战编队",
+  "input": {
+    "workflow": {
+      "title": "兵力任务",
+      "outputSchema": "ForceMissionPlan"
+    },
+    "analysis": {
+      "operationalTasks": [
+        {
+          "id": "task-swarm-1",
+          "name": "异构微小型集群饱和渗透",
+          "side": "friendly",
+          "phaseId": "phase-1",
+          "missionType": "strike",
+          "objective": "破击敌要害阵地",
+          "expectedEffect": "瘫痪关键指挥节点"
+        }
+      ],
+      "phaseAction": {
+        "phases": [
+          {
+            "id": "phase-1",
+            "name": "集群突防阶段"
+          }
+        ]
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "forces",
+      "combatForces"
+    ],
+    "minCounts": {
+      "forces": 1,
+      "combatForces": 1
+    },
+    "keywords": [
+      "strike",
+      "friendly"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "summary": "母机承载并快速投放微型自组织巡飞弹蜂群，实现防区外安全发射与蜂群末端自主寻歼。",
+    "forces": [
+      {
+        "id": "cf-hetero-swarm",
+        "name": "分布式异构集群攻防作战单元",
+        "side": "friendly",
+        "role": "action",
+        "group": "集群作战群",
+        "missionType": "strike",
+        "task": "接收任务包后自主分散入役，形成动态包围圈攻击",
+        "taskRefs": [
+          "task-swarm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "notes": ""
+      }
+    ],
+    "combatForces": [
+      {
+        "id": "cbf-mothership-carrier",
+        "name": "蜂群运载投送母机编队",
+        "side": "friendly",
+        "role": "command",
+        "conceptForceId": "cf-hetero-swarm",
+        "group": "空中投送机群",
+        "missionType": "strike",
+        "task": "在战术安全边界完成高密度蜂群弹射展开并提供初始数据链",
+        "taskRefs": [
+          "task-swarm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [],
+        "notes": ""
+      }
+    ],
+    "relations": [],
+    "openQuestions": [
+      "蜂群投放瞬间的气动分离安全及快速建链时间"
+    ],
+    "reviewChecklist": [
+      "审查蜂群自杀攻击决策伦理门禁（HITL模式保持）"
+    ]
+  }
+}

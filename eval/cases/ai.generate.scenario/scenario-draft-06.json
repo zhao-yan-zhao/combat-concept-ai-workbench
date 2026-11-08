@@ -1,0 +1,114 @@
+{
+  "id": "scenario-draft-06",
+  "category": "scenario",
+  "promptId": "ai.generate.scenario",
+  "schema": "ScenarioDraft",
+  "name": "港口航道反水雷与护航防卫想定",
+  "description": "检验反水雷母船使用自主潜航器清障与舰艇出港护航全过程",
+  "input": {
+    "workflow": {
+      "title": "仿真想定",
+      "outputSchema": "ScenarioDraft"
+    },
+    "analysis": {
+      "scenarioScope": "港口清障破阻",
+      "phaseAction": {
+        "phases": [
+          {
+            "name": "清障引航",
+            "timeWindow": "T+00:00-T+01:20"
+          }
+        ]
+      },
+      "forces": []
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "title",
+      "summary",
+      "entities",
+      "timeline",
+      "narrative"
+    ],
+    "minCounts": {
+      "entities": 2,
+      "timeline": 2
+    },
+    "keywords": [
+      "friendly",
+      "support"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "title": "要害港口出航航道反水雷护航想定",
+    "summary": "敌方在主要出海水道布设沉底智能声磁水雷，蓝方反水雷特战编组实施声学诱爆与无人灭雷，保障补给船队安全开拔。",
+    "entities": [
+      {
+        "id": "ent-blue-mcm-ship",
+        "label": "蓝方多能反水雷支援母舰",
+        "role": "support",
+        "side": "friendly",
+        "position": [
+          15,
+          15
+        ],
+        "platform": "远洋反水雷母舰",
+        "task": "下放无人潜航器与引航"
+      },
+      {
+        "id": "ent-blue-convoy",
+        "label": "蓝方战术物资护航运输群",
+        "role": "command",
+        "side": "friendly",
+        "position": [
+          10,
+          10
+        ],
+        "platform": "综合补给集装箱船队",
+        "task": "跟随扫雷通道安全出港"
+      }
+    ],
+    "areas": [
+      {
+        "id": "area-channel",
+        "label": "主要疏港深水航槽",
+        "type": "patrol",
+        "position": [
+          25,
+          25
+        ],
+        "size": 80,
+        "geometryType": "corridor",
+        "points": [
+          {
+            "latitude": 0,
+            "longitude": 0,
+            "label": "航槽轴线"
+          }
+        ]
+      }
+    ],
+    "timeline": [
+      {
+        "time": "T+00:25",
+        "phase": "清障引航",
+        "title": "自主灭雷机器人就位切割",
+        "description": "对两枚可疑磁性引信沉底水雷实施就地炸毁",
+        "impact": "主航道障碍清空"
+      },
+      {
+        "time": "T+01:00",
+        "phase": "清障引航",
+        "title": "护航船队平稳通过危险水区",
+        "description": "在声呐浮标实时监控下船队进入深海大洋",
+        "impact": "战备物资按计划离港"
+      }
+    ],
+    "narrative": "展示无人灭雷系统在快速解除关键港口封锁时的低风险与高处置时效。"
+  }
+}

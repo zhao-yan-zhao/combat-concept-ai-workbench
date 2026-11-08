@@ -1,0 +1,133 @@
+{
+  "id": "scenario-draft-03",
+  "category": "scenario",
+  "promptId": "ai.generate.scenario",
+  "schema": "ScenarioDraft",
+  "name": "强电磁干扰与通信拒止环境下的防空反导想定",
+  "description": "检验卫星通信被切断后，各战术节点基于预设规则自主防空的推演想定",
+  "input": {
+    "workflow": {
+      "title": "仿真想定",
+      "outputSchema": "ScenarioDraft"
+    },
+    "analysis": {
+      "scenarioScope": "通信拒止自主防空",
+      "phaseAction": {
+        "phases": [
+          {
+            "name": "自主拦截",
+            "timeWindow": "T+00:00-T+00:20"
+          }
+        ]
+      },
+      "forces": [
+        {
+          "id": "f-blue-ad",
+          "name": "蓝方防空单元",
+          "side": "friendly"
+        }
+      ]
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "title",
+      "summary",
+      "entities",
+      "timeline",
+      "narrative"
+    ],
+    "minCounts": {
+      "entities": 2,
+      "timeline": 2
+    },
+    "keywords": [
+      "friendly",
+      "hostile",
+      "sensor"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "title": "通信拒止环境下自主防空反导推演想定",
+    "summary": "在红方全频段压制干扰导致指挥所指令中断时，蓝方前沿防空导弹发射架启用预置交战规则自主截击。",
+    "entities": [
+      {
+        "id": "ent-blue-radar",
+        "label": "蓝方伴随对空雷达哨",
+        "role": "sensor",
+        "side": "friendly",
+        "position": [
+          25,
+          30
+        ],
+        "platform": "机动相控阵低空雷达",
+        "task": "独立探测超低空目标"
+      },
+      {
+        "id": "ent-blue-auto-sam",
+        "label": "蓝方自主防空发射单元",
+        "role": "command",
+        "side": "friendly",
+        "position": [
+          30,
+          30
+        ],
+        "platform": "野战防空发射车",
+        "task": "失联下自主激活防空火控"
+      },
+      {
+        "id": "ent-red-incoming",
+        "label": "红方低空反舰巡航导弹群",
+        "role": "opponent",
+        "side": "hostile",
+        "position": [
+          80,
+          32
+        ],
+        "platform": "高亚音速巡航导弹",
+        "task": "掠海突防打击蓝方阵地"
+      }
+    ],
+    "areas": [
+      {
+        "id": "area-jammed",
+        "label": "强电磁干扰重度覆盖区",
+        "type": "exclusion",
+        "position": [
+          50,
+          30
+        ],
+        "size": 140,
+        "geometryType": "circle",
+        "points": [
+          {
+            "latitude": 0,
+            "longitude": 0,
+            "label": "干扰中心"
+          }
+        ]
+      }
+    ],
+    "timeline": [
+      {
+        "time": "T+00:02",
+        "phase": "自主拦截",
+        "title": "上级数据链通信中断",
+        "description": "车载通信机信噪比降至门限以下，进入独立交战模式",
+        "impact": "系统转为本地传感器决策"
+      },
+      {
+        "time": "T+00:12",
+        "phase": "自主拦截",
+        "title": "毫米波雷达自捕获并开火",
+        "description": "在15个网格单位距离连续发射两枚拦截弹",
+        "impact": "首批来袭弹药空中解体"
+      }
+    ],
+    "narrative": "推演检验去中心化自主交战规则在极端通信受阻时的保底防空截击效能。"
+  }
+}

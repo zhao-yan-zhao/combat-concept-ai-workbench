@@ -1,0 +1,102 @@
+{
+  "id": "tactic-force-03",
+  "category": "tactic",
+  "promptId": "ai.generate.force-mission",
+  "schema": "ForceMissionPlan",
+  "name": "前沿隐蔽感知与无人中继编组",
+  "description": "配置前沿静默潜伏无人机与平流层长航时中继平台",
+  "input": {
+    "workflow": {
+      "title": "兵力任务",
+      "outputSchema": "ForceMissionPlan"
+    },
+    "analysis": {
+      "operationalTasks": [
+        {
+          "id": "task-recon-1",
+          "name": "隐蔽前沿监视",
+          "side": "friendly",
+          "phaseId": "phase-1",
+          "missionType": "recon",
+          "objective": "保持目标区连续观察",
+          "expectedEffect": "无盲区监控"
+        }
+      ],
+      "phaseAction": {
+        "phases": [
+          {
+            "id": "phase-1",
+            "name": "侦察预警阶段"
+          }
+        ]
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "forces",
+      "combatForces"
+    ],
+    "minCounts": {
+      "forces": 1,
+      "combatForces": 1
+    },
+    "keywords": [
+      "recon",
+      "friendly"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "summary": "配置前沿隐蔽潜伏无人机与长航时通信中继平台，保障态势感知不间断传输。",
+    "forces": [
+      {
+        "id": "cf-covert-sense",
+        "name": "前沿静默光学雷达复合感知单元",
+        "side": "friendly",
+        "role": "sense",
+        "group": "先锋监视组",
+        "missionType": "recon",
+        "task": "保持雷达低截获静默接收，辅以红外长焦探测战场热源",
+        "taskRefs": [
+          "task-recon-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "notes": ""
+      }
+    ],
+    "combatForces": [
+      {
+        "id": "cbf-uav-recon",
+        "name": "长航时高空隐身无人机编队",
+        "side": "friendly",
+        "role": "recon",
+        "conceptForceId": "cf-covert-sense",
+        "group": "无人侦察机组",
+        "missionType": "recon",
+        "task": "执行预定航线长时徘徊监视与毫米波激光中继",
+        "taskRefs": [
+          "task-recon-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [],
+        "notes": ""
+      }
+    ],
+    "relations": [],
+    "openQuestions": [
+      "长航时无人机应对敌空中扫荡战斗机时的自卫规避方案"
+    ],
+    "reviewChecklist": [
+      "检查传感器作用距离与驻留空域安全余量"
+    ]
+  }
+}

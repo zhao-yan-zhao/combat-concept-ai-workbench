@@ -1,0 +1,157 @@
+{
+  "id": "tactic-force-01",
+  "category": "tactic",
+  "promptId": "ai.generate.force-mission",
+  "schema": "ForceMissionPlan",
+  "name": "防空压制双层编组与协同任务编成",
+  "description": "构建概念层传感器/打击单元与作战层具体平台的防空压制联合编组",
+  "input": {
+    "workflow": {
+      "title": "兵力任务",
+      "outputSchema": "ForceMissionPlan"
+    },
+    "analysis": {
+      "operationalTasks": [
+        {
+          "id": "task-sead-1",
+          "name": "雷达信号侦测与定位",
+          "side": "friendly",
+          "phaseId": "phase-1",
+          "missionType": "recon",
+          "objective": "精确定位雷达阵地",
+          "expectedEffect": "坐标误差小于相对网格1%"
+        },
+        {
+          "id": "task-sead-2",
+          "name": "反辐射火力饱和突击",
+          "side": "friendly",
+          "phaseId": "phase-1",
+          "missionType": "sead",
+          "objective": "摧毁制导雷达天线",
+          "expectedEffect": "压制开机率"
+        }
+      ],
+      "phaseAction": {
+        "phases": [
+          {
+            "id": "phase-1",
+            "name": "突防压制阶段"
+          }
+        ]
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "forces",
+      "combatForces",
+      "relations"
+    ],
+    "minCounts": {
+      "forces": 2,
+      "combatForces": 2,
+      "relations": 1
+    },
+    "keywords": [
+      "friendly",
+      "recon",
+      "sead",
+      "command"
+    ],
+    "negativeKeywords": [
+      "经纬度",
+      "由于缺乏前置上下文"
+    ]
+  },
+  "goldenReference": {
+    "summary": "构建以高空电子侦察中继为感知核心、中远距反辐射战术机编组为执行主力的防空压制兵力编成。",
+    "forces": [
+      {
+        "id": "cf-sense-radar",
+        "name": "多源雷达辐射定位单元",
+        "side": "friendly",
+        "role": "sense",
+        "group": "侦察突防群",
+        "missionType": "recon",
+        "task": "在相对网格前沿持续截获雷达信号并完成多点测向交会定位",
+        "taskRefs": [
+          "task-sead-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "notes": ""
+      },
+      {
+        "id": "cf-strike-sead",
+        "name": "反辐射协同打击单元",
+        "side": "friendly",
+        "role": "air",
+        "group": "火力打击群",
+        "missionType": "sead",
+        "task": "接收目标定位参数，发射高速反辐射武器破坏雷达射频前端",
+        "taskRefs": [
+          "task-sead-2"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "notes": ""
+      }
+    ],
+    "combatForces": [
+      {
+        "id": "cbf-recon-plane",
+        "name": "电子战支援侦察机编组",
+        "side": "friendly",
+        "role": "recon",
+        "conceptForceId": "cf-sense-radar",
+        "group": "空中梯队",
+        "missionType": "recon",
+        "task": "战术空域巡逻并分发雷达脉冲参数",
+        "taskRefs": [
+          "task-sead-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [],
+        "notes": ""
+      },
+      {
+        "id": "cbf-strike-fighter",
+        "name": "防空压制歼击轰炸机编组",
+        "side": "friendly",
+        "role": "strike",
+        "conceptForceId": "cf-strike-sead",
+        "group": "火力突击梯队",
+        "missionType": "sead",
+        "task": "挂载超音速反辐射武器进入发射阵位实施齐射",
+        "taskRefs": [
+          "task-sead-2"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [],
+        "notes": ""
+      }
+    ],
+    "relations": [
+      {
+        "fromForceId": "cf-sense-radar",
+        "toForceId": "cf-strike-sead",
+        "type": "command",
+        "note": "目标雷达参数与引导射击解算分发及协同指挥授权"
+      }
+    ],
+    "openQuestions": [
+      "强电磁干扰下测向交会定位时延是否满足快速闭环要求"
+    ],
+    "reviewChecklist": [
+      "核对概念兵力与作战编成任务承接一致性"
+    ]
+  }
+}

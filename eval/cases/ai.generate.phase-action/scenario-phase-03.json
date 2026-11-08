@@ -1,0 +1,192 @@
+{
+  "id": "scenario-phase-03",
+  "category": "scenario",
+  "promptId": "ai.generate.phase-action",
+  "schema": "PhaseActionConcept",
+  "name": "潜伏待机-诱敌深入-分割包围-合围打击四阶段",
+  "description": "机动伏击战役经典四阶段行动",
+  "input": {
+    "workflow": {
+      "title": "阶段行动",
+      "outputSchema": "PhaseActionConcept"
+    },
+    "analysis": {
+      "brief": {
+        "objective": "诱敌伏击破网",
+        "approach": "口袋阵打法"
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "phases",
+      "transitions"
+    ],
+    "minCounts": {
+      "phases": 4,
+      "transitions": 3
+    },
+    "keywords": [
+      "phase-1",
+      "phase-2",
+      "phase-3",
+      "phase-4"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "summary": "从设伏伪装到决战聚歼的机动伏击四阶段作战时序构想。",
+    "phases": [
+      {
+        "id": "phase-1",
+        "name": "阵位潜伏与伪装待机",
+        "sequence": 1,
+        "timeWindow": "T+00:00至T+01:00",
+        "objective": "设下袋形预设战场",
+        "blueActions": [
+          "依托有利地形伪装待机",
+          "保持无线电静默"
+        ],
+        "redActions": [
+          "先遣侦察沿常规轴线推进"
+        ],
+        "primaryActions": [
+          "依托有利地形伪装待机"
+        ],
+        "secondaryActions": [
+          "先遣侦察沿常规轴线推进"
+        ],
+        "entryConditions": [
+          "伏击阵位勘察完成"
+        ],
+        "exitConditions": [
+          "各机动分队隐蔽就位"
+        ],
+        "expectedEffects": [
+          "达成战役隐蔽突然性"
+        ],
+        "forceIds": []
+      },
+      {
+        "id": "phase-2",
+        "name": "佯动牵制与诱敌深入",
+        "sequence": 2,
+        "timeWindow": "T+01:00至T+01:40",
+        "objective": "诱导敌主力进入预设袋形阵地",
+        "blueActions": [
+          "诱饵梯队边打边撤",
+          "释放虚假通信信号"
+        ],
+        "redActions": [
+          "全速追击前突"
+        ],
+        "primaryActions": [
+          "诱饵梯队边打边撤"
+        ],
+        "secondaryActions": [
+          "全速追击前突"
+        ],
+        "entryConditions": [
+          "敌先头部队出现"
+        ],
+        "exitConditions": [
+          "敌主力完全越过袋口界线"
+        ],
+        "expectedEffects": [
+          "敌阵型被拉长脱节"
+        ],
+        "forceIds": []
+      },
+      {
+        "id": "phase-3",
+        "name": "两翼切断与分割包围",
+        "sequence": 3,
+        "timeWindow": "T+01:40至T+02:10",
+        "objective": "封闭退路并割裂敌指挥链",
+        "blueActions": [
+          "两翼快速机动扎口",
+          "布设电磁隔离墙"
+        ],
+        "redActions": [
+          "仓促转向并呼叫支援"
+        ],
+        "primaryActions": [
+          "两翼快速机动扎口"
+        ],
+        "secondaryActions": [
+          "仓促转向并呼叫支援"
+        ],
+        "entryConditions": [
+          "袋底接触信令触发"
+        ],
+        "exitConditions": [
+          "后方退路彻底封闭"
+        ],
+        "expectedEffects": [
+          "敌陷入腹背受敌困局"
+        ],
+        "forceIds": []
+      },
+      {
+        "id": "phase-4",
+        "name": "多向聚歼与合围打击",
+        "sequence": 4,
+        "timeWindow": "T+02:10至T+03:00",
+        "objective": "集中优势火力歼灭被围之敌",
+        "blueActions": [
+          "全域全火力集火压制",
+          "精确穿刺指挥单元"
+        ],
+        "redActions": [
+          "就地组织分散抵抗"
+        ],
+        "primaryActions": [
+          "全域全火力集火压制"
+        ],
+        "secondaryActions": [
+          "就地组织分散抵抗"
+        ],
+        "entryConditions": [
+          "合围圈稳固建立"
+        ],
+        "exitConditions": [
+          "敌有生力量溃散或投降"
+        ],
+        "expectedEffects": [
+          "达成战役歼灭目标"
+        ],
+        "forceIds": []
+      }
+    ],
+    "transitions": [
+      {
+        "fromPhaseId": "phase-1",
+        "toPhaseId": "phase-2",
+        "condition": "观察哨报告敌主力出动",
+        "note": "T+01:00"
+      },
+      {
+        "fromPhaseId": "phase-2",
+        "toPhaseId": "phase-3",
+        "condition": "敌主力纵深过半达到预定标记",
+        "note": "T+01:40"
+      },
+      {
+        "fromPhaseId": "phase-3",
+        "toPhaseId": "phase-4",
+        "condition": "扎口部队完成正面阻击线部署",
+        "note": "T+02:10"
+      }
+    ],
+    "openQuestions": [
+      "第二阶段佯退部队如果遭受过大压力，如何防止被敌真正冲垮"
+    ],
+    "reviewChecklist": [
+      "审查各阶段转换节点两翼部队的机动时速与距离契合度"
+    ]
+  }
+}

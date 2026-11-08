@@ -1,0 +1,133 @@
+{
+  "id": "mech-decomp-01",
+  "category": "mechanism",
+  "promptId": "ai.generate.activity-decomposition",
+  "schema": "ActivityDecompositionDraft",
+  "name": "预警探测与航迹多源融合活动分解",
+  "description": "对高层探测活动开展 DoDAF OV-5a 规范化工序分解",
+  "input": {
+    "workflow": {
+      "title": "活动分解",
+      "outputSchema": "ActivityDecompositionDraft"
+    },
+    "analysis": {
+      "parentActivity": {
+        "id": "act-detect-root",
+        "title": "广域空天目标立体侦测与关联"
+      },
+      "activities": [
+        {
+          "id": "act-detect-root",
+          "title": "广域空天目标立体侦测与关联"
+        }
+      ]
+    },
+    "evidence": [
+      {
+        "id": "chunk-fusion-01",
+        "title": "多雷达航迹融合算法.md",
+        "summary": "点迹滤波、时间对齐与关联矩阵计算是融合的三大基础环节"
+      }
+    ]
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "activities",
+      "decompositions"
+    ],
+    "minCounts": {
+      "activities": 3,
+      "decompositions": 2
+    },
+    "keywords": [
+      "滤波",
+      "航迹",
+      "融合",
+      "关联"
+    ],
+    "negativeKeywords": [
+      "经纬度",
+      "由于缺乏前置上下文"
+    ]
+  },
+  "goldenReference": {
+    "summary": "将探测总活动分解为雷达点迹截获、时间空间坐标对齐以及多源多假设航迹关联融合三道精细工序。",
+    "activities": [
+      {
+        "id": "act-sub-capture",
+        "title": "多站射频原始点迹截获与预处理",
+        "type": "感知",
+        "domain": "综合",
+        "autonomy": "HOTL",
+        "performer": "分布式雷达网节点",
+        "timingWindow": "100ms",
+        "input": "反射射频回波信号",
+        "output": "标准目标点迹列表",
+        "parentId": "act-detect-root",
+        "text": "实时滤波提取目标方位、距离及信噪比参数",
+        "citations": [
+          {
+            "chunkId": "chunk-fusion-01",
+            "snippet": "点迹滤波、时间对齐与关联矩阵计算是融合的三大基础环节"
+          }
+        ]
+      },
+      {
+        "id": "act-sub-align",
+        "title": "时空基准对齐与野值剔除",
+        "type": "识别",
+        "domain": "综合",
+        "autonomy": "HOOTL",
+        "performer": "数据融合前端处理器",
+        "timingWindow": "50ms",
+        "input": "标准目标点迹列表",
+        "output": "统一时空框架点迹数据",
+        "parentId": "act-detect-root",
+        "text": "消除各站点时钟误差与天线安装偏差并过滤杂波",
+        "citations": [
+          {
+            "chunkId": "chunk-fusion-01",
+            "snippet": "点迹滤波、时间对齐与关联矩阵计算是融合的三大基础环节"
+          }
+        ]
+      },
+      {
+        "id": "act-sub-fusion",
+        "title": "多假设航迹关联与态势生成",
+        "type": "识别",
+        "domain": "综合",
+        "autonomy": "HOTL",
+        "performer": "中心态势服务器",
+        "timingWindow": "200ms",
+        "input": "统一时空框架点迹数据",
+        "output": "高置信度目标综合航迹",
+        "parentId": "act-detect-root",
+        "text": "利用卡尔曼滤波与关联矩阵确定唯一连续目标航迹",
+        "citations": [
+          {
+            "chunkId": "chunk-fusion-01",
+            "snippet": "点迹滤波、时间对齐与关联矩阵计算是融合的三大基础环节"
+          }
+        ]
+      }
+    ],
+    "decompositions": [
+      {
+        "parentActivityRef": "act-detect-root",
+        "childActivityRef": "act-sub-capture",
+        "rationale": "第一道物理截获工序"
+      },
+      {
+        "parentActivityRef": "act-detect-root",
+        "childActivityRef": "act-sub-align",
+        "rationale": "第二道时空对齐与数据洗净工序"
+      },
+      {
+        "parentActivityRef": "act-detect-root",
+        "childActivityRef": "act-sub-fusion",
+        "rationale": "第三道航迹生成工序"
+      }
+    ]
+  }
+}

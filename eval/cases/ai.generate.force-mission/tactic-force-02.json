@@ -1,0 +1,105 @@
+{
+  "id": "tactic-force-02",
+  "category": "tactic",
+  "promptId": "ai.generate.force-mission",
+  "schema": "ForceMissionPlan",
+  "name": "远海分布式打击作战编成与警戒护航",
+  "description": "构建水面舰艇突击编组与防空反潜护航保障双层兵力编成",
+  "input": {
+    "workflow": {
+      "title": "兵力任务",
+      "outputSchema": "ForceMissionPlan"
+    },
+    "analysis": {
+      "operationalTasks": [
+        {
+          "id": "task-asuw-1",
+          "name": "远海机动水面截击",
+          "side": "friendly",
+          "phaseId": "phase-2",
+          "missionType": "patrol_asuw",
+          "objective": "截击敌水面编队",
+          "expectedEffect": "迫退主力舰艇"
+        }
+      ],
+      "phaseAction": {
+        "phases": [
+          {
+            "id": "phase-2",
+            "name": "远海交战阶段"
+          }
+        ]
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "forces",
+      "combatForces",
+      "relations"
+    ],
+    "minCounts": {
+      "forces": 1,
+      "combatForces": 1,
+      "relations": 0
+    },
+    "keywords": [
+      "friendly",
+      "patrol_asuw"
+    ],
+    "negativeKeywords": [
+      "经纬度",
+      "由于缺乏前置上下文"
+    ]
+  },
+  "goldenReference": {
+    "summary": "部署分布式水面作战群，包含防空护航、超视距反舰攻击与空中早期预警要素。",
+    "forces": [
+      {
+        "id": "cf-surface-strike",
+        "name": "远程反舰突击作战单元",
+        "side": "friendly",
+        "role": "surface",
+        "group": "机动打击群",
+        "missionType": "patrol_asuw",
+        "task": "在超视距海域实施分散部署与齐射突击",
+        "taskRefs": [
+          "task-asuw-1"
+        ],
+        "phaseIds": [
+          "phase-2"
+        ],
+        "notes": ""
+      }
+    ],
+    "combatForces": [
+      {
+        "id": "cbf-destroyer-group",
+        "name": "驱逐舰综合作战编队",
+        "side": "friendly",
+        "role": "surface",
+        "conceptForceId": "cf-surface-strike",
+        "group": "水面编队",
+        "missionType": "patrol_asuw",
+        "task": "承担多通道超音速反舰突击及区域防空警戒",
+        "taskRefs": [
+          "task-asuw-1"
+        ],
+        "phaseIds": [
+          "phase-2"
+        ],
+        "platforms": [],
+        "notes": ""
+      }
+    ],
+    "relations": [],
+    "openQuestions": [
+      "水面编队在雷达静默状态下依赖外源态势的引导精度"
+    ],
+    "reviewChecklist": [
+      "确认水面单元防空与对海打击火力通道配比"
+    ]
+  }
+}

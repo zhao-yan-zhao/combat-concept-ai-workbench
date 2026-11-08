@@ -1,0 +1,56 @@
+{
+  "id": "tactic-brief-03",
+  "category": "tactic",
+  "promptId": "ai.generate.concept-brief",
+  "schema": "ConceptBrief",
+  "name": "低空智能集群跨域突防战法简报",
+  "description": "验证异构小型无人集群利用地形与网电掩护低空穿透防空网战法",
+  "input": {
+    "workflow": {
+      "title": "概念简报",
+      "outputSchema": "ConceptBrief"
+    },
+    "analysis": {
+      "researchIntent": "研究低空多批次异构集群突防与分布式自组织协同机理",
+      "currentBrief": {}
+    },
+    "evidence": [
+      {
+        "id": "ev-03",
+        "title": "自组织蜂群通信机制.md",
+        "summary": "去中心化动态拓扑支持节点受损自主替补"
+      }
+    ]
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "objective",
+      "approach",
+      "assumptions",
+      "expectedEffects",
+      "risk"
+    ],
+    "minLengths": {
+      "objective": 20,
+      "approach": 30,
+      "expectedEffects": 20
+    },
+    "keywords": [
+      "集群",
+      "低空",
+      "突防",
+      "自组织"
+    ],
+    "negativeKeywords": [
+      "经纬度",
+      "由于缺乏前置上下文"
+    ]
+  },
+  "goldenReference": {
+    "objective": "评估异构无人蜂群在近地表低空超低空突防过程中，突破中近程野战防空火力网的成功率与对抗消耗比。",
+    "approach": "先导侦察集群穿透探测、诱骗集群消耗拦截弹药、电子干扰机动态压制通信频段、末端攻击机群自主分配瞄准点进行定点破击。",
+    "assumptions": "蜂群内置自组织跳频通信网络具备抗局域电磁压制能力；近地面雷达存在探测盲区与多径杂波干扰。",
+    "expectedEffects": "耗尽守方60%以上近防弹药储备，确保核心高价值制导武器穿透防区边界。",
+    "risk": "定向能武器对轻小型无人集群形成面杀伤；复杂微气象导致低空编队散开失控。"
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "id": "tactic-force-05",
+  "category": "tactic",
+  "promptId": "ai.generate.force-mission",
+  "schema": "ForceMissionPlan",
+  "name": "软硬杀伤一体化电磁压制编成",
+  "description": "构建机载防区外干扰机与反辐射巡飞弹协同打击编队",
+  "input": {
+    "workflow": {
+      "title": "兵力任务",
+      "outputSchema": "ForceMissionPlan"
+    },
+    "analysis": {
+      "operationalTasks": [
+        {
+          "id": "task-ecm-1",
+          "name": "全频段远距支援干扰",
+          "side": "friendly",
+          "phaseId": "phase-1",
+          "missionType": "ecm",
+          "objective": "压制敌预警通信",
+          "expectedEffect": "形成通信黑障"
+        }
+      ],
+      "phaseAction": {
+        "phases": [
+          {
+            "id": "phase-1",
+            "name": "电磁压制阶段"
+          }
+        ]
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "forces",
+      "combatForces"
+    ],
+    "minCounts": {
+      "forces": 1,
+      "combatForces": 1
+    },
+    "keywords": [
+      "ecm",
+      "friendly"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "summary": "由防区外大型电子战干扰机与伴随无人干扰诱饵组成复合压制编队，实施全频段软硬复合杀伤。",
+    "forces": [
+      {
+        "id": "cf-ew-mesh",
+        "name": "综合作战电磁对抗单元",
+        "side": "friendly",
+        "role": "support",
+        "group": "网电支援群",
+        "missionType": "ecm",
+        "task": "对敌指控雷达链路施加噪声压制与瞄准式窄带干扰",
+        "taskRefs": [
+          "task-ecm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "notes": ""
+      }
+    ],
+    "combatForces": [
+      {
+        "id": "cbf-standoff-jamming",
+        "name": "防区外高功率电子干扰机编组",
+        "side": "friendly",
+        "role": "support",
+        "conceptForceId": "cf-ew-mesh",
+        "group": "电子支援战术群",
+        "missionType": "ecm",
+        "task": "保持战术空域8字航线巡逻并向敌方向发射大功率定向辐射",
+        "taskRefs": [
+          "task-ecm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [],
+        "notes": ""
+      }
+    ],
+    "relations": [],
+    "openQuestions": [
+      "大功率干扰对己方雷达侦察频率的自相干扰电磁兼容抑制"
+    ],
+    "reviewChecklist": [
+      "电磁频谱分配与敌友频率隔离方案审查"
+    ]
+  }
+}

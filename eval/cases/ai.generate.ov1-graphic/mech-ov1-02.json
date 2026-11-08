@@ -1,0 +1,121 @@
+{
+  "id": "mech-ov1-02",
+  "category": "mechanism",
+  "promptId": "ai.generate.ov1-graphic",
+  "schema": "OperationalConceptGraphic",
+  "name": "异构无人蜂群拒止突贯总体概念图",
+  "description": "构建异构小型无人蜂群破击关键节点的五节点总体概念图",
+  "input": {
+    "workflow": {
+      "title": "OV-1 总体图",
+      "outputSchema": "OperationalConceptGraphic"
+    },
+    "analysis": {
+      "brief": {
+        "objective": "蜂群穿透防御",
+        "approach": "去中心化动态包围"
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "concept",
+      "nodes",
+      "edges"
+    ],
+    "minCounts": {
+      "nodes": 5,
+      "edges": 4
+    },
+    "keywords": [
+      "sense",
+      "decide",
+      "control",
+      "opponent",
+      "assess"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "concept": {
+      "mission": "蜂群渗透要害破击",
+      "objective": "消耗并突破防线",
+      "scope": "前沿阻隔网格区",
+      "phase": "突防交火阶段",
+      "expectedEffects": "压制敌防御哨位",
+      "constraints": "蜂群电池续航时间"
+    },
+    "nodes": [
+      {
+        "id": "sense",
+        "label": "先导微型光学侦察蜂群",
+        "detail": "低空渗透侦测",
+        "category": "感知",
+        "kind": "equipment"
+      },
+      {
+        "id": "decide",
+        "label": "机载蜂群任务规划主板",
+        "detail": "自主动态协同决策",
+        "category": "指挥",
+        "kind": "command"
+      },
+      {
+        "id": "control",
+        "label": "自杀式巡飞攻击无人机",
+        "detail": "末端俯冲碰撞引爆",
+        "category": "行动",
+        "kind": "action"
+      },
+      {
+        "id": "opponent",
+        "label": "敌野战防空高炮与雷达",
+        "detail": "近程火力拦截拦截网",
+        "category": "外部",
+        "kind": "external"
+      },
+      {
+        "id": "assess",
+        "label": "伴随侦察机毁伤核验",
+        "detail": "高价值雷达开机率监测",
+        "category": "效果",
+        "kind": "effect"
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "sourceId": "opponent",
+        "targetId": "sense",
+        "type": "态势变化"
+      },
+      {
+        "id": "e2",
+        "sourceId": "sense",
+        "targetId": "decide",
+        "type": "信息流"
+      },
+      {
+        "id": "e3",
+        "sourceId": "decide",
+        "targetId": "control",
+        "type": "控制流"
+      },
+      {
+        "id": "e4",
+        "sourceId": "control",
+        "targetId": "assess",
+        "type": "态势变化"
+      },
+      {
+        "id": "e5",
+        "sourceId": "assess",
+        "targetId": "decide",
+        "type": "反馈"
+      }
+    ]
+  }
+}

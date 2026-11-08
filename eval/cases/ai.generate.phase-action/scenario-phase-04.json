@@ -1,0 +1,192 @@
+{
+  "id": "scenario-phase-04",
+  "category": "scenario",
+  "promptId": "ai.generate.phase-action",
+  "schema": "PhaseActionConcept",
+  "name": "动态防御-抗饱和冲击-协同反击-阵位控制四阶段",
+  "description": "海空一体攻防反击四阶段战术构想",
+  "input": {
+    "workflow": {
+      "title": "阶段行动",
+      "outputSchema": "PhaseActionConcept"
+    },
+    "analysis": {
+      "brief": {
+        "objective": "承受第一波冲击并实施反击",
+        "approach": "弹性抗损与转守为攻"
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "phases",
+      "transitions"
+    ],
+    "minCounts": {
+      "phases": 4,
+      "transitions": 3
+    },
+    "keywords": [
+      "phase-1",
+      "phase-2",
+      "phase-3",
+      "phase-4"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "summary": "展示以弹性抗损吸收敌第一波饱和突击后，立即发起协同火力反击的四阶段攻防构想。",
+    "phases": [
+      {
+        "id": "phase-1",
+        "name": "警戒前出与动态抗击",
+        "sequence": 1,
+        "timeWindow": "T+00:00至T+00:20",
+        "objective": "削弱敌首波进攻锐气",
+        "blueActions": [
+          "远距外层拦截",
+          "主动电磁假目标欺骗"
+        ],
+        "redActions": [
+          "首轮饱和导弹投送"
+        ],
+        "primaryActions": [
+          "远距外层拦截"
+        ],
+        "secondaryActions": [
+          "首轮饱和导弹投送"
+        ],
+        "entryConditions": [
+          "警戒雷达告警生效"
+        ],
+        "exitConditions": [
+          "首批来袭弹头大部分被拦截"
+        ],
+        "expectedEffects": [
+          "消耗敌先锋弹药量"
+        ],
+        "forceIds": []
+      },
+      {
+        "id": "phase-2",
+        "name": "抗饱和吸收与重构",
+        "sequence": 2,
+        "timeWindow": "T+00:20至T+00:40",
+        "objective": "承受局部战损并快速自愈",
+        "blueActions": [
+          "受损通道快速旁路",
+          "副指控节点平滑接管"
+        ],
+        "redActions": [
+          "次波跟进穿透突击"
+        ],
+        "primaryActions": [
+          "受损通道快速旁路"
+        ],
+        "secondaryActions": [
+          "次波跟进穿透突击"
+        ],
+        "entryConditions": [
+          "出现局部节点通信受损"
+        ],
+        "exitConditions": [
+          "杀伤网拓扑自愈完成"
+        ],
+        "expectedEffects": [
+          "核心指挥链路保持畅通"
+        ],
+        "forceIds": []
+      },
+      {
+        "id": "phase-3",
+        "name": "协同反击火力齐射",
+        "sequence": 3,
+        "timeWindow": "T+00:40至T+01:10",
+        "objective": "捕捉敌发射阵位反击其核心",
+        "blueActions": [
+          "多域传感器协同定位",
+          "超视距高超声速反击"
+        ],
+        "redActions": [
+          "转入阵地规避与防御"
+        ],
+        "primaryActions": [
+          "多域传感器协同定位"
+        ],
+        "secondaryActions": [
+          "转入阵地规避与防御"
+        ],
+        "entryConditions": [
+          "敌首波发射机动暴露"
+        ],
+        "exitConditions": [
+          "反击弹群全部进入终端制导"
+        ],
+        "expectedEffects": [
+          "摧毁敌核心进攻兵力"
+        ],
+        "forceIds": []
+      },
+      {
+        "id": "phase-4",
+        "name": "优势确立与阵位控制",
+        "sequence": 4,
+        "timeWindow": "T+01:10至T+01:40",
+        "objective": "牢固控制关键战术海空域",
+        "blueActions": [
+          "前出战斗机巡逻制空",
+          "封锁空海交战走廊"
+        ],
+        "redActions": [
+          "残部向后方集结撤退"
+        ],
+        "primaryActions": [
+          "前出战斗机巡逻制空"
+        ],
+        "secondaryActions": [
+          "残部向后方集结撤退"
+        ],
+        "entryConditions": [
+          "敌进攻波次彻底停止"
+        ],
+        "exitConditions": [
+          "预定防区空域净空"
+        ],
+        "expectedEffects": [
+          "彻底夺取战场主动权"
+        ],
+        "forceIds": []
+      }
+    ],
+    "transitions": [
+      {
+        "fromPhaseId": "phase-1",
+        "toPhaseId": "phase-2",
+        "condition": "敌首轮导弹突防进入近距近防阶段",
+        "note": "T+00:20"
+      },
+      {
+        "fromPhaseId": "phase-2",
+        "toPhaseId": "phase-3",
+        "condition": "反击火力通道重构完成并建立目标锁定",
+        "note": "T+00:40"
+      },
+      {
+        "fromPhaseId": "phase-3",
+        "toPhaseId": "phase-4",
+        "condition": "战果评估确认敌主力进攻能力受挫超过70%",
+        "note": "T+01:10"
+      }
+    ],
+    "openQuestions": [
+      "第二阶段抗损吸收期间，若主备指挥节点同时受损是否有第三层备选预案"
+    ],
+    "reviewChecklist": [
+      "确认反击火力发起时前沿探测网的时效刷新频率"
+    ]
+  }
+}

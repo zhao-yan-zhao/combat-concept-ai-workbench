@@ -1,0 +1,56 @@
+{
+  "id": "tactic-brief-02",
+  "category": "tactic",
+  "promptId": "ai.generate.concept-brief",
+  "schema": "ConceptBrief",
+  "name": "分布式水下静默预警阻击简报",
+  "description": "验证基于无人潜航器与海底监听阵列的静默警戒与快速封堵战法概念",
+  "input": {
+    "workflow": {
+      "title": "概念简报",
+      "outputSchema": "ConceptBrief"
+    },
+    "analysis": {
+      "researchIntent": "探索无人潜航器水下静默监视与要道反潜阻击机理",
+      "currentBrief": {}
+    },
+    "evidence": [
+      {
+        "id": "ev-02",
+        "title": "水下声学协同探测.md",
+        "summary": "分布式多节点声呐融合提升微弱信号信噪比"
+      }
+    ]
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "objective",
+      "approach",
+      "assumptions",
+      "expectedEffects",
+      "risk"
+    ],
+    "minLengths": {
+      "objective": 20,
+      "approach": 30,
+      "expectedEffects": 20
+    },
+    "keywords": [
+      "静默",
+      "预警",
+      "潜航",
+      "阻击"
+    ],
+    "negativeKeywords": [
+      "经纬度",
+      "由于缺乏前置上下文"
+    ]
+  },
+  "goldenReference": {
+    "objective": "论证水下要道关键海峡在被动静默声学监视与无人巡逻阻击体系下的多层封锁与早期预警能力。",
+    "approach": "布设水下固定水听阵列、移动无人潜航器（UUV）网格巡逻、水面无人艇定点通信中继的多层立体感知与即时阻击战法。",
+    "assumptions": "海洋水文跃层参数处于正常季节波动区间；敌潜航目标具备低噪声消音隐身外壳。",
+    "expectedEffects": "对过境高价值目标的首次探测距离外推30海里以上，实现水下通道全时域静默预警与精准阻击。",
+    "risk": "水声信道在剧烈温盐变化下衰减加剧；通信浮标暴露可能导致中继链路中断。"
+  }
+}

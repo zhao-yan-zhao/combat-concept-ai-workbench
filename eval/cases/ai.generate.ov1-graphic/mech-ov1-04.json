@@ -1,0 +1,121 @@
+{
+  "id": "mech-ov1-04",
+  "category": "mechanism",
+  "promptId": "ai.generate.ov1-graphic",
+  "schema": "OperationalConceptGraphic",
+  "name": "电磁压制与饱和反辐射攻防概念图",
+  "description": "描绘防区外电子战机、干扰诱饵与反辐射弹药协同回路",
+  "input": {
+    "workflow": {
+      "title": "OV-1 总体图",
+      "outputSchema": "OperationalConceptGraphic"
+    },
+    "analysis": {
+      "brief": {
+        "objective": "致盲预警雷达",
+        "approach": "软硬结合精准破网"
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "concept",
+      "nodes",
+      "edges"
+    ],
+    "minCounts": {
+      "nodes": 5,
+      "edges": 4
+    },
+    "keywords": [
+      "sense",
+      "decide",
+      "control",
+      "opponent",
+      "assess"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "concept": {
+      "mission": "防空雷达网防区外破击",
+      "objective": "瘫痪预警指挥神经网",
+      "scope": "战术纵深相对网格",
+      "phase": "电磁破击阶段",
+      "expectedEffects": "雷达停止辐射",
+      "constraints": "电子支援飞机巡逻空域"
+    },
+    "nodes": [
+      {
+        "id": "sense",
+        "label": "高灵敏电子侦察吊舱",
+        "detail": "雷达波形脉冲精准测向",
+        "category": "感知",
+        "kind": "equipment"
+      },
+      {
+        "id": "decide",
+        "label": "电子战联合任务控制席位",
+        "detail": "干扰频段与反辐射弹药分配",
+        "category": "指挥",
+        "kind": "command"
+      },
+      {
+        "id": "control",
+        "label": "超音速反辐射突击导弹",
+        "detail": "顺波束追踪精准毁伤天线",
+        "category": "行动",
+        "kind": "action"
+      },
+      {
+        "id": "opponent",
+        "label": "敌相控阵远程预警雷达阵地",
+        "detail": "大功率跳频搜索跟踪",
+        "category": "外部",
+        "kind": "external"
+      },
+      {
+        "id": "assess",
+        "label": "信号强度骤降与停机监测",
+        "detail": "射频静默持续时间评估",
+        "category": "效果",
+        "kind": "effect"
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "sourceId": "opponent",
+        "targetId": "sense",
+        "type": "态势变化"
+      },
+      {
+        "id": "e2",
+        "sourceId": "sense",
+        "targetId": "decide",
+        "type": "信息流"
+      },
+      {
+        "id": "e3",
+        "sourceId": "decide",
+        "targetId": "control",
+        "type": "控制流"
+      },
+      {
+        "id": "e4",
+        "sourceId": "control",
+        "targetId": "assess",
+        "type": "态势变化"
+      },
+      {
+        "id": "e5",
+        "sourceId": "assess",
+        "targetId": "decide",
+        "type": "反馈"
+      }
+    ]
+  }
+}

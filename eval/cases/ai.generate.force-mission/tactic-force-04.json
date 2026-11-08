@@ -1,0 +1,102 @@
+{
+  "id": "tactic-force-04",
+  "category": "tactic",
+  "promptId": "ai.generate.force-mission",
+  "schema": "ForceMissionPlan",
+  "name": "要地防空多层梯次截击编组",
+  "description": "构建远程防空、中程拦截与末端高炮结合的阵地防空体系",
+  "input": {
+    "workflow": {
+      "title": "兵力任务",
+      "outputSchema": "ForceMissionPlan"
+    },
+    "analysis": {
+      "operationalTasks": [
+        {
+          "id": "task-ad-1",
+          "name": "核心空域梯次防空抗击",
+          "side": "friendly",
+          "phaseId": "phase-1",
+          "missionType": "area_defense",
+          "objective": "拦截多批次来袭导弹",
+          "expectedEffect": "守卫重点保卫目标安全"
+        }
+      ],
+      "phaseAction": {
+        "phases": [
+          {
+            "id": "phase-1",
+            "name": "防空保卫阶段"
+          }
+        ]
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "forces",
+      "combatForces"
+    ],
+    "minCounts": {
+      "forces": 1,
+      "combatForces": 1
+    },
+    "keywords": [
+      "area_defense",
+      "friendly"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "summary": "配置远程区域防空导弹连与中近程近防速射炮混编防御力量，实施纵深梯次拦截。",
+    "forces": [
+      {
+        "id": "cf-layered-ad",
+        "name": "要地综合防空指挥拦截单元",
+        "side": "friendly",
+        "role": "airDefense",
+        "group": "防空群",
+        "missionType": "area_defense",
+        "task": "整合各层级雷达空情，进行目标威胁定级并分配火力批次",
+        "taskRefs": [
+          "task-ad-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "notes": ""
+      }
+    ],
+    "combatForces": [
+      {
+        "id": "cbf-sam-battery",
+        "name": "地空导弹综合营编组",
+        "side": "friendly",
+        "role": "airDefense",
+        "conceptForceId": "cf-layered-ad",
+        "group": "地面防空群",
+        "missionType": "area_defense",
+        "task": "操作远程相控阵雷达与垂直发射拦截弹构筑空域天网",
+        "taskRefs": [
+          "task-ad-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [],
+        "notes": ""
+      }
+    ],
+    "relations": [],
+    "openQuestions": [
+      "在敌密集投掷反辐射诱饵弹时的雷达开关机与诱偏协同配合"
+    ],
+    "reviewChecklist": [
+      "核对防空通道数与预期来袭饱和峰值密度"
+    ]
+  }
+}

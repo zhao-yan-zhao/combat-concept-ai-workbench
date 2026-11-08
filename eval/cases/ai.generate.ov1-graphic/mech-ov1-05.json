@@ -1,0 +1,121 @@
+{
+  "id": "mech-ov1-05",
+  "category": "mechanism",
+  "promptId": "ai.generate.ov1-graphic",
+  "schema": "OperationalConceptGraphic",
+  "name": "岛基弹性防御与分散火力交联机理图",
+  "description": "展示分布式分散发射架与空中预警机数据直连的抗毁机理",
+  "input": {
+    "workflow": {
+      "title": "OV-1 总体图",
+      "outputSchema": "OperationalConceptGraphic"
+    },
+    "analysis": {
+      "brief": {
+        "objective": "岛礁分散阵地抗毁存活",
+        "approach": "射频静默+远端数据链火控"
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "concept",
+      "nodes",
+      "edges"
+    ],
+    "minCounts": {
+      "nodes": 5,
+      "edges": 4
+    },
+    "keywords": [
+      "sense",
+      "decide",
+      "control",
+      "opponent",
+      "assess"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "concept": {
+      "mission": "岛基分布式抗毁拦截",
+      "objective": "保持节点分散与持续火力输出",
+      "scope": "岛链防御前哨相对网格",
+      "phase": "阵地固守阶段",
+      "expectedEffects": "提升阵地存活率",
+      "constraints": "岛礁纵深受限"
+    },
+    "nodes": [
+      {
+        "id": "sense",
+        "label": "长航时空中预警机雷达",
+        "detail": "空天视角下视海空态势",
+        "category": "感知",
+        "kind": "equipment"
+      },
+      {
+        "id": "decide",
+        "label": "后方防空联合指挥所",
+        "detail": "火控级高速指令分发",
+        "category": "指挥",
+        "kind": "command"
+      },
+      {
+        "id": "control",
+        "label": "岛基分散隐蔽垂直发射箱",
+        "detail": "冷发射无雷达暴露接战",
+        "category": "行动",
+        "kind": "action"
+      },
+      {
+        "id": "opponent",
+        "label": "敌远距隐身战机突击编队",
+        "detail": "超低空防区外投掷弹药",
+        "category": "外部",
+        "kind": "external"
+      },
+      {
+        "id": "assess",
+        "label": "远端光电吊舱红外爆破特征",
+        "detail": "目标坠海与二次燃烧判定",
+        "category": "效果",
+        "kind": "effect"
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "sourceId": "opponent",
+        "targetId": "sense",
+        "type": "态势变化"
+      },
+      {
+        "id": "e2",
+        "sourceId": "sense",
+        "targetId": "decide",
+        "type": "信息流"
+      },
+      {
+        "id": "e3",
+        "sourceId": "decide",
+        "targetId": "control",
+        "type": "控制流"
+      },
+      {
+        "id": "e4",
+        "sourceId": "control",
+        "targetId": "assess",
+        "type": "态势变化"
+      },
+      {
+        "id": "e5",
+        "sourceId": "assess",
+        "targetId": "decide",
+        "type": "反馈"
+      }
+    ]
+  }
+}

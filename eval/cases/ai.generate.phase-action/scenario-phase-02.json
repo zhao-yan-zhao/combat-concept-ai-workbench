@@ -1,0 +1,191 @@
+{
+  "id": "scenario-phase-02",
+  "category": "scenario",
+  "promptId": "ai.generate.phase-action",
+  "schema": "PhaseActionConcept",
+  "name": "早期预警-航迹确认-引导拦截-战果确认四阶段",
+  "description": "防空作战经典四阶段时序流",
+  "input": {
+    "workflow": {
+      "title": "阶段行动",
+      "outputSchema": "PhaseActionConcept"
+    },
+    "analysis": {
+      "brief": {
+        "objective": "防空预警截击",
+        "approach": "四阶段闭环"
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "phases",
+      "transitions"
+    ],
+    "minCounts": {
+      "phases": 4,
+      "transitions": 3
+    },
+    "keywords": [
+      "phase-1",
+      "phase-2",
+      "phase-3",
+      "phase-4"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "summary": "从目标初显到战果判定的防空截击战术四阶段递进流转体系。",
+    "phases": [
+      {
+        "id": "phase-1",
+        "name": "远程早期预警",
+        "sequence": 1,
+        "timeWindow": "T+00:00至T+00:05",
+        "objective": "捕获远距不明空中辐射",
+        "blueActions": [
+          "超视距相控阵雷达搜索"
+        ],
+        "redActions": [
+          "超低空突防接近"
+        ],
+        "primaryActions": [
+          "超视距相控阵雷达搜索"
+        ],
+        "secondaryActions": [
+          "超低空突防接近"
+        ],
+        "entryConditions": [
+          "日常战备警戒"
+        ],
+        "exitConditions": [
+          "确立异常目标航迹"
+        ],
+        "expectedEffects": [
+          "获取初始航向矢量"
+        ],
+        "forceIds": []
+      },
+      {
+        "id": "phase-2",
+        "name": "目标属性判别与建链",
+        "sequence": 2,
+        "timeWindow": "T+00:05至T+00:08",
+        "objective": "确认敌对属性并分配批号",
+        "blueActions": [
+          "应答机二次质询",
+          "红外光电比对"
+        ],
+        "redActions": [
+          "释放电磁干扰涂层"
+        ],
+        "primaryActions": [
+          "应答机二次质询"
+        ],
+        "secondaryActions": [
+          "释放电磁干扰涂层"
+        ],
+        "entryConditions": [
+          "目标进入雷达主波束"
+        ],
+        "exitConditions": [
+          "判定为敌对攻击群"
+        ],
+        "expectedEffects": [
+          "生成火控质量航迹"
+        ],
+        "forceIds": []
+      },
+      {
+        "id": "phase-3",
+        "name": "引导发射与中继协同",
+        "sequence": 3,
+        "timeWindow": "T+00:08至T+00:15",
+        "objective": "发射拦截弹并实施空中制导",
+        "blueActions": [
+          "垂直发射防空拦截弹",
+          "指令修正"
+        ],
+        "redActions": [
+          "大过载机动规避"
+        ],
+        "primaryActions": [
+          "垂直发射防空拦截弹"
+        ],
+        "secondaryActions": [
+          "大过载机动规避"
+        ],
+        "entryConditions": [
+          "目标越过交战拦截线"
+        ],
+        "exitConditions": [
+          "导引头进入自主捕获"
+        ],
+        "expectedEffects": [
+          "进入截击杀伤区"
+        ],
+        "forceIds": []
+      },
+      {
+        "id": "phase-4",
+        "name": "末端毁伤评估与解除",
+        "sequence": 4,
+        "timeWindow": "T+00:15至T+00:20",
+        "objective": "判定拦截结果并清空通道",
+        "blueActions": [
+          "雷达回波消失检测",
+          "通道释放"
+        ],
+        "redActions": [
+          "被击落或脱离"
+        ],
+        "primaryActions": [
+          "雷达回波消失检测"
+        ],
+        "secondaryActions": [
+          "被击落或脱离"
+        ],
+        "entryConditions": [
+          "弹目交汇时钟到达"
+        ],
+        "exitConditions": [
+          "火控通道重新处于待命"
+        ],
+        "expectedEffects": [
+          "保卫目标安全"
+        ],
+        "forceIds": []
+      }
+    ],
+    "transitions": [
+      {
+        "fromPhaseId": "phase-1",
+        "toPhaseId": "phase-2",
+        "condition": "目标回波连续3次稳定跟踪",
+        "note": "T+00:05"
+      },
+      {
+        "fromPhaseId": "phase-2",
+        "toPhaseId": "phase-3",
+        "condition": "交战规则授权吻合且在射程内",
+        "note": "T+00:08"
+      },
+      {
+        "fromPhaseId": "phase-3",
+        "toPhaseId": "phase-4",
+        "condition": "导弹引信引爆信号产生",
+        "note": "T+00:15"
+      }
+    ],
+    "openQuestions": [
+      "多目标群进入时，第二阶段判型时延是否会导致第三阶段发射窗口被压缩"
+    ],
+    "reviewChecklist": [
+      "检查各阶段交接条件是否具备严格可观察性"
+    ]
+  }
+}

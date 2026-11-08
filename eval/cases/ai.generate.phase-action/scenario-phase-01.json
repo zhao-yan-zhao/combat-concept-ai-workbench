@@ -1,0 +1,192 @@
+{
+  "id": "scenario-phase-01",
+  "category": "scenario",
+  "promptId": "ai.generate.phase-action",
+  "schema": "PhaseActionConcept",
+  "name": "四阶段战役行动时序与转换条件",
+  "description": "经典隐蔽展开-电磁压制-穿透打击-撤出重整四阶段模型",
+  "input": {
+    "workflow": {
+      "title": "阶段行动",
+      "outputSchema": "PhaseActionConcept"
+    },
+    "analysis": {
+      "brief": {
+        "objective": "多阶段联合突破",
+        "approach": "时序递进打击"
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "phases",
+      "transitions"
+    ],
+    "minCounts": {
+      "phases": 4,
+      "transitions": 3
+    },
+    "keywords": [
+      "phase-1",
+      "phase-2",
+      "phase-3",
+      "phase-4"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "summary": "将全过程划分为隐蔽机动、电磁压制、火力突击以及撤退重组四个时序严格衔接的作战阶段。",
+    "phases": [
+      {
+        "id": "phase-1",
+        "name": "隐蔽机动展开",
+        "sequence": 1,
+        "timeWindow": "T+00:00至T+00:30",
+        "objective": "兵力悄然进抵发射阵位",
+        "blueActions": [
+          "保持雷达无线电静默航行",
+          "下放潜航侦察哨"
+        ],
+        "redActions": [
+          "常规边境巡逻"
+        ],
+        "primaryActions": [
+          "保持雷达无线电静默航行"
+        ],
+        "secondaryActions": [
+          "常规边境巡逻"
+        ],
+        "entryConditions": [
+          "上级交战预令下达"
+        ],
+        "exitConditions": [
+          "各单元抵达待命阵位"
+        ],
+        "expectedEffects": [
+          "零暴露完成部署"
+        ],
+        "forceIds": []
+      },
+      {
+        "id": "phase-2",
+        "name": "电磁压制塑势",
+        "sequence": 2,
+        "timeWindow": "T+00:30至T+00:50",
+        "objective": "致盲敌预警探测网络",
+        "blueActions": [
+          "发射大功率机载干扰",
+          "布设雷达诱饵"
+        ],
+        "redActions": [
+          "跳频抗干扰自卫"
+        ],
+        "primaryActions": [
+          "发射大功率机载干扰"
+        ],
+        "secondaryActions": [
+          "跳频抗干扰自卫"
+        ],
+        "entryConditions": [
+          "阵位就绪信号确认"
+        ],
+        "exitConditions": [
+          "敌雷达跟踪率降至门限以下"
+        ],
+        "expectedEffects": [
+          "取得局部制电磁权"
+        ],
+        "forceIds": []
+      },
+      {
+        "id": "phase-3",
+        "name": "联合火力突击",
+        "sequence": 3,
+        "timeWindow": "T+00:50至T+01:20",
+        "objective": "毁灭性打击要害枢纽",
+        "blueActions": [
+          "多弹种协同齐射",
+          "高超声速贯穿打击"
+        ],
+        "redActions": [
+          "启动末端拦截系统"
+        ],
+        "primaryActions": [
+          "多弹种协同齐射"
+        ],
+        "secondaryActions": [
+          "启动末端拦截系统"
+        ],
+        "entryConditions": [
+          "电磁走廊完全成型"
+        ],
+        "exitConditions": [
+          "打击目标毁伤确认"
+        ],
+        "expectedEffects": [
+          "敌指挥通信枢纽瘫痪"
+        ],
+        "forceIds": []
+      },
+      {
+        "id": "phase-4",
+        "name": "战果评估与脱离",
+        "sequence": 4,
+        "timeWindow": "T+01:20至T+02:00",
+        "objective": "安全撤离并快速重整",
+        "blueActions": [
+          "实施防空掩护航退",
+          "卫星光学复核战果"
+        ],
+        "redActions": [
+          "组织搜救与防区加固"
+        ],
+        "primaryActions": [
+          "实施防空掩护航退"
+        ],
+        "secondaryActions": [
+          "组织搜救与防区加固"
+        ],
+        "entryConditions": [
+          "主突击弹药全部出膛"
+        ],
+        "exitConditions": [
+          "脱离敌火力反击威胁圈"
+        ],
+        "expectedEffects": [
+          "主力兵力零战损归建"
+        ],
+        "forceIds": []
+      }
+    ],
+    "transitions": [
+      {
+        "fromPhaseId": "phase-1",
+        "toPhaseId": "phase-2",
+        "condition": "全员阵位就绪率达100%",
+        "note": "T+00:30"
+      },
+      {
+        "fromPhaseId": "phase-2",
+        "toPhaseId": "phase-3",
+        "condition": "电磁压制窗口生效超过5分钟",
+        "note": "T+00:50"
+      },
+      {
+        "fromPhaseId": "phase-3",
+        "toPhaseId": "phase-4",
+        "condition": "末端弹头引爆信号回传",
+        "note": "T+01:20"
+      }
+    ],
+    "openQuestions": [
+      "第二阶段电磁压制若遇对手新型反辐射对抗，是否允许延长压制时窗"
+    ],
+    "reviewChecklist": [
+      "核对各阶段时间窗口总和与战役后勤保障持续力"
+    ]
+  }
+}

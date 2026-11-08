@@ -1,0 +1,121 @@
+{
+  "id": "mech-ov1-01",
+  "category": "mechanism",
+  "promptId": "ai.generate.ov1-graphic",
+  "schema": "OperationalConceptGraphic",
+  "name": "五节点分布式防空总体机理图",
+  "description": "生成严格满足 sense, decide, control, opponent, assess 五节点的概念图",
+  "input": {
+    "workflow": {
+      "title": "OV-1 总体图",
+      "outputSchema": "OperationalConceptGraphic"
+    },
+    "analysis": {
+      "brief": {
+        "objective": "分布式抗击饱和打击",
+        "approach": "五节点环路闭环"
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "concept",
+      "nodes",
+      "edges"
+    ],
+    "minCounts": {
+      "nodes": 5,
+      "edges": 4
+    },
+    "keywords": [
+      "sense",
+      "decide",
+      "control",
+      "opponent",
+      "assess"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "concept": {
+      "mission": "防空火力闭环拦截",
+      "objective": "阻断敌饱和空袭",
+      "scope": "区域相对网格空域",
+      "phase": "防空交战阶段",
+      "expectedEffects": "破坏敌进攻时序",
+      "constraints": "弹药通道限制"
+    },
+    "nodes": [
+      {
+        "id": "sense",
+        "label": "天基与防空雷达网",
+        "detail": "连续监视与目标发现",
+        "category": "感知",
+        "kind": "equipment"
+      },
+      {
+        "id": "decide",
+        "label": "联合防空指挥控制中枢",
+        "detail": "威胁排队与火力分配",
+        "category": "指挥",
+        "kind": "command"
+      },
+      {
+        "id": "control",
+        "label": "防空导弹发射阵地",
+        "detail": "多联装导弹发射执行",
+        "category": "行动",
+        "kind": "action"
+      },
+      {
+        "id": "opponent",
+        "label": "敌多批次突防巡航导弹群",
+        "detail": "低空密集空袭集群",
+        "category": "外部",
+        "kind": "external"
+      },
+      {
+        "id": "assess",
+        "label": "雷达与光电战果核验",
+        "detail": "拦截脱靶量与毁伤评估",
+        "category": "效果",
+        "kind": "effect"
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "sourceId": "opponent",
+        "targetId": "sense",
+        "type": "态势变化"
+      },
+      {
+        "id": "e2",
+        "sourceId": "sense",
+        "targetId": "decide",
+        "type": "信息流"
+      },
+      {
+        "id": "e3",
+        "sourceId": "decide",
+        "targetId": "control",
+        "type": "控制流"
+      },
+      {
+        "id": "e4",
+        "sourceId": "control",
+        "targetId": "assess",
+        "type": "态势变化"
+      },
+      {
+        "id": "e5",
+        "sourceId": "assess",
+        "targetId": "decide",
+        "type": "反馈"
+      }
+    ]
+  }
+}

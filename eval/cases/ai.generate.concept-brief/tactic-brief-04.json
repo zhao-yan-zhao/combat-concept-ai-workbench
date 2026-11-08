@@ -1,0 +1,56 @@
+{
+  "id": "tactic-brief-04",
+  "category": "tactic",
+  "promptId": "ai.generate.concept-brief",
+  "schema": "ConceptBrief",
+  "name": "敏捷电磁频谱压制与诱骗战法简报",
+  "description": "验证分布式动态频谱管控与虚假辐射源阵列诱骗战法",
+  "input": {
+    "workflow": {
+      "title": "概念简报",
+      "outputSchema": "ConceptBrief"
+    },
+    "analysis": {
+      "researchIntent": "研究认知电子战与分布式假目标电磁欺骗战法",
+      "currentBrief": {}
+    },
+    "evidence": [
+      {
+        "id": "ev-04",
+        "title": "认知电子战频谱对抗.md",
+        "summary": "自适应脉冲复制技术能够生成逼真雷达虚假航迹"
+      }
+    ]
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "objective",
+      "approach",
+      "assumptions",
+      "expectedEffects",
+      "risk"
+    ],
+    "minLengths": {
+      "objective": 20,
+      "approach": 30,
+      "expectedEffects": 20
+    },
+    "keywords": [
+      "频谱",
+      "压制",
+      "诱骗",
+      "认知"
+    ],
+    "negativeKeywords": [
+      "经纬度",
+      "由于缺乏前置上下文"
+    ]
+  },
+  "goldenReference": {
+    "objective": "检验认知电磁战系统对对手复合制导雷达的实时频谱感知、快速调制反制与多点协同虚假航迹诱骗效果。",
+    "approach": "运用认知射频传感器实时截获分析雷达波形，协同地面及空中无人诱饵实施频谱压制并同步辐射相干干扰信号，制造大量虚假编队航迹。",
+    "assumptions": "对手雷达信号处理机采用常规单脉冲测角与动目标显示技术，未部署完全独立的红外光电复合复核传感器。",
+    "expectedEffects": "敌方雷达指控系统误判率超过70%，将主力拦截资源空耗在虚假航迹方向。",
+    "risk": "自适应抗干扰算法可能快速识别并剔除无多普勒频移特征的静态假目标。"
+  }
+}

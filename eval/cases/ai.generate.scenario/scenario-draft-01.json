@@ -1,0 +1,131 @@
+{
+  "id": "scenario-draft-01",
+  "category": "scenario",
+  "promptId": "ai.generate.scenario",
+  "schema": "ScenarioDraft",
+  "name": "前沿海空走廊遭遇与对抗推演想定",
+  "description": "在抽象相对网格（0-100）上设定红蓝对抗遭遇战",
+  "input": {
+    "workflow": {
+      "title": "仿真想定",
+      "outputSchema": "ScenarioDraft"
+    },
+    "analysis": {
+      "scenarioScope": "前沿走廊对峙推演",
+      "phaseAction": {
+        "phases": [
+          {
+            "name": "对峙与接触",
+            "timeWindow": "T+00:00-T+00:30"
+          }
+        ]
+      },
+      "forces": [
+        {
+          "id": "f-blue-1",
+          "name": "蓝方巡逻编队",
+          "side": "friendly"
+        },
+        {
+          "id": "f-red-1",
+          "name": "红方侦察单元",
+          "side": "hostile"
+        }
+      ]
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "title",
+      "summary",
+      "entities",
+      "areas",
+      "timeline",
+      "narrative"
+    ],
+    "minCounts": {
+      "entities": 2,
+      "areas": 1,
+      "timeline": 2
+    },
+    "keywords": [
+      "friendly",
+      "hostile",
+      "patrol"
+    ],
+    "negativeKeywords": [
+      "东经",
+      "北纬",
+      "经纬度",
+      "由于缺乏前置上下文"
+    ]
+  },
+  "goldenReference": {
+    "title": "前沿海空走廊遭遇战术推演想定",
+    "summary": "在相对网格前沿巡逻走廊中，蓝方护航编队遭遇红方突发多机前出侦察，展开电磁静默对峙与驱离推演。",
+    "entities": [
+      {
+        "id": "e-blue-patrol",
+        "label": "蓝方护航战术编组",
+        "role": "command",
+        "side": "friendly",
+        "position": [
+          25,
+          40
+        ],
+        "platform": "区域防空驱逐舰",
+        "task": "维持预定走廊巡逻线"
+      },
+      {
+        "id": "e-red-recon",
+        "label": "红方高速前出侦察机",
+        "role": "sensor",
+        "side": "hostile",
+        "position": [
+          75,
+          45
+        ],
+        "platform": "远距海上巡逻机",
+        "task": "试探蓝方雷达覆盖边界"
+      }
+    ],
+    "areas": [
+      {
+        "id": "area-corridor",
+        "label": "战术巡逻走廊",
+        "type": "patrol",
+        "position": [
+          50,
+          45
+        ],
+        "size": 120,
+        "geometryType": "corridor",
+        "points": [
+          {
+            "latitude": 0,
+            "longitude": 0,
+            "label": "网格走廊中轴"
+          }
+        ]
+      }
+    ],
+    "timeline": [
+      {
+        "time": "T+00:05",
+        "phase": "接触对峙",
+        "title": "红方侦察机越过巡逻外沿",
+        "description": "红方辐射源信号被蓝方被动测向截获",
+        "impact": "蓝方全舰转入一级战备"
+      },
+      {
+        "time": "T+00:20",
+        "phase": "接触对峙",
+        "title": "蓝方雷达开机照射警告",
+        "description": "火控雷达锁定红方侦察机实施电磁驱离",
+        "impact": "红方调头退出警戒走廊"
+      }
+    ],
+    "narrative": "本想定旨在检验双方在非交火状态下的规则反应灵敏度与电磁取证闭环时效。"
+  }
+}

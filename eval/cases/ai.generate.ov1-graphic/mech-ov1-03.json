@@ -1,0 +1,121 @@
+{
+  "id": "mech-ov1-03",
+  "category": "mechanism",
+  "promptId": "ai.generate.ov1-graphic",
+  "schema": "OperationalConceptGraphic",
+  "name": "跨域立体反潜与通道阻击机理图",
+  "description": "呈现水下、水面与空中声学数据交联反潜闭环",
+  "input": {
+    "workflow": {
+      "title": "OV-1 总体图",
+      "outputSchema": "OperationalConceptGraphic"
+    },
+    "analysis": {
+      "brief": {
+        "objective": "海峡水下封锁",
+        "approach": "空潜声纳协同反潜"
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "concept",
+      "nodes",
+      "edges"
+    ],
+    "minCounts": {
+      "nodes": 5,
+      "edges": 4
+    },
+    "keywords": [
+      "sense",
+      "decide",
+      "control",
+      "opponent",
+      "assess"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "concept": {
+      "mission": "海峡反潜屏障阻击",
+      "objective": "阻止敌潜艇渗入",
+      "scope": "咽喉水道相对坐标系",
+      "phase": "巡逻猎潜阶段",
+      "expectedEffects": "潜艇无害化或迫退",
+      "constraints": "声线跃层深度"
+    },
+    "nodes": [
+      {
+        "id": "sense",
+        "label": "水听阵列与空投声呐浮标",
+        "detail": "水声频谱采集定位",
+        "category": "感知",
+        "kind": "equipment"
+      },
+      {
+        "id": "decide",
+        "label": "反潜作战巡逻机指挥中心",
+        "detail": "声学目标特征比对判型",
+        "category": "指挥",
+        "kind": "command"
+      },
+      {
+        "id": "control",
+        "label": "反潜护卫舰火箭助飞鱼雷",
+        "detail": "远距快速入水攻击",
+        "category": "行动",
+        "kind": "action"
+      },
+      {
+        "id": "opponent",
+        "label": "敌核动力攻击潜艇",
+        "detail": "大潜深低速静音潜航",
+        "category": "外部",
+        "kind": "external"
+      },
+      {
+        "id": "assess",
+        "label": "磁异探测仪与浮标二次复核",
+        "detail": "目标回音消失与爆炸声确认",
+        "category": "效果",
+        "kind": "effect"
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "sourceId": "opponent",
+        "targetId": "sense",
+        "type": "态势变化"
+      },
+      {
+        "id": "e2",
+        "sourceId": "sense",
+        "targetId": "decide",
+        "type": "信息流"
+      },
+      {
+        "id": "e3",
+        "sourceId": "decide",
+        "targetId": "control",
+        "type": "控制流"
+      },
+      {
+        "id": "e4",
+        "sourceId": "control",
+        "targetId": "assess",
+        "type": "态势变化"
+      },
+      {
+        "id": "e5",
+        "sourceId": "assess",
+        "targetId": "decide",
+        "type": "反馈"
+      }
+    ]
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "id": "mech-decomp-03",
+  "category": "mechanism",
+  "promptId": "ai.generate.activity-decomposition",
+  "schema": "ActivityDecompositionDraft",
+  "name": "综合射频协同压制工序分解",
+  "description": "分解多机协同射频干扰的频段分配、时序同步与对消验证工序",
+  "input": {
+    "workflow": {
+      "title": "活动分解",
+      "outputSchema": "ActivityDecompositionDraft"
+    },
+    "analysis": {
+      "parentActivity": {
+        "id": "act-rf-jamming",
+        "title": "多机分布式综合射频压制"
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "activities",
+      "decompositions"
+    ],
+    "minCounts": {
+      "activities": 2,
+      "decompositions": 1
+    },
+    "keywords": [
+      "射频",
+      "压制",
+      "干扰"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "summary": "涵盖侦察截获分析、综合射频频谱资源协调分配及同步复合干扰发射三道工序。",
+    "activities": [
+      {
+        "id": "act-spec-allocate",
+        "title": "协同干扰通道与时隙自适应规划",
+        "type": "决策",
+        "domain": "电磁",
+        "autonomy": "HOTL",
+        "performer": "电磁指控协调节点",
+        "timingWindow": "2s",
+        "input": "威胁雷达主频表",
+        "output": "编队干扰方案分配表",
+        "parentId": "act-rf-jamming",
+        "text": "动态划分各机压制子频带以防同频互扰"
+      },
+      {
+        "id": "act-sync-radiate",
+        "title": "多阵元相干时空同步压制辐射",
+        "type": "电子对抗",
+        "domain": "电磁",
+        "autonomy": "HOOTL",
+        "performer": "干扰吊舱阵列",
+        "timingWindow": "10s",
+        "input": "规划时序与脉冲波形",
+        "output": "高功率空间合成压制能量",
+        "parentId": "act-rf-jamming",
+        "text": "向目标雷达主瓣及主要旁瓣注入高占空比杂波"
+      }
+    ],
+    "decompositions": [
+      {
+        "parentActivityRef": "act-rf-jamming",
+        "childActivityRef": "act-spec-allocate",
+        "rationale": "决策与资源分配前置"
+      },
+      {
+        "parentActivityRef": "act-rf-jamming",
+        "childActivityRef": "act-sync-radiate",
+        "rationale": "物理对抗执行闭环"
+      }
+    ]
+  }
+}

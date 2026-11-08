@@ -1,0 +1,125 @@
+{
+  "id": "scenario-draft-02",
+  "category": "scenario",
+  "promptId": "ai.generate.scenario",
+  "schema": "ScenarioDraft",
+  "name": "多方向立体封控与破障推演想定",
+  "description": "验证红方实施三向立体封锁时，蓝方突击群穿透破障的动态对抗过程",
+  "input": {
+    "workflow": {
+      "title": "仿真想定",
+      "outputSchema": "ScenarioDraft"
+    },
+    "analysis": {
+      "scenarioScope": "立体封控突围推演",
+      "phaseAction": {
+        "phases": [
+          {
+            "name": "突破封控",
+            "timeWindow": "T+00:00-T+01:00"
+          }
+        ]
+      },
+      "forces": [
+        {
+          "id": "f-blue-break",
+          "name": "蓝方破障编队",
+          "side": "friendly"
+        }
+      ]
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "title",
+      "summary",
+      "entities",
+      "areas",
+      "timeline",
+      "narrative"
+    ],
+    "minCounts": {
+      "entities": 2,
+      "areas": 1,
+      "timeline": 2
+    },
+    "keywords": [
+      "friendly",
+      "hostile",
+      "exclusion"
+    ],
+    "negativeKeywords": [
+      "经纬度",
+      "北纬",
+      "东经"
+    ]
+  },
+  "goldenReference": {
+    "title": "多方向立体封控破障推演想定",
+    "summary": "红方构建包含水下雷区、水面巡逻与空域截击的三层封控圈，蓝方实施联合破网突围行动。",
+    "entities": [
+      {
+        "id": "ent-blue-spear",
+        "label": "蓝方先锋破障群",
+        "role": "action",
+        "side": "friendly",
+        "position": [
+          15,
+          50
+        ],
+        "platform": "快速攻击护卫舰",
+        "task": "清除水雷并撕开突破口"
+      },
+      {
+        "id": "ent-red-blocker",
+        "label": "红方外层水面封锁舰",
+        "role": "opponent",
+        "side": "hostile",
+        "position": [
+          60,
+          50
+        ],
+        "platform": "导弹巡洋舰",
+        "task": "封锁主航道并实施超视距火力阻截"
+      }
+    ],
+    "areas": [
+      {
+        "id": "area-minefield",
+        "label": "雷障封控危险区",
+        "type": "exclusion",
+        "position": [
+          40,
+          50
+        ],
+        "size": 100,
+        "geometryType": "circle",
+        "points": [
+          {
+            "latitude": 0,
+            "longitude": 0,
+            "label": "雷区中心"
+          }
+        ]
+      }
+    ],
+    "timeline": [
+      {
+        "time": "T+00:15",
+        "phase": "突破封控",
+        "title": "扫雷无人艇群展开作业",
+        "description": "蓝方在相对网格开辟出宽约5个单位的安全通道",
+        "impact": "降低主舰受损概率"
+      },
+      {
+        "time": "T+00:45",
+        "phase": "突破封控",
+        "title": "主突击群高速贯穿封锁线",
+        "description": "在烟幕与电磁干扰掩护下穿过狭窄水道",
+        "impact": "突破红方外层包围圈"
+      }
+    ],
+    "narrative": "评估高危封控区突破行动中，无人扫雷前导对保障主战舰艇突围速度与生存率的关键作用。"
+  }
+}

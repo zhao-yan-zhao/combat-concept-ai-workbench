@@ -1,0 +1,83 @@
+{
+  "id": "mech-decomp-04",
+  "category": "mechanism",
+  "promptId": "ai.generate.activity-decomposition",
+  "schema": "ActivityDecompositionDraft",
+  "name": "节点战损重构与自主替补活动分解",
+  "description": "分解杀伤网主节点失效后的拓扑自愈与备用通道激活工序",
+  "input": {
+    "workflow": {
+      "title": "活动分解",
+      "outputSchema": "ActivityDecompositionDraft"
+    },
+    "analysis": {
+      "parentActivity": {
+        "id": "act-net-healing",
+        "title": "战时网络拓扑动态自愈与重构"
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "activities",
+      "decompositions"
+    ],
+    "minCounts": {
+      "activities": 2,
+      "decompositions": 1
+    },
+    "keywords": [
+      "重构",
+      "自愈",
+      "拓扑"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "summary": "包含心跳丢失故障判定、备用候选节点权重选举及路由路由全网广播更新三个环节。",
+    "activities": [
+      {
+        "id": "act-detect-loss",
+        "title": "核心指挥节点通信心跳超时判损",
+        "type": "评估",
+        "domain": "网络",
+        "autonomy": "HOOTL",
+        "performer": "分布式共识代理",
+        "timingWindow": "500ms",
+        "input": "节点连续失联时钟",
+        "output": "节点战损状态确认报文",
+        "parentId": "act-net-healing",
+        "text": "多邻近节点协同投票判定主节点是否失效"
+      },
+      {
+        "id": "act-elect-backup",
+        "title": "次级备用指挥席位自动激活接管",
+        "type": "控制",
+        "domain": "综合",
+        "autonomy": "HITL",
+        "performer": "备用指挥母机/预警机",
+        "timingWindow": "3s",
+        "input": "战损确认与当前态势快照",
+        "output": "新指挥拓扑路由指令",
+        "parentId": "act-net-healing",
+        "text": "副指挥席位无缝拉起战术数据库接管交火授权"
+      }
+    ],
+    "decompositions": [
+      {
+        "parentActivityRef": "act-net-healing",
+        "childActivityRef": "act-detect-loss",
+        "rationale": "自愈触发判定"
+      },
+      {
+        "parentActivityRef": "act-net-healing",
+        "childActivityRef": "act-elect-backup",
+        "rationale": "职能转移与重构执行"
+      }
+    ]
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "id": "mech-decomp-02",
+  "category": "mechanism",
+  "promptId": "ai.generate.activity-decomposition",
+  "schema": "ActivityDecompositionDraft",
+  "name": "协同交火与末端制导移交工序分解",
+  "description": "分解跨平台制导链从母机引导向末端主动雷达寻的移交的工序",
+  "input": {
+    "workflow": {
+      "title": "活动分解",
+      "outputSchema": "ActivityDecompositionDraft"
+    },
+    "analysis": {
+      "parentActivity": {
+        "id": "act-fire-handoff",
+        "title": "中远距空空协同交战制导"
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "activities",
+      "decompositions"
+    ],
+    "minCounts": {
+      "activities": 2,
+      "decompositions": 1
+    },
+    "keywords": [
+      "制导",
+      "移交",
+      "导引头"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "summary": "分解中继引导阶段、中末段制导权移交以及导引头开机截获三个因果活动步骤。",
+    "activities": [
+      {
+        "id": "act-midcourse-guide",
+        "title": "双向数据链中段航迹修正",
+        "type": "控制",
+        "domain": "空中",
+        "autonomy": "HOOTL",
+        "performer": "中继预警机/发射机",
+        "timingWindow": "5s",
+        "input": "实时目标更新航迹",
+        "output": "导弹修正指令包",
+        "parentId": "act-fire-handoff",
+        "text": "持续向处于中段巡航的导弹发送目标预估截击点"
+      },
+      {
+        "id": "act-seeker-handoff",
+        "title": "末端主动导引头捕获与锁定确认",
+        "type": "行动",
+        "domain": "空中",
+        "autonomy": "HITL",
+        "performer": "截击弹导引头",
+        "timingWindow": "1s",
+        "input": "目标截击空域窗口",
+        "output": "自主锁定回传确认",
+        "parentId": "act-fire-handoff",
+        "text": "导弹导引头开机自扫描并锁定真实目标"
+      }
+    ],
+    "decompositions": [
+      {
+        "parentActivityRef": "act-fire-handoff",
+        "childActivityRef": "act-midcourse-guide",
+        "rationale": "中段机理支撑"
+      },
+      {
+        "parentActivityRef": "act-fire-handoff",
+        "childActivityRef": "act-seeker-handoff",
+        "rationale": "末端接管闭环"
+      }
+    ]
+  }
+}

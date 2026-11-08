@@ -1,0 +1,57 @@
+{
+  "id": "tactic-brief-01",
+  "category": "tactic",
+  "promptId": "ai.generate.concept-brief",
+  "schema": "ConceptBrief",
+  "name": "多域协同防空压制概念简报",
+  "description": "在抽象相对网格环境下，验证面对多通道雷达网时的多域电磁与反辐射协同压制概念",
+  "input": {
+    "workflow": {
+      "title": "概念简报",
+      "outputSchema": "ConceptBrief"
+    },
+    "analysis": {
+      "researchIntent": "研究分布式空天电磁协同与饱和反辐射突防战法",
+      "currentBrief": {}
+    },
+    "evidence": [
+      {
+        "id": "ev-01",
+        "title": "分布式电磁压制机理.md",
+        "summary": "多节点同步辐射可显著降低单脉冲雷达跟踪稳定性"
+      }
+    ]
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "objective",
+      "approach",
+      "assumptions",
+      "expectedEffects",
+      "risk"
+    ],
+    "minLengths": {
+      "objective": 20,
+      "approach": 30,
+      "expectedEffects": 20
+    },
+    "keywords": [
+      "协同",
+      "压制",
+      "饱和",
+      "电磁"
+    ],
+    "negativeKeywords": [
+      "经纬度",
+      "由于缺乏前置上下文",
+      "研究框架已就绪"
+    ]
+  },
+  "goldenReference": {
+    "objective": "评估在强对抗电磁环境下，运用多域分布式节点协同对敌预警雷达网实施压制与穿透打击的可行性与效能边界。",
+    "approach": "采用空天信息中继引导、低空无人分布式干扰机动态协同诱骗、中高空多批次反辐射武器饱和突击的体系破击模式。",
+    "assumptions": "通信卫星链路与前沿传感器中继保持基础联通；敌方预警探测具备多基站雷达互联与跳频抗干扰能力。",
+    "expectedEffects": "压制期间敌雷达网开机跟踪概率下降60%以上，突防打击武器穿透成功率提升至85%以上。",
+    "risk": "前沿节点暴露后可能遭受点对点精确定位打击；密集协同控制指令时延超差可能导致压制窗口错位。"
+  }
+}

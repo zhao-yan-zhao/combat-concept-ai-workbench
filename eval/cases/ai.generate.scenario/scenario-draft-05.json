@@ -1,0 +1,127 @@
+{
+  "id": "scenario-draft-05",
+  "category": "scenario",
+  "promptId": "ai.generate.scenario",
+  "schema": "ScenarioDraft",
+  "name": "隐身突防与多基站协同探测推演想定",
+  "description": "验证双三基准雷达网络通过前向散射效应对隐身飞机的探测捕获",
+  "input": {
+    "workflow": {
+      "title": "仿真想定",
+      "outputSchema": "ScenarioDraft"
+    },
+    "analysis": {
+      "scenarioScope": "反隐身网络推演",
+      "phaseAction": {
+        "phases": [
+          {
+            "name": "前向散射探测",
+            "timeWindow": "T+00:00-T+00:25"
+          }
+        ]
+      },
+      "forces": []
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "title",
+      "summary",
+      "entities",
+      "timeline",
+      "narrative"
+    ],
+    "minCounts": {
+      "entities": 2,
+      "timeline": 2
+    },
+    "keywords": [
+      "friendly",
+      "hostile",
+      "sensor"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "title": "隐身突防与多基站雷达协同探测想定",
+    "summary": "红方隐身轰炸机利用雷达低反射截面企图静默穿透防线，蓝方收发分置双基地雷达网通过基线交叉捕获目标扰动。",
+    "entities": [
+      {
+        "id": "ent-blue-bistatic-tx",
+        "label": "蓝方大功率连续波发射站",
+        "role": "sensor",
+        "side": "friendly",
+        "position": [
+          10,
+          20
+        ],
+        "platform": "固定式地面发射阵地",
+        "task": "向空域投射连续高频探照波"
+      },
+      {
+        "id": "ent-blue-bistatic-rx",
+        "label": "蓝方多通道被动接收车",
+        "role": "sensor",
+        "side": "friendly",
+        "position": [
+          30,
+          80
+        ],
+        "platform": "机动式静默接收天线",
+        "task": "检测双基地基线前向散射畸变"
+      },
+      {
+        "id": "ent-red-stealth-bomber",
+        "label": "红方隐身穿透突击机",
+        "role": "opponent",
+        "side": "hostile",
+        "position": [
+          85,
+          50
+        ],
+        "platform": "先进低可探测隐身飞机",
+        "task": "沿雷达盲区航路实施突入"
+      }
+    ],
+    "areas": [
+      {
+        "id": "area-bistatic-gate",
+        "label": "双基地探照栅栏",
+        "type": "patrol",
+        "position": [
+          20,
+          50
+        ],
+        "size": 120,
+        "geometryType": "corridor",
+        "points": [
+          {
+            "latitude": 0,
+            "longitude": 0,
+            "label": "基线中点"
+          }
+        ]
+      }
+    ],
+    "timeline": [
+      {
+        "time": "T+00:08",
+        "phase": "前向散射探测",
+        "title": "隐身飞机穿越收发基线",
+        "description": "接收站记录到显著的前向散射电平突增",
+        "impact": "解算出目标穿越时点与速度"
+      },
+      {
+        "time": "T+00:18",
+        "phase": "前向散射探测",
+        "title": "引导长波雷达完成目标跟踪",
+        "description": "将粗航向数据注入宽波束警戒雷达建立连续航迹",
+        "impact": "打破隐身飞机静默突防优势"
+      }
+    ],
+    "narrative": "推演检验分布式收发分置雷达栅栏在反隐身概念中的立论可行性与工程边界。"
+  }
+}

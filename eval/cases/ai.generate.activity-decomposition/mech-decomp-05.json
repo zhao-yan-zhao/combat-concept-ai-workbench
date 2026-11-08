@@ -1,0 +1,83 @@
+{
+  "id": "mech-decomp-05",
+  "category": "mechanism",
+  "promptId": "ai.generate.activity-decomposition",
+  "schema": "ActivityDecompositionDraft",
+  "name": "毁伤多维评估与再打击裁决活动分解",
+  "description": "分解打击后多源传感器效果采集、毁伤等级判定与补充打击决策",
+  "input": {
+    "workflow": {
+      "title": "活动分解",
+      "outputSchema": "ActivityDecompositionDraft"
+    },
+    "analysis": {
+      "parentActivity": {
+        "id": "act-bda-root",
+        "title": "目标战果实时评估与再打击裁决"
+      }
+    },
+    "evidence": []
+  },
+  "expectedAssertions": {
+    "requiredFields": [
+      "summary",
+      "activities",
+      "decompositions"
+    ],
+    "minCounts": {
+      "activities": 2,
+      "decompositions": 1
+    },
+    "keywords": [
+      "评估",
+      "毁伤",
+      "再打击"
+    ],
+    "negativeKeywords": [
+      "经纬度"
+    ]
+  },
+  "goldenReference": {
+    "summary": "分解为多光谱光电信号采集、物理功能残存度计算与火力再打击裁决决策工序。",
+    "activities": [
+      {
+        "id": "act-collect-bda",
+        "title": "攻击点红外与合成孔径雷达复核成像",
+        "type": "感知",
+        "domain": "综合",
+        "autonomy": "HOTL",
+        "performer": "低轨侦察卫星与战术无人机",
+        "timingWindow": "30s",
+        "input": "目标打击坐标与时间窗口",
+        "output": "毁伤前后对比影像及辐射谱",
+        "parentId": "act-bda-root",
+        "text": "快速拍摄轰炸爆心结构破坏与次生火灾烟尘"
+      },
+      {
+        "id": "act-decision-restrike",
+        "title": "战果功能等级评估与再打击裁决",
+        "type": "决策",
+        "domain": "综合",
+        "autonomy": "HITL",
+        "performer": "联合火力指挥参谋席",
+        "timingWindow": "15s",
+        "input": "毁伤评估报告",
+        "output": "转火撤销或备用梯队再打击补射命令",
+        "parentId": "act-bda-root",
+        "text": "根据目标雷达射频是否归零做出是否追加实施再打击决策"
+      }
+    ],
+    "decompositions": [
+      {
+        "parentActivityRef": "act-bda-root",
+        "childActivityRef": "act-collect-bda",
+        "rationale": "效果证据收集"
+      },
+      {
+        "parentActivityRef": "act-bda-root",
+        "childActivityRef": "act-decision-restrike",
+        "rationale": "因果决策回路"
+      }
+    ]
+  }
+}

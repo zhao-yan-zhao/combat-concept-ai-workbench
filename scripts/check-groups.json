@@ -128,7 +128,8 @@
     "check-m4-report-templates.mjs",
     "check-report-classification-and-audit.mjs",
     "check-m4-office-export-and-graphics.mjs",
-    "check-m4-obsidian-writeback.mjs"
+    "check-m4-obsidian-writeback.mjs",
+    "check-m5-golden-cases.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",
