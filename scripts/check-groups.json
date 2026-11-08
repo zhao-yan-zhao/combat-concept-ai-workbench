@@ -140,7 +140,8 @@
     "check-m6-consistency-repair.mjs",
     "check-m7-argument-chain-and-assumptions.mjs",
     "check-m7-adversarial-countermeasures.mjs",
-    "check-m7-wargame-turn-engine.mjs"
+    "check-m7-wargame-turn-engine.mjs",
+    "check-m7-tactical-case-study.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",

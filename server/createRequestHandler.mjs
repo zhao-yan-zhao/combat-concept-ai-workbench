@@ -5,6 +5,7 @@ import { createProjectResourceHandlers } from "./routes/projectResources.mjs";
 import { createAiHandlers } from "./routes/aiRoutes.mjs";
 import { createOfficeReportHandlers } from "./routes/officeReports.mjs";
 import { generateLocalAdjudicationAdvice } from "../design-studio/src/wargameTurnStore.js";
+import { generateLocalCaseComparison } from "../design-studio/src/tacticalCaseStore.js";
 
 export function createRequestHandler(runtime) {
   const auth = createCollaborationAuthHandlers(runtime);
@@ -450,6 +451,26 @@ export function createRequestHandler(runtime) {
             advice = { ...generateLocalAdjudicationAdvice(input?.turn), mode: "fallback" };
           }
           sendJson(response, 200, advice);
+        } catch (error) {
+          send(response, 400, error.message, "text/plain;charset=utf-8");
+        }
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/tactical/case-comparison") {
+        try {
+          const input = await readJson(request);
+          let comparison = null;
+          if (getAiApiKey() && openAi?.callOpenAiCaseComparison) {
+            try {
+              comparison = await openAi.callOpenAiCaseComparison(input);
+              comparison.mode = "ai";
+            } catch (err) {
+              comparison = { ...generateLocalCaseComparison(input?.query, input?.caseItem), mode: "fallback" };
+            }
+          } else {
+            comparison = { ...generateLocalCaseComparison(input?.query, input?.caseItem), mode: "fallback" };
+          }
+          sendJson(response, 200, comparison);
         } catch (error) {
           send(response, 400, error.message, "text/plain;charset=utf-8");
         }

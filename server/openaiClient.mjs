@@ -1229,6 +1229,83 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
       aiAdvice: String(draft.recommendationForNextTurn || draft.outcome || "").trim()
     };
   }
+
+  async function callOpenAiCaseComparison(input = {}) {
+    const defaultPrompt = [
+      "你是作战概念与战例分析专家助手。",
+      "请针对当前作战问题与指定历史经典战例，进行客观、严谨的跨时代对照分析：",
+      "1. 提取战役攻防对抗机理的相似点；",
+      "2. 提炼对当前战法设计的具体【可借鉴点】（为什么能学、学什么协同机制）；",
+      "3. 严肃剖析【不适用点与时代局限】（为什么不可盲目照搬、现代反制手段有何质变）；",
+      "安全边界：只进行宏观因果与战法机理分析，不做数值化杀伤计算，不编造具体部队番号或涉密战术参数。"
+    ].join("\n");
+
+    const prompt = [
+      resolvePrompt("ai.tactical.case-comparison", defaultPrompt),
+      "当前作战概念与问题：",
+      JSON.stringify(input.concept || {}, null, 2),
+      "待比对历史战例：",
+      JSON.stringify(input.caseItem || {}, null, 2)
+    ].join("\n");
+
+    const instructions = resolvePrompt("ai.generate.instructions", "你是专业、克制、可追溯的作战概念研究助手。只返回合法 JSON，不输出 Markdown 代码块。");
+    const schema = {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        similarityPoint: { type: "string" },
+        applicableLessons: {
+          type: "array",
+          items: { type: "string" }
+        },
+        unapplicableLessons: {
+          type: "array",
+          items: { type: "string" }
+        },
+        confidence: { type: "string", enum: ["高", "中", "低"] }
+      },
+      required: ["similarityPoint", "applicableLessons", "unapplicableLessons", "confidence"]
+    };
+
+    const body = {
+      model: getConfig().model,
+      temperature: 0.2,
+      messages: [
+        { role: "system", content: instructions },
+        { role: "user", content: prompt }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "TacticalCaseComparison",
+          strict: true,
+          schema
+        }
+      },
+      store: false
+    };
+
+    const primaryUrl = resolveApiUrl(getConfig().baseUrl);
+    let apiResponse;
+    try {
+      const result = await postOpenAi(primaryUrl, body, { timeoutMs: 60000 });
+      apiResponse = result.response;
+    } catch (error) {
+      throw normalizeUpstreamError(error, 60000);
+    }
+
+    if (!apiResponse.ok) {
+      throw new Error(await apiResponse.text());
+    }
+
+    const draft = parseJsonObject(extractOutputText(await apiResponse.json()));
+    return {
+      similarityPoint: String(draft.similarityPoint || "攻防对抗时序和非对称突破思路具备相似性").trim(),
+      applicableLessons: Array.isArray(draft.applicableLessons) ? draft.applicableLessons.map(String).filter(Boolean) : [],
+      unapplicableLessons: Array.isArray(draft.unapplicableLessons) ? draft.unapplicableLessons.map(String).filter(Boolean) : [],
+      confidence: ["高", "中", "低"].includes(draft.confidence) ? draft.confidence : "高"
+    };
+  }
   
   function mergeAiDraft(base, draft) {
     const sections = normalizeSections(draft);
@@ -2202,7 +2279,22 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
         '  "rationale": "因果链条剖析：说明为什么产生该态势，各方应对与事件扰动的影响",',
         '  "recommendationForNextTurn": "对导演部与后续回合演进的导调建议"',
         "}"
-      ].join("\n"), ["turnNumber", "phaseName", "redIntent", "blueIntent", "injectedEvents"])
+      ].join("\n"), ["turnNumber", "phaseName", "redIntent", "blueIntent", "injectedEvents"]),
+      promptDefinition("ai.tactical.case-comparison", "战例借鉴与适用性比对分析", "针对历史相似战例提取作战机理相似点、提炼可借鉴点与剖析不适用时代局限", [
+        "你是作战概念与战例分析专家助手。",
+        "请针对当前作战问题与指定历史经典战例，进行客观、严谨的跨时代对照分析：",
+        "1. 提取战役攻防对抗机理的相似点；",
+        "2. 提炼对当前战法设计的具体【可借鉴点】（为什么能学、学什么协同机制）；",
+        "3. 严肃剖析【不适用点与时代局限】（为什么不可盲目照搬、现代反制手段有何质变）；",
+        "安全边界：只进行宏观因果与战法机理分析，不做数值化杀伤计算，不编造具体部队番号或涉密战术参数。",
+        "严格返回合法 JSON，格式为：",
+        "{",
+        '  "similarityPoint": "对抗机理与战术突破的相似特征说明",',
+        '  "applicableLessons": ["可借鉴要点1", "可借鉴要点2"],',
+        '  "unapplicableLessons": ["不可盲目照搬的时代局限1", "现代防御演化反制2"],',
+        '  "confidence": "高|中|低"',
+        "}"
+      ].join("\n"), ["conceptQuestion", "caseName", "historicalContext", "similarityPoint"])
     ].map((item) => ({ ...item, content: resolvePrompt(item.id, item.defaultContent), customized: Boolean(getAiPromptOverrides()?.[item.id]) }));
   }
 
@@ -2304,6 +2396,7 @@ export function createOpenAiClient({ getAiServiceConfig, getAiApiKey, getAiPromp
     streamOpenAi,
     callOpenAiRedTeam,
     callOpenAiWargameAdjudication,
+    callOpenAiCaseComparison,
     mergeAiDraft,
     listPromptDefinitions,
     fetchUpstreamModels,

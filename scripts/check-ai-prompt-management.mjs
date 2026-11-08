@@ -24,8 +24,9 @@ try {
       getAiPromptOverrides: () => overrides
     });
     const items = client.listPromptDefinitions();
-    assert.equal(items.length, 26);
+    assert.equal(items.length, 27);
     assert.equal(items.find((item) => item.id === "ai.wargame.adjudication")?.name, "推演导调与裁决建议");
+    assert.equal(items.find((item) => item.id === "ai.tactical.case-comparison")?.name, "战例借鉴与适用性比对分析");
     assert.equal(items.find((item) => item.id === "ai.generate.generic")?.customized, true);
     assert.equal(items.find((item) => item.id === "ai.generate.activity-decomposition")?.name, "活动分解");
     assert.equal(items.find((item) => item.id === "ai.generate.phase-action")?.variables.includes("analysis"), true);

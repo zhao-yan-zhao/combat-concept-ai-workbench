@@ -284,9 +284,9 @@
   - 在现有红队审查的基础上扩展：红队针对战法提出"对手可能的反制"，每条反制都必须有"我方应对"或"接受风险（填理由）"。
   - 还有反制没处理时，评估页显示未闭合数量并警示阻断；战法说明中自动生成"风险与反制"总表并支持 XML 结构化导出。
 
-**T7.3 战例借鉴**
-- 在知识库中检索与当前作战问题相似的历史战例（复用 M2 的检索与引用机制）。
-- 每个战例生成一张"可借鉴点 / 不适用点"对照卡，可以引用到论证链中。
+- [x] **T7.3 战例借鉴**（2026-11-09 已落地）
+  - 在知识库中检索与当前作战问题相似的历史战例（复用 M2 的检索与引用机制）。
+  - 每个战例生成一张"可借鉴点 / 不适用点"对照卡，可以一键引用到制胜论证链证据支撑中。
 
 **T7.4 战法库（跨项目复用）**
 - 已确认的战法可以"存入战法库"，保存核心思想、适用条件、论证链摘要和引用。
@@ -1070,6 +1070,33 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs ui-static`：41/41 PASS (100%)
   - `node scripts/run-checks.mjs all`：160/160 PASS (100% 全绿)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+### 2026-11-09 T7.3 真实落地：战法设计线（历史相似战例借鉴、可借鉴点/不适用点对照卡与论证链引用）
+
+- **实施内容**：
+  1. 战例借鉴数据模型与种子库 (`design-studio/src/tacticalCaseStore.js`)：
+     - 数据契约：`tacticalCase = { id, caseName, category, similarityPoint, historicalContext, applicableLessons: [...], unapplicableLessons: [...], confidence: "高|中|低", knowledgeRef }`；
+     - 预置 4 类涵盖海战反舰突防（马岛海战）、防空体系致盲（贝卡谷地 SEAD）、超低空雷达破门（海湾战争特遣队）、非对称奇袭（塔兰托空袭）的典型战例对照卡；
+     - 导出 `searchTacticalCases`, `formatCaseAsEvidence`, `applyCaseToArgumentChain`, `generateLocalCaseComparison` 等完整能力集；
+  2. 统一提示词目录与服务端路由契约 (`server/openaiClient.mjs` & `server/createRequestHandler.mjs`)：
+     - 统一提示词目录纳管 `ai.tactical.case-comparison`（战例借鉴与适用性比对分析），声明动态变量与输出 Schema；
+     - 服务端接入 `POST /api/tactical/case-comparison`，提供大模型比对与离线本地推导平滑降级；
+  3. 前端 OV-5 制胜论证链深度集成与控制器动作 (`design-studio/src/ov5MechanismView.js` & `ov5AiController.js`)：
+     - 在“🎯 制胜论证链与假设”视口中增设“📚 历史相似战例借鉴与比对 (可借鉴点 / 时代不适用局限)”主看板；
+     - 卡片直观区分机制可借鉴点（绿色）与时代局限/不适用点（橙色），支持搜索匹配与自定义录入；
+     - 提供“📌 引用至论证链支撑证据”一键动作，将战例借鉴与局限分析格式化注入 `chain.evidenceRefs` 形成闭环支撑；
+  4. 报告导出引擎升级 (`design-studio/src/reportBuilder.js`)：
+     - 战法说明书（`tactic-doc`）与通用 Markdown 报告在制胜机理章节自动生成“历史相似战例借鉴与适用性剖析”对比总表；
+     - XML 报告结构化输出 `<tacticalCases>`，完整保留 `<applicableLessons>` 与 `<unapplicableLessons>`；
+  5. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m7-tactical-case-study.mjs`：8 项专项断言 100% 通过；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
+- **验证命令与结果**：
+  - `node scripts/check-m7-tactical-case-study.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：42/42 PASS (100%)
+  - `node scripts/run-checks.mjs all`：161/161 PASS (100% 全绿)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 
 
 

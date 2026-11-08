@@ -4,6 +4,7 @@ import { evaluateOodaLoopHealth } from "./oodaStore.js";
 import { renderProjectStorageState } from "./projectStorageView.js";
 import { renderOriginBadge, calculateEvidenceCoverage } from "./citationProvenanceView.js";
 import { normalizeArgumentChain, getSortedAssumptions, evaluateAssumptionImpact } from "./argumentChainStore.js";
+import { PRESET_TACTICAL_CASES, normalizeTacticalCase, searchTacticalCases } from "./tacticalCaseStore.js";
 
 function escapeHtml(value) {
   return String(value || "")
@@ -890,6 +891,11 @@ function renderArgumentChainPerspective({ activities, state, model, activityById
   const chain = normalizeArgumentChain(model?.argumentChain, state?.brief || {});
   const sortedAssumptions = getSortedAssumptions(chain);
   const impacts = evaluateAssumptionImpact(chain, model, state?.forceMission, state?.phaseAction);
+  const caseQuery = state?.tacticalCaseSearchQuery || "";
+  const displayedCases = searchTacticalCases(caseQuery, {
+    customCases: state?.tacticalCases || [],
+    knowledgeDocs: state?.knowledge || []
+  });
 
   return `
     <div class="ov5-argument-chain-perspective" style="padding:16px; background:#fff; border-radius:8px; border:1px solid #e2e8f0;">
@@ -942,7 +948,83 @@ function renderArgumentChainPerspective({ activities, state, model, activityById
         </div>
       ` : ""}
 
-      <!-- 关键假设清单（按置信度排序） -->
+      <!-- 历史相似战例借鉴与比对 (T7.3) -->
+      <section class="tactical-cases-panel" style="margin-bottom:20px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+          <div>
+            <h4 style="margin:0 0 2px 0; font-size:14px; color:#1e293b; display:flex; align-items:center; gap:6px;">
+              <span>📚 历史相似战例借鉴与比对 (可借鉴点 / 时代不适用局限)</span>
+              <span class="mini-tag" style="background:#fef3c7; color:#92400e; font-size:11px;">M7-T7.3 战例借鉴</span>
+            </h4>
+            <small style="color:#64748b;">检索历史相似战例，提炼对抗机制可借鉴点与时代局限，一键引用至论证链支撑证据。</small>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="search" id="tacticalCaseSearchInput" value="${escapeHtml(caseQuery)}" placeholder="输入作战问题检索战例（如：突防、电磁、防空）..." style="font-size:11.5px; padding:3px 8px; border:1px solid #cbd5e1; border-radius:4px; width:220px;" />
+            <button type="button" class="quiet-button compact-btn" data-action="search-tactical-cases">🔍 匹配战例</button>
+          </div>
+        </div>
+
+        <div class="tactical-cases-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          ${displayedCases.map((c) => {
+            const isCited = (chain.evidenceRefs || []).some((r) => r.chunkId === `case-${c.id}` || r.title?.includes(c.caseName));
+            return `
+              <div class="tactical-case-card" style="border:1px solid ${isCited ? "#86efac" : "#cbd5e1"}; background:${isCited ? "#f0fdf4" : "#ffffff"}; border-radius:6px; padding:12px; display:flex; flex-direction:column; gap:8px;" data-case-id="${escapeHtml(c.id)}">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <strong style="font-size:13px; color:#0f172a;">${escapeHtml(c.caseName)}</strong>
+                    <span class="mini-tag" style="background:#e0f2fe; color:#0369a1; font-size:10px;">${escapeHtml(c.category)}</span>
+                    <span class="mini-tag" style="font-size:10px;">${escapeHtml(c.confidence)}置信度</span>
+                  </div>
+                  ${isCited ? `<span class="mini-tag" style="background:#bbf7d0; color:#15803d; font-size:10px;">✓ 已引用至论证链</span>` : ""}
+                </div>
+
+                <p style="margin:0; font-size:11.5px; color:#475569; line-height:1.4;">
+                  <strong>相似特征：</strong>${escapeHtml(c.similarityPoint)}
+                </p>
+
+                <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px; padding:6px 8px;">
+                  <strong style="font-size:11px; color:#166534; display:block; margin-bottom:2px;">💡 机制可借鉴点：</strong>
+                  <ul style="margin:0; padding-left:14px; font-size:11px; color:#15803d; line-height:1.4;">
+                    ${(c.applicableLessons || []).map((l) => `<li>${escapeHtml(l)}</li>`).join("")}
+                  </ul>
+                </div>
+
+                <div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:4px; padding:6px 8px;">
+                  <strong style="font-size:11px; color:#9a3412; display:block; margin-bottom:2px;">⚠️ 时代局限与不适用点：</strong>
+                  <ul style="margin:0; padding-left:14px; font-size:11px; color:#c2410c; line-height:1.4;">
+                    ${(c.unapplicableLessons || []).map((l) => `<li>${escapeHtml(l)}</li>`).join("")}
+                  </ul>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:6px; margin-top:auto; padding-top:4px;">
+                  <button type="button" class="quiet-button compact-btn" data-action="apply-case-to-argument-chain" data-case-id="${escapeHtml(c.id)}" style="font-size:11px; ${isCited ? "color:#15803d; font-weight:700;" : "color:#0284c7;"}">
+                    ${isCited ? "✓ 更新论证链引用" : "📌 引用至论证链支撑证据"}
+                  </button>
+                  ${c.id.startsWith("custom-case-") ? `
+                    <button type="button" class="quiet-button compact-btn" data-action="delete-tactical-case" data-case-id="${escapeHtml(c.id)}" style="font-size:11px; color:#ef4444;">
+                      删除
+                    </button>
+                  ` : ""}
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+
+        <!-- 自定义战例录入折叠抽屉 -->
+        <details class="custom-case-details" style="margin-top:12px; border-top:1px dashed #cbd5e1; padding-top:8px;">
+          <summary class="quiet-button compact-btn" style="cursor:pointer; font-size:11.5px;">＋ 录入并分析自定义历史战例</summary>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
+            <input type="text" id="customCaseName" placeholder="战例名称（如：英德日德兰海战前哨战）" style="font-size:12px; padding:4px 8px; border:1px solid #cbd5e1; border-radius:4px;" />
+            <input type="text" id="customCaseSimilarity" placeholder="作战问题相似特征（如：主力接敌前的信息迷雾突破）" style="font-size:12px; padding:4px 8px; border:1px solid #cbd5e1; border-radius:4px;" />
+            <textarea id="customCaseApplicable" rows="2" placeholder="可借鉴点（每行一条或用分号隔开）" style="font-size:12px; padding:4px 8px; border:1px solid #cbd5e1; border-radius:4px;"></textarea>
+            <textarea id="customCaseUnapplicable" rows="2" placeholder="时代局限与不可盲目照搬点（每行一条或用分号隔开）" style="font-size:12px; padding:4px 8px; border:1px solid #cbd5e1; border-radius:4px;"></textarea>
+            <div style="grid-column:1 / -1; display:flex; justify-content:flex-end;">
+              <button type="button" class="primary-btn compact-btn" data-action="add-custom-tactical-case" style="font-size:11.5px;">确认录入战例</button>
+            </div>
+          </div>
+        </details>
+      </section>
       <div style="margin-bottom:20px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
           <h4 style="margin:0; font-size:14px; color:#1e293b; display:flex; align-items:center; gap:6px;">

@@ -76,7 +76,7 @@ export function buildExportArtifactFromPayload(type, payload) {
   };
 }
 
-export function buildReportPayload({ project, brief, inspiration, direction, forceMission = null, phaseAction = null, ov1, ov5, ooda, scenario, validationResult, knowledge, deployment, modelSnapshots = [], modelComparison = null, projectRepository = null, collaboration = null, knowledgeCitationApprovals = [], reportTemplate = null, ov1c: persistedOv1c = null, ov2: persistedOv2 = null, ov3: persistedOv3 = null, ov4: persistedOv4 = null, ov5a: persistedOv5a = null, ov6a: persistedOv6a = null, ov6b: persistedOv6b = null, ov6c: persistedOv6c = null, ov7: persistedOv7 = null }) {
+export function buildReportPayload({ project, brief, inspiration, direction, forceMission = null, phaseAction = null, ov1, ov5, ooda, scenario, validationResult, knowledge, deployment, modelSnapshots = [], modelComparison = null, projectRepository = null, collaboration = null, knowledgeCitationApprovals = [], reportTemplate = null, tacticalCases = [], ov1c: persistedOv1c = null, ov2: persistedOv2 = null, ov3: persistedOv3 = null, ov4: persistedOv4 = null, ov5a: persistedOv5a = null, ov6a: persistedOv6a = null, ov6b: persistedOv6b = null, ov6c: persistedOv6c = null, ov7: persistedOv7 = null }) {
   const activityRefs = unique(ov5.activities.flatMap((activity) => activity.refs || []));
   const deploymentData = scenario ? createDeploymentData(scenario) : null;
   const knowledgeSummary = buildKnowledgeSummary(knowledge, activityRefs, knowledgeCitationApprovals);
@@ -188,7 +188,8 @@ export function buildReportPayload({ project, brief, inspiration, direction, for
     projectAudit: buildProjectAuditSummary(collaboration?.auditEntries),
     modelGovernance: buildModelGovernance(modelSnapshots, modelComparison),
     projectRepository: buildProjectRepositorySummary(projectRepository),
-    phaseAction: phaseAction || null
+    phaseAction: phaseAction || null,
+    tacticalCases: Array.isArray(tacticalCases) && tacticalCases.length ? tacticalCases : (Array.isArray(project?.tacticalCases) ? project.tacticalCases : [])
   };
 }
 
@@ -225,6 +226,7 @@ export function buildMarkdownReport(payload) {
     `- 主要风险：${inline(payload.project.brief.risk)}`,
     "",
     ...(payload.argumentChain ? renderArgumentChainSection(payload.argumentChain) : []),
+    ...(payload.tacticalCases?.length ? renderTacticalCasesSection(payload.tacticalCases) : []),
     "## 灵感孵化轨迹",
     ...renderInspirationSection(payload.inspiration),
     "",
@@ -366,6 +368,7 @@ function buildTacticDocMarkdown(payload, template) {
     "",
     "## 六、制胜机理与因果协同 (OV-5/OODA)",
     ...(payload.argumentChain ? renderArgumentChainSection(payload.argumentChain) : []),
+    ...(payload.tacticalCases?.length ? renderTacticalCasesSection(payload.tacticalCases) : []),
     "### OV-5a 作战活动工序分解",
     ...renderActivityDecompositions(payload.ov5a, payload.ov5.activities),
     "### OV-5b 杀伤网因果链路与活动模型",
@@ -668,6 +671,7 @@ export function buildXmlReport(payload) {
       "    </assumptions>",
       "  </argumentChain>"
     ] : []),
+    ...renderXmlTacticalCases(payload.tacticalCases),
     `  <ooda durationMinutes="${xml(ooda.durationMinutes)}" generationSource="${xml(ooda.provenance?.mode || "derived")}"${evidenceSelectionAttributes(ooda.provenance?.evidenceSelection)}>`,
     ...(ooda.lanes || []).flatMap((lane) => [
       `    <lane id="${xml(lane.id)}" title="${xml(lane.title)}" subtitle="${xml(lane.subtitle)}">`,
@@ -968,6 +972,41 @@ function renderArgumentChainSection(chain) {
   }
   lines.push("");
   return lines;
+}
+
+function renderTacticalCasesSection(cases) {
+  if (!Array.isArray(cases) || cases.length === 0) return [];
+  const lines = [
+    "### 历史相似战例借鉴与适用性剖析",
+    "| 战例名称 | 作战相似特征 | 可借鉴机制 | 时代局限与不适用点 | 置信度 |",
+    "| :--- | :--- | :--- | :--- | :---: |"
+  ];
+  cases.forEach((c) => {
+    const appStr = (c.applicableLessons || []).join("；");
+    const unappStr = (c.unapplicableLessons || []).join("；");
+    lines.push(`| ${inline(c.caseName)} | ${inline(c.similarityPoint)} | ${inline(appStr)} | ⚠️ ${inline(unappStr)} | ${inline(c.confidence)} |`);
+  });
+  lines.push("");
+  return lines;
+}
+
+function renderXmlTacticalCases(cases) {
+  if (!Array.isArray(cases) || cases.length === 0) return [];
+  return [
+    "  <tacticalCases>",
+    ...cases.flatMap((c) => [
+      `    <case id="${xml(c.id)}" name="${xml(c.caseName)}" category="${xml(c.category)}" confidence="${xml(c.confidence)}">`,
+      xmlElement("similarityPoint", c.similarityPoint, 3),
+      "      <applicableLessons>",
+      ...(c.applicableLessons || []).map((l) => xmlElement("lesson", l, 4)),
+      "      </applicableLessons>",
+      "      <unapplicableLessons>",
+      ...(c.unapplicableLessons || []).map((l) => xmlElement("lesson", l, 4)),
+      "      </unapplicableLessons>",
+      "    </case>"
+    ]),
+    "  </tacticalCases>"
+  ];
 }
 
 function renderXmlInspiration(inspiration) {

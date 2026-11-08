@@ -13,6 +13,11 @@ import {
   updateAssumptionInChain,
   saveArgumentChain
 } from "./argumentChainStore.js";
+import {
+  PRESET_TACTICAL_CASES,
+  normalizeTacticalCase,
+  applyCaseToArgumentChain
+} from "./tacticalCaseStore.js";
 
 export function createOv5AiController({ getState, render, notify, invalidateDerivedArtifacts, syncOv5, syncOoda }) {
   return {
@@ -135,6 +140,65 @@ export function createOv5AiController({ getState, render, notify, invalidateDeri
           persistOv5Model(state.ov5);
           if (typeof syncOv5 === "function") syncOv5();
           notify?.("已成功保存论证链与假设设定");
+          render();
+        }
+        return true;
+      }
+      if (action === "search-tactical-cases") {
+        const state = getState();
+        const inputEl = typeof document !== "undefined" ? document.getElementById("tacticalCaseSearchInput") : null;
+        state.tacticalCaseSearchQuery = inputEl?.value?.trim() || "";
+        notify?.(state.tacticalCaseSearchQuery ? `已按「${state.tacticalCaseSearchQuery}」检索历史战例` : "已展示全部历史战例");
+        render();
+        return true;
+      }
+      if (action === "apply-case-to-argument-chain") {
+        const state = getState();
+        const caseId = source?.dataset?.caseId;
+        const allCases = [...PRESET_TACTICAL_CASES, ...(state.tacticalCases || [])];
+        const targetCase = allCases.find((c) => c.id === caseId);
+        if (targetCase) {
+          applyCaseToArgumentChain(state, targetCase);
+          persistOv5Model(state.ov5);
+          if (typeof syncOv5 === "function") syncOv5();
+          notify?.(`已将战例【${targetCase.caseName}】引用至制胜论证链支撑证据！`);
+          render();
+        }
+        return true;
+      }
+      if (action === "add-custom-tactical-case") {
+        const state = getState();
+        const nameEl = typeof document !== "undefined" ? document.getElementById("customCaseName") : null;
+        const appEl = typeof document !== "undefined" ? document.getElementById("customCaseApplicable") : null;
+        const unappEl = typeof document !== "undefined" ? document.getElementById("customCaseUnapplicable") : null;
+        const simEl = typeof document !== "undefined" ? document.getElementById("customCaseSimilarity") : null;
+
+        const caseName = nameEl?.value?.trim();
+        if (!caseName) {
+          notify?.("请输入战例名称");
+          return true;
+        }
+
+        const newCase = normalizeTacticalCase({
+          id: `custom-case-${Date.now().toString(36)}`,
+          caseName,
+          similarityPoint: simEl?.value?.trim() || "攻防对抗机理具备借鉴价值",
+          applicableLessons: appEl?.value?.split(/[;\n]/).map((s) => s.trim()).filter(Boolean),
+          unapplicableLessons: unappEl?.value?.split(/[;\n]/).map((s) => s.trim()).filter(Boolean)
+        });
+
+        if (!Array.isArray(state.tacticalCases)) state.tacticalCases = [];
+        state.tacticalCases.push(newCase);
+        notify?.(`已添加自定义战例：${caseName}`);
+        render();
+        return true;
+      }
+      if (action === "delete-tactical-case") {
+        const state = getState();
+        const caseId = source?.dataset?.caseId;
+        if (caseId && Array.isArray(state.tacticalCases)) {
+          state.tacticalCases = state.tacticalCases.filter((c) => c.id !== caseId);
+          notify?.("已移除自定义战例卡");
           render();
         }
         return true;
