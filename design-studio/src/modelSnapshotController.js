@@ -1,6 +1,7 @@
 import { compareModelSnapshots } from "./modelCompare.js";
-import { deleteModelSnapshot, saveModelSnapshot, snapshotContextFromState } from "./modelSnapshotStore.js";
+import { deleteModelSnapshot, forkModelSnapshot, saveModelSnapshot, snapshotContextFromState } from "./modelSnapshotStore.js";
 import { updateComparisonWeights, updateManualReview } from "./modelComparisonSettingsStore.js";
+import { rankMultiSchemeSnapshots } from "./schemeScoring.js";
 
 export function createModelSnapshotController({ getState, render, notify, project, restoreSnapshot, exportComparison, syncSnapshot, removeSnapshot }) {
   return {
@@ -17,6 +18,9 @@ export function createModelSnapshotController({ getState, render, notify, projec
         }
         state.modelComparisonSettings = updateComparisonWeights(state.modelComparisonSettings, readWeights(formData));
         state.modelComparison = compareModelSnapshots(baseline, candidate, state.modelComparisonSettings);
+        if (state.modelComparison) {
+          state.modelComparison.multiScheme = rankMultiSchemeSnapshots(state.modelSnapshots, state.modelComparisonSettings);
+        }
         notify(`已对比 ${baseline.label} 与 ${candidate.label}`);
         render();
       });
@@ -35,6 +39,28 @@ export function createModelSnapshotController({ getState, render, notify, projec
         state.modelComparison = compareModelSnapshots(baseline, candidate, state.modelComparisonSettings);
         notify("已保存人工评分复核并重新计算比较结果");
         render();
+      });
+
+      root.querySelectorAll("[data-model-snapshot-fork]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const state = getState();
+          const snapshot = state.modelSnapshots.find((item) => item.id === button.dataset.modelSnapshotFork);
+          if (!snapshot) return;
+          const defaultName = `${snapshot.label}-分支方案`;
+          const promptText = typeof window !== "undefined" && typeof window.prompt === "function"
+            ? window.prompt(`基于快照 [${snapshot.label}] 派生新方案分支。\n请输入新方案分支名称：`, defaultName)
+            : defaultName;
+          if (!promptText) return;
+          const result = forkModelSnapshot(snapshot.id, { label: promptText }, state.modelSnapshots);
+          state.modelSnapshots = result.snapshots;
+          void syncSnapshot?.(result.snapshot, { source: "fork" });
+          state.modelComparison = compareModelSnapshots(snapshot, result.snapshot, state.modelComparisonSettings);
+          if (state.modelComparison) {
+            state.modelComparison.multiScheme = rankMultiSchemeSnapshots(state.modelSnapshots, state.modelComparisonSettings);
+          }
+          notify(`已基于 ${snapshot.label} 成功派生新方案分支 [${result.snapshot.label}]，并自动并排对比`);
+          render();
+        });
       });
 
       root.querySelectorAll("[data-model-snapshot-delete]").forEach((button) => {
@@ -85,6 +111,9 @@ export function createModelSnapshotController({ getState, render, notify, projec
       const newest = state.modelSnapshots[0];
       const prior = state.modelSnapshots[1];
       state.modelComparison = prior ? compareModelSnapshots(prior, newest, state.modelComparisonSettings) : null;
+      if (state.modelComparison) {
+        state.modelComparison.multiScheme = rankMultiSchemeSnapshots(state.modelSnapshots, state.modelComparisonSettings);
+      }
       void syncSnapshot?.(newest, { source: "manual" });
       notify(prior ? `已保存 ${newest.label}，并与 ${prior.label} 形成对比` : `已保存模型快照 ${newest.label}`);
       render();

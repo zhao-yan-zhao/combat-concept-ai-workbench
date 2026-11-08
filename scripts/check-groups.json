@@ -133,7 +133,8 @@
     "check-m5-schema-validation-retry.mjs",
     "check-m5-prompt-evaluator.mjs",
     "check-m5-offline-and-local-model.mjs",
-    "check-m5-prompt-history-and-diff.mjs"
+    "check-m5-prompt-history-and-diff.mjs",
+    "check-m6-multi-scheme-branching.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",

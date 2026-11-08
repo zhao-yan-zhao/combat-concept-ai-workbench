@@ -26,6 +26,7 @@ export function buildModelComparisonMarkdown(comparison) {
     `- 对比方案：${inline(candidate.label)}（${inline(candidate.direction)}）`,
     `- 对比结论：${inline(comparison?.summary)}`,
     "",
+    ...renderMultiSchemeSection(comparison?.multiScheme),
     "## 指标变化",
     "| 指标 | 基准 | 对比 | 变化 |",
     "| --- | ---: | ---: | --- |",
@@ -37,6 +38,20 @@ export function buildModelComparisonMarkdown(comparison) {
     ...(comparison?.changes || []).flatMap((change) => renderChange(change))
   ];
   return lines.join("\n");
+}
+
+function renderMultiSchemeSection(multiScheme) {
+  if (!multiScheme || !Array.isArray(multiScheme.rankings) || multiScheme.rankings.length === 0) return [];
+  return [
+    "## 多方案综合比较排行榜",
+    `- 评价方法：${inline(multiScheme.method)}；量表：${inline(multiScheme.scale)}`,
+    `- 优选方案：${inline(multiScheme.leader?.label || "暂无")}（${multiScheme.leader?.total ?? 0} 分）`,
+    "",
+    "| 排名 | 方案名称 | 方向特征 | 定量总分 | 差距 | 审阅状态 |",
+    "| ---: | --- | --- | ---: | ---: | --- |",
+    ...multiScheme.rankings.map((item) => `| ${item.rank} | ${cell(item.label)} | ${cell(item.direction)} | ${item.total} | ${item.gapToLeader === 0 ? "领先" : item.gapToLeader} | ${item.manualReviewCount > 0 ? "已人工复核" : "自动初评"} |`),
+    ""
+  ];
 }
 
 function renderQuantitativeSection(quantitative) {

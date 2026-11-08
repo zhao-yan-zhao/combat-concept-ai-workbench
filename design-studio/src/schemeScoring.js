@@ -62,6 +62,35 @@ export function scoreSchemeSnapshot(snapshot, settings = {}) {
   };
 }
 
+export function rankMultiSchemeSnapshots(snapshots = [], settings = {}) {
+  const normalizedSettings = createQuantitativeSettings(settings);
+  const scoredList = snapshots
+    .filter((s) => s && s.model)
+    .map((snapshot) => scoreSchemeSnapshot(snapshot, normalizedSettings));
+
+  scoredList.sort((a, b) => b.total - a.total);
+
+  const leader = scoredList[0] || null;
+  const rankings = scoredList.map((item, index) => ({
+    ...item,
+    rank: index + 1,
+    isLeader: index === 0 && scoredList.length > 1,
+    gapToLeader: leader ? Number((item.total - leader.total).toFixed(2)) : 0
+  }));
+
+  return {
+    method: "multi-scheme-weighted-rank-v1",
+    scale: "0-100",
+    leader,
+    rankings,
+    weights: QUANTITATIVE_CRITERIA.map((criterion) => ({
+      id: criterion.id,
+      label: criterion.label,
+      weight: normalizedSettings.weights[criterion.id]
+    }))
+  };
+}
+
 export function buildQuantitativeComparison(baseline, candidate, settings = {}) {
   const normalizedSettings = createQuantitativeSettings(settings);
   const baselineScore = scoreSchemeSnapshot(baseline, normalizedSettings);

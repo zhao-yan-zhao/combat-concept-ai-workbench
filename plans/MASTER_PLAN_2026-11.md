@@ -900,6 +900,35 @@ node scripts/smoke-ui.mjs
 > **M5 里程碑（AI 质量与部署）全量圆满收官！**
 > 5 项任务卡全部 100% 落地闭环（T5.1 黄金用例库 30 条、T5.2 Schema 结构校验与重试、T5.3 评测脚本与指标引擎、T5.4 本地离线模型与降级手工模板、T5.5 提示词版本历史与差异回退）。
 
+### 2026-11-08 T6.1 真实落地：多方案分支（基于快照派生方案B/C、排行榜并排对比与定量评分）
+
+- **实施内容**：
+  1. 快照派生多方案分支模型扩展 (`design-studio/src/modelSnapshotStore.js`)：
+     - 新增导出 `forkModelSnapshot(sourceSnapshotId, { label, direction }, snapshots)`；
+     - 基于目标基准快照深度克隆全部 DM2 模型要素（简报、总体图、活动分解、OODA、时序、规则、状态机、想定与验证诊断）；
+     - 分配新 ID 与递增编号，标记 `forkedFrom` 与 `forkedFromLabel` 溯源指针，实现方案 A/B/C 的独立派生与演化；
+  2. 多方案综合评分与排行榜引擎 (`design-studio/src/schemeScoring.js`)：
+     - 新增导出 `rankMultiSchemeSnapshots(snapshots, settings)`；
+     - 基于 8 项关键准则（任务适配度、体系协同度、可实施性、风险可控性、资源可承受性、时间窗口适配度、对手反制韧性、成果表达完整度）对多方案统一打分；
+     - 自动降序排序并输出排名、`isLeader` 优选推荐标记、`gapToLeader` 领先/落后分值差与人工复核覆盖；
+  3. 报告构建与多方案比对导出扩展 (`design-studio/src/modelComparisonBuilder.js` & `modelCompare.js`)：
+     - 为两两对比数据结构附加 `multiScheme` 汇总看板；
+     - 导出 Markdown / JSON 自动加入 `## 多方案综合比较排行榜` 章节，呈现多方案编号、方向特征、定量总分与差距；
+     - 在 `modelCompare.js` 中增加模型空属性访问保护（`nodes?.length`、`edges?.length`）；
+  4. 工作台前端界面与交互绑定升级 (`design-studio/src/modelSnapshotView.js`, `modelSnapshotController.js`, `styles/ov5-mechanism.css`)：
+     - 快照列表项增加 `[派生分支]` 按钮，并呈现 `派生自: M001` 来源徽章；
+     - 当存在 $\ge 2$ 个快照时，渲染“多方案综合评分看板 (并排对比)”：卡片式展示各方案总分、推荐优选 Badge、差距提示以及关键维度分项柱状条；
+     - 控制器响应 `[data-model-snapshot-fork]`：弹窗输入新分支名称，派生后自动触发 SQLite 服务端同步（`syncSnapshot`），并自动拉起源方案与新方案的并排对比；
+  5. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m6-multi-scheme-branching.mjs`：全量覆盖快照分支派生、独立性克隆、多方案综合打分排行榜、Markdown 报告导出契约与前端视图控制器绑定；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
+- **验证命令与结果**：
+  - `node scripts/check-m6-multi-scheme-branching.mjs`：100% PASS
+  - `node scripts/check-quantitative-comparison.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：35/35 PASS (100%)
+  - `node scripts/run-checks.mjs all`：154/154 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 
 
 

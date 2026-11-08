@@ -1,14 +1,15 @@
-import { QUANTITATIVE_CRITERIA } from "./schemeScoring.js";
+import { QUANTITATIVE_CRITERIA, rankMultiSchemeSnapshots } from "./schemeScoring.js";
 
 export function renderModelSnapshotPanel({ snapshots = [], comparison = null, settings = {} }) {
   const defaultBaseline = comparison?.baseline.id || snapshots[1]?.id || "";
   const defaultCandidate = comparison?.candidate.id || snapshots[0]?.id || "";
   return `
     <section class="report-detail-section model-snapshot-section">
-      <div class="report-detail-heading"><h3>模型快照与方案对比</h3><span class="report-state ${snapshots.length ? "ready" : "pending"}">${snapshots.length ? `${snapshots.length} 份快照` : "未保存"}</span></div>
-      <p class="model-snapshot-intro">保存概念简报、高层概念图、活动模型、研究循环、想定与验证的不可变本地快照；对比不会改写当前模型。</p>
-      <div class="model-snapshot-actions"><button class="quiet-button" data-action="save-model-snapshot">保存当前模型</button></div>
+      <div class="report-detail-heading"><h3>模型快照与多方案分支对比</h3><span class="report-state ${snapshots.length ? "ready" : "pending"}">${snapshots.length ? `${snapshots.length} 份快照` : "未保存"}</span></div>
+      <p class="model-snapshot-intro">支持保存当前模型为快照，或基于既有快照派生方案 B/C 分支；通过多方案综合评分看板进行并排对比，对比与评估不会改写当前活动模型。</p>
+      <div class="model-snapshot-actions"><button class="quiet-button" data-action="save-model-snapshot">保存当前模型为快照</button></div>
       ${snapshots.length ? renderSnapshotList(snapshots) : `<p class="report-empty">尚未保存模型快照。报告归档与模型快照相互独立。</p>`}
+      ${snapshots.length > 1 ? renderMultiSchemeLeaderboard(snapshots, settings) : ""}
       ${snapshots.length > 1 ? renderComparisonForm(snapshots, defaultBaseline, defaultCandidate, settings) : ""}
       ${comparison ? renderComparison(comparison) : ""}
     </section>
@@ -16,7 +17,61 @@ export function renderModelSnapshotPanel({ snapshots = [], comparison = null, se
 }
 
 function renderSnapshotList(snapshots) {
-  return `<div class="model-snapshot-list">${snapshots.map((snapshot) => `<article><div><b>${escapeHtml(snapshot.label)} · ${escapeHtml(snapshot.direction)}</b><small>${escapeHtml(formatTime(snapshot.savedAt))} · ${escapeHtml(snapshotSummary(snapshot))}</small></div><div class="model-snapshot-row-actions"><button class="quiet-button" data-model-snapshot-restore="${escapeHtml(snapshot.id)}">恢复</button><button class="quiet-button" data-model-snapshot-delete="${escapeHtml(snapshot.id)}">删除</button></div></article>`).join("")}</div>`;
+  return `<div class="model-snapshot-list">${snapshots.map((snapshot) => {
+    const forkInfo = snapshot.forkedFromLabel ? `<span class="snapshot-fork-badge">派生自 ${escapeHtml(snapshot.forkedFromLabel)}</span> · ` : "";
+    return `
+      <article>
+        <div>
+          <b>${escapeHtml(snapshot.label)} · ${escapeHtml(snapshot.direction)}</b>
+          <small>${forkInfo}${escapeHtml(formatTime(snapshot.savedAt))} · ${escapeHtml(snapshotSummary(snapshot))}</small>
+        </div>
+        <div class="model-snapshot-row-actions">
+          <button class="quiet-button compact" data-model-snapshot-fork="${escapeHtml(snapshot.id)}" title="基于此快照派生新方案分支（方案B/C）">派生分支</button>
+          <button class="quiet-button compact" data-model-snapshot-restore="${escapeHtml(snapshot.id)}" title="恢复此方案快照为当前工作台模型">恢复</button>
+          <button class="quiet-button compact" data-model-snapshot-delete="${escapeHtml(snapshot.id)}" title="删除此快照">删除</button>
+        </div>
+      </article>
+    `;
+  }).join("")}</div>`;
+}
+
+function renderMultiSchemeLeaderboard(snapshots, settings) {
+  const ranked = rankMultiSchemeSnapshots(snapshots, settings);
+  if (!ranked.rankings?.length) return "";
+  return `
+    <section class="multi-scheme-leaderboard">
+      <div class="leaderboard-heading">
+        <h4>多方案综合评分看板 (并排对比)</h4>
+        <span class="leaderboard-count">共 ${ranked.rankings.length} 个方案</span>
+      </div>
+      <div class="leaderboard-grid">
+        ${ranked.rankings.map((scheme) => `
+          <div class="leaderboard-card ${scheme.isLeader ? "is-leader" : ""}">
+            <div class="card-top">
+              <span class="scheme-rank">#${scheme.rank}</span>
+              <strong class="scheme-label">${escapeHtml(scheme.label)}</strong>
+              ${scheme.isLeader ? `<span class="leader-badge">优选推荐</span>` : ""}
+            </div>
+            <div class="card-score">
+              <span class="score-num">${scheme.total}</span>
+              <small class="score-scale">/ 100 分</small>
+              ${scheme.gapToLeader !== 0 ? `<span class="score-gap">落后优选 ${Math.abs(scheme.gapToLeader)} 分</span>` : `<span class="score-gap is-leading">综合评价最高</span>`}
+            </div>
+            <div class="card-direction">${escapeHtml(scheme.direction || "未命名方向")}</div>
+            <div class="card-criteria-bars">
+              ${scheme.criteria.slice(0, 4).map((c) => `
+                <div class="criteria-bar-item" title="${escapeHtml(c.label)}: ${c.score}分">
+                  <span>${escapeHtml(c.label)}</span>
+                  <div class="bar-track"><div class="bar-fill" style="width: ${Math.min(100, c.score)}%"></div></div>
+                  <em>${c.score}</em>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </section>
+  `;
 }
 
 function renderComparisonForm(snapshots, baselineId, candidateId, settings) {

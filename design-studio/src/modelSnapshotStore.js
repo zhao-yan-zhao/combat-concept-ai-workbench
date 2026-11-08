@@ -57,6 +57,32 @@ export function snapshotContextFromState(state, project) {
   };
 }
 
+export function forkModelSnapshot(sourceSnapshotId, { label, direction } = {}, snapshots = []) {
+  const current = snapshots.filter(isSnapshot).slice(0, MAX_SNAPSHOTS);
+  const source = current.find((item) => item.id === sourceSnapshotId);
+  if (!source) {
+    throw new Error(`未找到源模型快照: ${sourceSnapshotId}`);
+  }
+  const number = current.reduce((highest, item) => Math.max(highest, Number(item.number) || 0), 0) + 1;
+  const savedAt = new Date().toISOString();
+  const nextLabel = clean(label) || `M${String(number).padStart(3, "0")} (分支方案)`;
+  const nextDirection = clean(direction) || `${source.direction || "基准方向"} · 分支`;
+  const snapshot = {
+    id: createId(),
+    number,
+    label: nextLabel,
+    savedAt,
+    title: source.title || "作战概念研究",
+    direction: nextDirection,
+    forkedFrom: source.id,
+    forkedFromLabel: source.label,
+    model: clone(source.model)
+  };
+  const next = [snapshot, ...current].slice(0, MAX_SNAPSHOTS);
+  persistModelSnapshots(next);
+  return { snapshot, snapshots: next };
+}
+
 export function deleteModelSnapshot(snapshotId, snapshots = []) {
   const current = snapshots.filter(isSnapshot).slice(0, MAX_SNAPSHOTS);
   const next = current.filter((item) => item.id !== snapshotId);
