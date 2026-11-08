@@ -843,28 +843,32 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：149/149 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
-### 2026-11-08 T5.2 真实落地：结构校验与自动重试机制
+### 2026-11-08 T5.3 真实落地：评测脚本（eval-prompts.mjs）与指标评测引擎
 
 - **实施内容**：
-  1. 纯净轻量 JSON Schema 校验器 (`shared/schemaValidator.js`)：
-     - 零外部 npm 依赖，严格支持 `type`、`required`、`properties`、`items`、`minItems`/`maxItems`、`minimum`/`maximum`、`enum` 与字符串长度递归校验；
-     - 提供结构化校验结果 `{ valid: boolean, errors: string[] }`，精确定位字段路径与语义错误；
-  2. 服务端输出校验与自动纠错重试 (`server/openaiClient.mjs`)：
-     - `resolveDraftSchema(outputSchema, isResearchChat)`：统一对齐各输出 Schema 契约；
-     - 模型生成后先经校验：初次通过则直接返回，并附加 `_rawOutput` 原始输出元数据；
-     - 初次校验未通过时：自动向大模型发起第 2 次纠错请求（Correction Retry），将错误清单精准提示给模型并要求修正重新输出；
-     - 若重试 1 次后仍未通过：抛出结构化 `SchemaValidationError` (HTTP 422)，携带详细错误清单与原始输出 `rawOutput`；
-  3. API 路由层错误与原始输出透传 (`server/routes/aiRoutes.mjs`)：
-     - `handleGenerate` 与 `handleGenerateStreamJob` 捕获到 `SchemaValidationError` 时，向客户端返回 JSON 格式的可读错误，完整透传 `error`、`validationErrors` 与 `rawOutput` 供前端排查与诊断；
+  1. 提示词质量与输出评测核心引擎 (`eval/evaluator.mjs`)：
+     - **结构合法率 (Schema Validity Rate)**：接入 `validateSchema` 与 `resolveDraftSchema`，严格核验模型输出的类型、属性、嵌套结构与枚举值；
+     - **引用合法率 (Citation Validity Rate)**：自动深度提取输出中的显式引用（`citations`、`evidenceRefs`）及正文引用标记（`[ev-xx]`），对照输入证据白名单比对；对未声明或伪造的证据标记为“幻觉引用”，实现科研级零捏造证据溯源；
+     - **关键字段完整率 (Field Completeness Rate)**：逐项判定 `requiredFields` 必填字段、`minCounts` 集合最小数量约束及 `minLengths` 文本最小长度；
+     - **语义质量与安全边界检查 (Semantic Quality)**：关键词白名单覆盖及违规词黑名单拦截（严格保证抽象网格，绝无真实地理经纬度敏感词）；
+     - **多维指标聚合与评分 (aggregateResults)**：产出结构合法率、引用合法率、完整率、语义达标率与综合评分，支持按战法/机理/想定及按 PromptId 细分统计；
+     - **控制台报告排版 (formatConsoleReport)**：支持表格化用例明细与核心指标汇总看板展示；
+  2. 独立人工触发评测运行脚本 (`scripts/eval-prompts.mjs`)：
+     - 支持 `--live`（真实大模型在线生成并评测）、`--golden`（基准离线评测黄金用例库）、`--category`、`--prompt`、`--case` 细粒度筛选；
+     - 支持 `--save` 将评测明细 JSON 持久化至 `eval/results/`；
+     - 本脚本定位为按需触发的真实评测工具，不进全量自动回归 `run-checks`；
+  3. 黄金用例库数据对齐：
+     - 对 `tactic-force-01~06` 完善 4 概念单元 + 4 作战编成包及平台规格数据，实现 30 条黄金用例在 DoDAF 元模型 Schema 校验下的 100% 结构合法率；
   4. 专用自动化回归测试与基线纳入：
-     - 新建 `scripts/check-m5-schema-validation-retry.mjs`，覆盖校验器全规则、初次通过场景、初次失败纠错重试成功场景、重试后仍失败抛出 422 异常并保留 `rawOutput` 场景；
+     - 新建 `scripts/check-m5-prompt-evaluator.mjs`，覆盖证据提取、零幻觉判定、完整率统计、语义黑白名单核验、30 条黄金用例 100% 达标测试与 CLI 冒烟；
      - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
 - **验证命令与结果**：
-  - `node scripts/check-m5-schema-validation-retry.mjs`：100% PASS
-  - `node scripts/run-checks.mjs ui-static`：31/31 PASS (100%)
-  - `node scripts/run-checks.mjs server`：23/23 PASS (100%)
-  - `node scripts/run-checks.mjs all`：150/150 PASS (100%)
+  - `node scripts/eval-prompts.mjs`：30/30 用例全绿，结构合法率 100%，引用合法率 100%，完整率 100%，均分 100 分；
+  - `node scripts/check-m5-prompt-evaluator.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：32/32 PASS (100%)
+  - `node scripts/run-checks.mjs all`：151/151 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 
 
 

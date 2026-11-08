@@ -130,7 +130,8 @@
     "check-m4-office-export-and-graphics.mjs",
     "check-m4-obsidian-writeback.mjs",
     "check-m5-golden-cases.mjs",
-    "check-m5-schema-validation-retry.mjs"
+    "check-m5-schema-validation-retry.mjs",
+    "check-m5-prompt-evaluator.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",

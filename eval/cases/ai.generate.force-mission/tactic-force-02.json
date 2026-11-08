@@ -41,9 +41,9 @@
       "relations"
     ],
     "minCounts": {
-      "forces": 1,
-      "combatForces": 1,
-      "relations": 0
+      "forces": 4,
+      "combatForces": 4,
+      "relations": 2
     },
     "keywords": [
       "friendly",
@@ -58,6 +58,58 @@
     "summary": "部署分布式水面作战群，包含防空护航、超视距反舰攻击与空中早期预警要素。",
     "forces": [
       {
+        "id": "cf-surface-recon",
+        "name": "远海警戒感知单元",
+        "side": "friendly",
+        "role": "sense",
+        "group": "远海警戒群",
+        "missionType": "recon",
+        "task": "搜寻目标水面编队方位与航向",
+        "taskRefs": [
+          "task-asuw-1"
+        ],
+        "phaseIds": [
+          "phase-2"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1101,
+            "name": "海上巡逻机",
+            "country": "通用",
+            "category": "巡逻机",
+            "quantity": 2
+          }
+        ],
+        "notes": "态势侦察"
+      },
+      {
+        "id": "cf-surface-command",
+        "name": "编队指挥控制单元",
+        "side": "friendly",
+        "role": "command",
+        "group": "旗舰指挥群",
+        "missionType": "command",
+        "task": "下达反舰打击任务并协调防空防御",
+        "taskRefs": [
+          "task-asuw-1"
+        ],
+        "phaseIds": [
+          "phase-2"
+        ],
+        "platforms": [
+          {
+            "domain": "ship",
+            "cmoId": 1102,
+            "name": "指挥驱逐舰",
+            "country": "通用",
+            "category": "驱逐舰",
+            "quantity": 1
+          }
+        ],
+        "notes": "海上指控中枢"
+      },
+      {
         "id": "cf-surface-strike",
         "name": "远程反舰突击作战单元",
         "side": "friendly",
@@ -71,10 +123,100 @@
         "phaseIds": [
           "phase-2"
         ],
-        "notes": ""
+        "platforms": [
+          {
+            "domain": "ship",
+            "cmoId": 1103,
+            "name": "导弹驱逐舰",
+            "country": "通用",
+            "category": "驱逐舰",
+            "quantity": 2
+          }
+        ],
+        "notes": "水面突击"
+      },
+      {
+        "id": "cf-surface-escort",
+        "name": "防空反潜护航保障单元",
+        "side": "friendly",
+        "role": "support",
+        "group": "伴随屏护群",
+        "missionType": "support",
+        "task": "为水面突击单元提供中近程防空反潜屏护",
+        "taskRefs": [
+          "task-asuw-1"
+        ],
+        "phaseIds": [
+          "phase-2"
+        ],
+        "platforms": [
+          {
+            "domain": "ship",
+            "cmoId": 1104,
+            "name": "护卫舰",
+            "country": "通用",
+            "category": "护卫舰",
+            "quantity": 2
+          }
+        ],
+        "notes": "伴随屏护"
       }
     ],
     "combatForces": [
+      {
+        "id": "cbf-recon-plane",
+        "name": "海上远程巡逻分队",
+        "side": "friendly",
+        "role": "sense",
+        "conceptForceId": "cf-surface-recon",
+        "group": "空中梯队",
+        "missionType": "recon",
+        "task": "执行雷达对海搜索巡逻",
+        "taskRefs": [
+          "task-asuw-1"
+        ],
+        "phaseIds": [
+          "phase-2"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2101,
+            "name": "海巡机A型",
+            "country": "通用",
+            "category": "巡逻机",
+            "quantity": 2
+          }
+        ],
+        "notes": "巡逻执行包"
+      },
+      {
+        "id": "cbf-cmd-flagship",
+        "name": "海上指挥旗舰作战编组",
+        "side": "friendly",
+        "role": "command",
+        "conceptForceId": "cf-surface-command",
+        "group": "水面编组",
+        "missionType": "command",
+        "task": "统筹全海区战术协同指令分发",
+        "taskRefs": [
+          "task-asuw-1"
+        ],
+        "phaseIds": [
+          "phase-2"
+        ],
+        "platforms": [
+          {
+            "domain": "ship",
+            "cmoId": 2102,
+            "name": "指挥舰B型",
+            "country": "通用",
+            "category": "驱逐舰",
+            "quantity": 1
+          }
+        ],
+        "notes": "指控执行包"
+      },
       {
         "id": "cbf-destroyer-group",
         "name": "驱逐舰综合作战编队",
@@ -90,11 +232,60 @@
         "phaseIds": [
           "phase-2"
         ],
-        "platforms": [],
-        "notes": ""
+        "platforms": [
+          {
+            "domain": "ship",
+            "cmoId": 2103,
+            "name": "驱逐舰C型",
+            "country": "通用",
+            "category": "驱逐舰",
+            "quantity": 2
+          }
+        ],
+        "notes": "突击执行包"
+      },
+      {
+        "id": "cbf-frigate-screen",
+        "name": "防空护卫舰屏护分队",
+        "side": "friendly",
+        "role": "support",
+        "conceptForceId": "cf-surface-escort",
+        "group": "水面编组",
+        "missionType": "support",
+        "task": "在编队外围建立防空与反鱼雷屏障",
+        "taskRefs": [
+          "task-asuw-1"
+        ],
+        "phaseIds": [
+          "phase-2"
+        ],
+        "platforms": [
+          {
+            "domain": "ship",
+            "cmoId": 2104,
+            "name": "护卫舰D型",
+            "country": "通用",
+            "category": "护卫舰",
+            "quantity": 2
+          }
+        ],
+        "notes": "护航执行包"
       }
     ],
-    "relations": [],
+    "relations": [
+      {
+        "fromForceId": "cf-surface-recon",
+        "toForceId": "cf-surface-command",
+        "type": "information",
+        "note": "海空态势上报"
+      },
+      {
+        "fromForceId": "cf-surface-command",
+        "toForceId": "cf-surface-strike",
+        "type": "command",
+        "note": "下达反舰打击任务与射击窗口"
+      }
+    ],
     "openQuestions": [
       "水面编队在雷达静默状态下依赖外源态势的引导精度"
     ],

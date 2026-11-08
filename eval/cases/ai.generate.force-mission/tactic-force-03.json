@@ -37,11 +37,13 @@
     "requiredFields": [
       "summary",
       "forces",
-      "combatForces"
+      "combatForces",
+      "relations"
     ],
     "minCounts": {
-      "forces": 1,
-      "combatForces": 1
+      "forces": 4,
+      "combatForces": 4,
+      "relations": 2
     },
     "keywords": [
       "recon",
@@ -68,7 +70,95 @@
         "phaseIds": [
           "phase-1"
         ],
-        "notes": ""
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1201,
+            "name": "静默侦察无人机",
+            "country": "通用",
+            "category": "无人机",
+            "quantity": 2
+          }
+        ],
+        "notes": "静默侦察"
+      },
+      {
+        "id": "cf-relay-cmd",
+        "name": "战术空中信息中继指控单元",
+        "side": "friendly",
+        "role": "command",
+        "group": "中继控制群",
+        "missionType": "command",
+        "task": "汇集前沿无人机传感数据并转发至后方控制中枢",
+        "taskRefs": [
+          "task-recon-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1202,
+            "name": "空中通信中继机",
+            "country": "通用",
+            "category": "中继机",
+            "quantity": 1
+          }
+        ],
+        "notes": "数据转发指控"
+      },
+      {
+        "id": "cf-fast-strike",
+        "name": "前沿随伴快速处置单元",
+        "side": "friendly",
+        "role": "air",
+        "group": "先锋反应群",
+        "missionType": "strike",
+        "task": "对突发高价值时敏目标实施快速核实与精准遏制",
+        "taskRefs": [
+          "task-recon-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1203,
+            "name": "察打一体无人机",
+            "country": "通用",
+            "category": "无人机",
+            "quantity": 2
+          }
+        ],
+        "notes": "快速处置"
+      },
+      {
+        "id": "cf-comm-supp",
+        "name": "战术链路电磁维护保障单元",
+        "side": "friendly",
+        "role": "support",
+        "group": "通信保障群",
+        "missionType": "support",
+        "task": "对抗敌方窄带测向与瞄准式干扰，保障中继信道畅通",
+        "taskRefs": [
+          "task-recon-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "ground",
+            "cmoId": 1204,
+            "name": "地面测控天线站",
+            "country": "通用",
+            "category": "地面站",
+            "quantity": 1
+          }
+        ],
+        "notes": "信道维护"
       }
     ],
     "combatForces": [
@@ -76,7 +166,7 @@
         "id": "cbf-uav-recon",
         "name": "长航时高空隐身无人机编队",
         "side": "friendly",
-        "role": "recon",
+        "role": "sense",
         "conceptForceId": "cf-covert-sense",
         "group": "无人侦察机组",
         "missionType": "recon",
@@ -87,11 +177,114 @@
         "phaseIds": [
           "phase-1"
         ],
-        "platforms": [],
-        "notes": ""
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2201,
+            "name": "长航时侦察无人机A型",
+            "country": "通用",
+            "category": "无人机",
+            "quantity": 2
+          }
+        ],
+        "notes": "无人机侦察包"
+      },
+      {
+        "id": "cbf-relay-plane",
+        "name": "平流层通信中继机组",
+        "side": "friendly",
+        "role": "command",
+        "conceptForceId": "cf-relay-cmd",
+        "group": "空中中继组",
+        "missionType": "command",
+        "task": "保持高空稳定盘旋并建立定向高速微波链路",
+        "taskRefs": [
+          "task-recon-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2202,
+            "name": "平流层中继机B型",
+            "country": "通用",
+            "category": "中继机",
+            "quantity": 1
+          }
+        ],
+        "notes": "中继执行包"
+      },
+      {
+        "id": "cbf-strike-uav",
+        "name": "察打一体巡逻战备分队",
+        "side": "friendly",
+        "role": "air",
+        "conceptForceId": "cf-fast-strike",
+        "group": "战备值班组",
+        "missionType": "strike",
+        "task": "挂载小型精确制导武器待命响应",
+        "taskRefs": [
+          "task-recon-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2203,
+            "name": "察打无人机C型",
+            "country": "通用",
+            "category": "无人机",
+            "quantity": 2
+          }
+        ],
+        "notes": "打击执行包"
+      },
+      {
+        "id": "cbf-supp-station",
+        "name": "地面远程控制数据终端站",
+        "side": "friendly",
+        "role": "support",
+        "conceptForceId": "cf-comm-supp",
+        "group": "地面保障组",
+        "missionType": "support",
+        "task": "负责天线伺服跟踪与抗干扰基带解调",
+        "taskRefs": [
+          "task-recon-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "ground",
+            "cmoId": 2204,
+            "name": "卫星数据地面站D型",
+            "country": "通用",
+            "category": "地面站",
+            "quantity": 1
+          }
+        ],
+        "notes": "保障执行包"
       }
     ],
-    "relations": [],
+    "relations": [
+      {
+        "fromForceId": "cf-covert-sense",
+        "toForceId": "cf-relay-cmd",
+        "type": "information",
+        "note": "静默侦察数据向中继平台高速回传"
+      },
+      {
+        "fromForceId": "cf-relay-cmd",
+        "toForceId": "cf-fast-strike",
+        "type": "command",
+        "note": "目标确认后下发时敏打击指派"
+      }
+    ],
     "openQuestions": [
       "长航时无人机应对敌空中扫荡战斗机时的自卫规避方案"
     ],

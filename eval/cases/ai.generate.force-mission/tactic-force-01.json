@@ -50,9 +50,9 @@
       "relations"
     ],
     "minCounts": {
-      "forces": 2,
-      "combatForces": 2,
-      "relations": 1
+      "forces": 4,
+      "combatForces": 4,
+      "relations": 2
     },
     "keywords": [
       "friendly",
@@ -82,7 +82,43 @@
         "phaseIds": [
           "phase-1"
         ],
-        "notes": ""
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1001,
+            "name": "电子侦察机",
+            "country": "通用",
+            "category": "侦察机",
+            "quantity": 2
+          }
+        ],
+        "notes": "概念能力单元"
+      },
+      {
+        "id": "cf-cmd-sead",
+        "name": "战术压制指挥协调单元",
+        "side": "friendly",
+        "role": "command",
+        "group": "指挥控制群",
+        "missionType": "command",
+        "task": "融合雷达辐射源态势，生成反辐射突击发射任务解算",
+        "taskRefs": [
+          "task-sead-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1002,
+            "name": "预警指挥机",
+            "country": "通用",
+            "category": "预警机",
+            "quantity": 1
+          }
+        ],
+        "notes": "指挥协同中枢"
       },
       {
         "id": "cf-strike-sead",
@@ -98,7 +134,43 @@
         "phaseIds": [
           "phase-1"
         ],
-        "notes": ""
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1003,
+            "name": "反辐射战机",
+            "country": "通用",
+            "category": "战斗机",
+            "quantity": 4
+          }
+        ],
+        "notes": "防空压制主力"
+      },
+      {
+        "id": "cf-supp-tanker",
+        "name": "突防战术加油支援单元",
+        "side": "friendly",
+        "role": "support",
+        "group": "战术保障群",
+        "missionType": "support",
+        "task": "在战术安全边界建立空中受油航线，保障压制编队远距作战航程",
+        "taskRefs": [
+          "task-sead-2"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1004,
+            "name": "空中加油机",
+            "country": "通用",
+            "category": "保障机",
+            "quantity": 2
+          }
+        ],
+        "notes": "航程保障支持"
       }
     ],
     "combatForces": [
@@ -106,7 +178,7 @@
         "id": "cbf-recon-plane",
         "name": "电子战支援侦察机编组",
         "side": "friendly",
-        "role": "recon",
+        "role": "sense",
         "conceptForceId": "cf-sense-radar",
         "group": "空中梯队",
         "missionType": "recon",
@@ -117,14 +189,50 @@
         "phaseIds": [
           "phase-1"
         ],
-        "platforms": [],
-        "notes": ""
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2001,
+            "name": "电子侦察机A型",
+            "country": "通用",
+            "category": "侦察机",
+            "quantity": 2
+          }
+        ],
+        "notes": "仿真作战编成执行包"
+      },
+      {
+        "id": "cbf-cmd-node",
+        "name": "空中预警指控前沿分队",
+        "side": "friendly",
+        "role": "command",
+        "conceptForceId": "cf-cmd-sead",
+        "group": "空中梯队",
+        "missionType": "command",
+        "task": "承担突防压制实时任务分派与指令授权",
+        "taskRefs": [
+          "task-sead-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2002,
+            "name": "战术预警机B型",
+            "country": "通用",
+            "category": "预警机",
+            "quantity": 1
+          }
+        ],
+        "notes": "仿真指控单元"
       },
       {
         "id": "cbf-strike-fighter",
         "name": "防空压制歼击轰炸机编组",
         "side": "friendly",
-        "role": "strike",
+        "role": "air",
         "conceptForceId": "cf-strike-sead",
         "group": "火力突击梯队",
         "missionType": "sead",
@@ -135,16 +243,58 @@
         "phaseIds": [
           "phase-1"
         ],
-        "platforms": [],
-        "notes": ""
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2003,
+            "name": "战术歼轰机C型",
+            "country": "通用",
+            "category": "战斗轰炸机",
+            "quantity": 4
+          }
+        ],
+        "notes": "仿真打击单元"
+      },
+      {
+        "id": "cbf-tanker-flight",
+        "name": "伴随加油支援分队",
+        "side": "friendly",
+        "role": "support",
+        "conceptForceId": "cf-supp-tanker",
+        "group": "保障梯队",
+        "missionType": "support",
+        "task": "定点待命并执行软管加油对接",
+        "taskRefs": [
+          "task-sead-2"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2004,
+            "name": "战术加油机D型",
+            "country": "通用",
+            "category": "加油机",
+            "quantity": 2
+          }
+        ],
+        "notes": "仿真保障单元"
       }
     ],
     "relations": [
       {
         "fromForceId": "cf-sense-radar",
+        "toForceId": "cf-cmd-sead",
+        "type": "information",
+        "note": "目标雷达参数与定位数据上报"
+      },
+      {
+        "fromForceId": "cf-cmd-sead",
         "toForceId": "cf-strike-sead",
         "type": "command",
-        "note": "目标雷达参数与引导射击解算分发及协同指挥授权"
+        "note": "引导射击解算分发及协同指挥授权"
       }
     ],
     "openQuestions": [

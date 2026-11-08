@@ -37,11 +37,13 @@
     "requiredFields": [
       "summary",
       "forces",
-      "combatForces"
+      "combatForces",
+      "relations"
     ],
     "minCounts": {
-      "forces": 1,
-      "combatForces": 1
+      "forces": 4,
+      "combatForces": 4,
+      "relations": 2
     },
     "keywords": [
       "ecm",
@@ -54,6 +56,58 @@
   "goldenReference": {
     "summary": "由防区外大型电子战干扰机与伴随无人干扰诱饵组成复合压制编队，实施全频段软硬复合杀伤。",
     "forces": [
+      {
+        "id": "cf-esm-sense",
+        "name": "电磁辐射频谱侦测单元",
+        "side": "friendly",
+        "role": "sense",
+        "group": "电磁感知群",
+        "missionType": "recon",
+        "task": "全面测绘敌战场电磁态势与主辐射波形",
+        "taskRefs": [
+          "task-ecm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1401,
+            "name": "电子频谱侦察机",
+            "country": "通用",
+            "category": "侦察机",
+            "quantity": 2
+          }
+        ],
+        "notes": "频谱侦测"
+      },
+      {
+        "id": "cf-ew-command",
+        "name": "网电空间作战协同指挥单元",
+        "side": "friendly",
+        "role": "command",
+        "group": "网电指控群",
+        "missionType": "command",
+        "task": "规划干扰频点与辐射功率分配",
+        "taskRefs": [
+          "task-ecm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1402,
+            "name": "空中电子战指控机",
+            "country": "通用",
+            "category": "指控机",
+            "quantity": 1
+          }
+        ],
+        "notes": "电磁指挥"
+      },
       {
         "id": "cf-ew-mesh",
         "name": "综合作战电磁对抗单元",
@@ -68,10 +122,100 @@
         "phaseIds": [
           "phase-1"
         ],
-        "notes": ""
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1403,
+            "name": "大型防区外干扰机",
+            "country": "通用",
+            "category": "干扰机",
+            "quantity": 2
+          }
+        ],
+        "notes": "电磁干扰"
+      },
+      {
+        "id": "cf-hard-kill",
+        "name": "反辐射精确硬杀伤突击单元",
+        "side": "friendly",
+        "role": "air",
+        "group": "反辐射突击群",
+        "missionType": "strike",
+        "task": "发射反辐射巡飞弹对暴露雷达实施硬摧毁",
+        "taskRefs": [
+          "task-ecm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1404,
+            "name": "巡飞弹发射战术机",
+            "country": "通用",
+            "category": "战斗机",
+            "quantity": 4
+          }
+        ],
+        "notes": "硬摧毁突击"
       }
     ],
     "combatForces": [
+      {
+        "id": "cbf-esm-plane",
+        "name": "高敏电子侦察分队",
+        "side": "friendly",
+        "role": "sense",
+        "conceptForceId": "cf-esm-sense",
+        "group": "电子侦察组",
+        "missionType": "recon",
+        "task": "采集辐射源频点数据",
+        "taskRefs": [
+          "task-ecm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2401,
+            "name": "侦测机A型",
+            "country": "通用",
+            "category": "侦察机",
+            "quantity": 2
+          }
+        ],
+        "notes": "频谱执行包"
+      },
+      {
+        "id": "cbf-ew-control",
+        "name": "电子战任务规划机组",
+        "side": "friendly",
+        "role": "command",
+        "conceptForceId": "cf-ew-command",
+        "group": "网电控制组",
+        "missionType": "command",
+        "task": "动态生成电子对抗战策",
+        "taskRefs": [
+          "task-ecm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2402,
+            "name": "电子指挥机B型",
+            "country": "通用",
+            "category": "指控机",
+            "quantity": 1
+          }
+        ],
+        "notes": "指控执行包"
+      },
       {
         "id": "cbf-standoff-jamming",
         "name": "防区外高功率电子干扰机编组",
@@ -87,11 +231,60 @@
         "phaseIds": [
           "phase-1"
         ],
-        "platforms": [],
-        "notes": ""
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2403,
+            "name": "高功率干扰机C型",
+            "country": "通用",
+            "category": "干扰机",
+            "quantity": 2
+          }
+        ],
+        "notes": "干扰执行包"
+      },
+      {
+        "id": "cbf-harm-flight",
+        "name": "反辐射巡飞打击编组",
+        "side": "friendly",
+        "role": "air",
+        "conceptForceId": "cf-hard-kill",
+        "group": "突击机群",
+        "missionType": "strike",
+        "task": "突防投掷反辐射精确武器",
+        "taskRefs": [
+          "task-ecm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2404,
+            "name": "战术机D型",
+            "country": "通用",
+            "category": "战斗机",
+            "quantity": 4
+          }
+        ],
+        "notes": "打击执行包"
       }
     ],
-    "relations": [],
+    "relations": [
+      {
+        "fromForceId": "cf-esm-sense",
+        "toForceId": "cf-ew-command",
+        "type": "information",
+        "note": "雷达辐射源频谱特征上传"
+      },
+      {
+        "fromForceId": "cf-ew-command",
+        "toForceId": "cf-ew-mesh",
+        "type": "command",
+        "note": "压制频段与照射扇区指派"
+      }
+    ],
     "openQuestions": [
       "大功率干扰对己方雷达侦察频率的自相干扰电磁兼容抑制"
     ],

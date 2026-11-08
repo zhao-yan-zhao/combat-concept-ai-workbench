@@ -37,11 +37,13 @@
     "requiredFields": [
       "summary",
       "forces",
-      "combatForces"
+      "combatForces",
+      "relations"
     ],
     "minCounts": {
-      "forces": 1,
-      "combatForces": 1
+      "forces": 4,
+      "combatForces": 4,
+      "relations": 2
     },
     "keywords": [
       "strike",
@@ -55,10 +57,62 @@
     "summary": "母机承载并快速投放微型自组织巡飞弹蜂群，实现防区外安全发射与蜂群末端自主寻歼。",
     "forces": [
       {
+        "id": "cf-swarm-scout",
+        "name": "蜂群微型先导侦察单元",
+        "side": "friendly",
+        "role": "sense",
+        "group": "集群先导群",
+        "missionType": "recon",
+        "task": "低空超低空渗透勘察敌防御漏洞与关键目标",
+        "taskRefs": [
+          "task-swarm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1501,
+            "name": "微型侦察无人机",
+            "country": "通用",
+            "category": "无人机",
+            "quantity": 6
+          }
+        ],
+        "notes": "微型侦察"
+      },
+      {
+        "id": "cf-swarm-mother",
+        "name": "立体投送与指挥母机单元",
+        "side": "friendly",
+        "role": "command",
+        "group": "投送指挥群",
+        "missionType": "command",
+        "task": "在战术安全边界投送蜂群并协调组网协议",
+        "taskRefs": [
+          "task-swarm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1502,
+            "name": "蜂群运载投送母机",
+            "country": "通用",
+            "category": "运输机",
+            "quantity": 1
+          }
+        ],
+        "notes": "母机指控"
+      },
+      {
         "id": "cf-hetero-swarm",
         "name": "分布式异构集群攻防作战单元",
         "side": "friendly",
-        "role": "action",
+        "role": "air",
         "group": "集群作战群",
         "missionType": "strike",
         "task": "接收任务包后自主分散入役，形成动态包围圈攻击",
@@ -68,18 +122,81 @@
         "phaseIds": [
           "phase-1"
         ],
-        "notes": ""
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1503,
+            "name": "微型自杀攻击巡飞弹",
+            "country": "通用",
+            "category": "巡飞弹",
+            "quantity": 24
+          }
+        ],
+        "notes": "集群突防"
+      },
+      {
+        "id": "cf-swarm-supp",
+        "name": "蜂群射频链路中继保障单元",
+        "side": "friendly",
+        "role": "support",
+        "group": "链路保障群",
+        "missionType": "support",
+        "task": "维持母机与去中心化蜂群节点之间的人在回路链路",
+        "taskRefs": [
+          "task-swarm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 1504,
+            "name": "战术中继无人机",
+            "country": "通用",
+            "category": "无人机",
+            "quantity": 2
+          }
+        ],
+        "notes": "链路保障"
       }
     ],
     "combatForces": [
+      {
+        "id": "cbf-scout-swarm",
+        "name": "先导微型蜂群探针分队",
+        "side": "friendly",
+        "role": "sense",
+        "conceptForceId": "cf-swarm-scout",
+        "group": "先导侦察机群",
+        "missionType": "recon",
+        "task": "探查防空雷达盲区",
+        "taskRefs": [
+          "task-swarm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2501,
+            "name": "探针微型机A型",
+            "country": "通用",
+            "category": "无人机",
+            "quantity": 6
+          }
+        ],
+        "notes": "侦察执行包"
+      },
       {
         "id": "cbf-mothership-carrier",
         "name": "蜂群运载投送母机编队",
         "side": "friendly",
         "role": "command",
-        "conceptForceId": "cf-hetero-swarm",
+        "conceptForceId": "cf-swarm-mother",
         "group": "空中投送机群",
-        "missionType": "strike",
+        "missionType": "command",
         "task": "在战术安全边界完成高密度蜂群弹射展开并提供初始数据链",
         "taskRefs": [
           "task-swarm-1"
@@ -87,11 +204,87 @@
         "phaseIds": [
           "phase-1"
         ],
-        "platforms": [],
-        "notes": ""
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2502,
+            "name": "投送母机B型",
+            "country": "通用",
+            "category": "运输机",
+            "quantity": 1
+          }
+        ],
+        "notes": "母机执行包"
+      },
+      {
+        "id": "cbf-suicide-swarm",
+        "name": "微型饱和自杀攻击蜂群组",
+        "side": "friendly",
+        "role": "air",
+        "conceptForceId": "cf-hetero-swarm",
+        "group": "饱和突击机群",
+        "missionType": "strike",
+        "task": "向要害节点发起多角度同时命中攻击",
+        "taskRefs": [
+          "task-swarm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2503,
+            "name": "巡飞弹C型",
+            "country": "通用",
+            "category": "巡飞弹",
+            "quantity": 24
+          }
+        ],
+        "notes": "突击执行包"
+      },
+      {
+        "id": "cbf-relay-drone",
+        "name": "空中战术网关伴随保障组",
+        "side": "friendly",
+        "role": "support",
+        "conceptForceId": "cf-swarm-supp",
+        "group": "伴随保障机群",
+        "missionType": "support",
+        "task": "在战区外围保障指令回传",
+        "taskRefs": [
+          "task-swarm-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "aircraft",
+            "cmoId": 2504,
+            "name": "中继无人机D型",
+            "country": "通用",
+            "category": "无人机",
+            "quantity": 2
+          }
+        ],
+        "notes": "保障执行包"
       }
     ],
-    "relations": [],
+    "relations": [
+      {
+        "fromForceId": "cf-swarm-scout",
+        "toForceId": "cf-swarm-mother",
+        "type": "information",
+        "note": "前沿微型侦察目标动态上报"
+      },
+      {
+        "fromForceId": "cf-swarm-mother",
+        "toForceId": "cf-hetero-swarm",
+        "type": "command",
+        "note": "目标攻击包分发与集群协同授权"
+      }
+    ],
     "openQuestions": [
       "蜂群投放瞬间的气动分离安全及快速建链时间"
     ],

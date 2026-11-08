@@ -154,22 +154,27 @@ const cases = [
     },
     expectedAssertions: {
       requiredFields: ["summary", "forces", "combatForces", "relations"],
-      minCounts: { forces: 2, combatForces: 2, relations: 1 },
+      minCounts: { forces: 4, combatForces: 4, relations: 2 },
       keywords: ["friendly", "recon", "sead", "command"],
       negativeKeywords: ["经纬度", "由于缺乏前置上下文"]
     },
     goldenReference: {
       summary: "构建以高空电子侦察中继为感知核心、中远距反辐射战术机编组为执行主力的防空压制兵力编成。",
       forces: [
-        { id: "cf-sense-radar", name: "多源雷达辐射定位单元", side: "friendly", role: "sense", group: "侦察突防群", missionType: "recon", task: "在相对网格前沿持续截获雷达信号并完成多点测向交会定位", taskRefs: ["task-sead-1"], phaseIds: ["phase-1"], notes: "" },
-        { id: "cf-strike-sead", name: "反辐射协同打击单元", side: "friendly", role: "air", group: "火力打击群", missionType: "sead", task: "接收目标定位参数，发射高速反辐射武器破坏雷达射频前端", taskRefs: ["task-sead-2"], phaseIds: ["phase-1"], notes: "" }
+        { id: "cf-sense-radar", name: "多源雷达辐射定位单元", side: "friendly", role: "sense", group: "侦察突防群", missionType: "recon", task: "在相对网格前沿持续截获雷达信号并完成多点测向交会定位", taskRefs: ["task-sead-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1001, name: "电子侦察机", country: "通用", category: "侦察机", quantity: 2 }], notes: "概念能力单元" },
+        { id: "cf-cmd-sead", name: "战术压制指挥协调单元", side: "friendly", role: "command", group: "指挥控制群", missionType: "command", task: "融合雷达辐射源态势，生成反辐射突击发射任务解算", taskRefs: ["task-sead-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1002, name: "预警指挥机", country: "通用", category: "预警机", quantity: 1 }], notes: "指挥协同中枢" },
+        { id: "cf-strike-sead", name: "反辐射协同打击单元", side: "friendly", role: "air", group: "火力打击群", missionType: "sead", task: "接收目标定位参数，发射高速反辐射武器破坏雷达射频前端", taskRefs: ["task-sead-2"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1003, name: "反辐射战机", country: "通用", category: "战斗机", quantity: 4 }], notes: "防空压制主力" },
+        { id: "cf-supp-tanker", name: "突防战术加油支援单元", side: "friendly", role: "support", group: "战术保障群", missionType: "support", task: "在战术安全边界建立空中受油航线，保障压制编队远距作战航程", taskRefs: ["task-sead-2"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1004, name: "空中加油机", country: "通用", category: "保障机", quantity: 2 }], notes: "航程保障支持" }
       ],
       combatForces: [
-        { id: "cbf-recon-plane", name: "电子战支援侦察机编组", side: "friendly", role: "recon", conceptForceId: "cf-sense-radar", group: "空中梯队", missionType: "recon", task: "战术空域巡逻并分发雷达脉冲参数", taskRefs: ["task-sead-1"], phaseIds: ["phase-1"], platforms: [], notes: "" },
-        { id: "cbf-strike-fighter", name: "防空压制歼击轰炸机编组", side: "friendly", role: "strike", conceptForceId: "cf-strike-sead", group: "火力突击梯队", missionType: "sead", task: "挂载超音速反辐射武器进入发射阵位实施齐射", taskRefs: ["task-sead-2"], phaseIds: ["phase-1"], platforms: [], notes: "" }
+        { id: "cbf-recon-plane", name: "电子战支援侦察机编组", side: "friendly", role: "sense", conceptForceId: "cf-sense-radar", group: "空中梯队", missionType: "recon", task: "战术空域巡逻并分发雷达脉冲参数", taskRefs: ["task-sead-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2001, name: "电子侦察机A型", country: "通用", category: "侦察机", quantity: 2 }], notes: "仿真作战编成执行包" },
+        { id: "cbf-cmd-node", name: "空中预警指控前沿分队", side: "friendly", role: "command", conceptForceId: "cf-cmd-sead", group: "空中梯队", missionType: "command", task: "承担突防压制实时任务分派与指令授权", taskRefs: ["task-sead-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2002, name: "战术预警机B型", country: "通用", category: "预警机", quantity: 1 }], notes: "仿真指控单元" },
+        { id: "cbf-strike-fighter", name: "防空压制歼击轰炸机编组", side: "friendly", role: "air", conceptForceId: "cf-strike-sead", group: "火力突击梯队", missionType: "sead", task: "挂载超音速反辐射武器进入发射阵位实施齐射", taskRefs: ["task-sead-2"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2003, name: "战术歼轰机C型", country: "通用", category: "战斗轰炸机", quantity: 4 }], notes: "仿真打击单元" },
+        { id: "cbf-tanker-flight", name: "伴随加油支援分队", side: "friendly", role: "support", conceptForceId: "cf-supp-tanker", group: "保障梯队", missionType: "support", task: "定点待命并执行软管加油对接", taskRefs: ["task-sead-2"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2004, name: "战术加油机D型", country: "通用", category: "加油机", quantity: 2 }], notes: "仿真保障单元" }
       ],
       relations: [
-        { fromForceId: "cf-sense-radar", toForceId: "cf-strike-sead", type: "command", note: "目标雷达参数与引导射击解算分发及协同指挥授权" }
+        { fromForceId: "cf-sense-radar", toForceId: "cf-cmd-sead", type: "information", note: "目标雷达参数与定位数据上报" },
+        { fromForceId: "cf-cmd-sead", toForceId: "cf-strike-sead", type: "command", note: "引导射击解算分发及协同指挥授权" }
       ],
       openQuestions: ["强电磁干扰下测向交会定位时延是否满足快速闭环要求"],
       reviewChecklist: ["核对概念兵力与作战编成任务承接一致性"]
@@ -194,19 +199,28 @@ const cases = [
     },
     expectedAssertions: {
       requiredFields: ["summary", "forces", "combatForces", "relations"],
-      minCounts: { forces: 1, combatForces: 1, relations: 0 },
+      minCounts: { forces: 4, combatForces: 4, relations: 2 },
       keywords: ["friendly", "patrol_asuw"],
       negativeKeywords: ["经纬度", "由于缺乏前置上下文"]
     },
     goldenReference: {
       summary: "部署分布式水面作战群，包含防空护航、超视距反舰攻击与空中早期预警要素。",
       forces: [
-        { id: "cf-surface-strike", name: "远程反舰突击作战单元", side: "friendly", role: "surface", group: "机动打击群", missionType: "patrol_asuw", task: "在超视距海域实施分散部署与齐射突击", taskRefs: ["task-asuw-1"], phaseIds: ["phase-2"], notes: "" }
+        { id: "cf-surface-recon", name: "远海警戒感知单元", side: "friendly", role: "sense", group: "远海警戒群", missionType: "recon", task: "搜寻目标水面编队方位与航向", taskRefs: ["task-asuw-1"], phaseIds: ["phase-2"], platforms: [{ domain: "aircraft", cmoId: 1101, name: "海上巡逻机", country: "通用", category: "巡逻机", quantity: 2 }], notes: "态势侦察" },
+        { id: "cf-surface-command", name: "编队指挥控制单元", side: "friendly", role: "command", group: "旗舰指挥群", missionType: "command", task: "下达反舰打击任务并协调防空防御", taskRefs: ["task-asuw-1"], phaseIds: ["phase-2"], platforms: [{ domain: "ship", cmoId: 1102, name: "指挥驱逐舰", country: "通用", category: "驱逐舰", quantity: 1 }], notes: "海上指控中枢" },
+        { id: "cf-surface-strike", name: "远程反舰突击作战单元", side: "friendly", role: "surface", group: "机动打击群", missionType: "patrol_asuw", task: "在超视距海域实施分散部署与齐射突击", taskRefs: ["task-asuw-1"], phaseIds: ["phase-2"], platforms: [{ domain: "ship", cmoId: 1103, name: "导弹驱逐舰", country: "通用", category: "驱逐舰", quantity: 2 }], notes: "水面突击" },
+        { id: "cf-surface-escort", name: "防空反潜护航保障单元", side: "friendly", role: "support", group: "伴随屏护群", missionType: "support", task: "为水面突击单元提供中近程防空反潜屏护", taskRefs: ["task-asuw-1"], phaseIds: ["phase-2"], platforms: [{ domain: "ship", cmoId: 1104, name: "护卫舰", country: "通用", category: "护卫舰", quantity: 2 }], notes: "伴随屏护" }
       ],
       combatForces: [
-        { id: "cbf-destroyer-group", name: "驱逐舰综合作战编队", side: "friendly", role: "surface", conceptForceId: "cf-surface-strike", group: "水面编队", missionType: "patrol_asuw", task: "承担多通道超音速反舰突击及区域防空警戒", taskRefs: ["task-asuw-1"], phaseIds: ["phase-2"], platforms: [], notes: "" }
+        { id: "cbf-recon-plane", name: "海上远程巡逻分队", side: "friendly", role: "sense", conceptForceId: "cf-surface-recon", group: "空中梯队", missionType: "recon", task: "执行雷达对海搜索巡逻", taskRefs: ["task-asuw-1"], phaseIds: ["phase-2"], platforms: [{ domain: "aircraft", cmoId: 2101, name: "海巡机A型", country: "通用", category: "巡逻机", quantity: 2 }], notes: "巡逻执行包" },
+        { id: "cbf-cmd-flagship", name: "海上指挥旗舰作战编组", side: "friendly", role: "command", conceptForceId: "cf-surface-command", group: "水面编组", missionType: "command", task: "统筹全海区战术协同指令分发", taskRefs: ["task-asuw-1"], phaseIds: ["phase-2"], platforms: [{ domain: "ship", cmoId: 2102, name: "指挥舰B型", country: "通用", category: "驱逐舰", quantity: 1 }], notes: "指控执行包" },
+        { id: "cbf-destroyer-group", name: "驱逐舰综合作战编队", side: "friendly", role: "surface", conceptForceId: "cf-surface-strike", group: "水面编队", missionType: "patrol_asuw", task: "承担多通道超音速反舰突击及区域防空警戒", taskRefs: ["task-asuw-1"], phaseIds: ["phase-2"], platforms: [{ domain: "ship", cmoId: 2103, name: "驱逐舰C型", country: "通用", category: "驱逐舰", quantity: 2 }], notes: "突击执行包" },
+        { id: "cbf-frigate-screen", name: "防空护卫舰屏护分队", side: "friendly", role: "support", conceptForceId: "cf-surface-escort", group: "水面编组", missionType: "support", task: "在编队外围建立防空与反鱼雷屏障", taskRefs: ["task-asuw-1"], phaseIds: ["phase-2"], platforms: [{ domain: "ship", cmoId: 2104, name: "护卫舰D型", country: "通用", category: "护卫舰", quantity: 2 }], notes: "护航执行包" }
       ],
-      relations: [],
+      relations: [
+        { fromForceId: "cf-surface-recon", toForceId: "cf-surface-command", type: "information", note: "海空态势上报" },
+        { fromForceId: "cf-surface-command", toForceId: "cf-surface-strike", type: "command", note: "下达反舰打击任务与射击窗口" }
+      ],
       openQuestions: ["水面编队在雷达静默状态下依赖外源态势的引导精度"],
       reviewChecklist: ["确认水面单元防空与对海打击火力通道配比"]
     }
@@ -229,20 +243,29 @@ const cases = [
       evidence: []
     },
     expectedAssertions: {
-      requiredFields: ["summary", "forces", "combatForces"],
-      minCounts: { forces: 1, combatForces: 1 },
+      requiredFields: ["summary", "forces", "combatForces", "relations"],
+      minCounts: { forces: 4, combatForces: 4, relations: 2 },
       keywords: ["recon", "friendly"],
       negativeKeywords: ["经纬度"]
     },
     goldenReference: {
       summary: "配置前沿隐蔽潜伏无人机与长航时通信中继平台，保障态势感知不间断传输。",
       forces: [
-        { id: "cf-covert-sense", name: "前沿静默光学雷达复合感知单元", side: "friendly", role: "sense", group: "先锋监视组", missionType: "recon", task: "保持雷达低截获静默接收，辅以红外长焦探测战场热源", taskRefs: ["task-recon-1"], phaseIds: ["phase-1"], notes: "" }
+        { id: "cf-covert-sense", name: "前沿静默光学雷达复合感知单元", side: "friendly", role: "sense", group: "先锋监视组", missionType: "recon", task: "保持雷达低截获静默接收，辅以红外长焦探测战场热源", taskRefs: ["task-recon-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1201, name: "静默侦察无人机", country: "通用", category: "无人机", quantity: 2 }], notes: "静默侦察" },
+        { id: "cf-relay-cmd", name: "战术空中信息中继指控单元", side: "friendly", role: "command", group: "中继控制群", missionType: "command", task: "汇集前沿无人机传感数据并转发至后方控制中枢", taskRefs: ["task-recon-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1202, name: "空中通信中继机", country: "通用", category: "中继机", quantity: 1 }], notes: "数据转发指控" },
+        { id: "cf-fast-strike", name: "前沿随伴快速处置单元", side: "friendly", role: "air", group: "先锋反应群", missionType: "strike", task: "对突发高价值时敏目标实施快速核实与精准遏制", taskRefs: ["task-recon-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1203, name: "察打一体无人机", country: "通用", category: "无人机", quantity: 2 }], notes: "快速处置" },
+        { id: "cf-comm-supp", name: "战术链路电磁维护保障单元", side: "friendly", role: "support", group: "通信保障群", missionType: "support", task: "对抗敌方窄带测向与瞄准式干扰，保障中继信道畅通", taskRefs: ["task-recon-1"], phaseIds: ["phase-1"], platforms: [{ domain: "ground", cmoId: 1204, name: "地面测控天线站", country: "通用", category: "地面站", quantity: 1 }], notes: "信道维护" }
       ],
       combatForces: [
-        { id: "cbf-uav-recon", name: "长航时高空隐身无人机编队", side: "friendly", role: "recon", conceptForceId: "cf-covert-sense", group: "无人侦察机组", missionType: "recon", task: "执行预定航线长时徘徊监视与毫米波激光中继", taskRefs: ["task-recon-1"], phaseIds: ["phase-1"], platforms: [], notes: "" }
+        { id: "cbf-uav-recon", name: "长航时高空隐身无人机编队", side: "friendly", role: "sense", conceptForceId: "cf-covert-sense", group: "无人侦察机组", missionType: "recon", task: "执行预定航线长时徘徊监视与毫米波激光中继", taskRefs: ["task-recon-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2201, name: "长航时侦察无人机A型", country: "通用", category: "无人机", quantity: 2 }], notes: "无人机侦察包" },
+        { id: "cbf-relay-plane", name: "平流层通信中继机组", side: "friendly", role: "command", conceptForceId: "cf-relay-cmd", group: "空中中继组", missionType: "command", task: "保持高空稳定盘旋并建立定向高速微波链路", taskRefs: ["task-recon-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2202, name: "平流层中继机B型", country: "通用", category: "中继机", quantity: 1 }], notes: "中继执行包" },
+        { id: "cbf-strike-uav", name: "察打一体巡逻战备分队", side: "friendly", role: "air", conceptForceId: "cf-fast-strike", group: "战备值班组", missionType: "strike", task: "挂载小型精确制导武器待命响应", taskRefs: ["task-recon-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2203, name: "察打无人机C型", country: "通用", category: "无人机", quantity: 2 }], notes: "打击执行包" },
+        { id: "cbf-supp-station", name: "地面远程控制数据终端站", side: "friendly", role: "support", conceptForceId: "cf-comm-supp", group: "地面保障组", missionType: "support", task: "负责天线伺服跟踪与抗干扰基带解调", taskRefs: ["task-recon-1"], phaseIds: ["phase-1"], platforms: [{ domain: "ground", cmoId: 2204, name: "卫星数据地面站D型", country: "通用", category: "地面站", quantity: 1 }], notes: "保障执行包" }
       ],
-      relations: [],
+      relations: [
+        { fromForceId: "cf-covert-sense", toForceId: "cf-relay-cmd", type: "information", note: "静默侦察数据向中继平台高速回传" },
+        { fromForceId: "cf-relay-cmd", toForceId: "cf-fast-strike", type: "command", note: "目标确认后下发时敏打击指派" }
+      ],
       openQuestions: ["长航时无人机应对敌空中扫荡战斗机时的自卫规避方案"],
       reviewChecklist: ["检查传感器作用距离与驻留空域安全余量"]
     }
@@ -265,20 +288,29 @@ const cases = [
       evidence: []
     },
     expectedAssertions: {
-      requiredFields: ["summary", "forces", "combatForces"],
-      minCounts: { forces: 1, combatForces: 1 },
+      requiredFields: ["summary", "forces", "combatForces", "relations"],
+      minCounts: { forces: 4, combatForces: 4, relations: 2 },
       keywords: ["area_defense", "friendly"],
       negativeKeywords: ["经纬度"]
     },
     goldenReference: {
       summary: "配置远程区域防空导弹连与中近程近防速射炮混编防御力量，实施纵深梯次拦截。",
       forces: [
-        { id: "cf-layered-ad", name: "要地综合防空指挥拦截单元", side: "friendly", role: "airDefense", group: "防空群", missionType: "area_defense", task: "整合各层级雷达空情，进行目标威胁定级并分配火力批次", taskRefs: ["task-ad-1"], phaseIds: ["phase-1"], notes: "" }
+        { id: "cf-early-radar", name: "防空远程预警雷达单元", side: "friendly", role: "sense", group: "空情感知群", missionType: "recon", task: "远程探测来袭空气动力目标与弹道威胁", taskRefs: ["task-ad-1"], phaseIds: ["phase-1"], platforms: [{ domain: "ground", cmoId: 1301, name: "远程对空情报雷达", country: "通用", category: "雷达站", quantity: 2 }], notes: "远距预警" },
+        { id: "cf-layered-ad", name: "要地综合防空指挥拦截单元", side: "friendly", role: "command", group: "防空指控群", missionType: "area_defense", task: "整合各层级雷达空情，进行目标威胁定级并分配火力批次", taskRefs: ["task-ad-1"], phaseIds: ["phase-1"], platforms: [{ domain: "ground", cmoId: 1302, name: "防空自动化指控车", country: "通用", category: "指控车", quantity: 1 }], notes: "指控统筹" },
+        { id: "cf-sam-strike", name: "中远程地空导弹火力单元", side: "friendly", role: "airDefense", group: "防空突击群", missionType: "area_defense", task: "对中高空突破目标实施拦截导弹齐射", taskRefs: ["task-ad-1"], phaseIds: ["phase-1"], platforms: [{ domain: "ground", cmoId: 1303, name: "中远程防空导弹发射车", country: "通用", category: "发射车", quantity: 4 }], notes: "中远程拦截" },
+        { id: "cf-point-ciws", name: "要地末端近防速射高炮单元", side: "friendly", role: "support", group: "末端近防群", missionType: "support", task: "拦截漏网巡航导弹与精确制导弹药", taskRefs: ["task-ad-1"], phaseIds: ["phase-1"], platforms: [{ domain: "ground", cmoId: 1304, name: "近程速射防空高炮", country: "通用", category: "防空炮", quantity: 4 }], notes: "末端近防保底" }
       ],
       combatForces: [
-        { id: "cbf-sam-battery", name: "地空导弹综合营编组", side: "friendly", role: "airDefense", conceptForceId: "cf-layered-ad", group: "地面防空群", missionType: "area_defense", task: "操作远程相控阵雷达与垂直发射拦截弹构筑空域天网", taskRefs: ["task-ad-1"], phaseIds: ["phase-1"], platforms: [], notes: "" }
+        { id: "cbf-radar-station", name: "相控阵空情预警雷达连", side: "friendly", role: "sense", conceptForceId: "cf-early-radar", group: "地面空情群", missionType: "recon", task: "持续广播航迹坐标", taskRefs: ["task-ad-1"], phaseIds: ["phase-1"], platforms: [{ domain: "ground", cmoId: 2301, name: "预警雷达A型", country: "通用", category: "雷达站", quantity: 2 }], notes: "雷达执行包" },
+        { id: "cbf-ad-cp", name: "要地防空自动化指挥所编组", side: "friendly", role: "command", conceptForceId: "cf-layered-ad", group: "指控中心", missionType: "area_defense", task: "下发火力通道分配指令", taskRefs: ["task-ad-1"], phaseIds: ["phase-1"], platforms: [{ domain: "ground", cmoId: 2302, name: "指控车B型", country: "通用", category: "指控车", quantity: 1 }], notes: "指控执行包" },
+        { id: "cbf-sam-battery", name: "地空导弹综合营编组", side: "friendly", role: "airDefense", conceptForceId: "cf-sam-strike", group: "地面防空群", missionType: "area_defense", task: "操作远程相控阵雷达与垂直发射拦截弹构筑空域天网", taskRefs: ["task-ad-1"], phaseIds: ["phase-1"], platforms: [{ domain: "ground", cmoId: 2303, name: "地导发射车C型", country: "通用", category: "发射车", quantity: 4 }], notes: "导弹执行包" },
+        { id: "cbf-ciws-flight", name: "末端近防连排编组", side: "friendly", role: "support", conceptForceId: "cf-point-ciws", group: "近防火力群", missionType: "support", task: "执行要害阵地近程拦截防护", taskRefs: ["task-ad-1"], phaseIds: ["phase-1"], platforms: [{ domain: "ground", cmoId: 2304, name: "近防炮D型", country: "通用", category: "近防炮", quantity: 4 }], notes: "近防执行包" }
       ],
-      relations: [],
+      relations: [
+        { fromForceId: "cf-early-radar", toForceId: "cf-layered-ad", type: "information", note: "空中威胁航迹实时报送" },
+        { fromForceId: "cf-layered-ad", toForceId: "cf-sam-strike", type: "command", note: "目标分配与导弹拦截引导授权" }
+      ],
       openQuestions: ["在敌密集投掷反辐射诱饵弹时的雷达开关机与诱偏协同配合"],
       reviewChecklist: ["核对防空通道数与预期来袭饱和峰值密度"]
     }
@@ -301,20 +333,29 @@ const cases = [
       evidence: []
     },
     expectedAssertions: {
-      requiredFields: ["summary", "forces", "combatForces"],
-      minCounts: { forces: 1, combatForces: 1 },
+      requiredFields: ["summary", "forces", "combatForces", "relations"],
+      minCounts: { forces: 4, combatForces: 4, relations: 2 },
       keywords: ["ecm", "friendly"],
       negativeKeywords: ["经纬度"]
     },
     goldenReference: {
       summary: "由防区外大型电子战干扰机与伴随无人干扰诱饵组成复合压制编队，实施全频段软硬复合杀伤。",
       forces: [
-        { id: "cf-ew-mesh", name: "综合作战电磁对抗单元", side: "friendly", role: "support", group: "网电支援群", missionType: "ecm", task: "对敌指控雷达链路施加噪声压制与瞄准式窄带干扰", taskRefs: ["task-ecm-1"], phaseIds: ["phase-1"], notes: "" }
+        { id: "cf-esm-sense", name: "电磁辐射频谱侦测单元", side: "friendly", role: "sense", group: "电磁感知群", missionType: "recon", task: "全面测绘敌战场电磁态势与主辐射波形", taskRefs: ["task-ecm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1401, name: "电子频谱侦察机", country: "通用", category: "侦察机", quantity: 2 }], notes: "频谱侦测" },
+        { id: "cf-ew-command", name: "网电空间作战协同指挥单元", side: "friendly", role: "command", group: "网电指控群", missionType: "command", task: "规划干扰频点与辐射功率分配", taskRefs: ["task-ecm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1402, name: "空中电子战指控机", country: "通用", category: "指控机", quantity: 1 }], notes: "电磁指挥" },
+        { id: "cf-ew-mesh", name: "综合作战电磁对抗单元", side: "friendly", role: "support", group: "网电支援群", missionType: "ecm", task: "对敌指控雷达链路施加噪声压制与瞄准式窄带干扰", taskRefs: ["task-ecm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1403, name: "大型防区外干扰机", country: "通用", category: "干扰机", quantity: 2 }], notes: "电磁干扰" },
+        { id: "cf-hard-kill", name: "反辐射精确硬杀伤突击单元", side: "friendly", role: "air", group: "反辐射突击群", missionType: "strike", task: "发射反辐射巡飞弹对暴露雷达实施硬摧毁", taskRefs: ["task-ecm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1404, name: "巡飞弹发射战术机", country: "通用", category: "战斗机", quantity: 4 }], notes: "硬摧毁突击" }
       ],
       combatForces: [
-        { id: "cbf-standoff-jamming", name: "防区外高功率电子干扰机编组", side: "friendly", role: "support", conceptForceId: "cf-ew-mesh", group: "电子支援战术群", missionType: "ecm", task: "保持战术空域8字航线巡逻并向敌方向发射大功率定向辐射", taskRefs: ["task-ecm-1"], phaseIds: ["phase-1"], platforms: [], notes: "" }
+        { id: "cbf-esm-plane", name: "高敏电子侦察分队", side: "friendly", role: "sense", conceptForceId: "cf-esm-sense", group: "电子侦察组", missionType: "recon", task: "采集辐射源频点数据", taskRefs: ["task-ecm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2401, name: "侦测机A型", country: "通用", category: "侦察机", quantity: 2 }], notes: "频谱执行包" },
+        { id: "cbf-ew-control", name: "电子战任务规划机组", side: "friendly", role: "command", conceptForceId: "cf-ew-command", group: "网电控制组", missionType: "command", task: "动态生成电子对抗战策", taskRefs: ["task-ecm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2402, name: "电子指挥机B型", country: "通用", category: "指控机", quantity: 1 }], notes: "指控执行包" },
+        { id: "cbf-standoff-jamming", name: "防区外高功率电子干扰机编组", side: "friendly", role: "support", conceptForceId: "cf-ew-mesh", group: "电子支援战术群", missionType: "ecm", task: "保持战术空域8字航线巡逻并向敌方向发射大功率定向辐射", taskRefs: ["task-ecm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2403, name: "高功率干扰机C型", country: "通用", category: "干扰机", quantity: 2 }], notes: "干扰执行包" },
+        { id: "cbf-harm-flight", name: "反辐射巡飞打击编组", side: "friendly", role: "air", conceptForceId: "cf-hard-kill", group: "突击机群", missionType: "strike", task: "突防投掷反辐射精确武器", taskRefs: ["task-ecm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2404, name: "战术机D型", country: "通用", category: "战斗机", quantity: 4 }], notes: "打击执行包" }
       ],
-      relations: [],
+      relations: [
+        { fromForceId: "cf-esm-sense", toForceId: "cf-ew-command", type: "information", note: "雷达辐射源频谱特征上传" },
+        { fromForceId: "cf-ew-command", toForceId: "cf-ew-mesh", type: "command", note: "压制频段与照射扇区指派" }
+      ],
       openQuestions: ["大功率干扰对己方雷达侦察频率的自相干扰电磁兼容抑制"],
       reviewChecklist: ["电磁频谱分配与敌友频率隔离方案审查"]
     }
@@ -337,20 +378,29 @@ const cases = [
       evidence: []
     },
     expectedAssertions: {
-      requiredFields: ["summary", "forces", "combatForces"],
-      minCounts: { forces: 1, combatForces: 1 },
+      requiredFields: ["summary", "forces", "combatForces", "relations"],
+      minCounts: { forces: 4, combatForces: 4, relations: 2 },
       keywords: ["strike", "friendly"],
       negativeKeywords: ["经纬度"]
     },
     goldenReference: {
       summary: "母机承载并快速投放微型自组织巡飞弹蜂群，实现防区外安全发射与蜂群末端自主寻歼。",
       forces: [
-        { id: "cf-hetero-swarm", name: "分布式异构集群攻防作战单元", side: "friendly", role: "action", group: "集群作战群", missionType: "strike", task: "接收任务包后自主分散入役，形成动态包围圈攻击", taskRefs: ["task-swarm-1"], phaseIds: ["phase-1"], notes: "" }
+        { id: "cf-swarm-scout", name: "蜂群微型先导侦察单元", side: "friendly", role: "sense", group: "集群先导群", missionType: "recon", task: "低空超低空渗透勘察敌防御漏洞与关键目标", taskRefs: ["task-swarm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1501, name: "微型侦察无人机", country: "通用", category: "无人机", quantity: 6 }], notes: "微型侦察" },
+        { id: "cf-swarm-mother", name: "立体投送与指挥母机单元", side: "friendly", role: "command", group: "投送指挥群", missionType: "command", task: "在战术安全边界投送蜂群并协调组网协议", taskRefs: ["task-swarm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1502, name: "蜂群运载投送母机", country: "通用", category: "运输机", quantity: 1 }], notes: "母机指控" },
+        { id: "cf-hetero-swarm", name: "分布式异构集群攻防作战单元", side: "friendly", role: "air", group: "集群作战群", missionType: "strike", task: "接收任务包后自主分散入役，形成动态包围圈攻击", taskRefs: ["task-swarm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1503, name: "微型自杀攻击巡飞弹", country: "通用", category: "巡飞弹", quantity: 24 }], notes: "集群突防" },
+        { id: "cf-swarm-supp", name: "蜂群射频链路中继保障单元", side: "friendly", role: "support", group: "链路保障群", missionType: "support", task: "维持母机与去中心化蜂群节点之间的人在回路链路", taskRefs: ["task-swarm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 1504, name: "战术中继无人机", country: "通用", category: "无人机", quantity: 2 }], notes: "链路保障" }
       ],
       combatForces: [
-        { id: "cbf-mothership-carrier", name: "蜂群运载投送母机编队", side: "friendly", role: "command", conceptForceId: "cf-hetero-swarm", group: "空中投送机群", missionType: "strike", task: "在战术安全边界完成高密度蜂群弹射展开并提供初始数据链", taskRefs: ["task-swarm-1"], phaseIds: ["phase-1"], platforms: [], notes: "" }
+        { id: "cbf-scout-swarm", name: "先导微型蜂群探针分队", side: "friendly", role: "sense", conceptForceId: "cf-swarm-scout", group: "先导侦察机群", missionType: "recon", task: "探查防空雷达盲区", taskRefs: ["task-swarm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2501, name: "探针微型机A型", country: "通用", category: "无人机", quantity: 6 }], notes: "侦察执行包" },
+        { id: "cbf-mothership-carrier", name: "蜂群运载投送母机编队", side: "friendly", role: "command", conceptForceId: "cf-swarm-mother", group: "空中投送机群", missionType: "command", task: "在战术安全边界完成高密度蜂群弹射展开并提供初始数据链", taskRefs: ["task-swarm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2502, name: "投送母机B型", country: "通用", category: "运输机", quantity: 1 }], notes: "母机执行包" },
+        { id: "cbf-suicide-swarm", name: "微型饱和自杀攻击蜂群组", side: "friendly", role: "air", conceptForceId: "cf-hetero-swarm", group: "饱和突击机群", missionType: "strike", task: "向要害节点发起多角度同时命中攻击", taskRefs: ["task-swarm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2503, name: "巡飞弹C型", country: "通用", category: "巡飞弹", quantity: 24 }], notes: "突击执行包" },
+        { id: "cbf-relay-drone", name: "空中战术网关伴随保障组", side: "friendly", role: "support", conceptForceId: "cf-swarm-supp", group: "伴随保障机群", missionType: "support", task: "在战区外围保障指令回传", taskRefs: ["task-swarm-1"], phaseIds: ["phase-1"], platforms: [{ domain: "aircraft", cmoId: 2504, name: "中继无人机D型", country: "通用", category: "无人机", quantity: 2 }], notes: "保障执行包" }
       ],
-      relations: [],
+      relations: [
+        { fromForceId: "cf-swarm-scout", toForceId: "cf-swarm-mother", type: "information", note: "前沿微型侦察目标动态上报" },
+        { fromForceId: "cf-swarm-mother", toForceId: "cf-hetero-swarm", type: "command", note: "目标攻击包分发与集群协同授权" }
+      ],
       openQuestions: ["蜂群投放瞬间的气动分离安全及快速建链时间"],
       reviewChecklist: ["审查蜂群自杀攻击决策伦理门禁（HITL模式保持）"]
     }

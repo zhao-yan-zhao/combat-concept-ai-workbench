@@ -48,3 +48,8 @@ temp/
 output/playwright/
 archive/output-playwright-*/
 archive/data-backups/
+
+# Evaluation run reports
+eval/results/*.json
+!eval/results/.gitkeep
+

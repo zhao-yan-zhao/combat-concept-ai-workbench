@@ -37,11 +37,13 @@
     "requiredFields": [
       "summary",
       "forces",
-      "combatForces"
+      "combatForces",
+      "relations"
     ],
     "minCounts": {
-      "forces": 1,
-      "combatForces": 1
+      "forces": 4,
+      "combatForces": 4,
+      "relations": 2
     },
     "keywords": [
       "area_defense",
@@ -55,11 +57,37 @@
     "summary": "配置远程区域防空导弹连与中近程近防速射炮混编防御力量，实施纵深梯次拦截。",
     "forces": [
       {
+        "id": "cf-early-radar",
+        "name": "防空远程预警雷达单元",
+        "side": "friendly",
+        "role": "sense",
+        "group": "空情感知群",
+        "missionType": "recon",
+        "task": "远程探测来袭空气动力目标与弹道威胁",
+        "taskRefs": [
+          "task-ad-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "ground",
+            "cmoId": 1301,
+            "name": "远程对空情报雷达",
+            "country": "通用",
+            "category": "雷达站",
+            "quantity": 2
+          }
+        ],
+        "notes": "远距预警"
+      },
+      {
         "id": "cf-layered-ad",
         "name": "要地综合防空指挥拦截单元",
         "side": "friendly",
-        "role": "airDefense",
-        "group": "防空群",
+        "role": "command",
+        "group": "防空指控群",
         "missionType": "area_defense",
         "task": "整合各层级雷达空情，进行目标威胁定级并分配火力批次",
         "taskRefs": [
@@ -68,16 +96,132 @@
         "phaseIds": [
           "phase-1"
         ],
-        "notes": ""
+        "platforms": [
+          {
+            "domain": "ground",
+            "cmoId": 1302,
+            "name": "防空自动化指控车",
+            "country": "通用",
+            "category": "指控车",
+            "quantity": 1
+          }
+        ],
+        "notes": "指控统筹"
+      },
+      {
+        "id": "cf-sam-strike",
+        "name": "中远程地空导弹火力单元",
+        "side": "friendly",
+        "role": "airDefense",
+        "group": "防空突击群",
+        "missionType": "area_defense",
+        "task": "对中高空突破目标实施拦截导弹齐射",
+        "taskRefs": [
+          "task-ad-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "ground",
+            "cmoId": 1303,
+            "name": "中远程防空导弹发射车",
+            "country": "通用",
+            "category": "发射车",
+            "quantity": 4
+          }
+        ],
+        "notes": "中远程拦截"
+      },
+      {
+        "id": "cf-point-ciws",
+        "name": "要地末端近防速射高炮单元",
+        "side": "friendly",
+        "role": "support",
+        "group": "末端近防群",
+        "missionType": "support",
+        "task": "拦截漏网巡航导弹与精确制导弹药",
+        "taskRefs": [
+          "task-ad-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "ground",
+            "cmoId": 1304,
+            "name": "近程速射防空高炮",
+            "country": "通用",
+            "category": "防空炮",
+            "quantity": 4
+          }
+        ],
+        "notes": "末端近防保底"
       }
     ],
     "combatForces": [
+      {
+        "id": "cbf-radar-station",
+        "name": "相控阵空情预警雷达连",
+        "side": "friendly",
+        "role": "sense",
+        "conceptForceId": "cf-early-radar",
+        "group": "地面空情群",
+        "missionType": "recon",
+        "task": "持续广播航迹坐标",
+        "taskRefs": [
+          "task-ad-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "ground",
+            "cmoId": 2301,
+            "name": "预警雷达A型",
+            "country": "通用",
+            "category": "雷达站",
+            "quantity": 2
+          }
+        ],
+        "notes": "雷达执行包"
+      },
+      {
+        "id": "cbf-ad-cp",
+        "name": "要地防空自动化指挥所编组",
+        "side": "friendly",
+        "role": "command",
+        "conceptForceId": "cf-layered-ad",
+        "group": "指控中心",
+        "missionType": "area_defense",
+        "task": "下发火力通道分配指令",
+        "taskRefs": [
+          "task-ad-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "ground",
+            "cmoId": 2302,
+            "name": "指控车B型",
+            "country": "通用",
+            "category": "指控车",
+            "quantity": 1
+          }
+        ],
+        "notes": "指控执行包"
+      },
       {
         "id": "cbf-sam-battery",
         "name": "地空导弹综合营编组",
         "side": "friendly",
         "role": "airDefense",
-        "conceptForceId": "cf-layered-ad",
+        "conceptForceId": "cf-sam-strike",
         "group": "地面防空群",
         "missionType": "area_defense",
         "task": "操作远程相控阵雷达与垂直发射拦截弹构筑空域天网",
@@ -87,11 +231,60 @@
         "phaseIds": [
           "phase-1"
         ],
-        "platforms": [],
-        "notes": ""
+        "platforms": [
+          {
+            "domain": "ground",
+            "cmoId": 2303,
+            "name": "地导发射车C型",
+            "country": "通用",
+            "category": "发射车",
+            "quantity": 4
+          }
+        ],
+        "notes": "导弹执行包"
+      },
+      {
+        "id": "cbf-ciws-flight",
+        "name": "末端近防连排编组",
+        "side": "friendly",
+        "role": "support",
+        "conceptForceId": "cf-point-ciws",
+        "group": "近防火力群",
+        "missionType": "support",
+        "task": "执行要害阵地近程拦截防护",
+        "taskRefs": [
+          "task-ad-1"
+        ],
+        "phaseIds": [
+          "phase-1"
+        ],
+        "platforms": [
+          {
+            "domain": "ground",
+            "cmoId": 2304,
+            "name": "近防炮D型",
+            "country": "通用",
+            "category": "近防炮",
+            "quantity": 4
+          }
+        ],
+        "notes": "近防执行包"
       }
     ],
-    "relations": [],
+    "relations": [
+      {
+        "fromForceId": "cf-early-radar",
+        "toForceId": "cf-layered-ad",
+        "type": "information",
+        "note": "空中威胁航迹实时报送"
+      },
+      {
+        "fromForceId": "cf-layered-ad",
+        "toForceId": "cf-sam-strike",
+        "type": "command",
+        "note": "目标分配与导弹拦截引导授权"
+      }
+    ],
     "openQuestions": [
       "在敌密集投掷反辐射诱饵弹时的雷达开关机与诱偏协同配合"
     ],
