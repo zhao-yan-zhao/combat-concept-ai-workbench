@@ -1789,3 +1789,40 @@ h3 { margin-bottom: 8px; font-size: 15px; color: #d9f3e8; }
 .relation-remove:hover { background: rgba(239, 68, 68, .3); color: #fff; border-color: #ef4444; }
 .empty-relations { margin: 0; color: var(--muted); font-size: 12px; font-style: italic; }
 
+/* 标准空状态块样式：现状 + 操作引导 (T3.6) */
+.empty-state-block,
+.project-manager-empty-block,
+.force-roster-empty-block,
+.report-empty-block,
+.empty-inspector-block,
+.force-mission-phase-empty-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+  color: var(--muted);
+}
+.empty-state-block p,
+.project-manager-empty-block p,
+.force-roster-empty-block p,
+.report-empty-block p,
+.empty-inspector-block p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.project-empty-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.empty-state-hint {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 4px;
+}
+

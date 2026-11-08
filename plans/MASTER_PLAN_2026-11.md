@@ -705,6 +705,32 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：142/142 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
+### 2026-11-08 T3.6 真实落地：空状态与错误提示文案可操作化改造
+
+- **实施内容**：
+  1. 系统性梳理并消除孤立死胡同式的“暂无”文案：
+     - `design-studio/src/projectManagerView.js`：项目列表为空时，展示现状说明、新建项目按钮以及“战法设计示例”与“想定推演示例”快捷载入按钮；
+     - `design-studio/src/aiPromptView.js`：提示词目录为空时，展示现状说明并附带“重新加载目录”按钮；
+     - `design-studio/src/conceptGraphicView.js`：节点和关系草案为空时，提供“生成草案”与“推导关系草案”操作按钮；修复了 TDZ 变量声明顺序 Bug；
+     - `design-studio/src/forceMissionView.js`：阶段为空提供前往「阶段与行动」引导；概念兵力为空提供“重新生成概念兵力”与“手动添加”操作；作战编成为空提供“生成作战编成”操作；任务未挂接提供“前往任务库补充”操作；
+     - `design-studio/src/operationalTaskView.js`：区域坐标为空提供操作指导说明与“+ 手工添加参考点”；空任务列表提供一键生成与手动新增；
+     - `design-studio/src/ov1bView.js`：未整理任务提供前往第一步补充按钮；红蓝对抗未分配泳道提供指引说明；
+     - `design-studio/src/ov2View.js`：节点无流入/流出资源交换时明确提示在右侧面板新增发往其他节点的资源流；
+     - `design-studio/src/ov4View.js`：无诊断项时明确标识当前结构完整；
+     - `design-studio/src/ov5MechanismView.js`：作战域无活动时附带“+ 新增活动”按钮；全自主回路为空时提示在检查器配置 HOOTL 等级；
+     - `design-studio/src/stateMachineView.js`：未选中状态机时附带“+ 新增状态机”快捷按钮；
+     - `design-studio/src/simulationAdapterView.js`：未登记仿真实验时提示配置表单与推演数据导出说明；
+  2. 样式规范支持：
+     - `design-studio/styles/views-foundation.css`：为 `.empty-state-block`、`.project-manager-empty-block`、`.force-roster-empty-block`、`.report-empty-block`、`.empty-inspector-block` 等空状态容器提供整洁居中的布局与说明文字排版；
+  3. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-empty-states-actionable.mjs`：断言各视图空状态必须包含操作按钮与上下文指引，并静态扫描核心视图杜绝死胡同式空标签；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 组。
+- **验证命令与结果**：
+  - `node scripts/run-checks.mjs ui-static`：24/24 PASS (100%)
+  - `node scripts/run-checks.mjs all`：143/143 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+
 
 
 

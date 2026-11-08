@@ -432,7 +432,7 @@ function renderOv2PropertyDock({ selectedExchange, selectedNode, nodes = [], exc
                   <span class="flow-target">➔ ${escapeHtml(ex.targetNodeLabel || ex.targetNodeId)}</span>
                   <span class="flow-name">${escapeHtml(ex.label || ex.flowType)}</span>
                 </button>
-              `).join("") || `<span class="empty-hint">暂无流出交换</span>`}
+              `).join("") || `<span class="empty-hint">暂无流出交换。可在右侧新增发往其他节点的资源流。</span>`}
             </div>
           </div>
 
@@ -444,7 +444,7 @@ function renderOv2PropertyDock({ selectedExchange, selectedNode, nodes = [], exc
                   <span class="flow-target">⬅ ${escapeHtml(ex.sourceNodeLabel || ex.sourceNodeId)}</span>
                   <span class="flow-name">${escapeHtml(ex.label || ex.flowType)}</span>
                 </button>
-              `).join("") || `<span class="empty-hint">暂无流入交换</span>`}
+              `).join("") || `<span class="empty-hint">暂无流入交换。可在右侧新增发往此节点的资源流。</span>`}
             </div>
           </div>
 

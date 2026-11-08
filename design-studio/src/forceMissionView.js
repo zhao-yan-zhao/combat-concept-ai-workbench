@@ -561,7 +561,7 @@ function renderForceMissionRail({
         </span>
       </button>`;
     }).join("")
-    : `<p class="empty-inspector force-mission-phase-empty">暂无阶段。请先生成并确认「阶段与行动」。</p>`;
+    : `<div class="force-mission-phase-empty-block"><p class="empty-inspector force-mission-phase-empty">暂无作战阶段。兵力编组依赖「阶段与行动」定义的作战时序。</p><button type="button" class="quiet-button compact" data-related-model="true" data-view="phase-action">前往「阶段与行动」</button></div>`;
   return `<aside class="force-mission-rail planning-card" aria-label="阶段">
     <header class="force-mission-rail-head" title="跨阶段单元会在其所属阶段重复出现。">
       <h2>阶段</h2>
@@ -694,6 +694,11 @@ function renderLayerEmpty({
     if (hasGlobal) {
       return `<div class="force-layer-empty">
         <p class="empty-inspector">「${escapeHtml(phaseLabel)}」暂无概念兵力。可切换其他阶段，或重新生成概念兵力。</p>
+        <div class="planning-actions">
+          <button type="button" data-action="generate-concept-forces" ${canGenerate && !generating ? "" : "disabled"}>
+            ${generating ? "正在生成概念兵力…" : "重新生成概念兵力"}
+          </button>
+        </div>
       </div>`;
     }
     return `<div class="force-layer-empty">
@@ -829,7 +834,7 @@ function renderConceptSideColumn({ title, className, items = [], tasks = [], emp
             search: [force.id, name, force.task, taskLine, equip, sideLabel(force.side), roleLabel(force.role)].filter(Boolean).join(" ")
           });
         }).join("")}</ul>`
-      : `<p class="empty-inspector force-concept-empty">${escapeHtml(emptyText)}</p>`}
+      : `<div class="force-roster-empty-block"><p class="empty-inspector force-concept-empty">${escapeHtml(emptyText || "本阶段暂无概念兵力。")}</p><button type="button" class="quiet-button compact" data-action="generate-concept-forces">生成概念兵力</button></div>`}
   </section>`;
 }
 
@@ -1030,7 +1035,7 @@ function renderCombatSideColumn({
             search: [force.id, name, force.task, missionType, unitType, platformSummary, sideLabel(force.side), roleLabel(force.role), pkgLabel].filter(Boolean).join(" ")
           });
         }).join("")}</ul>`
-      : `<p class="empty-inspector force-concept-empty">${escapeHtml(emptyText)}</p>`}
+      : `<div class="force-roster-empty-block"><p class="empty-inspector force-combat-empty">${escapeHtml(emptyText || "本阶段暂无作战编成。可点击上方按钮添加，或由 AI 自动根据概念兵力扩展。")}</p><button type="button" class="quiet-button compact" data-action="generate-combat-forces">生成作战编成</button></div>`}
   </section>`;
 }
 
@@ -1122,7 +1127,7 @@ function renderCombatForceDetail(force, {
                 ${editable ? "" : "disabled"}>
               <span>${escapeHtml(displayConceptName(item))} <small style="color:var(--color-text-muted, #64748b);">(${escapeHtml(roleLabel(item.role))})</small></span>
             </label>`;
-          }).join("") || `<small>暂无对应阵营的概念能力单元。</small>`}
+          }).join("") || `<small class="empty-state-hint">暂无对应阵营的概念能力单元。可切换至「概念兵力」层新增或补充。</small>`}
         </div>
         ${!linkedIds.length ? `<small class="is-warn-text">未挂概念能力单元，阶段与任务追溯不完整。</small>` : ""}
       </section>
@@ -1148,7 +1153,7 @@ function renderForceTaskRefs(force, tasks = [], { editable = false, layer = "con
   return `<section class="force-concept-detail-block force-task-ref-block">
     <strong>承接作战任务 <em>${selected.size}</em></strong>
     <div class="force-task-ref-list">
-      ${candidates.map((task) => `<label><input type="checkbox" data-force-task-ref data-force-id="${escapeAttribute(force.id)}" data-force-layer="${escapeAttribute(layer)}" data-task-ref="${escapeAttribute(task.id)}" ${selected.has(task.id) ? "checked" : ""} ${editable ? "" : "disabled"}><span>${escapeHtml(task.name || task.id)}</span></label>`).join("") || `<small>当前阵营暂无正式任务。</small>`}
+      ${candidates.map((task) => `<label><input type="checkbox" data-force-task-ref data-force-id="${escapeAttribute(force.id)}" data-force-layer="${escapeAttribute(layer)}" data-task-ref="${escapeAttribute(task.id)}" ${selected.has(task.id) ? "checked" : ""} ${editable ? "" : "disabled"}><span>${escapeHtml(task.name || task.id)}</span></label>`).join("") || `<div class="force-task-empty"><small>当前阵营暂无正式任务。</small><button type="button" class="quiet-button compact" data-related-model="true" data-view="operational-task">前往任务库补充</button></div>`}
       ${missing.map((ref) => `<span class="is-warn-text">失效引用：${escapeHtml(ref)}</span>`).join("")}
     </div>
   </section>`;

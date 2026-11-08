@@ -33,7 +33,7 @@ export function renderAiPromptPanel({ open, catalog, selectedId, saving, drafts 
               <button type="submit" class="primary-btn ai-prompt-save-btn" ${!writable || saving || !hasDraft ? "disabled" : ""} title="${!hasDraft ? "内容无修改" : "保存修改后的提示词"}">${saving ? "正在保存…" : "保存提示词"}</button>
             </div>
           </footer>
-        </form>` : `<p class="report-empty">暂无可用提示词。</p>`}</main>
+        </form>` : `<div class="report-empty-block"><p class="report-empty">当前暂无可用提示词。可重新加载提示词目录或检查服务配置。</p><button type="button" class="quiet-button compact" data-action="reload-ai-prompts">重新加载目录</button></div>`}</main>
       </div>
     </div>
   </dialog>`;

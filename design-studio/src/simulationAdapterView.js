@@ -24,7 +24,7 @@ export function renderSimulationAdapter(state) {
 
 function renderSimulationRuns(diagnostics) {
   const run = diagnostics.latestRun;
-  if (!run) return `<p class="simulation-adapter-empty">尚未登记仿真提交。导出 JSON 不会发送任何外部请求。</p>`;
+  if (!run) return `<div class="simulation-adapter-empty-block"><p class="simulation-adapter-empty">当前尚未登记仿真提交记录。可通过上方表单配置外部仿真适配，或导出推演数据 JSON。</p></div>`;
   const result = run.result;
   return `<div class="simulation-run-summary"><b>最近提交</b><span>${escapeHtml(run.adapterName)} ${escapeHtml(run.adapterVersion)} · ${escapeHtml(run.submittedAt)}</span><small>包：${escapeHtml(run.packageId)} · 状态：${escapeHtml(result?.status || run.status)} · 输入：${escapeHtml(freshnessLabel(run.freshness))}${result?.inputMatch ? ` · 回传指纹：${escapeHtml(inputMatchLabel(result.inputMatch))}` : ""}</small>${result ? `<p>${escapeHtml(result.summary)}</p>${renderMetrics(result.metrics)}` : ""}</div>`;
 }

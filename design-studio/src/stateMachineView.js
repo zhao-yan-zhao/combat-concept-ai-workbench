@@ -114,7 +114,7 @@ export function renderStateMachineWorkbench(state = {}) {
       selectedTransitionId: String(state.ov6bSelectedTransitionId || ""),
       subjects
     })
-    : `<div class="sm-empty-editor"><p>请选择左侧状态机</p></div>`}
+    : `<div class="sm-empty-editor"><p>当前未选中状态机。请从左侧列表选择，或新建状态机进行流转建模。</p><button type="button" class="quiet-button compact" data-action="ov6b-add-machine">+ 新增状态机</button></div>`}
         </div>
         ${renderMachinePropertyDock(selected, {
           selectedStateId,

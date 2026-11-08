@@ -492,7 +492,7 @@ function renderReviewInformation(model) {
       ${diagnostics.map((item) => `<article class="ov4-diagnostic ${escapeHtml(item.state)}">
         <div><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.statusLabel || item.state)}</span></div>
         <p>${escapeHtml(item.detail)}</p>
-      </article>`).join("") || `<p class="ov4-panel-empty">暂无诊断。</p>`}
+      </article>`).join("") || `<div class="ov4-panel-empty"><p>暂无异常诊断。当前组织编成与指挥协同关系结构完整。</p></div>`}
     </div>
   </section>`;
 }

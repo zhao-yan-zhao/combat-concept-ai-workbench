@@ -136,7 +136,7 @@ function renderGroupBoard(group, tasks, taskById, editOpen = false, phases = [])
         </header>
         ${renderOrganizationCanvas(group, refs, taskById, phaseObj)}
       </section>
-      ${editOpen ? `<aside class="ov1b-edit-dock"><section class="ov1b-task-picker"><header><strong>现有任务</strong><small>${tasks.length} 项</small></header><div>${tasks.map((task) => `<label class="ov1b-task-option"><input type="checkbox" data-action="ov1b-toggle-task" data-group-id="${escapeHtml(group.id)}" value="${escapeHtml(task.id)}" ${selected.has(String(task.id)) ? "checked" : ""}><span><strong>${escapeHtml(task.name || task.id)}</strong><small>${escapeHtml(task.missionType || "未分类")} · ${task.side === "hostile" ? "红方" : "蓝方"}</small></span></label>`).join("") || `<p class="ov1b-side-empty">“作战任务”步骤暂无可整理任务。</p>`}</div></section>${stateCoordinationEditor(group)}</aside>` : ""}
+      ${editOpen ? `<aside class="ov1b-edit-dock"><section class="ov1b-task-picker"><header><strong>现有任务</strong><small>${tasks.length} 项</small></header><div>${tasks.map((task) => `<label class="ov1b-task-option"><input type="checkbox" data-action="ov1b-toggle-task" data-group-id="${escapeHtml(group.id)}" value="${escapeHtml(task.id)}" ${selected.has(String(task.id)) ? "checked" : ""}><span><strong>${escapeHtml(task.name || task.id)}</strong><small>${escapeHtml(task.missionType || "未分类")} · ${task.side === "hostile" ? "红方" : "蓝方"}</small></span></label>`).join("") || `<div class="ov1b-side-empty"><p>“作战任务”步骤暂无可整理任务。</p><button type="button" class="quiet-button compact" data-related-model="true" data-view="operational-task">前往作战任务补充</button></div>`}</div></section>${stateCoordinationEditor(group)}</aside>` : ""}
     </div>
   </section>`;
 }
@@ -224,7 +224,7 @@ function renderOrganizationCanvas(group, refs, taskById, phaseObj = null) {
                   : "";
                 return pod + connector;
               }).join("")
-              : `<div class="ov1b-lane-empty">本组暂无蓝方任务，由红方单向施压或待分配</div>`}
+              : `<div class="ov1b-lane-empty"><p>本组暂无蓝方任务（可点击右上角“编辑编排”勾选分配，或属红方单向施压）</p></div>`}
           </div>
         </section>
 
@@ -254,7 +254,7 @@ function renderOrganizationCanvas(group, refs, taskById, phaseObj = null) {
                   : "";
                 return pod + connector;
               }).join("")
-              : `<div class="ov1b-lane-empty">本组暂无红方对抗任务（蓝方单边行动阶段）</div>`}
+              : `<div class="ov1b-lane-empty"><p>本组暂无红方对抗任务（蓝方单边行动阶段，或点击“编辑编排”勾选分配红方任务）</p></div>`}
           </div>
         </section>
 

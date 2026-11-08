@@ -6,13 +6,6 @@ export function renderConceptGraphic(state) {
   const plan = state.conceptGraphic || {};
   const generating = Boolean(state.conceptGraphicGenerating);
   const confirmed = isConceptGraphicPlanConfirmed(plan, state.conceptGraphicStorage);
-  const status = state.conceptGraphicStorage?.stale
-    ? "已过期"
-    : (confirmed || nodes.length > 0)
-      ? "已就绪"
-      : plan.status === "draft"
-        ? "已就绪"
-        : "待生成";
   const nodes = Array.isArray(plan.nodes) ? plan.nodes : [];
   const edges = Array.isArray(plan.edges) ? plan.edges : [];
   const effects = Array.isArray(plan.effects) ? plan.effects : [];
@@ -21,6 +14,13 @@ export function renderConceptGraphic(state) {
   const questions = Array.isArray(plan.openQuestions) ? plan.openQuestions : [];
   const checklist = Array.isArray(plan.reviewChecklist) ? plan.reviewChecklist : [];
   const consistency = Array.isArray(plan.consistencyReport) ? plan.consistencyReport : [];
+  const status = state.conceptGraphicStorage?.stale
+    ? "已过期"
+    : (confirmed || nodes.length > 0)
+      ? "已就绪"
+      : plan.status === "draft"
+        ? "已就绪"
+        : "待生成";
   const upstreamReady = state.forceMission?.status === "confirmed"
     && state.phaseAction?.status === "confirmed"
     && state.conceptMap?.reference?.status === "confirmed"
@@ -58,13 +58,13 @@ export function renderConceptGraphic(state) {
             <b>${escapeHtml(node.label)}</b>
             <span>${escapeHtml(node.role)}${node.fromForceIds?.length ? ` · 兵力 ${escapeHtml(node.fromForceIds.join("、"))}` : ""}${node.fromPhaseIds?.length ? ` · 阶段 ${escapeHtml(node.fromPhaseIds.join("、"))}` : ""}</span>
             <p>${escapeHtml(node.note || "—")}</p>
-          </article>`).join("")}</div>` : `<p class="empty-inspector">尚未生成节点草案。</p>`}
+          </article>`).join("")}</div>` : `<div class="empty-inspector-block"><p class="empty-inspector">尚未生成总体节点草案。可点击上方「一键生成概念图草案」提取节点。</p><button type="button" class="quiet-button compact" data-action="generate-concept-graphic">生成草案</button></div>`}
       </article>
 
       <article class="planning-card">
         <header><h3>高层关系（${edges.length}）</h3></header>
         ${edges.length ? `<ul class="planning-relations">${edges.map((edge) => `
-          <li><b>${escapeHtml(edge.from)}</b> —${escapeHtml(edge.type)}→ <b>${escapeHtml(edge.to)}</b>${edge.note ? `<small>${escapeHtml(edge.note)}</small>` : ""}</li>`).join("")}</ul>` : `<p class="empty-inspector">暂无关系草案。</p>`}
+          <li><b>${escapeHtml(edge.from)}</b> —${escapeHtml(edge.type)}→ <b>${escapeHtml(edge.to)}</b>${edge.note ? `<small>${escapeHtml(edge.note)}</small>` : ""}</li>`).join("")}</ul>` : `<div class="empty-inspector-block"><p class="empty-inspector">暂无高层关系草案。节点就绪后可自动推导或人工连线。</p><button type="button" class="quiet-button compact" data-action="generate-concept-graphic">推导关系草案</button></div>`}
       </article>
 
       <article class="planning-card">
@@ -79,7 +79,7 @@ export function renderConceptGraphic(state) {
       <article class="planning-card">
         <header><h3>一致性与复核</h3></header>
         ${consistency.length ? `<ul class="planning-checklist">${consistency.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
-        ${checklist.length ? `<ul class="planning-checklist">${checklist.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : `<p class="empty-inspector">生成后将列出复核清单。</p>`}
+        ${checklist.length ? `<ul class="planning-checklist">${checklist.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : `<p class="empty-inspector">尚未生成复核清单。完成草案生成后将列出要素覆盖度核对表。</p>`}
         ${questions.length ? `<div class="planning-questions"><h4>开放问题</h4><ul>${questions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}
         <label class="planning-notes">
           <span>复核批注（可选）</span>

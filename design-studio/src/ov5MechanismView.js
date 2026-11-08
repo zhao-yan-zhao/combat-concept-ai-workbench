@@ -478,7 +478,7 @@ function renderKillWebView({ activities, edges, activityById, oodaHealth, state 
               <small>${lane.items.length} 个节点</small>
             </div>
             <div class="lane-cards">
-              ${lane.items.map((act) => renderActivityCard(act, selectedId, edges, selectedUpstream, selectedDownstream, upstreamMap, downstreamMap)).join("") || `<div class="lane-empty">暂无对应活动</div>`}
+              ${lane.items.map((act) => renderActivityCard(act, selectedId, edges, selectedUpstream, selectedDownstream, upstreamMap, downstreamMap)).join("") || `<div class="lane-empty"><p>本域暂无活动节点</p><button type="button" class="quiet-button compact" data-action="add-activity" data-domain="${escapeHtml(lane.id || "")}">+ 新增活动</button></div>`}
             </div>
           </div>
         `).join("")}
@@ -647,7 +647,7 @@ function renderAutonomyLadderView({ activities, state }) {
           <p>适用于超视距电磁自适应对消、蜂群防撞避障、点防御硬杀伤等人类生理反应无法介入的高速闭环。</p>
         </div>
         <div class="level-cards">
-          ${hootlActivities.map((act) => renderLadderCard(act, state.selection?.id, lethalViolations.some((v) => v.id === act.id))).join("") || `<p class="empty-tip">暂无微秒级全自主活动</p>`}
+          ${hootlActivities.map((act) => renderLadderCard(act, state.selection?.id, lethalViolations.some((v) => v.id === act.id))).join("") || `<p class="empty-tip">暂无微秒级全自主活动。可在活动检查器中将自主等级配置为 HOOTL。</p>`}
         </div>
       </div>
     </div>

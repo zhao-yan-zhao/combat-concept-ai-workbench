@@ -72,7 +72,7 @@ function renderCoordinateRow(taskId, point, index) {
 
 function renderAreaPlot(area) {
   const points = (area.points || []).filter((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude));
-  if (!points.length) return `<div class="operational-area-plot is-empty"><div><strong>暂无坐标</strong><span>等待 AI 依据或人工参考点</span></div></div>`;
+  if (!points.length) return `<div class="operational-area-plot is-empty"><div><strong>暂无参考坐标</strong><span>当前区域未配置地理坐标，可手动添加参考点</span></div></div>`;
   const lats = points.map((point) => point.latitude); const lons = points.map((point) => point.longitude);
   const minLat = Math.min(...lats); const maxLat = Math.max(...lats); const minLon = Math.min(...lons); const maxLon = Math.max(...lons);
   const projected = points.map((point) => ({ x: 10 + ((point.longitude - minLon) / (maxLon - minLon || 1)) * 80, y: 90 - ((point.latitude - minLat) / (maxLat - minLat || 1)) * 80 }));
@@ -82,7 +82,7 @@ function renderAreaPlot(area) {
 }
 
 function optionList(options, selected) { return options.map(([value, label]) => `<option value="${value}" ${value === selected ? "selected" : ""}>${label}</option>`).join(""); }
-function renderEmpty() { return `<div class="operational-list-empty"><span>00</span><p>尚无任务</p></div>`; }
+function renderEmpty() { return `<div class="operational-list-empty"><span>00</span><p>尚无作战任务，可点击上方按钮生成或新增</p></div>`; }
 function renderWorkspaceEmpty(ready, generating = false) {
   return `<div class="operational-workspace-empty">
     <strong>${ready ? "生成或新增作战任务" : "等待阶段确认"}</strong>
