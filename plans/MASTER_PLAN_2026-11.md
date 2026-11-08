@@ -771,31 +771,30 @@ node scripts/smoke-ui.mjs
 - **验证命令与结果**：
   - 文件已生成：`plans/USABILITY_TEST_SCRIPT.md`，内容完整符合规范。
 
-### 2026-11-08 T4.2 真实落地：密级与标识及导出审计日志
+### 2026-11-08 T4.3 真实落地：导出格式（Office Word 覆盖新模板与图件嵌入）
 
 - **实施内容**：
-  1. 项目级密级配置与持久化：
-     - 在 `server/projectRepository.mjs` 中为项目元数据增加 `classification` 字段（默认值"内部"，预设"内部 / 公开 / 受限 / 机密"，支持自定义）；
-     - SQLite 表通过 `ALTER TABLE project_catalog ADD COLUMN classification TEXT NOT NULL DEFAULT '内部'` 实现自动平滑升级；
-     - `design-studio/src/ui.js` 成果报告区域增加“密级标识”选择与自定义输入组件，`design-studio/src/app/bindings/reportBindings.js` 联动实时更新并持久化至服务端；
-  2. 导出文档全格式页眉与页脚密级标注 (`design-studio/src/reportBuilder.js`)：
-     - Markdown：通用模板及 3 套专属模板顶部引用块增加 `> **密级标识**：[密级]`，底部增加 `--- \n*密级标识：[密级] · 作战概念研究工作台*`；
-     - RTF：生成原生 RTF 页眉 `{\header \qr \fs18 \i 密级标识：... \par}` 与页脚 `{\footer \qc \fs18 \i 密级标识：... \par}`，正文居中醒目标注；
-     - XML：根节点属性增加 `classification="..."`，包含 `<classification>...</classification>` 标签；
-     - Office Word (`scripts/generate-report-docx.ps1`)：页眉增加 `| 密级标识：[密级]`，正文标题下方追加密级段落；
-  3. 导出记录写入现有审计日志：
-     - `server/projectRepository.mjs` 落地 `recordAudit(projectId, input)` 核心方法，写入 `action: "report.exported"` 审计事件；
-     - 后端暴露 `POST /api/projects/:id/audit` 路由并校验授权（`handleRecordProjectAudit`）；
-     - 前端各导出触发点（Markdown、Word、PDF、PPTX、JSON、XML、map、geojson 及版本归档导出）全量调用 `recordExportAudit` 上报审计日志；
-  4. 专用回归测试与基线纳入：
-     - 新建 `scripts/check-report-classification-and-audit.mjs`，全量覆盖静态契约、各格式报告密级渲染、File 与 SQLite 双模式项目密级读写及审计日志持久化；
+  1. 矢量图件生成器与图形集合封装 (`design-studio/src/reportBuilder.js`)：
+     - 新增 `renderOv1StandaloneSvg(ov1, options)`：实现自包含高层作战概念图 SVG 渲染，内嵌抽象相对网格背景、分类色系顶条（指挥/打击/感知/通信）、带箭头与中点标签的协同关系虚线、密级标识和 DoDAF 2.02 DM2 图例栏；
+     - `buildReportPayload` 为 `ov1Snapshot.svgGraphic` 自动注入 SVG 矢量图，并同步输出标准 `payload.graphics` 图件清单；
+  2. 服务端临时图件解耦与落盘 (`server/routes/officeReports.mjs`)：
+     - 在 `handleReportDocument` 中检测图件载荷，自动在生成目录落盘 `graphic-ov1.svg`，并向自动化生成器透传 `-GraphicPath` 参数；
+  3. Word/Office 导出全量覆盖新模板与图件嵌入 (`scripts/generate-report-docx.ps1`)：
+     - 增加 `Add-Image` 辅助函数与 `$GraphicPath` 参数自动检测；
+     - 适配三套新模板的大纲结构：
+       * `tactic-doc`（战法说明）：覆盖 9 章节（问题背景、对手体系与 OV-4 表、战法思想与 OV-1 嵌入图件、力量编组与 OV-1c 表、实施阶段与 OV-6c、制胜机理与 OV-5a/OV-5b/OODA/OV-6a、风险应对与 OV-6b、评估效能与成熟度、溯源证据）；
+       * `scenario-doc`（想定文书）：覆盖 6 章节（背景态势与规模、时空边界与桥接、双方企图与编成、阶段设定与时序、推演交战规则、附件图件与验证）；
+       * `wargame-review`（推演复盘）：覆盖 6 章节（概况编组、阶段推进战损、决策对抗博弈、偏差深度剖析、改进建议、参考依据）；
+       * 通用模板保底并自动嵌入图件；
+  4. 自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m4-office-export-and-graphics.mjs`，全量覆盖静态契约、SVG 图件生成、payload 自动注入与 officeReports 临时落盘流程；
      - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
 - **验证命令与结果**：
-  - `node scripts/check-report-classification-and-audit.mjs`：100% PASS
-  - `node scripts/run-checks.mjs ui-static`：27/27 PASS (100%)
-  - `node scripts/run-checks.mjs storage server`：35/35 PASS (100%)
-  - `node scripts/run-checks.mjs all`：146/146 PASS (100%)
+  - `node scripts/check-m4-office-export-and-graphics.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：28/28 PASS (100%)
+  - `node scripts/run-checks.mjs all`：147/147 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 
 
 

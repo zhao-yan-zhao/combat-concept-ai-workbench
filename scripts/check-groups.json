@@ -126,7 +126,8 @@
     "check-empty-states-actionable.mjs",
     "check-command-palette.mjs",
     "check-m4-report-templates.mjs",
-    "check-report-classification-and-audit.mjs"
+    "check-report-classification-and-audit.mjs",
+    "check-m4-office-export-and-graphics.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",

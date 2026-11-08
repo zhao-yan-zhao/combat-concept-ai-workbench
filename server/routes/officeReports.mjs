@@ -41,8 +41,15 @@ export function createOfficeReportHandlers(runtime) {
     const inputPath = join(temporaryDirectory, "report-payload.json");
     const filename = `combat-concept-research-report.${format.extension}`;
     const outputPath = join(temporaryDirectory, filename);
+    const graphicPath = join(temporaryDirectory, "graphic-ov1.svg");
     try {
       await writeFile(inputPath, JSON.stringify(input.payload), "utf8");
+      let hasGraphic = false;
+      const svgGraphic = input.payload?.ov1?.svgGraphic || input.payload?.graphics?.find((g) => g.id === "ov1" && g.content)?.content;
+      if (svgGraphic) {
+        await writeFile(graphicPath, svgGraphic, "utf8");
+        hasGraphic = true;
+      }
       const scriptArguments = [
         "-NoProfile",
         "-ExecutionPolicy",
@@ -54,6 +61,7 @@ export function createOfficeReportHandlers(runtime) {
         "-OutputPath",
         outputPath
       ];
+      if (hasGraphic) scriptArguments.push("-GraphicPath", graphicPath);
       if (format.outputFormat) scriptArguments.push("-OutputFormat", format.outputFormat);
       await runProcess("powershell.exe", scriptArguments);
       const content = await readFile(outputPath);

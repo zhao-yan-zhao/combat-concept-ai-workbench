@@ -75,6 +75,11 @@ export function buildReportPayload({ project, brief, inspiration, direction, for
   const knowledgeSummary = buildKnowledgeSummary(knowledge, activityRefs, knowledgeCitationApprovals);
   const reportBrief = filterBriefEvidenceRefs(brief || project.brief, knowledge, knowledgeCitationApprovals);
   const ov1Snapshot = buildOv1Snapshot(ov1);
+  const ov1Svg = renderOv1StandaloneSvg(ov1Snapshot, {
+    title: `${project?.title || "作战概念"} - 高层作战概念图 (OV-1)`,
+    classification: project?.classification || project?.brief?.classification || "内部"
+  });
+  ov1Snapshot.svgGraphic = ov1Svg;
   const traceability = buildTraceability({ ov1: ov1Snapshot, ov5, ooda, scenario });
   // Prefer persisted DoDAF products when present; otherwise seed from builders.
   const ov4 = persistedOv4 || buildOv4Model({ forceMission, ov1: ov1Snapshot, ov5, ooda, scenario });
@@ -91,6 +96,9 @@ export function buildReportPayload({ project, brief, inspiration, direction, for
     generatedAt: new Date().toISOString(),
     classification,
     reportTemplate: getReportTemplate(reportTemplate),
+    graphics: [
+      { id: "ov1", title: "高层作战概念图 (OV-1)", format: "svg", content: ov1Svg }
+    ],
     standard: "DoDAF-2.02-DM2",
     project: { id: project?.id, title: project.title, kind: project?.kind, classification, direction, brief: reportBrief, citations: project.citations },
     inspiration: toInspirationReportSnapshot(inspiration),
@@ -1659,4 +1667,134 @@ function rtf(value) {
 
 function unique(values) {
   return [...new Set(values.map((value) => String(value).trim()).filter(Boolean))];
+}
+
+
+/**
+ * Generate a standalone, self-contained SVG graphic for the OV-1 conceptual model.
+ * Renders background grid, nodes, categorized entity bars, dashed edge lines with arrows and labels.
+ */
+export function renderOv1StandaloneSvg(ov1, { width = 800, height = 520, title = "高层作战概念图 (OV-1)", classification = "内部" } = {}) {
+  const nodes = Array.isArray(ov1?.nodes) ? ov1.nodes : [];
+  const edges = Array.isArray(ov1?.edges) ? ov1.edges : [];
+
+  if (!nodes.length) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="${width}" height="${height}" fill="#0f172a" rx="8"/>
+  <text x="${width / 2}" y="${height / 2}" fill="#64748b" font-size="16" text-anchor="middle" font-family="system-ui, -apple-system, 'Microsoft YaHei', sans-serif">尚未配置 OV-1 概念节点</text>
+</svg>`;
+  }
+
+  const padX = 80;
+  const padY = 70;
+  const availW = width - padX * 2;
+  const availH = height - padY * 2 - 36;
+
+  const rawPositions = nodes.map((node, index) => {
+    let x = Number(node.x);
+    let y = Number(node.y);
+    if (isNaN(x) || isNaN(y) || (x === 0 && y === 0)) {
+      const angle = (index / nodes.length) * 2 * Math.PI - Math.PI / 2;
+      x = 50 + 36 * Math.cos(angle);
+      y = 50 + 36 * Math.sin(angle);
+    }
+    return { id: node.id, x, y };
+  });
+
+  const minX = Math.min(...rawPositions.map((p) => p.x));
+  const maxX = Math.max(...rawPositions.map((p) => p.x));
+  const minY = Math.min(...rawPositions.map((p) => p.y));
+  const maxY = Math.max(...rawPositions.map((p) => p.y));
+  const rangeX = (maxX - minX) || 100;
+  const rangeY = (maxY - minY) || 100;
+
+  const nodePosMap = new Map();
+  nodes.forEach((node, index) => {
+    const raw = rawPositions[index];
+    const normX = rangeX === 0 ? 0.5 : (raw.x - minX) / rangeX;
+    const normY = rangeY === 0 ? 0.5 : (raw.y - minY) / rangeY;
+    const px = Math.round(padX + normX * availW);
+    const py = Math.round(padY + normY * availH);
+    nodePosMap.set(node.id, { x: px, y: py });
+  });
+
+  function getCategoryColor(category = "") {
+    const c = String(category).toLowerCase();
+    if (c.includes("指挥") || c.includes("command") || c.includes("c2")) return "#3b82f6";
+    if (c.includes("打击") || c.includes("strike") || c.includes("fire") || c.includes("武器")) return "#ef4444";
+    if (c.includes("感知") || c.includes("sensor") || c.includes("recon") || c.includes("侦察") || c.includes("预警")) return "#8b5cf6";
+    if (c.includes("通信") || c.includes("网络") || c.includes("network") || c.includes("节点")) return "#10b981";
+    return "#0ea5e9";
+  }
+
+  const nodeWidth = 132;
+  const nodeHeight = 56;
+
+  const edgeSvgLines = edges.map((edge) => {
+    const src = nodePosMap.get(edge.sourceId);
+    const tgt = nodePosMap.get(edge.targetId);
+    if (!src || !tgt) return "";
+    const midX = Math.round((src.x + tgt.x) / 2);
+    const midY = Math.round((src.y + tgt.y) / 2);
+    const edgeType = inline(edge.type || "协同");
+    return `
+    <g class="ov1-edge">
+      <line x1="${src.x}" y1="${src.y}" x2="${tgt.x}" y2="${tgt.y}" stroke="#64748b" stroke-width="1.8" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+      <rect x="${midX - 32}" y="${midY - 10}" width="64" height="20" rx="4" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+      <text x="${midX}" y="${midY + 4}" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="system-ui, -apple-system, 'Microsoft YaHei', sans-serif">${xml(edgeType)}</text>
+    </g>`;
+  }).join("");
+
+  const nodeSvgBoxes = nodes.map((node) => {
+    const pos = nodePosMap.get(node.id);
+    const color = getCategoryColor(node.category);
+    const label = inline(node.label || node.id);
+    const cat = inline(node.category || "实体");
+    return `
+    <g class="ov1-node" transform="translate(${pos.x - Math.round(nodeWidth / 2)}, ${pos.y - Math.round(nodeHeight / 2)})">
+      <rect width="${nodeWidth}" height="${nodeHeight}" rx="6" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+      <rect width="${nodeWidth}" height="4" rx="2" fill="${color}"/>
+      <text x="${Math.round(nodeWidth / 2)}" y="28" fill="#f8fafc" font-size="13" font-weight="bold" text-anchor="middle" font-family="system-ui, -apple-system, 'Microsoft YaHei', sans-serif">${xml(label)}</text>
+      <text x="${Math.round(nodeWidth / 2)}" y="44" fill="#94a3b8" font-size="10" text-anchor="middle" font-family="system-ui, -apple-system, 'Microsoft YaHei', sans-serif">${xml(cat)}</text>
+    </g>`;
+  }).join("");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.8"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="28" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+  <rect width="${width}" height="${height}" fill="#0b1120" rx="8"/>
+  <rect width="${width}" height="${height}" fill="url(#grid)"/>
+
+  <!-- 顶部标题与密级 -->
+  <rect x="0" y="0" width="${width}" height="42" fill="#0f172a" fill-opacity="0.85" rx="8"/>
+  <text x="24" y="26" fill="#f1f5f9" font-size="14" font-weight="bold" font-family="system-ui, -apple-system, 'Microsoft YaHei', sans-serif">${xml(title)}</text>
+  <text x="${width - 24}" y="26" fill="#38bdf8" font-size="12" text-anchor="end" font-family="system-ui, -apple-system, 'Microsoft YaHei', sans-serif">密级：${xml(classification)}</text>
+  <line x1="0" y1="42" x2="${width}" y2="42" stroke="#334155" stroke-width="1"/>
+
+  <!-- 关系连线 -->
+  ${edgeSvgLines}
+
+  <!-- 作战概念节点 -->
+  ${nodeSvgBoxes}
+
+  <!-- 底部图例栏 -->
+  <rect x="0" y="${height - 32}" width="${width}" height="32" fill="#0f172a" fill-opacity="0.9" rx="0 0 8 8"/>
+  <text x="24" y="${height - 12}" fill="#64748b" font-size="10" font-family="system-ui, -apple-system, 'Microsoft YaHei', sans-serif">坐标基准：抽象相对网格坐标体系 (DoDAF 2.02 DM2)</text>
+  <g transform="translate(${width - 240}, ${height - 20})">
+    <rect x="0" y="0" width="8" height="8" rx="2" fill="#3b82f6"/>
+    <text x="12" y="8" fill="#94a3b8" font-size="10" font-family="system-ui, -apple-system, 'Microsoft YaHei', sans-serif">指挥控制</text>
+    <rect x="62" y="0" width="8" height="8" rx="2" fill="#ef4444"/>
+    <text x="74" y="8" fill="#94a3b8" font-size="10" font-family="system-ui, -apple-system, 'Microsoft YaHei', sans-serif">协同打击</text>
+    <rect x="124" y="0" width="8" height="8" rx="2" fill="#8b5cf6"/>
+    <text x="136" y="8" fill="#94a3b8" font-size="10" font-family="system-ui, -apple-system, 'Microsoft YaHei', sans-serif">多域侦察</text>
+    <rect x="186" y="0" width="8" height="8" rx="2" fill="#10b981"/>
+    <text x="198" y="8" fill="#94a3b8" font-size="10" font-family="system-ui, -apple-system, 'Microsoft YaHei', sans-serif">通信中继</text>
+  </g>
+</svg>`;
 }
