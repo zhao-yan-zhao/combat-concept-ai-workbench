@@ -10,6 +10,10 @@ import {
   filterTurnByPerspective,
   renderPerspectiveSwitcher
 } from "./wargamePerspectiveFilter.js";
+import {
+  buildWargameTimeline,
+  renderWargameTimelineSection
+} from "./wargameTimelineStore.js";
 
 export function renderScenario(state) {
   const scenario = state.scenario;
@@ -592,6 +596,14 @@ export function renderWargameTurnsView(state) {
           </div>
         </section>
       </div>
+
+      <!-- 📜 推演时序流水线与 What-If 派生看板 -->
+      ${renderWargameTimelineSection({
+        timeline: buildWargameTimeline(wargame, { activePerspective }),
+        currentTurnNumber: currentTurn.turnNumber,
+        whatIfSelectedTurn: state.wargameWhatIfSelectedTurn || null,
+        activePerspective
+      })}
     </div>
   `;
 }

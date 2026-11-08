@@ -34,6 +34,7 @@ import {
   deleteTacticFromLibrary,
   buildForkedProjectData
 } from "./tacticsLibraryClient.js";
+import { buildWhatIfProjectPayload } from "./wargameTimelineStore.js";
 import { ensureClientStoragePurged, purgeProjectClientStorage } from "./clientStoragePurge.js";
 import { applyWithRecoveryPoint } from "./app/recoveryTransaction.js";
 
@@ -954,6 +955,33 @@ async function handleAction(action, source = null) {
       render({ skipViewRoot: true });
     } catch (err) {
       showToast("删除战法失败: " + err.message);
+    }
+    return;
+  }
+  if (action === "toggle-what-if-form") {
+    const turnNum = Number(source?.dataset?.turnNumber) || 1;
+    state.wargameWhatIfSelectedTurn = state.wargameWhatIfSelectedTurn === turnNum ? null : turnNum;
+    render({ skipViewRoot: false });
+    return;
+  }
+  if (action === "close-what-if-form") {
+    state.wargameWhatIfSelectedTurn = null;
+    render({ skipViewRoot: false });
+    return;
+  }
+  if (action === "execute-what-if-fork") {
+    const turnNum = Number(source?.dataset?.turnNumber) || 1;
+    const branchTitle = document.getElementById("whatIfBranchTitle")?.value || "";
+    const assumption = document.getElementById("whatIfAssumption")?.value || "";
+    const payload = buildWhatIfProjectPayload(state, turnNum, { branchTitle, assumption });
+
+    try {
+      const result = await createProject(payload);
+      state.wargameWhatIfSelectedTurn = null;
+      showToast(`已从第 ${turnNum} 回合派生 What-If 探索分支项目！`);
+      switchProject(result.project.id, getProjectCtx());
+    } catch (err) {
+      showToast("派生 What-If 分支失败: " + err.message);
     }
     return;
   }

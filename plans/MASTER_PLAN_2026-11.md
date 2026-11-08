@@ -261,8 +261,8 @@
 | **T7.3 战例借鉴** | 知识库检索历史相似战例，生成可借鉴点/不适用点对照卡并引用 | **雏形** | M2 知识检索（`knowledge.js`）与灵感建议（`inspirationStore.js`）已具备检索与推荐能力，但缺少战例对照卡片（借鉴点/不适用点）数据契约与卡片视图 | `shared/knowledge.js`, `design-studio/src/inspirationStore.js`, `inspirationView.js` | **补全增强**：复用检索与灵感卡片，接入战例对比模板与论证链引用 |
 | **T7.4 战法库** | 已确认战法跨项目复用库，存入/复制起点 | **已完成** | 独立持久化仓储 `server/tacticsLibraryStore.mjs`（`data/tactics-library.json`）、路由 `GET/POST/DELETE /api/tactics-library`、前端弹窗与深拷贝绝对解耦复制 | `server/tacticsLibraryStore.mjs`, `design-studio/src/tacticsLibraryView.js`, `tacticsLibraryClient.js` | **已完成**（2026-11-09） |
 | **T7.5 红蓝分立与信息隔离** | 导演部/红方/蓝方视角与信息过滤，协同权限映射 | **已完成** | 协同角色映射（`lead` -> 导演部全知，`researcher` -> 红方，`reviewer` -> 蓝方）、情报迷雾脱敏过滤管道与防覆写保存 | `design-studio/src/wargamePerspectiveFilter.js`, `scenarioView.js`, `scenarioController.js` | **已完成**（2026-11-09） |
-| **T7.6 推演回合与导调** | 回合制推进（意图提交、事件注入卡库、导调裁决建议、进入下回合） | **雏形** | 已有静态想定部署（`scenarioStore.js`）与外部仿真结果适配（`simulationAdapter.js`），但缺少回合交互循环、预置事件卡库与导调裁决 | `design-studio/src/scenarioStore.js`, `scenarioView.js`, `simulationAdapter.js`, `simulationRecycleStore.js` | **补全增强**：在想定与仿真适配层扩展回合制推进引擎与导调看板 |
-| **T7.7 推演日志与时间线** | 回合推演流水线记录与 what-if 分支派生 | **雏形** | 已有推演结果记录与快照分支能力（`modelSnapshotStore.js`），但无回合级时序流水线（Turn Timeline）呈现与一键派生 | `design-studio/src/simulationRecycleStore.js`, `modelSnapshotStore.js`, `scenarioView.js` | **补全增强**：串联回合日志与快照派生 |
+| **T7.6 推演回合与导调** | 回合制推进（意图提交、事件注入卡库、导调裁决建议、进入下回合） | **已完成** | 回合状态机、6类预置事件卡库、因果机理导调裁决建议（`ai.wargame.adjudication`），绝无数值化杀伤计算 | `design-studio/src/wargameTurnStore.js`, `wargameClient.js`, `scenarioView.js` | **已完成**（2026-11-09） |
+| **T7.7 推演日志与时间线** | 回合推演流水线记录与 what-if 分支派生 | **已完成** | 时序时间轴流水线（`Turn Timeline`）、情报迷雾脱敏过滤、任选历史回合一键纯深拷贝派生 What-If 项目 | `design-studio/src/wargameTimelineStore.js`, `scenarioView.js`, `main.js` | **已完成**（2026-11-09） |
 | **T7.8 复盘生成** | 根据推演日志自动起草复盘报告（`wargame-review`） | **可用** | M4 报告引擎与 M6-T6.3 已支持 `wargame-review` 模板、阶段成效表格与活动执行偏差回填，契约已全闭环 | `design-studio/src/reportBuilder.js`, `simulationRecycleStore.js` | **无缝接驳**：直接串联回合日志即可，无需重建 |
 | **T7.9 上下文 AI 研讨助手** | 研讨助手感知当前步骤模型与引用，生成候选并事务应用 | **雏形** | `researchChat/` 目录有完整对话流、上下文同步，但未自动感知当前步骤视图的模型摘要与证据注入，缺少事务安全候选框 | `design-studio/src/researchChat/` 全套控制器与视图 | **补全增强**：为研讨助手注入当前步骤上下文与安全候选事务框 |
 | **T7.10 评审与签批流程** | 草稿→送审（冻结快照）→修改→定稿（只读） | **雏形** | 已有项目状态字段与快照冻结（`modelSnapshotStore.js`），但无正规工作流流转与定稿只读守卫 | `design-studio/src/projectStorageStore.js`, `modelSnapshotStore.js` | **补全增强**：补齐工作流状态流转与界面门禁 |
@@ -307,9 +307,9 @@
 - 事件注入卡库：预置一批可编辑的抽象事件，例如"通信中断""态势误判""友邻延误"，也可以自定义。
 - 裁决：导演部人工裁决，AI 可提供"裁决建议与理由"（新提示词，必须纳入提示词目录）。**不做数值化的杀伤计算。**
 
-**T7.7 推演日志与时间线**
-- 自动记录每个回合的意图、注入、裁决和关键决策，形成可回看的时间线。
-- 在时间线的任意回合可以"从此处派生分支"（what-if），复用 M1 的快照能力。
+- [x] **T7.7 推演日志与时间线**（2026-11-09 已落地）
+- 自动记录每个回合的意图、注入、裁决和关键决策，形成可回看的时间线（Turn Timeline）。
+- 在时间线的任意回合可以"从此处派生分支"（what-if），通过纯深拷贝截断生成解耦分支项目，携带战术假设并重置起点裁决。
 
 **T7.8 复盘生成**
 - 根据推演日志自动起草复盘报告，使用 M4 的 `wargame-review` 模板。
