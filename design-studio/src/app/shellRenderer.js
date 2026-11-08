@@ -134,7 +134,8 @@ export function renderStudioShell(ctx) {
     catalog: state.aiPromptCatalog,
     selectedId: state.aiPromptSelectedId,
     saving: state.aiPromptSaving,
-    drafts: state.aiPromptDrafts || {}
+    drafts: state.aiPromptDrafts || {},
+    viewingDiffVersionId: state.aiPromptViewingDiffVersionId || null
   });
   const aiPromptElem = $("#aiPromptRoot");
   if (aiPromptElem && aiPromptElem.dataset.renderedMarkup !== aiPromptMarkup) {

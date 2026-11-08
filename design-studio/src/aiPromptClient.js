@@ -4,11 +4,21 @@ export async function getAiPrompts() {
   return response.json();
 }
 
-export async function saveAiPrompts(overrides) {
+export async function saveAiPrompts(overrides, note = "") {
   const response = await fetch("/api/ai-prompts", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ overrides })
+    body: JSON.stringify({ overrides, note })
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  return response.json();
+}
+
+export async function rollbackAiPrompt(promptId, versionId) {
+  const response = await fetch("/api/ai-prompts/rollback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ promptId, versionId })
   });
   if (!response.ok) throw new Error(await readError(response));
   return response.json();

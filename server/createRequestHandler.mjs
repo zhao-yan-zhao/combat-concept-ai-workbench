@@ -382,9 +382,17 @@ export function createRequestHandler(runtime) {
         sendJson(response, 200, getAiConfigResponse());
         return;
       }
+      async function getPromptsWithHistory() {
+        const promptData = await runtime.loadAiPromptData({ configPath: aiPromptConfigPath }).catch(() => ({ history: {} }));
+        return openAi.listPromptDefinitions().map((item) => ({
+          ...item,
+          history: promptData?.history?.[item.id] || []
+        }));
+      }
+
       if (request.method === "GET" && url.pathname === "/api/ai-prompts") {
         sendJson(response, 200, {
-          items: openAi.listPromptDefinitions(),
+          items: await getPromptsWithHistory(),
           configurationWrite: aiConfigWriteAuthorizer.getStatus()
         });
         return;
@@ -395,9 +403,32 @@ export function createRequestHandler(runtime) {
           const input = await readJson(request);
           const knownIds = new Set(openAi.listPromptDefinitions().map((item) => item.id));
           const requested = Object.fromEntries(Object.entries(input?.overrides || {}).filter(([id]) => knownIds.has(id)));
-          const next = await runtime.saveAiPromptOverrides({ configPath: aiPromptConfigPath, value: { overrides: requested } });
+          const note = String(input?.note || "").trim();
+          const next = await runtime.saveAiPromptOverrides({ configPath: aiPromptConfigPath, value: { overrides: requested }, note });
           setAiPromptOverrides(next);
-          sendJson(response, 200, { items: openAi.listPromptDefinitions(), configurationWrite: aiConfigWriteAuthorizer.getStatus() });
+          sendJson(response, 200, { items: await getPromptsWithHistory(), configurationWrite: aiConfigWriteAuthorizer.getStatus() });
+        } catch (error) {
+          send(response, error.statusCode || 400, error.message, "text/plain;charset=utf-8");
+        }
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/ai-prompts/rollback") {
+        try {
+          await aiConfigWriteAuthorizer.authorize(request);
+          const input = await readJson(request);
+          const promptId = String(input?.promptId || "");
+          const versionId = String(input?.versionId || "");
+          const result = await runtime.rollbackAiPromptVersion({
+            configPath: aiPromptConfigPath,
+            promptId,
+            versionId
+          });
+          setAiPromptOverrides(result.overrides);
+          sendJson(response, 200, {
+            items: await getPromptsWithHistory(),
+            rolledBack: result.rolledBack,
+            configurationWrite: aiConfigWriteAuthorizer.getStatus()
+          });
         } catch (error) {
           send(response, error.statusCode || 400, error.message, "text/plain;charset=utf-8");
         }

@@ -1,4 +1,4 @@
-import { getAiPrompts, saveAiPrompts } from "./aiPromptClient.js";
+import { getAiPrompts, rollbackAiPrompt, saveAiPrompts } from "./aiPromptClient.js";
 
 export function createAiPromptController({ getState, render, notify }) {
   async function load(announce = false) {
@@ -13,13 +13,14 @@ export function createAiPromptController({ getState, render, notify }) {
     render({ skipViewRoot: true });
   }
 
-  async function persist(nextOverrides) {
+  async function persist(nextOverrides, note = "") {
     const state = getState();
     state.aiPromptSaving = true;
     render({ skipViewRoot: true });
     try {
-      state.aiPromptCatalog = await saveAiPrompts(nextOverrides);
-      notify("AI 提示词已保存，后续请求立即生效");
+      state.aiPromptCatalog = await saveAiPrompts(nextOverrides, note);
+      state.aiPromptViewingDiffVersionId = null;
+      notify("AI 提示词已保存，已自动归档新版本，后续请求立即生效");
     } catch (error) {
       notify(error.message || "AI 提示词保存失败");
     } finally {
@@ -102,10 +103,47 @@ export function createAiPromptController({ getState, render, notify }) {
         const promptList = document.querySelector(".ai-prompt-list");
         const listScrollTop = promptList ? promptList.scrollTop : 0;
         state.aiPromptSelectedId = promptId;
+        state.aiPromptViewingDiffVersionId = null;
         render({ skipViewRoot: true });
         const nextPromptList = document.querySelector(".ai-prompt-list");
         if (nextPromptList) nextPromptList.scrollTop = listScrollTop;
         requestAnimationFrame(() => document.querySelector(`.ai-prompt-item.is-active[data-prompt-id="${CSS.escape(promptId)}"]`)?.scrollIntoView?.({ block: "nearest", inline: "nearest" }));
+        return true;
+      }
+      if (action === "toggle-ai-prompt-diff") {
+        const versionId = element?.dataset?.versionId || "";
+        state.aiPromptViewingDiffVersionId = state.aiPromptViewingDiffVersionId === versionId ? null : versionId;
+        render({ skipViewRoot: true });
+        return true;
+      }
+      if (action === "rollback-ai-prompt-version") {
+        const promptId = element?.dataset?.promptId || state.aiPromptSelectedId || "";
+        const versionId = element?.dataset?.versionId || "";
+        if (!promptId || !versionId) return true;
+        const selected = (state.aiPromptCatalog?.items || []).find((item) => item.id === promptId);
+        const targetVersion = (selected?.history || []).find((v) => v.versionId === versionId);
+        const versionLabel = targetVersion ? `v${targetVersion.version}` : versionId;
+
+        const confirmed = typeof window !== "undefined" && typeof window.confirm === "function"
+          ? window.confirm(`确定要将提示词 [${selected?.name || promptId}] 回退到版本 ${versionLabel} 吗？当前草稿将被该版本替换。`)
+          : true;
+        if (!confirmed) return true;
+
+        (async () => {
+          state.aiPromptSaving = true;
+          render({ skipViewRoot: true });
+          try {
+            state.aiPromptCatalog = await rollbackAiPrompt(promptId, versionId);
+            if (state.aiPromptDrafts) delete state.aiPromptDrafts[promptId];
+            state.aiPromptViewingDiffVersionId = null;
+            notify(`提示词 [${selected?.name || promptId}] 已成功回退至版本 ${versionLabel}`);
+          } catch (error) {
+            notify(error.message || "提示词回退失败");
+          } finally {
+            state.aiPromptSaving = false;
+            render({ skipViewRoot: true });
+          }
+        })();
         return true;
       }
       if (action === "reset-ai-prompt") {
@@ -120,7 +158,9 @@ export function createAiPromptController({ getState, render, notify }) {
         }
         const overrides = Object.fromEntries((state.aiPromptCatalog?.items || []).filter((item) => item.customized && item.id !== state.aiPromptSelectedId).map((item) => [item.id, item.content]));
         if (state.aiPromptDrafts) delete state.aiPromptDrafts[state.aiPromptSelectedId];
-        void persist(overrides); return true;
+        state.aiPromptViewingDiffVersionId = null;
+        void persist(overrides, "恢复系统默认值");
+        return true;
       }
       return false;
     }

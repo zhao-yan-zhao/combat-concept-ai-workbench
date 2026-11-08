@@ -868,6 +868,38 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：152/152 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
+### 2026-11-08 T5.5 真实落地：提示词版本历史、文本差异对比与一键回退
+
+- **实施内容**：
+  1. 纯轻量零依赖行级文本差异算法与 HTML 渲染器 (`shared/textDiff.js`)：
+     - `computeLineDiff(oldText, newText, options)`：基于最长公共子序列（LCS）算法实现精确的行级差异对比，输出 `added`、`removed`、`unchanged` 行明细，并统计增删行数与全等判定；
+     - `renderUnifiedDiffHtml(diffResult)`：格式化渲染统一 Diff 视窗，支持单行标号（`+`、`-`、` `）、行号对比高亮与 XSS 防护转义；
+  2. 提示词历史版本模型与持久化扩展 (`server/aiPromptConfig.mjs`)：
+     - 扩展 `data/ai-prompts.json` 结构，增加 `history: { [promptId]: Array<PromptVersionRecord> }`，保存时检测内容变动并自动生成 `v1`、`v2`... 单调递增版本，各提示词上限保留 30 个历史版本；
+     - 内容未修改时防冗余，不生成多余版本；
+     - 导出 `loadAiPromptData`、`loadAiPromptOverrides`（100% 保持既有格式向后兼容）；
+     - 导出 `rollbackAiPromptVersion({ configPath, promptId, versionId })`，精准恢复目标版本覆盖并追加回退审计记录；
+  3. 服务端运行时与 HTTP 路由贯通 (`server/createRequestHandler.mjs` & `server/createRuntime.mjs`)：
+     - `GET /api/ai-prompts`：为返回的每个提示词注入其对应的 `history` 列表；
+     - `PUT /api/ai-prompts`：支持可选备注并触发版本归档，返回包含最新历史的目录；
+     - `POST /api/ai-prompts/rollback`：接收 `{ promptId, versionId }` 执行一键回退，实时更新生效覆盖并同步返回最新列表；
+  4. 提示词客户端与交互界面升级 (`design-studio/src/aiPromptClient.js`, `aiPromptView.js`, `aiPromptController.js`, `styles/shell.css`)：
+     - 客户端导出 `rollbackAiPrompt(promptId, versionId)` 与支持备注的 `saveAiPrompts`；
+     - 视图在编辑器下方提供“版本历史”面板与版本统计徽章；
+     - 历史卡片提供“查看差异”操作：内联展开 Unified Diff 视图，实时对比历史版本与当前正文/草稿的增删行差异；
+     - 历史卡片提供“回退到此版本”按钮：二次确认后回退并重置草稿；
+  5. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m5-prompt-history-and-diff.mjs`：全量覆盖 LCS 行级算法、版本单调递增归档、防冗余判定、版本回退、老接口兼容、前端视图与控制器静态契约；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
+- **验证命令与结果**：
+  - `node scripts/check-m5-prompt-history-and-diff.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：34/34 PASS (100%)
+  - `node scripts/run-checks.mjs all`：153/153 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+> **M5 里程碑（AI 质量与部署）全量圆满收官！**
+> 5 项任务卡全部 100% 落地闭环（T5.1 黄金用例库 30 条、T5.2 Schema 结构校验与重试、T5.3 评测脚本与指标引擎、T5.4 本地离线模型与降级手工模板、T5.5 提示词版本历史与差异回退）。
+
 
 
 

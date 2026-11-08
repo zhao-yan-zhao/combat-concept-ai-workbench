@@ -15,7 +15,7 @@ import { readJson } from "./httpUtils.mjs";
 import { createOpenAiClient } from "./openaiClient.mjs";
 import { loadThemeConfig, saveThemeConfig } from "./themeConfig.mjs";
 import { createCmoDatabaseService } from "./cmoDatabase.mjs";
-import { loadAiPromptOverrides, saveAiPromptOverrides } from "./aiPromptConfig.mjs";
+import { loadAiPromptData, loadAiPromptOverrides, rollbackAiPromptVersion, saveAiPromptOverrides } from "./aiPromptConfig.mjs";
 
 const mimeTypes = {
   ".html": "text/html;charset=utf-8",
@@ -122,6 +122,8 @@ export async function createRuntime() {
     saveAiServiceConfig,
     saveThemeConfig,
     saveAiPromptOverrides,
+    loadAiPromptData,
+    rollbackAiPromptVersion,
     getPublicAiServiceConfig,
     listKnowledgeRetrievalModes
   };

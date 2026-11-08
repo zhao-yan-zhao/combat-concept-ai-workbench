@@ -90,6 +90,41 @@
 .ai-prompt-actions-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .ai-prompt-actions button { width: auto; min-width: 96px; padding: 8px 18px; font-size: 12px; }
 .ai-prompt-draft-hint { font-size: 11px; color: var(--gold); padding: 2px 8px; border-radius: 999px; background: var(--gold-soft); border: 1px solid rgba(251, 191, 36, .28); }
+.ai-prompt-history-section { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 10px; }
+.ai-prompt-history-header { display: flex; align-items: center; justify-content: space-between; }
+.ai-prompt-history-header h4 { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+.history-count-badge { font-size: 11px; color: var(--muted); background: rgba(255, 255, 255, .05); padding: 2px 8px; border-radius: 999px; }
+.ai-prompt-history-empty { padding: 12px; background: rgba(255, 255, 255, .02); border: 1px solid var(--line); border-radius: 4px; font-size: 12px; color: var(--muted); text-align: center; }
+.ai-prompt-history-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
+.ai-prompt-history-card { border: 1px solid var(--line); border-radius: 4px; background: rgba(0, 0, 0, .2); padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; }
+.ai-prompt-history-card.is-expanded { border-color: rgba(61, 255, 197, .3); background: rgba(61, 255, 197, .03); }
+.history-card-main { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.history-card-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 11px; }
+.history-version-tag { background: rgba(61, 255, 197, .15); color: var(--cyan); padding: 1px 6px; border-radius: 3px; font-weight: 600; font-family: monospace; }
+.history-time { color: var(--muted); }
+.history-chars { color: var(--muted); }
+.history-note { color: var(--ink); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-card-actions { display: flex; align-items: center; gap: 6px; }
+.history-card-actions button.warning-hover:hover { color: #f87171; border-color: rgba(248, 113, 113, .3); }
+.history-diff-viewer { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+.prompt-diff-container { display: flex; flex-direction: column; gap: 6px; font-family: Consolas, "Microsoft YaHei", monospace; font-size: 11px; }
+.prompt-diff-header { display: flex; gap: 8px; font-size: 10px; margin-bottom: 4px; }
+.diff-tag { padding: 1px 6px; border-radius: 3px; font-weight: 500; }
+.diff-tag.diff-added { background: rgba(52, 211, 153, .15); color: #34d399; }
+.diff-tag.diff-removed { background: rgba(248, 113, 113, .15); color: #f87171; }
+.diff-tag.diff-unchanged { background: rgba(255, 255, 255, .05); color: var(--muted); }
+.prompt-diff-table-wrap { max-height: 220px; overflow-y: auto; background: #070e0c; border: 1px solid var(--line); border-radius: 4px; }
+.prompt-diff-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.prompt-diff-line td { padding: 1px 4px; vertical-align: top; white-space: pre-wrap; word-break: break-all; }
+.diff-num { width: 34px; text-align: right; user-select: none; color: rgba(255, 255, 255, .25); border-right: 1px solid rgba(255, 255, 255, .05); font-size: 10px; }
+.diff-mark { width: 18px; text-align: center; user-select: none; font-weight: 600; }
+.diff-text { padding-left: 6px !important; }
+.prompt-diff-line.line-added { background: rgba(52, 211, 153, .12); color: #a7f3d0; }
+.prompt-diff-line.line-added .diff-mark { color: #34d399; }
+.prompt-diff-line.line-removed { background: rgba(248, 113, 113, .12); color: #fca5a5; }
+.prompt-diff-line.line-removed .diff-mark { color: #f87171; }
+.prompt-diff-line.line-unchanged { color: var(--muted); }
+.prompt-diff-identical, .prompt-diff-empty { padding: 10px; text-align: center; color: var(--muted); font-size: 11px; background: rgba(255, 255, 255, .02); border-radius: 4px; }
 @media (max-width: 760px) {
   .ai-prompt-dialog { width: calc(100vw - 16px); height: calc(100vh - 16px); }
   .ai-prompt-layout { grid-template-columns: 1fr; grid-template-rows: 180px minmax(0, 1fr); }
