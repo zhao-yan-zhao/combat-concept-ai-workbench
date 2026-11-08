@@ -5,6 +5,11 @@ import { getScenarioFreshness } from "./scenarioStore.js";
 import { renderSimulationAdapter } from "./simulationAdapterView.js";
 import { renderValidation } from "./validationView.js";
 import { normalizeWargameState, PRESET_EVENT_CARDS } from "./wargameTurnStore.js";
+import {
+  resolveUserPerspective,
+  filterTurnByPerspective,
+  renderPerspectiveSwitcher
+} from "./wargamePerspectiveFilter.js";
 
 export function renderScenario(state) {
   const scenario = state.scenario;
@@ -341,6 +346,10 @@ export function renderWargameTurnsView(state) {
   const currentTurnIndex = state.wargameCurrentTurnIndex || wargame.currentTurnIndex || wargame.turns.length;
   const currentTurn = wargame.turns.find((t) => t.turnNumber === currentTurnIndex) || wargame.turns[wargame.turns.length - 1];
 
+  const perm = resolveUserPerspective(state.collaboration?.session);
+  const activePerspective = state.wargamePerspective || perm.defaultPerspective;
+  const displayTurn = filterTurnByPerspective(currentTurn, activePerspective);
+
   const statusMap = {
     "intents-planning": { label: "意图筹划中", class: "review" },
     "event-injection": { label: "导调注入中", class: "is-warn" },
@@ -366,11 +375,18 @@ export function renderWargameTurnsView(state) {
         <div class="wargame-turn-meta">
           <span class="wargame-meta-item">作战阶段：<strong>${escapeHtml(currentTurn.phaseName)}</strong></span>
           <span class="status-tag ${curStatus.class}">${curStatus.label}</span>
-          <button type="button" class="primary-btn wargame-advance-btn" data-action="advance-wargame-turn" ${currentTurn.status !== "completed" ? "disabled title='需先裁决并保存当前回合方可推进'" : ""}>
-            推进至下一回合 (Turn ${currentTurn.turnNumber + 1}) ➔
-          </button>
+          ${displayTurn.canAdjudicate ? `
+            <button type="button" class="primary-btn wargame-advance-btn" data-action="advance-wargame-turn" ${currentTurn.status !== "completed" ? "disabled title='需先裁决并保存当前回合方可推进'" : ""}>
+              推进至下一回合 (Turn ${currentTurn.turnNumber + 1}) ➔
+            </button>
+          ` : `
+            <span style="font-size:12px; color:#94a3b8; font-style:italic;">(非导演部视角，由导演部统一推进回合)</span>
+          `}
         </div>
       </header>
+
+      <!-- 协同角色与红蓝分立视角切换器 -->
+      ${renderPerspectiveSwitcher({ activePerspective, session: state.collaboration?.session, currentTurn })}
 
       <!-- 三栏协同工作区 -->
       <div class="wargame-workspace-grid">
@@ -378,50 +394,75 @@ export function renderWargameTurnsView(state) {
         <section class="surface wargame-card wargame-intents-pane">
           <div class="wargame-card-head">
             <h3>1. 红蓝双方作战概念意图</h3>
-            <small>宏观因果与协同构想</small>
-          </div>
-          <div class="wargame-intent-box is-red">
-            <header>
-              <strong style="color: #f87171;">红方对抗意图 (Opponent Intent)</strong>
-              <small>多轴突击 / 佯动 / 电子压制</small>
-            </header>
-            <textarea class="wargame-textarea" id="wargameRedIntent" placeholder="描述红方行动意图与战术动作...">${escapeHtml(currentTurn.intents.red?.text || "")}</textarea>
-            <div class="wargame-intent-refs">
-              <label>关联阶段活动：</label>
-              <div class="wargame-ref-tags">
-                ${activities.slice(0, 5).map((act) => `
-                  <label class="wargame-checkbox-label">
-                    <input type="checkbox" name="redActivityRefs" value="${act.id}" ${currentTurn.intents.red?.activityRefs?.includes(act.id) ? "checked" : ""}>
-                    <span>${escapeHtml(act.name)}</span>
-                  </label>
-                `).join("")}
-              </div>
-            </div>
+            <small>${displayTurn.fogOfWar ? "当前视角受情报迷雾约束" : "全息因果协同构想"}</small>
           </div>
 
-          <div class="wargame-intent-box is-blue">
+          <!-- 红方意图 -->
+          <div class="wargame-intent-box is-red ${displayTurn.intents.red?.masked ? "is-masked" : ""}">
+            <header>
+              <strong style="color: #f87171;">红方对抗意图 (Opponent Intent)</strong>
+              ${displayTurn.intents.red?.masked
+                ? `<span class="badge" style="background:rgba(239,68,68,0.2); color:#fca5a5; font-size:10px;">🌫️ 蓝方情报迷雾</span>`
+                : `<small>多轴突击 / 佯动 / 电子压制</small>`}
+            </header>
+            <textarea
+              class="wargame-textarea"
+              id="wargameRedIntent"
+              placeholder="${displayTurn.canEditRed ? "描述红方行动意图与战术动作..." : "红方意图已受情报迷雾遮蔽"}"
+              ${displayTurn.canEditRed ? "" : "readonly style='background:rgba(2,6,23,0.5); color:#94a3b8; font-style:italic;'"}
+            >${escapeHtml(displayTurn.intents.red?.text || "")}</textarea>
+            ${displayTurn.canEditRed ? `
+              <div class="wargame-intent-refs">
+                <label>关联阶段活动：</label>
+                <div class="wargame-ref-tags">
+                  ${activities.slice(0, 5).map((act) => `
+                    <label class="wargame-checkbox-label">
+                      <input type="checkbox" name="redActivityRefs" value="${act.id}" ${currentTurn.intents.red?.activityRefs?.includes(act.id) ? "checked" : ""}>
+                      <span>${escapeHtml(act.name)}</span>
+                    </label>
+                  `).join("")}
+                </div>
+              </div>
+            ` : ""}
+          </div>
+
+          <!-- 蓝方意图 -->
+          <div class="wargame-intent-box is-blue ${displayTurn.intents.blue?.masked ? "is-masked" : ""}">
             <header>
               <strong style="color: #38bdf8;">蓝方作战意图 (Blue Intent)</strong>
-              <small>防区抗击 / 跨域协同 / 韧性重组</small>
+              ${displayTurn.intents.blue?.masked
+                ? `<span class="badge" style="background:rgba(56,189,248,0.2); color:#7dd3fc; font-size:10px;">🌫️ 红方情报迷雾</span>`
+                : `<small>防区抗击 / 跨域协同 / 韧性重组</small>`}
             </header>
-            <textarea class="wargame-textarea" id="wargameBlueIntent" placeholder="描述蓝方行动意图与战术动作...">${escapeHtml(currentTurn.intents.blue?.text || "")}</textarea>
-            <div class="wargame-intent-refs">
-              <label>关联阶段活动：</label>
-              <div class="wargame-ref-tags">
-                ${activities.slice(0, 5).map((act) => `
-                  <label class="wargame-checkbox-label">
-                    <input type="checkbox" name="blueActivityRefs" value="${act.id}" ${currentTurn.intents.blue?.activityRefs?.includes(act.id) ? "checked" : ""}>
-                    <span>${escapeHtml(act.name)}</span>
-                  </label>
-                `).join("")}
+            <textarea
+              class="wargame-textarea"
+              id="wargameBlueIntent"
+              placeholder="${displayTurn.canEditBlue ? "描述蓝方行动意图与战术动作..." : "蓝方意图已受情报迷雾遮蔽"}"
+              ${displayTurn.canEditBlue ? "" : "readonly style='background:rgba(2,6,23,0.5); color:#94a3b8; font-style:italic;'"}
+            >${escapeHtml(displayTurn.intents.blue?.text || "")}</textarea>
+            ${displayTurn.canEditBlue ? `
+              <div class="wargame-intent-refs">
+                <label>关联阶段活动：</label>
+                <div class="wargame-ref-tags">
+                  ${activities.slice(0, 5).map((act) => `
+                    <label class="wargame-checkbox-label">
+                      <input type="checkbox" name="blueActivityRefs" value="${act.id}" ${currentTurn.intents.blue?.activityRefs?.includes(act.id) ? "checked" : ""}>
+                      <span>${escapeHtml(act.name)}</span>
+                    </label>
+                  `).join("")}
+                </div>
               </div>
-            </div>
+            ` : ""}
           </div>
 
           <div class="wargame-pane-footer">
-            <button type="button" class="primary-btn" data-action="save-wargame-intent" data-turn-number="${currentTurn.turnNumber}">
-              💾 保存双方意图
-            </button>
+            ${displayTurn.canEditRed || displayTurn.canEditBlue ? `
+              <button type="button" class="primary-btn" data-action="save-wargame-intent" data-turn-number="${currentTurn.turnNumber}">
+                💾 保存${displayTurn.canEditRed && displayTurn.canEditBlue ? "双方" : displayTurn.canEditRed ? "红方" : "蓝方"}意图
+              </button>
+            ` : `
+              <small style="color:#64748b;">当前视角处于只读观察状态</small>
+            `}
           </div>
         </section>
 
@@ -429,58 +470,71 @@ export function renderWargameTurnsView(state) {
         <section class="surface wargame-card wargame-events-pane">
           <div class="wargame-card-head">
             <h3>2. 导演部突发事件注入</h3>
-            <small>电磁/网络/气象/装备扰动 (${currentTurn.injectedEvents.length})</small>
+            <small>电磁/网络/气象/装备扰动 (${displayTurn.injectedEvents.length})</small>
           </div>
+
+          ${!displayTurn.canInjectEvents ? `
+            <div style="margin-bottom:10px; padding:8px 10px; border-radius:6px; background:rgba(30,41,59,0.7); border:1px solid rgba(148,163,184,0.15); font-size:11px; color:#cbd5e1;">
+              🛡️ 当前为【${activePerspective === "red" ? "红方" : "蓝方"}】视角：仅呈现已对本方造成显性影响的事件；导调事件由导演部注入。
+            </div>
+          ` : ""}
 
           <!-- 已注入列表 -->
           <div class="wargame-injected-list">
-            ${currentTurn.injectedEvents.length === 0 ? `
+            ${displayTurn.injectedEvents.length === 0 ? `
               <div class="wargame-empty-state">
-                本回合暂未注入突发事件（对抗将按既定战术逻辑推进）
+                本回合暂未呈现突发事件（对抗将按既定战术逻辑推进）
               </div>
-            ` : currentTurn.injectedEvents.map((e) => `
+            ` : displayTurn.injectedEvents.map((e) => `
               <article class="wargame-injected-item" data-injection-id="${e.id}">
                 <div class="wargame-injected-header">
                   <strong>${escapeHtml(e.title)}</strong>
                   <span class="status-tag is-warn">${escapeHtml(e.category)}</span>
-                  <button type="button" class="quiet-button wargame-del-btn" data-action="remove-wargame-event" data-turn-number="${currentTurn.turnNumber}" data-injection-id="${e.id}" title="撤回此事件">✕ 撤回</button>
+                  <span class="badge" style="font-size:10px; background:rgba(56,189,248,0.15); color:#38bdf8;">
+                    ${e.targetSide === "red" ? "影响红方" : e.targetSide === "blue" ? "影响蓝方" : "全局影响"}
+                  </span>
+                  ${displayTurn.canInjectEvents ? `
+                    <button type="button" class="quiet-button wargame-del-btn" data-action="remove-wargame-event" data-turn-number="${currentTurn.turnNumber}" data-injection-id="${e.id}" title="撤回此事件">✕ 撤回</button>
+                  ` : ""}
                 </div>
                 <p>${escapeHtml(e.detail)}</p>
               </article>
             `).join("")}
           </div>
 
-          <!-- 预置事件卡库快捷注入 -->
-          <div class="wargame-card-library-section">
-            <div class="wargame-library-title"><strong>预置扰动事件卡库 (点击一键注入)：</strong></div>
-            <div class="wargame-card-library-grid">
-              ${wargame.eventCardLibrary.slice(0, 6).map((card) => `
-                <div class="wargame-preset-card">
-                  <div class="wargame-preset-card-head">
-                    <b>${escapeHtml(card.title)}</b>
-                    <small>${escapeHtml(card.category)}</small>
+          ${displayTurn.canInjectEvents ? `
+            <!-- 预置事件卡库快捷注入 -->
+            <div class="wargame-card-library-section">
+              <div class="wargame-library-title"><strong>预置扰动事件卡库 (点击一键注入)：</strong></div>
+              <div class="wargame-card-library-grid">
+                ${wargame.eventCardLibrary.slice(0, 6).map((card) => `
+                  <div class="wargame-preset-card">
+                    <div class="wargame-preset-card-head">
+                      <b>${escapeHtml(card.title)}</b>
+                      <small>${escapeHtml(card.category)}</small>
+                    </div>
+                    <p>${escapeHtml(card.suggestedImpact)}</p>
+                    <button type="button" class="quiet-button wargame-inject-btn" data-action="inject-wargame-card" data-turn-number="${currentTurn.turnNumber}" data-card-id="${card.id}">
+                      + 注入本回合
+                    </button>
                   </div>
-                  <p>${escapeHtml(card.suggestedImpact)}</p>
-                  <button type="button" class="quiet-button wargame-inject-btn" data-action="inject-wargame-card" data-turn-number="${currentTurn.turnNumber}" data-card-id="${card.id}">
-                    + 注入本回合
-                  </button>
-                </div>
-              `).join("")}
+                `).join("")}
+              </div>
             </div>
-          </div>
 
-          <!-- 自定义事件注入输入折叠 -->
-          <details class="wargame-custom-card-details">
-            <summary class="quiet-button">＋ 自定义战场扰动事件</summary>
-            <div class="wargame-custom-card-form">
-              <input type="text" class="wargame-input" id="customCardTitle" placeholder="事件标题（如：无人艇侦察浮标脱网）" />
-              <input type="text" class="wargame-input" id="customCardCategory" placeholder="扰动类别（如：无人自主系统）" />
-              <textarea class="wargame-textarea" id="customCardDetail" rows="2" placeholder="事件详情与潜在影响..."></textarea>
-              <button type="button" class="quiet-button" data-action="add-custom-wargame-card" data-turn-number="${currentTurn.turnNumber}">
-                注入自定义事件
-              </button>
-            </div>
-          </details>
+            <!-- 自定义事件注入输入折叠 -->
+            <details class="wargame-custom-card-details">
+              <summary class="quiet-button">＋ 自定义战场扰动事件</summary>
+              <div class="wargame-custom-card-form">
+                <input type="text" class="wargame-input" id="customCardTitle" placeholder="事件标题（如：无人艇侦察浮标脱网）" />
+                <input type="text" class="wargame-input" id="customCardCategory" placeholder="扰动类别（如：无人自主系统）" />
+                <textarea class="wargame-textarea" id="customCardDetail" rows="2" placeholder="事件详情与潜在影响..."></textarea>
+                <button type="button" class="quiet-button" data-action="add-custom-wargame-card" data-turn-number="${currentTurn.turnNumber}">
+                  注入自定义事件
+                </button>
+              </div>
+            </details>
+          ` : ""}
         </section>
 
         <!-- 栏 3：导演部裁决工作台 -->
@@ -494,20 +548,26 @@ export function renderWargameTurnsView(state) {
           <div class="wargame-advice-panel">
             <div class="wargame-advice-head">
               <strong>导调裁决建议：</strong>
-              <button type="button" class="quiet-button" data-action="request-wargame-adjudication-advice" data-turn-number="${currentTurn.turnNumber}">
-                ⚡ 获取导调裁决建议
-              </button>
+              ${displayTurn.canAdjudicate ? `
+                <button type="button" class="quiet-button" data-action="request-wargame-adjudication-advice" data-turn-number="${currentTurn.turnNumber}">
+                  ⚡ 获取导调裁决建议
+                </button>
+              ` : `
+                <small style="color:#94a3b8;">(由导演部主导生成)</small>
+              `}
             </div>
             ${currentTurn.adjudication?.aiAdvice ? `
               <div class="wargame-advice-body">
                 <p>${escapeHtml(currentTurn.adjudication.aiAdvice)}</p>
-                <button type="button" class="quiet-button wargame-adopt-btn" data-action="adopt-wargame-advice" data-turn-number="${currentTurn.turnNumber}">
-                  采纳填入裁决 ➔
-                </button>
+                ${displayTurn.canAdjudicate ? `
+                  <button type="button" class="quiet-button wargame-adopt-btn" data-action="adopt-wargame-advice" data-turn-number="${currentTurn.turnNumber}">
+                    采纳填入裁决 ➔
+                  </button>
+                ` : ""}
               </div>
             ` : `
               <div class="wargame-empty-state">
-                点击上方按钮，系统将根据双方意图与注入事件，生成宏观对抗机理建议。
+                ${displayTurn.canAdjudicate ? "点击上方按钮，系统将根据双方意图与注入事件，生成宏观对抗机理建议。" : "等待导演部发起裁决推导…"}
               </div>
             `}
           </div>
@@ -515,16 +575,20 @@ export function renderWargameTurnsView(state) {
           <!-- 裁决输入表单 -->
           <div class="wargame-adjudication-form">
             <label><strong>裁决结论：</strong></label>
-            <input type="text" class="wargame-input" id="wargameOutcome" placeholder="如：蓝方保持局部感知优势，红方佯动受挫但牵制了主力预警..." value="${escapeHtml(currentTurn.adjudication?.outcome || "")}" />
+            <input type="text" class="wargame-input" id="wargameOutcome" placeholder="${displayTurn.canAdjudicate ? "如：蓝方保持局部感知优势，红方佯动受挫但牵制了主力预警..." : "等待导演部裁决结论公布"}" value="${escapeHtml(currentTurn.adjudication?.outcome || "")}" ${displayTurn.canAdjudicate ? "" : "readonly style='background:rgba(2,6,23,0.5); color:#94a3b8;'"} />
 
             <label style="margin-top: 10px; display: block;"><strong>对抗因果机理与体系韧性阐释：</strong></label>
-            <textarea class="wargame-textarea" id="wargameRationale" rows="5" placeholder="阐释态势演进机理：攻防双方因何种协同机制或扰动产生此结果？对后续作战阶段有何影响？">${escapeHtml(currentTurn.adjudication?.rationale || "")}</textarea>
+            <textarea class="wargame-textarea" id="wargameRationale" rows="5" placeholder="${displayTurn.canAdjudicate ? "阐释态势演进机理：攻防双方因何种协同机制或扰动产生此结果？对后续作战阶段有何影响？" : "等待导演部对抗机理阐释公布"}" ${displayTurn.canAdjudicate ? "" : "readonly style='background:rgba(2,6,23,0.5); color:#94a3b8;'"} >${escapeHtml(currentTurn.adjudication?.rationale || "")}</textarea>
           </div>
 
           <div class="wargame-pane-footer">
-            <button type="button" class="primary-btn" data-action="save-wargame-adjudication" data-turn-number="${currentTurn.turnNumber}">
-              ✓ 保存并确认本回合裁决
-            </button>
+            ${displayTurn.canAdjudicate ? `
+              <button type="button" class="primary-btn" data-action="save-wargame-adjudication" data-turn-number="${currentTurn.turnNumber}">
+                ✓ 保存并确认本回合裁决
+              </button>
+            ` : `
+              <small style="color:#64748b;">裁决权归属导演部席位</small>
+            `}
           </div>
         </section>
       </div>

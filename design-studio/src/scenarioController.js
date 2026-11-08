@@ -11,6 +11,7 @@ import {
   generateLocalAdjudicationAdvice
 } from "./wargameTurnStore.js";
 import { requestWargameAdjudication } from "./wargameClient.js";
+import { resolveUserPerspective } from "./wargamePerspectiveFilter.js";
 
 export function createScenarioController({ getState, render, notify, invalidateValidation, syncScenario }) {
   function ensureScenarioInitialized(state) {
@@ -40,6 +41,20 @@ export function createScenarioController({ getState, render, notify, invalidateV
         return true;
       }
 
+      if (action === "switch-wargame-perspective") {
+        const targetPerspective = source?.dataset?.perspective;
+        if (!targetPerspective) return true;
+        const perm = resolveUserPerspective(state.collaboration?.session);
+        if (!perm.canSwitch && targetPerspective !== perm.defaultPerspective) {
+          notify(`当前协同身份（${perm.roleName}）无权切换推演视角`);
+          return true;
+        }
+        state.wargamePerspective = targetPerspective;
+        notify(`已切换至【${targetPerspective === "red" ? "红方" : targetPerspective === "blue" ? "蓝方" : "导演部"}】推演视角`);
+        render();
+        return true;
+      }
+
       if (action === "select-wargame-turn") {
         const turnNum = Number(source?.dataset?.turnNumber) || 1;
         state.wargameCurrentTurnIndex = turnNum;
@@ -50,17 +65,29 @@ export function createScenarioController({ getState, render, notify, invalidateV
       if (action === "save-wargame-intent") {
         ensureScenarioInitialized(state);
         const turnNum = Number(source?.dataset?.turnNumber) || state.wargameCurrentTurnIndex || 1;
-        const redText = document.getElementById("wargameRedIntent")?.value || "";
-        const blueText = document.getElementById("wargameBlueIntent")?.value || "";
-        const redRefs = Array.from(document.querySelectorAll("input[name='redActivityRefs']:checked")).map((el) => el.value);
-        const blueRefs = Array.from(document.querySelectorAll("input[name='blueActivityRefs']:checked")).map((el) => el.value);
+        const perm = resolveUserPerspective(state.collaboration?.session);
+        const activePerspective = state.wargamePerspective || perm.defaultPerspective;
 
         let w = normalizeWargameState(state.scenario.wargame, { phases: state.phaseAction?.phases });
-        w = submitTurnIntent(w, turnNum, "red", { text: redText, activityRefs: redRefs });
-        w = submitTurnIntent(w, turnNum, "blue", { text: blueText, activityRefs: blueRefs });
+        const existingTurn = w.turns.find((t) => t.turnNumber === turnNum);
+
+        // 防情报迷雾脱敏文本覆写真实数据：红方视角只存红方，蓝方视角只存蓝方，导演部皆可存
+        if (activePerspective === "red" || activePerspective === "director") {
+          const redElem = document.getElementById("wargameRedIntent");
+          const redText = redElem ? redElem.value : (existingTurn?.intents?.red?.text || "");
+          const redRefs = Array.from(document.querySelectorAll("input[name='redActivityRefs']:checked")).map((el) => el.value);
+          w = submitTurnIntent(w, turnNum, "red", { text: redText, activityRefs: redRefs });
+        }
+        if (activePerspective === "blue" || activePerspective === "director") {
+          const blueElem = document.getElementById("wargameBlueIntent");
+          const blueText = blueElem ? blueElem.value : (existingTurn?.intents?.blue?.text || "");
+          const blueRefs = Array.from(document.querySelectorAll("input[name='blueActivityRefs']:checked")).map((el) => el.value);
+          w = submitTurnIntent(w, turnNum, "blue", { text: blueText, activityRefs: blueRefs });
+        }
+
         state.scenario.wargame = w;
         void syncScenario?.(state.scenario, { source: "wargame-intent" });
-        notify(`第 ${turnNum} 回合红蓝作战概念意图已保存`);
+        notify(`第 ${turnNum} 回合作战意图已保存`);
         render();
         return true;
       }

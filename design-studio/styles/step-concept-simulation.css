@@ -1027,3 +1027,20 @@
   display: flex;
   justify-content: flex-end;
 }
+
+/* ==========================================================================
+   Wargame Perspective Switcher & Fog of War (M7-T7.5)
+   ========================================================================== */
+.wargame-perspective-bar {
+  transition: all 0.2s ease;
+}
+
+.wargame-intent-box.is-masked {
+  background: rgba(15, 23, 42, 0.45);
+  border-color: rgba(148, 163, 184, 0.2);
+  opacity: 0.88;
+}
+
+.wargame-intent-box.is-masked textarea {
+  letter-spacing: 0.2px;
+}

@@ -260,7 +260,7 @@
 | **T7.2 对抗循环** | 红队提出对手反制，我方应对或接受风险闭环，生成风险反制章 | **雏形** | M6-T6.2 已建立红队意见（`findings`）、状态机（`accepted/rejected/revised`）与要素绑定，但未形成对手反制（countermeasure）与我方应对（response）闭环对偶结构 | `design-studio/src/redTeamStore.js`, `redTeamController.js`, `redTeamView.js`, `reportBuilder.js` | **补全增强**：在已有红队审查框架上扩展对抗链条与未闭合看板 |
 | **T7.3 战例借鉴** | 知识库检索历史相似战例，生成可借鉴点/不适用点对照卡并引用 | **雏形** | M2 知识检索（`knowledge.js`）与灵感建议（`inspirationStore.js`）已具备检索与推荐能力，但缺少战例对照卡片（借鉴点/不适用点）数据契约与卡片视图 | `shared/knowledge.js`, `design-studio/src/inspirationStore.js`, `inspirationView.js` | **补全增强**：复用检索与灵感卡片，接入战例对比模板与论证链引用 |
 | **T7.4 战法库** | 已确认战法跨项目复用库，存入/复制起点 | **已完成** | 独立持久化仓储 `server/tacticsLibraryStore.mjs`（`data/tactics-library.json`）、路由 `GET/POST/DELETE /api/tactics-library`、前端弹窗与深拷贝绝对解耦复制 | `server/tacticsLibraryStore.mjs`, `design-studio/src/tacticsLibraryView.js`, `tacticsLibraryClient.js` | **已完成**（2026-11-09） |
-| **T7.5 红蓝分立与信息隔离** | 导演部/红方/蓝方视角与信息过滤，协同权限映射 | **雏形** | 已有协作身份与角色框架（`projectCollaborationPolicy.mjs`，`collaborationController.js`），但未与想定中的红/蓝/导演部视角及要素可见性过滤联动 | `server/projectCollaborationPolicy.mjs`, `design-studio/src/scenarioStore.js`, `scenarioView.js` | **补全增强**：建立视角映射与要素过滤管道 |
+| **T7.5 红蓝分立与信息隔离** | 导演部/红方/蓝方视角与信息过滤，协同权限映射 | **已完成** | 协同角色映射（`lead` -> 导演部全知，`researcher` -> 红方，`reviewer` -> 蓝方）、情报迷雾脱敏过滤管道与防覆写保存 | `design-studio/src/wargamePerspectiveFilter.js`, `scenarioView.js`, `scenarioController.js` | **已完成**（2026-11-09） |
 | **T7.6 推演回合与导调** | 回合制推进（意图提交、事件注入卡库、导调裁决建议、进入下回合） | **雏形** | 已有静态想定部署（`scenarioStore.js`）与外部仿真结果适配（`simulationAdapter.js`），但缺少回合交互循环、预置事件卡库与导调裁决 | `design-studio/src/scenarioStore.js`, `scenarioView.js`, `simulationAdapter.js`, `simulationRecycleStore.js` | **补全增强**：在想定与仿真适配层扩展回合制推进引擎与导调看板 |
 | **T7.7 推演日志与时间线** | 回合推演流水线记录与 what-if 分支派生 | **雏形** | 已有推演结果记录与快照分支能力（`modelSnapshotStore.js`），但无回合级时序流水线（Turn Timeline）呈现与一键派生 | `design-studio/src/simulationRecycleStore.js`, `modelSnapshotStore.js`, `scenarioView.js` | **补全增强**：串联回合日志与快照派生 |
 | **T7.8 复盘生成** | 根据推演日志自动起草复盘报告（`wargame-review`） | **可用** | M4 报告引擎与 M6-T6.3 已支持 `wargame-review` 模板、阶段成效表格与活动执行偏差回填，契约已全闭环 | `design-studio/src/reportBuilder.js`, `simulationRecycleStore.js` | **无缝接驳**：直接串联回合日志即可，无需重建 |
@@ -294,9 +294,9 @@
 
 #### B. 想定推演线
 
-**T7.5 红蓝分立与信息隔离**
-- 想定中区分导演部、红方、蓝方三类视角。各方只看到本方和公开信息，导演部看到全部。
-- 复用现有的协同身份与权限（`collaboration*`、`projectCollaborationPolicy.mjs`）。动手前先停下，说明权限模型如何映射。
+- [x] **T7.5 红蓝分立与信息隔离**（2026-11-09 已落地）
+- 想定中区分导演部（全知）、红方（主攻概念视角）、蓝方（对手反制视角）三类视角。红方蓝方互相受情报迷雾遮蔽，仅看到本方意图与定向事件；导演部掌握全局全息态势。
+- 复用现有的协同身份与权限（`collaboration*`、`projectCollaborationPolicy.mjs`）。提供前端视角切换控制器、意图防覆写保护与情报迷雾高亮展示。
 
 - [x] **T7.6 推演回合与导调（最高优先）**（2026-11-09 已落地）
 - 推演按"回合"推进。每个回合的流程：
