@@ -104,6 +104,7 @@
         </div>
 
         <div class="menubar-actions">
+          <button id="commandPaletteBtn" class="quiet-button command-palette-trigger" type="button" data-action="open-command-palette" title="快速查找与跳转 (Ctrl+K)"><span>⌘ 搜索 / 命令</span><kbd>Ctrl K</kbd></button>
           <button id="undoTransactionBtn" class="quiet-button undo-transaction-btn" type="button" data-action="undo-last-transaction" disabled title="暂无可撤销的操作">撤销</button>
           <button id="reducedMotionBtn" class="reduced-motion-toggle" type="button" role="switch" data-action="toggle-reduced-motion" aria-checked="false" title="开启减少动效模式，禁用非必要动画与转场"><span class="reduced-motion-track" aria-hidden="true"></span><span>减少动效</span></button>
           <button id="workflowTestModeBtn" class="workflow-test-mode-toggle" type="button" role="switch" data-action="toggle-workflow-test-mode" aria-checked="false" title="启用测试模式，所有阶段可自由访问"><span class="workflow-test-mode-track" aria-hidden="true"></span><span>测试模式</span></button>
@@ -192,6 +193,7 @@
       </div>
     </dialog>
     <dialog id="customDirectionDialog" class="direction-dialog"><form id="customDirectionForm" method="dialog" class="custom-direction-form"><header><h2>新增方向</h2><button class="quiet-button" type="button" data-action="close-custom-direction">关闭</button></header><label><span>名称</span><input name="title" maxlength="80" required></label><label><span>概述</span><textarea name="text" rows="3" maxlength="500" required></textarea></label><label><span>研究依据</span><textarea name="basis" rows="3" maxlength="500" required></textarea></label><div class="editor-actions"><button class="quiet-button" type="button" data-action="close-custom-direction">取消</button><button type="submit">保存方向</button></div></form></dialog>
+    <dialog id="commandPaletteDialog" class="command-palette-dialog" aria-label="全局命令面板"></dialog>
     <dialog id="ov1Dialog" class="ov1-dialog" aria-label="高层作战概念图编辑窗口"></dialog>
     <div class="toast" id="toast" role="status"></div>
     <input id="knowledgeVaultInput" type="file" accept=".md,.markdown,.txt" webkitdirectory directory multiple hidden>

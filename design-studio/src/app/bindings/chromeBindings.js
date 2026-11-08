@@ -302,7 +302,17 @@ export function bindAiModalsChrome(ctx) {
   }
 
   document.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && (event.key === "k" || event.key === "K")) {
+      event.preventDefault();
+      handleAction("toggle-command-palette");
+      return;
+    }
     if (event.key !== "Escape") return;
+    if (state.commandPaletteOpen) {
+      event.preventDefault();
+      handleAction("close-command-palette");
+      return;
+    }
     const overlay = $("#workflowModeOverlay");
     if (overlay && !overlay.hidden && overlay.classList.contains("is-visible")) {
       const busy = getBusyOverlayState();

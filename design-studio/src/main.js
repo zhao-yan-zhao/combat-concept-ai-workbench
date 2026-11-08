@@ -1,5 +1,6 @@
 import { directions, project, views, workflowPhases } from "./data.js";
 import { createInitialWorkbenchState } from "./app/createInitialState.js";
+import { createCommandPaletteController } from "./commandPaletteController.js";
 import { workflowPrimaryStepIds } from "./data.js";
 import { $, downloadArtifact as downloadArtifactHelper, downloadBlob, escapeHtml, initNotificationCapsule, setBackgroundTaskState, showToast, writePrintableReport as writePrintableReportHelper } from "./app/domUtils.js";
 import { completedWorkflowStage, currentProjectTitle as currentProjectTitleFor, currentWorkflow as currentWorkflowFor, getWorkflowStageIncompleteReasons, nextWorkflowStage, renderWorkflowGate as renderWorkflowGateFor, resolveWorkflowGateContext } from "./app/workflowGate.js";
@@ -323,6 +324,14 @@ const {
   exportModelComparison,
   hydrateProjectDirectory,
   completeCurrentWorkflowStage: completeWorkflowStage
+});
+
+const commandPaletteController = createCommandPaletteController({
+  state,
+  $,
+  showToast,
+  navigateToResearchView: (view) => navigateToResearchView(view),
+  handleAction: (action, source) => handleAction(action, source)
 });
 
 let textCompositionActive = false;
@@ -719,6 +728,7 @@ function select(type, id) {
 }
 
 async function handleAction(action, source = null) {
+  if (commandPaletteController.handleAction(action)) return;
   if (source && source.closest && action !== "close-provenance-popover") {
     source.closest(".derived-provenance-dropdown")?.removeAttribute("open");
   }
@@ -2079,6 +2089,8 @@ if (typeof window !== "undefined") {
       }
     }
   } catch {}
+
+  commandPaletteController.bindEvents();
 
   window.__workbench = {
     getState: () => state,

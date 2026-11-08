@@ -730,6 +730,34 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：143/143 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
+### 2026-11-08 T3.7 真实落地：全局命令面板 (Ctrl+K)
+
+- **实施内容**：
+  1. 全局命令面板核心视图与要素检索设计 (`design-studio/src/commandPaletteView.js`)：
+     - `VIEW_COMMANDS`：收录 6 步主线步骤（简报、阶段行动、兵力任务、OV-5机制、OV-1概念图、推演想定）及全部关联子视图（作战任务、OV-1b、OV-2/OV-3、OV-4、OV-6b、规则库、设计验证、结构核对台等）；
+     - `ACTION_COMMANDS`：收录减少动效切换、AI配置、提示词目录、协同管理、版本归档、战法示例载入、想定示例载入等系统级常用操作；
+     - `extractProjectElements`：动态提取当前项目的作战任务、时序阶段、概念兵力编组、OV-5 活动节点以及 OV-6b 状态机，赋能直接按要素名称快速跳转与聚焦；
+     - `filterCommands`：支持空 query 默认列出常用项、支持多词空格拆分模糊匹配、拼音/英文大小写不敏感检索；
+     - `renderCommandPaletteHtml`：生成结构化分类分组、无障碍 `role="option"`、键盘高亮提示与快捷键徽章；
+  2. 控制器与事件响应流 (`design-studio/src/commandPaletteController.js`)：
+     - 管理模态对话框生命周期（`open` / `close` / `toggle`）；
+     - 支持方向键 `ArrowUp` / `ArrowDown` 环形切换选中条目并自动滚动至可视区；按 `Enter` 键直接执行跳转或调用系统操作；按 `Escape` 或点击遮罩层快速退出；
+     - 完全复用现有 `navigateToResearchView` 与 `handleAction` 分发机制，不新增底层私有行为契约；
+  3. 顶栏入口与全局键盘快捷键接入：
+     - `design-studio/index.html`：在顶栏操作区新增快捷按钮 `id="commandPaletteBtn"`（提示 `Ctrl K`），底部挂载 `<dialog id="commandPaletteDialog">`；
+     - `design-studio/src/app/bindings/chromeBindings.js`：全局监听 `Ctrl+K` 与 `Cmd+K` 唤起命令面板，监听 `Escape` 键优先关闭命令面板；
+     - `design-studio/src/main.js`：接入 `commandPaletteController` 实例化与动作分发；
+  4. 专用样式设计与动效兼容 (`design-studio/styles/transitions-modals.css`)：
+     - 优雅浮层、毛玻璃背景遮罩、键盘按键 `<kbd>` 胶囊高亮、分类徽章；完全受全局减少动效规则管辖；
+  5. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-command-palette.mjs`：断言导航覆盖、要素动态提取、模糊过滤、HTML结构以及 `index.html` 与 `chromeBindings.js` 的快捷键契约；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 组。
+- **验证命令与结果**：
+  - `node scripts/run-checks.mjs ui-static`：25/25 PASS (100%)
+  - `node scripts/run-checks.mjs all`：144/144 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+
 
 
 

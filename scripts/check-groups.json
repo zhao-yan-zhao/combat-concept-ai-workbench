@@ -123,7 +123,8 @@
     "check-citation-provenance-ui.mjs",
     "check-glossary-coverage.mjs",
     "check-reduced-motion-and-disclosure.mjs",
-    "check-empty-states-actionable.mjs"
+    "check-empty-states-actionable.mjs",
+    "check-command-palette.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",
