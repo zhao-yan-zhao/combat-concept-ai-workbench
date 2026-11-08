@@ -241,8 +241,8 @@
 
 ### M6 研究闭环（按需启动）
 
-- **T6.1 多方案分支**：基于快照派生方案 B/C，用 `modelComparisonBuilder` 并排对比，用 `schemeScoring` 比较评分。
-- **T6.2 红队意见追踪**：每条意见关联具体要素，带"接受 / 驳回（需填理由）/ 已修订"状态，结果进入报告。
+- [x] **T6.1 多方案分支**：基于快照派生方案 B/C，用 `modelComparisonBuilder` 并排对比，用 `schemeScoring` 比较评分。（2026-11-08 已落地）
+- [x] **T6.2 红队意见追踪**：每条意见关联具体要素，带"接受 / 驳回（需填理由）/ 已修订"状态，结果进入报告。（2026-11-08 已落地）
 - **T6.3 推演结果回收**：仿真适配器的结果回填到阶段与活动，生成偏差清单，进入复盘模板。
 - **T6.4 一致性问题一键定位**：每个问题都提供跳转定位；能自动修的给出修复建议，经人工确认后应用，并走 M1 的事务包装。
 
@@ -900,34 +900,36 @@ node scripts/smoke-ui.mjs
 > **M5 里程碑（AI 质量与部署）全量圆满收官！**
 > 5 项任务卡全部 100% 落地闭环（T5.1 黄金用例库 30 条、T5.2 Schema 结构校验与重试、T5.3 评测脚本与指标引擎、T5.4 本地离线模型与降级手工模板、T5.5 提示词版本历史与差异回退）。
 
-### 2026-11-08 T6.1 真实落地：多方案分支（基于快照派生方案B/C、排行榜并排对比与定量评分）
+### 2026-11-08 T6.2 真实落地：红队意见追踪（要素关联、状态机与闭环率导出）
 
 - **实施内容**：
-  1. 快照派生多方案分支模型扩展 (`design-studio/src/modelSnapshotStore.js`)：
-     - 新增导出 `forkModelSnapshot(sourceSnapshotId, { label, direction }, snapshots)`；
-     - 基于目标基准快照深度克隆全部 DM2 模型要素（简报、总体图、活动分解、OODA、时序、规则、状态机、想定与验证诊断）；
-     - 分配新 ID 与递增编号，标记 `forkedFrom` 与 `forkedFromLabel` 溯源指针，实现方案 A/B/C 的独立派生与演化；
-  2. 多方案综合评分与排行榜引擎 (`design-studio/src/schemeScoring.js`)：
-     - 新增导出 `rankMultiSchemeSnapshots(snapshots, settings)`；
-     - 基于 8 项关键准则（任务适配度、体系协同度、可实施性、风险可控性、资源可承受性、时间窗口适配度、对手反制韧性、成果表达完整度）对多方案统一打分；
-     - 自动降序排序并输出排名、`isLeader` 优选推荐标记、`gapToLeader` 领先/落后分值差与人工复核覆盖；
-  3. 报告构建与多方案比对导出扩展 (`design-studio/src/modelComparisonBuilder.js` & `modelCompare.js`)：
-     - 为两两对比数据结构附加 `multiScheme` 汇总看板；
-     - 导出 Markdown / JSON 自动加入 `## 多方案综合比较排行榜` 章节，呈现多方案编号、方向特征、定量总分与差距；
-     - 在 `modelCompare.js` 中增加模型空属性访问保护（`nodes?.length`、`edges?.length`）；
-  4. 工作台前端界面与交互绑定升级 (`design-studio/src/modelSnapshotView.js`, `modelSnapshotController.js`, `styles/ov5-mechanism.css`)：
-     - 快照列表项增加 `[派生分支]` 按钮，并呈现 `派生自: M001` 来源徽章；
-     - 当存在 $\ge 2$ 个快照时，渲染“多方案综合评分看板 (并排对比)”：卡片式展示各方案总分、推荐优选 Badge、差距提示以及关键维度分项柱状条；
-     - 控制器响应 `[data-model-snapshot-fork]`：弹窗输入新分支名称，派生后自动触发 SQLite 服务端同步（`syncSnapshot`），并自动拉起源方案与新方案的并排对比；
-  5. 专用自动化回归测试与基线纳入：
-     - 新建 `scripts/check-m6-multi-scheme-branching.mjs`：全量覆盖快照分支派生、独立性克隆、多方案综合打分排行榜、Markdown 报告导出契约与前端视图控制器绑定；
+  1. 红队意见数据模型与处置规范化 (`design-studio/src/redTeamStore.js`)：
+     - 规范化 `findings` 条目结构，新增 `targetElement`（关联具体作战要素，含 `type`、`id`、`name`）、`status`（`pending | accepted | rejected | revised`）、`rejectionRationale`（驳回理由）与 `disposedAt`；
+     - 新增导出 `updateFindingDisposition(validationResult, findingId, { status, rejectionRationale })`：处置状态流转，且对 `rejected` 状态强制执行驳回理由非空校验；
+     - 新增导出 `updateFindingTargetElement(validationResult, findingId, targetElement)`：支持意见与特定作战要素进行溯源绑定；
+  2. 控制器交互与审计留痕 (`design-studio/src/redTeamController.js` & `main.js`)：
+     - 控制器响应 `accept-red-team-finding`、`revise-red-team-finding`、`reset-red-team-finding`；
+     - 响应 `reject-red-team-finding` 时弹出对话框收集必填驳回理由，留存审计痕迹；
+     - 状态变更后自动调用 `syncValidation` 同步持久化并弹出操作反馈；
+     - `main.js` 中将点击源节点 `source` 透传至 `redTeamController.handleAction(action, source)`；
+  3. 验证视图与闭环看板升级 (`design-studio/src/validationView.js` & `styles/dodaf-views.css`)：
+     - 在验证评估界面顶部呈现“审阅处置闭环看板”：计算闭环率（已处置 / 总数）、展示处置进度条和四状态药丸计数；
+     - 意见卡片增加状态 Badge、关联要素标签（`🎯 关联要素：[类型] 名称`）、驳回理由警告框，以及一键处置动作组；
+  4. 报告构建与结构化导出追踪 (`design-studio/src/reportBuilder.js`)：
+     - Markdown 报告导出中注入“红队质询与审阅处置追踪”章节，展示处置闭环率，并为每条意见标注 `【已修订】/【已接受】/【已驳回】`、关联要素与驳回理由；
+     - XML 报告导出扩展 `<finding status="..." targetType="..." targetName="...">` 及 `<rejectionRationale>` 节点；
+  5. 环境健壮性加固 (`design-studio/src/validationStore.js` & `scripts/smoke-ui.mjs`)：
+     - 为 `persistValidation` 和 `clearValidation` 增加环境降级保护（防 Node 纯单元测试无 `localStorage` 报错）；
+     - 为 CDP 冒烟测试增加视图加载自适应轮询等待，彻底消除时序竞态；
+  6. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m6-red-team-tracking.mjs`：全量覆盖红队意见状态流转、驳回理由强校验、要素关联、统计指标计算、报告追踪导出与前端视图契约；
      - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
 - **验证命令与结果**：
-  - `node scripts/check-m6-multi-scheme-branching.mjs`：100% PASS
-  - `node scripts/check-quantitative-comparison.mjs`：100% PASS
-  - `node scripts/run-checks.mjs ui-static`：35/35 PASS (100%)
-  - `node scripts/run-checks.mjs all`：154/154 PASS (100%)
+  - `node scripts/check-m6-red-team-tracking.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：36/36 PASS (100%)
+  - `node scripts/run-checks.mjs all`：155/155 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 
 
 

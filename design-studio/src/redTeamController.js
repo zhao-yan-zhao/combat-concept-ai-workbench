@@ -1,6 +1,6 @@
 import { selectEvidenceForAi } from "./evidenceSelectionStore.js";
 import { generateRedTeamReview, getRedTeamHealth } from "./redTeamClient.js";
-import { applyRedTeamReview, createLocalRedTeamReview } from "./redTeamStore.js";
+import { applyRedTeamReview, createLocalRedTeamReview, updateFindingDisposition } from "./redTeamStore.js";
 
 export function createRedTeamController({ getState, render, notify, syncValidation }) {
   return {
@@ -9,14 +9,55 @@ export function createRedTeamController({ getState, render, notify, syncValidati
       void refreshHealth(state, render, notify, false);
     },
 
-    handleAction(action) {
+    handleAction(action, element) {
+      const state = getState();
       if (action === "refresh-red-team-health") {
-        const state = getState();
         void refreshHealth(state, render, notify, true);
         return true;
       }
+      if (action === "accept-red-team-finding") {
+        const findingId = element?.dataset?.findingId || element?.closest?.("[data-finding-id]")?.dataset?.findingId || "";
+        if (!findingId || !state.validationResult) return true;
+        updateFindingDisposition(state.validationResult, findingId, { status: "accepted" });
+        void syncValidation?.(state.validationResult, { source: "disposition-accept" });
+        notify("已将红方意见标记为 [已接受]");
+        render();
+        return true;
+      }
+      if (action === "revise-red-team-finding") {
+        const findingId = element?.dataset?.findingId || element?.closest?.("[data-finding-id]")?.dataset?.findingId || "";
+        if (!findingId || !state.validationResult) return true;
+        updateFindingDisposition(state.validationResult, findingId, { status: "revised" });
+        void syncValidation?.(state.validationResult, { source: "disposition-revise" });
+        notify("已将红方意见标记为 [已修订闭环]");
+        render();
+        return true;
+      }
+      if (action === "reset-red-team-finding") {
+        const findingId = element?.dataset?.findingId || element?.closest?.("[data-finding-id]")?.dataset?.findingId || "";
+        if (!findingId || !state.validationResult) return true;
+        updateFindingDisposition(state.validationResult, findingId, { status: "pending" });
+        void syncValidation?.(state.validationResult, { source: "disposition-reset" });
+        notify("已重置红方意见状态为 [待处置]");
+        render();
+        return true;
+      }
+      if (action === "reject-red-team-finding") {
+        const findingId = element?.dataset?.findingId || element?.closest?.("[data-finding-id]")?.dataset?.findingId || "";
+        if (!findingId || !state.validationResult) return true;
+        const promptFn = typeof window !== "undefined" && typeof window.prompt === "function" ? window.prompt : null;
+        const rationale = promptFn ? promptFn("请输入驳回该红方意见的理由（必填）：") : "经推演评估，已具备备用手段覆盖该风险。";
+        if (!rationale || !String(rationale).trim()) {
+          notify("驳回失败：必须填写驳回理由");
+          return true;
+        }
+        updateFindingDisposition(state.validationResult, findingId, { status: "rejected", rejectionRationale: rationale });
+        void syncValidation?.(state.validationResult, { source: "disposition-reject" });
+        notify("已驳回该红方意见，驳回理由已留存");
+        render();
+        return true;
+      }
       if (action !== "run-red-team") return false;
-      const state = getState();
       if (!state.validationResult) {
         notify("请先运行设计验证，再生成红方质询");
         return true;

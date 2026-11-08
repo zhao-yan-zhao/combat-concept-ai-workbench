@@ -239,14 +239,21 @@ try {
   });
 
   await sendCommand("Page.navigate", { url: projectUrl });
-  await sleep(2500);
-
-  const pageInfo = await evalInPage(`(() => ({
-    title: document.title,
-    viewRoot: Boolean(document.querySelector('#viewRoot')),
-    renderedView: document.querySelector('#viewRoot')?.dataset?.renderedView,
-    testModeBtn: document.querySelector('#workflowTestModeBtn')?.getAttribute('aria-checked')
-  }))()`);
+  
+  // Wait adaptively for page bootstrap and initial view render
+  let pageInfo = null;
+  for (let attempt = 0; attempt < 25; attempt++) {
+    await sleep(400);
+    pageInfo = await evalInPage(`(() => ({
+      title: document.title,
+      viewRoot: Boolean(document.querySelector('#viewRoot')),
+      renderedView: document.querySelector('#viewRoot')?.dataset?.renderedView,
+      testModeBtn: document.querySelector('#workflowTestModeBtn')?.getAttribute('aria-checked'),
+      isLocked: document.querySelector('#studioShell')?.classList?.contains('is-login-locked'),
+      hasProject: Boolean(window.__workbench?.state?.activeProjectId)
+    }))()`);
+    if (pageInfo.renderedView && pageInfo.hasProject) break;
+  }
   console.log("[Smoke] Initial page state:", JSON.stringify(pageInfo));
 
   // If test mode is not yet free, activate it via UI toggle
@@ -268,6 +275,7 @@ try {
       return { ok: true };
     })()`);
     if (!switchRes.ok) {
+      if (criticalErrors.length) console.log("[Smoke] Critical errors so far:", criticalErrors);
       throw new Error(`Failed to switch to mainline step [${step}]: ${switchRes.reason}`);
     }
     await sleep(800);

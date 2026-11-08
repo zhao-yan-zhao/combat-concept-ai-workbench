@@ -182,11 +182,23 @@ export function inspectDerivedOperationalViews(ov5Model, oodaModel) {
 }
 
 export function persistValidation(result) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(result));
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(result));
+    }
+  } catch {
+    // Node environment fallback
+  }
 }
 
 export function clearValidation() {
-  localStorage.removeItem(STORAGE_KEY);
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {
+    // Node environment fallback
+  }
 }
 
 function createIssue(level, title, text, sourceId) {

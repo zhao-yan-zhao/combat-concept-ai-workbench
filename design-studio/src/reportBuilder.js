@@ -994,7 +994,7 @@ function renderXmlRedTeamReview(review) {
   return [
     `    <redTeamReview mode="${xml(review.mode)}" provider="${xml(review.provider)}" model="${xml(review.model)}" generatedAt="${xml(review.generatedAt)}"${evidenceSelectionAttributes(review.evidenceSelection)}>`,
     xmlElement("summary", review.summary, 3),
-    ...(review.findings || []).map((finding) => `      <finding severity="${xml(finding.severity)}"><title>${xml(finding.title)}</title><analysis>${xml(finding.analysis)}</analysis><recommendation>${xml(finding.recommendation)}</recommendation><evidenceRefs>${(finding.evidenceRefs || []).map((ref) => `<reference>${xml(ref)}</reference>`).join("")}</evidenceRefs></finding>`),
+    ...(review.findings || []).map((finding) => `      <finding severity="${xml(finding.severity)}" status="${xml(finding.status || "pending")}" targetType="${xml(finding.targetElement?.type || "activity")}" targetName="${xml(finding.targetElement?.name || "")}"><title>${xml(finding.title)}</title><analysis>${xml(finding.analysis)}</analysis><recommendation>${xml(finding.recommendation)}</recommendation>${finding.status === "rejected" && finding.rejectionRationale ? `<rejectionRationale>${xml(finding.rejectionRationale)}</rejectionRationale>` : ""}<evidenceRefs>${(finding.evidenceRefs || []).map((ref) => `<reference>${xml(ref)}</reference>`).join("")}</evidenceRefs></finding>`),
     "    </redTeamReview>"
   ];
 }
@@ -1319,17 +1319,40 @@ function renderRedTeamReviewSection(validation) {
   const provider = review.mode === "ai"
     ? `AI 审阅${review.model ? `（${inline(review.model)}）` : ""}`
     : "本地规则审阅";
+  const findings = review.findings || [];
+  const acceptedCount = findings.filter((f) => f.status === "accepted").length;
+  const revisedCount = findings.filter((f) => f.status === "revised").length;
+  const rejectedCount = findings.filter((f) => f.status === "rejected").length;
+  const closedCount = acceptedCount + revisedCount + rejectedCount;
+  const rate = findings.length ? Math.round((closedCount / findings.length) * 100) : 100;
+
+  const statusLabelMap = {
+    revised: "已修订",
+    accepted: "已接受",
+    rejected: "已驳回",
+    pending: "待处置"
+  };
+
   return [
     `- 审阅类型：${provider}`,
     `- 生成时间：${inline(review.generatedAt)}`,
     ...evidenceSelectionLines(review.evidenceSelection),
     `- 审阅摘要：${inline(review.summary)}`,
-    ...(review.findings.length ? review.findings.flatMap((finding) => [
-      `#### [${inline(finding.severity)}] ${inline(finding.title)}`,
-      `- 分析：${inline(finding.analysis)}`,
-      `- 建议：${inline(finding.recommendation)}`,
-      `- 证据：${finding.evidenceRefs.length ? finding.evidenceRefs.map(inline).join("、") : "未引用"}`
-    ]) : ["- 未返回具体质询项。"])
+    `- 意见闭环率：${rate}%（共 ${findings.length} 条质询：已修订 ${revisedCount}、已接受 ${acceptedCount}、已驳回 ${rejectedCount}）`,
+    ...(findings.length ? findings.flatMap((finding) => {
+      const statusText = statusLabelMap[finding.status] || "待处置";
+      const targetText = finding.targetElement?.name ? `（关联要素：${inline(finding.targetElement.name)}）` : "";
+      const baseLines = [
+        `#### [${inline(finding.severity)}] 【${statusText}】${inline(finding.title)} ${targetText}`,
+        `- 分析：${inline(finding.analysis)}`,
+        `- 建议：${inline(finding.recommendation)}`,
+        `- 证据：${finding.evidenceRefs.length ? finding.evidenceRefs.map(inline).join("、") : "未引用"}`
+      ];
+      if (finding.status === "rejected" && finding.rejectionRationale) {
+        baseLines.push(`- 驳回理由：${inline(finding.rejectionRationale)}`);
+      }
+      return baseLines;
+    }) : ["- 未返回具体质询项。"])
   ];
 }
 

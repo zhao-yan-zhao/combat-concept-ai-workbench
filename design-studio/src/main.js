@@ -1013,7 +1013,7 @@ async function handleAction(action, source = null) {
   if (oodaAiController.handleAction(action)) return;
   if (modelSnapshotController.handleAction(action)) return;
   if (briefController.handleAction(action)) return;
-  if (redTeamController.handleAction(action)) return;
+  if (redTeamController.handleAction(action, source)) return;
   if (deploymentController.handleAction(action)) return;
   if (conceptPlanningController.handleAction(action, source)) return;
   if (conceptMapController.handleAction(action)) return;

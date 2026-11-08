@@ -54,12 +54,83 @@ function renderRedTeamReview(result, running, health) {
     return `<section class="surface surface-pad"><div class="section-heading"><div><h2>红方质询</h2><p>基于当前模型、规则问题和 Obsidian 检索证据生成研究级对抗审阅。</p></div><button data-action="run-red-team" ${running ? "disabled" : ""}>${running ? "正在生成" : "生成红方质询"}</button></div><div class="idea-prompt"><p>${result.redTeam}</p></div>${renderRedTeamService(health)}</section>`;
   }
   const modeLabel = review.mode === "ai" ? `AI 生成${review.model ? ` · ${review.model}` : ""}` : "本地规则草案";
+  const findings = review.findings || [];
+  const acceptedCount = findings.filter((f) => f.status === "accepted").length;
+  const revisedCount = findings.filter((f) => f.status === "revised").length;
+  const rejectedCount = findings.filter((f) => f.status === "rejected").length;
+  const pendingCount = findings.filter((f) => !f.status || f.status === "pending").length;
+  const closedCount = acceptedCount + revisedCount + rejectedCount;
+  const rate = findings.length ? Math.round((closedCount / findings.length) * 100) : 100;
+
   return `
     <section class="surface surface-pad">
-      <div class="section-heading"><div><h2>红方质询</h2><p>生成时间：${new Date(review.generatedAt).toLocaleString("zh-CN", { hour12: false })}</p></div><div class="activity-toolbar"><span class="status-tag ${review.mode === "ai" ? "" : "review"}">${modeLabel}</span><button data-action="run-red-team" ${running ? "disabled" : ""}>${running ? "正在生成" : "重新生成"}</button></div></div>
+      <div class="section-heading">
+        <div>
+          <h2>红方质询与意见处置追踪</h2>
+          <p>生成时间：${new Date(review.generatedAt).toLocaleString("zh-CN", { hour12: false })}</p>
+        </div>
+        <div class="activity-toolbar">
+          <span class="status-tag ${review.mode === "ai" ? "" : "review"}">${modeLabel}</span>
+          <button data-action="run-red-team" ${running ? "disabled" : ""}>${running ? "正在生成" : "重新生成"}</button>
+        </div>
+      </div>
       <div class="idea-prompt"><p>${escapeHtml(review.summary)}</p></div>
       ${review.evidenceSelection ? `<p class="evidence-selection">${escapeHtml(formatEvidenceSelection(review.evidenceSelection))}</p>` : ""}
-      <div class="red-team-list">${review.findings.map((item) => `<article class="red-team-finding ${item.severity}"><div><strong>${escapeHtml(item.title)}</strong><span>${item.severity === "high" ? "高优先级" : item.severity === "low" ? "低优先级" : "待复核"}</span></div><p>${escapeHtml(item.analysis)}</p><p><b>建议：</b>${escapeHtml(item.recommendation)}</p>${item.evidenceRefs.length ? `<small>证据：${item.evidenceRefs.map(escapeHtml).join("、")}</small>` : ""}</article>`).join("")}</div>
+
+      <div class="red-team-tracking-summary">
+        <div class="tracking-summary-label">
+          <strong>审阅处置闭环率：${rate}%</strong>
+          <span>共 ${findings.length} 条质询 · 已闭环 ${closedCount} 条</span>
+        </div>
+        <div class="tracking-summary-pills">
+          <span class="tracking-pill revised">已修订 ${revisedCount}</span>
+          <span class="tracking-pill accepted">已接受 ${acceptedCount}</span>
+          <span class="tracking-pill rejected">已驳回 ${rejectedCount}</span>
+          <span class="tracking-pill pending">待处置 ${pendingCount}</span>
+        </div>
+      </div>
+
+      <div class="red-team-list">
+        ${findings.map((item) => {
+          const status = item.status || "pending";
+          const statusMap = {
+            revised: { label: "已修订", cls: "status-revised" },
+            accepted: { label: "已接受", cls: "status-accepted" },
+            rejected: { label: "已驳回", cls: "status-rejected" },
+            pending: { label: "待处置", cls: "status-pending" }
+          };
+          const curStatus = statusMap[status] || statusMap.pending;
+          const target = item.targetElement || { name: "关键作战机理要素", type: "activity" };
+          return `
+            <article class="red-team-finding ${item.severity} is-${status}">
+              <div class="finding-header">
+                <div class="finding-title-group">
+                  <strong>${escapeHtml(item.title)}</strong>
+                  <span class="severity-tag ${item.severity}">${item.severity === "high" ? "高优先级" : item.severity === "low" ? "低优先级" : "待复核"}</span>
+                  <span class="finding-status-tag ${curStatus.cls}">${curStatus.label}</span>
+                </div>
+                <div class="finding-target-badge" title="关联要素 ID: ${escapeHtml(target.id || "")}">
+                  <span>🎯 关联要素：${escapeHtml(target.name)}</span>
+                </div>
+              </div>
+              <p class="finding-analysis">${escapeHtml(item.analysis)}</p>
+              <p class="finding-recommendation"><b>改进建议：</b>${escapeHtml(item.recommendation)}</p>
+              ${item.evidenceRefs?.length ? `<small class="finding-evidence">证据引用：${item.evidenceRefs.map(escapeHtml).join("、")}</small>` : ""}
+              ${status === "rejected" && item.rejectionRationale ? `
+                <div class="finding-rejection-box">
+                  <strong>驳回理由：</strong>${escapeHtml(item.rejectionRationale)}
+                </div>
+              ` : ""}
+              <div class="finding-actions">
+                <button type="button" class="quiet-button compact-btn action-accept" data-action="accept-red-team-finding" data-finding-id="${escapeHtml(item.id)}" title="接受此意见，后续安排修订">接受</button>
+                <button type="button" class="quiet-button compact-btn action-revise" data-action="revise-red-team-finding" data-finding-id="${escapeHtml(item.id)}" title="标记此意见已在当前模型中完成修订">已修订</button>
+                <button type="button" class="quiet-button compact-btn action-reject" data-action="reject-red-team-finding" data-finding-id="${escapeHtml(item.id)}" title="驳回此意见（需输入驳回理由留存审计痕迹）">驳回</button>
+                ${status !== "pending" ? `<button type="button" class="quiet-button compact-btn action-reset" data-action="reset-red-team-finding" data-finding-id="${escapeHtml(item.id)}" title="重置状态为待处置">重置</button>` : ""}
+              </div>
+            </article>
+          `;
+        }).join("")}
+      </div>
       ${renderRedTeamService(health)}
     </section>
   `;

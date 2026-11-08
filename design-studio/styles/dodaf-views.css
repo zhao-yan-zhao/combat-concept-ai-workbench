@@ -2241,6 +2241,29 @@ table.ov3-matrix thead th.matrix-head-th.is-col-hovered {
 .red-team-finding span, .red-team-finding small { color: var(--muted); font-size: 11px; }
 .red-team-finding p { margin: 7px 0 0; font-size: 12px; line-height: 1.55; }
 .red-team-finding p b { color: var(--ink); }
+.red-team-tracking-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: rgba(2, 6, 23, .45); border: 1px solid var(--line); border-radius: 6px; margin-top: 10px; flex-wrap: wrap; }
+.tracking-summary-label { display: flex; flex-direction: column; gap: 2px; }
+.tracking-summary-label strong { font-size: 13px; color: var(--ink); }
+.tracking-summary-label span { font-size: 11px; color: var(--muted); }
+.tracking-summary-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.tracking-pill { font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 600; }
+.tracking-pill.revised { background: rgba(56, 189, 248, .15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, .3); }
+.tracking-pill.accepted { background: rgba(52, 211, 153, .15); color: #34d399; border: 1px solid rgba(52, 211, 153, .3); }
+.tracking-pill.rejected { background: rgba(248, 113, 113, .15); color: #f87171; border: 1px solid rgba(248, 113, 113, .3); }
+.tracking-pill.pending { background: rgba(255, 255, 255, .05); color: var(--muted); border: 1px solid var(--line); }
+.red-team-finding .finding-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.finding-title-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.finding-target-badge { font-size: 10px; color: var(--cyan, #38bdf8); background: rgba(56, 189, 248, .1); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, .25); }
+.finding-status-tag { font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 600; }
+.finding-status-tag.status-revised { background: rgba(56, 189, 248, .2); color: #38bdf8; }
+.finding-status-tag.status-accepted { background: rgba(52, 211, 153, .2); color: #34d399; }
+.finding-status-tag.status-rejected { background: rgba(248, 113, 113, .2); color: #f87171; }
+.finding-status-tag.status-pending { background: rgba(255, 255, 255, .08); color: var(--muted); }
+.finding-rejection-box { margin-top: 8px; padding: 7px 10px; background: rgba(248, 113, 113, .08); border-left: 3px solid #f87171; border-radius: 4px; font-size: 11px; color: #fca5a5; line-height: 1.45; }
+.finding-actions { display: flex; gap: 6px; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.finding-actions button.action-accept:hover { border-color: rgba(52, 211, 153, .4); color: #34d399; }
+.finding-actions button.action-revise:hover { border-color: rgba(56, 189, 248, .4); color: #38bdf8; }
+.finding-actions button.action-reject:hover { border-color: rgba(248, 113, 113, .4); color: #f87171; }
 .deployment-integration { display: grid; gap: 12px; }
 .deployment-integration .section-heading { margin-bottom: 0; }
 .deployment-bridge-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
