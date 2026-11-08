@@ -19,6 +19,7 @@ import {
   renderPhaseOutcomesTableMarkdown,
   renderDeviationsTableMarkdown
 } from "./simulationRecycleStore.js";
+import { normalizeArgumentChain } from "./argumentChainStore.js";
 
 export function buildExportArtifact(type, context) {
   return buildExportArtifactFromPayload(type, buildReportPayload(context));
@@ -137,6 +138,7 @@ export function buildReportPayload({ project, brief, inspiration, direction, for
       })),
       edges: ov5.edges
     },
+    argumentChain: ov5?.argumentChain ? normalizeArgumentChain(ov5.argumentChain, reportBrief) : (reportBrief?.assumptions ? normalizeArgumentChain(null, reportBrief) : null),
     ooda: {
       provenance: ooda.provenance || null,
       sourceActivityIds: ooda.sourceActivityIds,
@@ -222,6 +224,7 @@ export function buildMarkdownReport(payload) {
     `- 知识依据：${inline((payload.project.brief.evidenceRefs || []).join("、") || "未关联")}`,
     `- 主要风险：${inline(payload.project.brief.risk)}`,
     "",
+    ...(payload.argumentChain ? renderArgumentChainSection(payload.argumentChain) : []),
     "## 灵感孵化轨迹",
     ...renderInspirationSection(payload.inspiration),
     "",
@@ -362,6 +365,7 @@ function buildTacticDocMarkdown(payload, template) {
     ...renderOv6cSection(payload.ov6c),
     "",
     "## 六、制胜机理与因果协同 (OV-5/OODA)",
+    ...(payload.argumentChain ? renderArgumentChainSection(payload.argumentChain) : []),
     "### OV-5a 作战活动工序分解",
     ...renderActivityDecompositions(payload.ov5a, payload.ov5.activities),
     "### OV-5b 杀伤网因果链路与活动模型",
@@ -649,6 +653,21 @@ export function buildXmlReport(payload) {
       "    </edge>"
     ]),
     "  </ov5>",
+    ...(payload.argumentChain ? [
+      "  <argumentChain>",
+      xmlElement("claim", payload.argumentChain.claim, 2),
+      xmlElement("reasoning", payload.argumentChain.reasoning, 2),
+      "    <assumptions>",
+      ...(payload.argumentChain.assumptions || []).flatMap((asm) => [
+        `      <assumption id="${xml(asm.id)}" confidence="${xml(asm.confidence)}">`,
+        xmlElement("text", asm.text, 4),
+        xmlElement("ifFalse", asm.ifFalse, 4),
+        xmlElement("activityRefs", (asm.activityRefs || []).join(","), 4),
+        "      </assumption>"
+      ]),
+      "    </assumptions>",
+      "  </argumentChain>"
+    ] : []),
     `  <ooda durationMinutes="${xml(ooda.durationMinutes)}" generationSource="${xml(ooda.provenance?.mode || "derived")}"${evidenceSelectionAttributes(ooda.provenance?.evidenceSelection)}>`,
     ...(ooda.lanes || []).flatMap((lane) => [
       `    <lane id="${xml(lane.id)}" title="${xml(lane.title)}" subtitle="${xml(lane.subtitle)}">`,
@@ -919,6 +938,36 @@ function renderInspirationSection(inspiration) {
     "### 会话轨迹",
     ...(inspiration.messages || []).map((message) => `- [${message.role === "user" ? "研究人员" : "孵化助手"}] ${inline(message.text)}`)
   ];
+}
+
+function renderArgumentChainSection(chain) {
+  if (!chain) return [];
+  const lines = [
+    "## 制胜机理论证链与关键假设清单",
+    `- **核心主张 (Claim)**：${inline(chain.claim || "未定义")}`,
+    `- **因果推演 (Reasoning)**：${inline(chain.reasoning || "未定义")}`,
+    ""
+  ];
+
+  if (Array.isArray(chain.evidenceRefs) && chain.evidenceRefs.length) {
+    lines.push(`- **支撑证据**：${chain.evidenceRefs.map((r) => inline(r.title || r.chunkId)).join("、")}`);
+    lines.push("");
+  }
+
+  lines.push("### 关键假设清单 (按风险置信度排序)");
+  lines.push("| 编号 | 假设描述 | 置信度 | 失效推论后果 | 依赖活动 |");
+  lines.push("| :--- | :--- | :---: | :--- | :--- |");
+  const assumptions = Array.isArray(chain.assumptions) ? chain.assumptions : [];
+  if (assumptions.length === 0) {
+    lines.push("| - | 暂无结构化假设 | - | - | - |");
+  } else {
+    assumptions.forEach((asm) => {
+      const actRefs = (asm.activityRefs || []).join("、") || "全过程";
+      lines.push(`| ${inline(asm.id)} | ${inline(asm.text)} | ${inline(asm.confidence)} | ${inline(asm.ifFalse)} | ${inline(actRefs)} |`);
+    });
+  }
+  lines.push("");
+  return lines;
 }
 
 function renderXmlInspiration(inspiration) {

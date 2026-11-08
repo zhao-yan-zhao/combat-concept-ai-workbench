@@ -66,6 +66,28 @@ export function enrichIssuesWithLocatorAndRepair(issues, models = {}) {
           targetId: targetElementId
         };
       }
+    } else if (issue.title.includes("假设")) {
+      targetView = "ov5";
+      targetElementName = `关键假设 (${targetElementId})`;
+      const firstAct = (ov5.activities || [])[0];
+      if (issue.title.includes("未关联活动") && firstAct) {
+        repairable = true;
+        repairPlan = {
+          type: "link-assumption-activity",
+          label: `关联至活动 [${firstAct.title || firstAct.name}]`,
+          description: `为关键假设绑定支撑活动“${firstAct.title || firstAct.name}”，建立机理依存关系。`,
+          targetId: targetElementId,
+          activityId: firstAct.id
+        };
+      } else if (issue.title.includes("缺少失效推论")) {
+        repairable = true;
+        repairPlan = {
+          type: "fill-assumption-iffalse",
+          label: "补充标准失效后果推论",
+          description: "为该关键假设补充规范的失效推论：核心战术通联中断，协同延误严重增加，导致突防窗口丧失。",
+          targetId: targetElementId
+        };
+      }
     } else if (issue.title.includes("活动") || issue.title.includes("输入输出")) {
       targetView = "ov5";
       const act = activityMap.get(targetElementId);
@@ -207,6 +229,37 @@ export function applyIssueRepair(state, issue) {
       });
       state.scenario = { ...state.scenario, entities };
       return { modifiedDomain: "scenario", detail: `已将实体关联至主责活动。` };
+    }
+  }
+
+  if (type === "link-assumption-activity") {
+    if (state.ov5?.argumentChain?.assumptions && activityId) {
+      const assumptions = state.ov5.argumentChain.assumptions.map((asm) => {
+        if (asm.id === targetId) {
+          const refs = Array.isArray(asm.activityRefs) ? [...asm.activityRefs] : [];
+          if (!refs.includes(activityId)) refs.push(activityId);
+          return { ...asm, activityRefs: refs };
+        }
+        return asm;
+      });
+      state.ov5.argumentChain = { ...state.ov5.argumentChain, assumptions };
+      return { modifiedDomain: "ov5", detail: `已为关键假设关联支撑活动。` };
+    }
+  }
+
+  if (type === "fill-assumption-iffalse") {
+    if (state.ov5?.argumentChain?.assumptions) {
+      const assumptions = state.ov5.argumentChain.assumptions.map((asm) => {
+        if (asm.id === targetId) {
+          return {
+            ...asm,
+            ifFalse: "核心战术通联中断，协同延误严重增加，导致突防打击窗口丧失。"
+          };
+        }
+        return asm;
+      });
+      state.ov5.argumentChain = { ...state.ov5.argumentChain, assumptions };
+      return { modifiedDomain: "ov5", detail: `已为关键假设补全失效推论说明。` };
     }
   }
 

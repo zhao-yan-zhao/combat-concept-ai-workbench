@@ -270,15 +270,15 @@
 
 #### A. 战法设计线
 
-**T7.1 论证链与关键假设清单（最高优先）**
-- 战法的核心是"为什么能赢"。新增"论证链"结构：
-  ```js
-  { claim, reasoning, evidenceRefs, assumptions: [{ text, confidence: "高|中|低", ifFalse }] }
-  ```
-  它挂在"制胜机理"上，并关联到 OV-5 活动。
-- 汇总"关键假设清单"：列出全部假设，按置信度排序。点击任一假设，可查看依赖它的活动和任务。
-- 评估页提示：如果某个低置信度假设被推翻，哪些部分会失效。
-- 这是数据结构变更：**先停下报告。**
+- [x] **T7.1 论证链与关键假设清单（最高优先）**（2026-11-09 已落地）
+  - 战法的核心是"为什么能赢"。新增"论证链"结构：
+    ```js
+    { claim, reasoning, evidenceRefs, assumptions: [{ id, text, confidence: "高|中|低", ifFalse, activityRefs }] }
+    ```
+    它挂在"制胜机理"上，并关联到 OV-5 活动。
+  - 汇总"关键假设清单"：列出全部假设，按置信度排序（低置信度优先置顶警示）。点击任一假设，可查看依赖它的活动和任务。
+  - 评估页提示：如果某个低置信度假设被推翻，哪些部分会失效（级联波及矩阵推演）。
+  - 数据结构变更已完成先停下报告并闭环落地。
 
 **T7.2 对抗循环：反制 → 应对**
 - 在现有红队审查的基础上扩展：红队针对战法提出"对手可能的反制"，每条反制都必须有"我方应对"或"接受风险（填理由）"。
@@ -1016,6 +1016,37 @@ node scripts/smoke-ui.mjs
 - **验证命令与结果**：
   - `node scripts/run-checks.mjs all`：157/157 PASS (100% 全绿)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+### 2026-11-09 T7.1 真实落地：战法制胜论证链与关键假设清单（最高优先）
+
+- **实施内容**：
+  1. 论证链核心存储与模型规范化 (`design-studio/src/argumentChainStore.js`)：
+     - 新建模块，支持 `{ claim, reasoning, evidenceRefs, assumptions: [{ id, text, confidence, ifFalse, activityRefs }], updatedAt }`；
+     - 导出 `normalizeArgumentChain`，平滑兼容与自动解析旧项目 `state.brief.assumptions` 纯文本，无缝升级；
+     - 导出 `getSortedAssumptions`：严格按风险置信度排序（低置信度优先置顶警示）；
+     - 导出 `evaluateAssumptionImpact`：多维推演假设失效波及矩阵，跨活动、跨作战阶段、跨兵力实体进行级联影响分析；
+     - 导出 `addAssumptionToChain`、`removeAssumptionFromChain`、`updateAssumptionInChain`、`saveArgumentChain` 并向后兼容同步 brief 文本；
+  2. OV-5 作战活动机理工作台扩展 (`design-studio/src/ov5MechanismView.js` & `ov5AiController.js`)：
+     - 新增“🎯 制胜论证链与假设”选项卡（`data-mode="argument-chain"`）；
+     - 提供核心主张（Claim）、机理推演（Reasoning）、支撑证据（Evidence）与关键假设清单维护看板；
+     - 控制器响应 `add-chain-assumption`、`remove-chain-assumption`、`toggle-assumption-confidence`、`select-link-assumption-activity`、`save-argument-chain`，全自动触发持久化与同步；
+  3. 设计验证与连锁失效波及评估联动 (`design-studio/src/validationStore.js`, `validationView.js`, `consistencyLocatorStore.js`)：
+     - 规则引擎检视低置信度假设：孤立无关联活动或缺少失效推论时精准检出 Issue；
+     - 评估页新增专属专区：`renderAssumptionImpactSection`，高亮低置信度高危连锁警示并列出受波及的活动与阶段；
+     - `consistencyLocatorStore.js` 支持假设类问题的视图跳转定位与一键自动修复（`link-assumption-activity`、`fill-assumption-iffalse`）；
+  4. 复盘与报告导出引擎升级 (`design-studio/src/reportBuilder.js`)：
+     - `buildReportPayload` 打包 `argumentChain` 结构体；
+     - Markdown 报告输出“制胜机理论证链与关键假设清单”章节与置信度表格；
+     - XML 报告结构化输出 `<argumentChain>` 与 `<assumptions>`；
+  5. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m7-argument-chain-and-assumptions.mjs`：8 项针对性断言 100% 通过；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
+- **验证命令与结果**：
+  - `node scripts/check-m7-argument-chain-and-assumptions.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：39/39 PASS (100%)
+  - `node scripts/run-checks.mjs all`：158/158 PASS (100% 全绿)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 
 
 

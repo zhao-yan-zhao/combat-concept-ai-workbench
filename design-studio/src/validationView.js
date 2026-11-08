@@ -24,6 +24,7 @@ export function renderValidation(state) {
         <div><h3>${result.issues.length ? (stale ? "过期问题与修正建议" : "验证问题与修正建议") : "规则检查通过"}</h3><div class="issue-list">${result.issues.length ? result.issues.map((item) => renderIssueCard(item, stale)).join("") : `<div class="idea-prompt"><p>当前模型未发现阻断性规则问题，可进入红方质询或导出成果。</p></div>`}</div></div>
       </div>
     </section>
+    ${renderAssumptionImpactSection(result.assumptionImpacts || [])}
     ${renderRedTeamReview(result, state.redTeamRunning, state.redTeamHealth)}
   `;
 }
@@ -210,6 +211,80 @@ export function selectionForValidationIssue(issueId, result) {
     refs: ["多方案评估框架"],
     issueData: issue
   };
+}
+
+export function renderAssumptionImpactSection(impacts = []) {
+  if (!Array.isArray(impacts) || impacts.length === 0) {
+    return `
+      <section class="surface surface-pad assumption-impact-section" style="margin-top:16px;">
+        <div class="section-heading">
+          <div>
+            <h3>🎯 关键假设与连锁失效波及评估 (T7.1)</h3>
+            <p>汇总战法论证链的关键假设，按置信度排序推演失效连锁影响。</p>
+          </div>
+        </div>
+        <div class="idea-prompt" style="padding:12px; font-size:13px; color:#64748b;">
+          当前尚未配置结构化论证链假设。可在 <strong>[OV-5 作战活动与机理]</strong> 切换至“制胜论证链与假设”视角进行配置与评估。
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="surface surface-pad assumption-impact-section" style="margin-top:16px;">
+      <div class="section-heading">
+        <div>
+          <h3>🎯 关键假设与连锁失效波及评估 (T7.1)</h3>
+          <p>战法核心假设置信度排查：低置信度假设若被推翻，对应活动与阶段将发生级联失效。</p>
+        </div>
+        <div class="activity-toolbar">
+          <span class="mini-tag" style="background:#f1f5f9; color:#475569;">共 ${impacts.length} 项关键假设</span>
+        </div>
+      </div>
+      <div class="assumption-impact-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:12px; margin-top:12px;">
+        ${impacts.map((item) => {
+          const isCritical = item.severity === "critical";
+          const isHigh = item.severity === "high";
+          const badgeBg = item.confidence === "低" ? "#fef2f2" : item.confidence === "中" ? "#fffbeb" : "#f0fdf4";
+          const badgeColor = item.confidence === "低" ? "#b91c1c" : item.confidence === "中" ? "#b45309" : "#15803d";
+          const borderStyle = isCritical ? "2px solid #ef4444" : isHigh ? "1px solid #f87171" : "1px solid #e2e8f0";
+
+          return `
+            <div class="assumption-impact-card" style="background:#fff; border:${borderStyle}; border-radius:8px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="font-weight:700; font-size:13px; color:#1e293b;">${escapeHtml(item.assumptionId)}</span>
+                <div>
+                  <span style="font-size:11px; padding:2px 8px; border-radius:12px; background:${badgeBg}; color:${badgeColor}; font-weight:600;">
+                    ${item.confidence === "低" ? "🔴" : item.confidence === "中" ? "🟡" : "🟢"} ${escapeHtml(item.confidence)}置信度
+                  </span>
+                  ${isCritical ? `<span style="font-size:11px; padding:2px 6px; border-radius:12px; background:#ef4444; color:#fff; font-weight:600; margin-left:4px;">高危连锁</span>` : ""}
+                </div>
+              </div>
+              <p style="font-size:13px; font-weight:600; color:#0f172a; margin:0 0 6px 0;">${escapeHtml(item.text)}</p>
+              
+              <div style="font-size:12px; background:#f8fafc; border-left:3px solid ${badgeColor}; padding:6px 8px; border-radius:4px; margin-bottom:8px;">
+                <div style="color:#64748b; font-size:11px; font-weight:600; margin-bottom:2px;">若假设失效之推论后果：</div>
+                <div style="color:#334155;">${escapeHtml(item.ifFalse)}</div>
+              </div>
+
+              <div style="font-size:12px; color:#475569;">
+                <div style="font-size:11px; color:#64748b; font-weight:600; margin-bottom:4px;">依赖本假设的 OV-5 活动与阶段：</div>
+                ${item.impactedActivities.length > 0 ? `
+                  <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                    ${item.impactedActivities.map((act) => `
+                      <span style="font-size:11px; padding:2px 6px; background:#e0f2fe; color:#0369a1; border-radius:4px;" title="阶段: ${escapeHtml(act.phaseName)} · 力量: ${escapeHtml(act.performerName)}">
+                        📌 ${escapeHtml(act.name)} (${escapeHtml(act.phaseName)})
+                      </span>
+                    `).join("")}
+                  </div>
+                ` : `<span style="font-size:11px; color:#94a3b8; font-style:italic;">暂未关联活动（孤立假设）</span>`}
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
 }
 
 function escapeHtml(value) {

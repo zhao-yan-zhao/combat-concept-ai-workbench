@@ -3,6 +3,7 @@ import { resolveAiActionLabel } from "./app/aiAvailability.js";
 import { evaluateOodaLoopHealth } from "./oodaStore.js";
 import { renderProjectStorageState } from "./projectStorageView.js";
 import { renderOriginBadge, calculateEvidenceCoverage } from "./citationProvenanceView.js";
+import { normalizeArgumentChain, getSortedAssumptions, evaluateAssumptionImpact } from "./argumentChainStore.js";
 
 function escapeHtml(value) {
   return String(value || "")
@@ -103,6 +104,9 @@ export function renderOv5Workbench(state, context = {}) {
             </button>
             <button type="button" class="ov5-tab-btn ${viewMode === "resilience" ? "active" : ""}" data-action="set-ov5-view" data-mode="resilience" title="模拟关键节点战损或强干扰，检验自愈降级链路">
               🛡️ 体系抗毁对抗推演
+            </button>
+            <button type="button" class="ov5-tab-btn ${viewMode === "argument-chain" ? "active" : ""}" data-action="set-ov5-view" data-mode="argument-chain" title="制胜机理论证链、关键假设清单与置信度排查">
+              🎯 制胜论证链与假设
             </button>
           </nav>
 
@@ -424,6 +428,9 @@ function renderActivePerspective({ viewMode, model, activities, edges, activityB
   }
   if (viewMode === "resilience") {
     return renderResilienceView({ activities, edges, state, stressedNodeId, activityById });
+  }
+  if (viewMode === "argument-chain") {
+    return renderArgumentChainPerspective({ activities, state, model, activityById });
   }
   // Default: kill-web
   return renderKillWebView({ activities, edges, activityById, oodaHealth, state });
@@ -874,4 +881,165 @@ function formatPhaseActivities(activities = []) {
   if (!activities.length) return `<span class="phase-empty">无直接对应活动</span>`;
   return activities.slice(0, 4).map((a) => `<span class="phase-chip" title="${escapeHtml(a.title)}">${escapeHtml(a.title)}</span>`).join("")
     + (activities.length > 4 ? `<span class="phase-chip more">+${activities.length - 4}</span>` : "");
+}
+
+/**
+ * 视角 5：制胜论证链与关键假设排查 (M7-T7.1)
+ */
+function renderArgumentChainPerspective({ activities, state, model, activityById }) {
+  const chain = normalizeArgumentChain(model?.argumentChain, state?.brief || {});
+  const sortedAssumptions = getSortedAssumptions(chain);
+  const impacts = evaluateAssumptionImpact(chain, model, state?.forceMission, state?.phaseAction);
+
+  return `
+    <div class="ov5-argument-chain-perspective" style="padding:16px; background:#fff; border-radius:8px; border:1px solid #e2e8f0;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; border-bottom:1px solid #f1f5f9; padding-bottom:12px;">
+        <div>
+          <h3 style="margin:0 0 4px 0; font-size:16px; color:#0f172a; display:flex; align-items:center; gap:8px;">
+            <span>🎯 制胜机理论证链与关键假设清单</span>
+            <span class="mini-tag" style="background:#e0f2fe; color:#0369a1; font-size:11px;">M7-T7.1 战法机理</span>
+          </h3>
+          <p style="margin:0; font-size:12px; color:#64748b;">
+            明确战法“为什么能赢”的因果主张与推演逻辑；梳理核心假设并按置信度排序，闭环评估假设被推翻时的级联失效波及。
+          </p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="quiet-button compact-btn" data-action="add-chain-assumption">+ 新增关键假设</button>
+        </div>
+      </div>
+
+      <!-- 核心主张与推演机理 -->
+      <form class="argument-chain-form" id="argumentChainForm" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:12px;">
+          <label style="display:block; font-size:12px; font-weight:700; color:#334155; margin-bottom:6px;">
+            🏆 核心主张 (Claim: 为什么能赢)
+          </label>
+          <textarea name="claim" rows="3" style="width:100%; box-sizing:border-box; font-size:12px; border:1px solid #cbd5e1; border-radius:4px; padding:6px 8px;" placeholder="阐明本战法达成制胜优势的核心逻辑主张...">${escapeHtml(chain.claim)}</textarea>
+        </div>
+
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:12px;">
+          <label style="display:block; font-size:12px; font-weight:700; color:#334155; margin-bottom:6px;">
+            ⛓️ 机理推演 (Reasoning: 因果驱动机制)
+          </label>
+          <textarea name="reasoning" rows="3" style="width:100%; box-sizing:border-box; font-size:12px; border:1px solid #cbd5e1; border-radius:4px; padding:6px 8px;" placeholder="阐明从初始态势到制胜终态的因果链路...">${escapeHtml(chain.reasoning)}</textarea>
+        </div>
+        <div style="grid-column:1 / -1; display:flex; justify-content:flex-end;">
+          <button type="button" class="quiet-button compact-btn" data-action="save-argument-chain">保存主张与推演</button>
+        </div>
+      </form>
+
+      <!-- 支撑证据引用 -->
+      ${chain.evidenceRefs?.length ? `
+        <div style="margin-bottom:20px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:10px 12px;">
+          <strong style="font-size:12px; color:#166534; display:block; margin-bottom:6px;">📖 支撑证据引用与规则依据 (${chain.evidenceRefs.length} 条)</strong>
+          <div style="display:flex; flex-wrap:wrap; gap:6px;">
+            ${chain.evidenceRefs.map((ref) => `
+              <span class="mini-tag" style="background:#dcfce7; color:#15803d; font-size:11px;" title="${escapeHtml(ref.snippet)}">
+                📄 ${escapeHtml(ref.title || ref.filePath || ref.chunkId)}
+              </span>
+            `).join("")}
+          </div>
+        </div>
+      ` : ""}
+
+      <!-- 关键假设清单（按置信度排序） -->
+      <div style="margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h4 style="margin:0; font-size:14px; color:#1e293b; display:flex; align-items:center; gap:6px;">
+            <span>📋 关键假设清单 (按风险置信度排序)</span>
+            <span class="mini-tag" style="font-size:11px;">低置信度假设置顶警示</span>
+          </h4>
+        </div>
+
+        <div class="chain-assumptions-list" style="display:flex; flex-direction:column; gap:10px;">
+          ${sortedAssumptions.map((asm, index) => {
+            const isLow = asm.confidence === "低";
+            const isMed = asm.confidence === "中";
+            const borderCol = isLow ? "#fca5a5" : isMed ? "#fde68a" : "#bbf7d0";
+            const bgCol = isLow ? "#fef2f2" : isMed ? "#fffbeb" : "#f0fdf4";
+            const badgeCol = isLow ? "#dc2626" : isMed ? "#d97706" : "#16a34a";
+
+            return `
+              <div class="assumption-row-card" style="border:1px solid ${borderCol}; background:${bgCol}; border-radius:6px; padding:12px;" data-assumption-id="${escapeHtml(asm.id)}">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-weight:700; font-size:12px; color:#1e293b;">${escapeHtml(asm.id)}</span>
+                    <span style="font-size:11px; padding:2px 8px; border-radius:10px; background:#fff; border:1px solid ${borderCol}; color:${badgeCol}; font-weight:700;">
+                      ${isLow ? "🔴" : isMed ? "🟡" : "🟢"} ${escapeHtml(asm.confidence)}置信度
+                    </span>
+                    ${isLow ? `<span style="font-size:11px; color:#dc2626; font-weight:600;">⚠️ 重点质询排查对象</span>` : ""}
+                  </div>
+                  <div style="display:flex; gap:6px; align-items:center;">
+                    <button type="button" class="quiet-button compact-btn" data-action="toggle-assumption-confidence" data-assumption-id="${escapeHtml(asm.id)}" style="font-size:11px;">
+                      切换置信度: ${asm.confidence} ⟳
+                    </button>
+                    <button type="button" class="quiet-button compact-btn" data-action="remove-chain-assumption" data-assumption-id="${escapeHtml(asm.id)}" style="color:#ef4444; font-size:11px;">
+                      删除
+                    </button>
+                  </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px;">
+                  <div>
+                    <label style="font-size:11px; color:#475569; font-weight:600; display:block; margin-bottom:2px;">假设内容：</label>
+                    <input type="text" class="assumption-input-text" data-assumption-id="${escapeHtml(asm.id)}" data-field="text" value="${escapeHtml(asm.text)}" style="width:100%; box-sizing:border-box; font-size:12px; padding:4px 8px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;" />
+                  </div>
+                  <div>
+                    <label style="font-size:11px; color:#475569; font-weight:600; display:block; margin-bottom:2px;">若失效之后果推论 (ifFalse)：</label>
+                    <input type="text" class="assumption-input-text" data-assumption-id="${escapeHtml(asm.id)}" data-field="ifFalse" value="${escapeHtml(asm.ifFalse)}" style="width:100%; box-sizing:border-box; font-size:12px; padding:4px 8px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;" />
+                  </div>
+                </div>
+
+                <div style="font-size:11px; color:#475569;">
+                  <div style="font-weight:600; margin-bottom:4px; display:flex; justify-content:space-between;">
+                    <span>🔗 依赖此假设的 OV-5 活动 (${asm.activityRefs?.length || 0} 项)：</span>
+                  </div>
+                  <div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
+                    ${(asm.activityRefs || []).map((actId) => {
+                      const act = activityById.get(actId);
+                      return `
+                        <span class="mini-tag" style="background:#e0f2fe; color:#0369a1; font-size:11px; cursor:pointer;" data-action="edit-activity" data-activity-id="${escapeHtml(actId)}" data-activity="${escapeHtml(actId)}" title="点击在左栏查看或编辑活动">
+                          📌 ${escapeHtml(act?.title || act?.name || actId)}
+                          <b data-action="unlink-assumption-activity" data-assumption-id="${escapeHtml(asm.id)}" data-activity-id="${escapeHtml(actId)}" style="margin-left:4px; color:#0284c7; cursor:pointer;">×</b>
+                        </span>
+                      `;
+                    }).join("")}
+                    ${activities.length > (asm.activityRefs?.length || 0) ? `
+                      <select class="assumption-link-select" data-action="select-link-assumption-activity" data-assumption-id="${escapeHtml(asm.id)}" style="font-size:11px; padding:2px 6px; border:1px dashed #94a3b8; border-radius:4px; background:#fff;">
+                        <option value="">+ 关联活动...</option>
+                        ${activities
+                          .filter((a) => !asm.activityRefs?.includes(a.id))
+                          .map((a) => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.title || a.name || a.id)}</option>`)
+                          .join("")}
+                      </select>
+                    ` : ""}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      </div>
+
+      <!-- 失效连锁波及推演预览 -->
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:12px;">
+        <h4 style="margin:0 0 8px 0; font-size:13px; color:#1e293b; display:flex; align-items:center; gap:6px;">
+          <span>⚡ 假设失效连锁波及矩阵 (抗毁性推演预研)</span>
+        </h4>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          ${impacts.map((imp) => `
+            <div style="font-size:12px; padding:6px 10px; background:#fff; border-radius:4px; border:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <strong style="color:${imp.confidence === "低" ? "#dc2626" : imp.confidence === "中" ? "#d97706" : "#16a34a"};">${escapeHtml(imp.assumptionId)} [${escapeHtml(imp.confidence)}]</strong>:
+                <span style="color:#334155; margin-left:4px;">${escapeHtml(imp.summary)}</span>
+              </div>
+              <span class="mini-tag" style="background:${imp.severity === "critical" ? "#fee2e2" : imp.severity === "high" ? "#ffedd5" : "#f1f5f9"}; color:${imp.severity === "critical" ? "#dc2626" : imp.severity === "high" ? "#c2410c" : "#475569"}; font-size:10px;">
+                ${imp.severity === "critical" ? "极高波及" : imp.severity === "high" ? "高度波及" : "受控波及"}
+              </span>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </div>
+  `;
 }

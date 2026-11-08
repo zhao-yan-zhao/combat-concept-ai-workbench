@@ -6,6 +6,13 @@ import { deriveOodaFromOv5, evaluateOodaLoopHealth } from "./oodaStore.js";
 import { countUnmappedOv5Activities } from "./ov5Ov1Linker.js";
 import { planningAnalysisForDownstream } from "./planningContext.js";
 import { selectionFor } from "./ui.js";
+import {
+  normalizeArgumentChain,
+  addAssumptionToChain,
+  removeAssumptionFromChain,
+  updateAssumptionInChain,
+  saveArgumentChain
+} from "./argumentChainStore.js";
 
 export function createOv5AiController({ getState, render, notify, invalidateDerivedArtifacts, syncOv5, syncOoda }) {
   return {
@@ -17,6 +24,119 @@ export function createOv5AiController({ getState, render, notify, invalidateDeri
         const state = getState();
         state.ov5ViewMode = source?.dataset?.mode || "kill-web";
         render();
+        return true;
+      }
+      if (action === "add-chain-assumption") {
+        const state = getState();
+        const chain = normalizeArgumentChain(state.ov5?.argumentChain, state.brief || {});
+        addAssumptionToChain(chain);
+        saveArgumentChain(state, chain);
+        persistOv5Model(state.ov5);
+        if (typeof syncOv5 === "function") syncOv5();
+        notify?.("已新增关键假设条目");
+        render();
+        return true;
+      }
+      if (action === "remove-chain-assumption") {
+        const state = getState();
+        const asmId = source?.dataset?.assumptionId;
+        if (asmId) {
+          const chain = normalizeArgumentChain(state.ov5?.argumentChain, state.brief || {});
+          removeAssumptionFromChain(chain, asmId);
+          saveArgumentChain(state, chain);
+          persistOv5Model(state.ov5);
+          if (typeof syncOv5 === "function") syncOv5();
+          notify?.("已删除关键假设");
+          render();
+        }
+        return true;
+      }
+      if (action === "toggle-assumption-confidence") {
+        const state = getState();
+        const asmId = source?.dataset?.assumptionId;
+        if (asmId) {
+          const chain = normalizeArgumentChain(state.ov5?.argumentChain, state.brief || {});
+          const item = chain.assumptions.find((a) => a.id === asmId);
+          if (item) {
+            const nextConf = item.confidence === "低" ? "中" : item.confidence === "中" ? "高" : "低";
+            updateAssumptionInChain(chain, asmId, { confidence: nextConf });
+            saveArgumentChain(state, chain);
+            persistOv5Model(state.ov5);
+            if (typeof syncOv5 === "function") syncOv5();
+            notify?.(`已将假设置信度调整为: ${nextConf}`);
+            render();
+          }
+        }
+        return true;
+      }
+      if (action === "select-link-assumption-activity") {
+        const state = getState();
+        const asmId = source?.dataset?.assumptionId;
+        const actId = source?.value;
+        if (asmId && actId) {
+          const chain = normalizeArgumentChain(state.ov5?.argumentChain, state.brief || {});
+          const item = chain.assumptions.find((a) => a.id === asmId);
+          if (item) {
+            const refs = Array.isArray(item.activityRefs) ? [...item.activityRefs] : [];
+            if (!refs.includes(actId)) refs.push(actId);
+            updateAssumptionInChain(chain, asmId, { activityRefs: refs });
+            saveArgumentChain(state, chain);
+            persistOv5Model(state.ov5);
+            if (typeof syncOv5 === "function") syncOv5();
+            notify?.("已为假设关联支撑活动");
+            render();
+          }
+        }
+        return true;
+      }
+      if (action === "unlink-assumption-activity") {
+        const state = getState();
+        const asmId = source?.dataset?.assumptionId;
+        const actId = source?.dataset?.activityId;
+        if (asmId && actId) {
+          const chain = normalizeArgumentChain(state.ov5?.argumentChain, state.brief || {});
+          const item = chain.assumptions.find((a) => a.id === asmId);
+          if (item) {
+            const refs = (item.activityRefs || []).filter((id) => id !== actId);
+            updateAssumptionInChain(chain, asmId, { activityRefs: refs });
+            saveArgumentChain(state, chain);
+            persistOv5Model(state.ov5);
+            if (typeof syncOv5 === "function") syncOv5();
+            notify?.("已解除活动关联");
+            render();
+          }
+        }
+        return true;
+      }
+      if (action === "save-argument-chain") {
+        const state = getState();
+        const form = typeof document !== "undefined" ? document.getElementById("argumentChainForm") : null;
+        if (form) {
+          const data = new FormData(form);
+          const claim = data.get("claim");
+          const reasoning = data.get("reasoning");
+          const chain = normalizeArgumentChain(state.ov5?.argumentChain, state.brief || {});
+          if (claim !== null) chain.claim = String(claim).trim();
+          if (reasoning !== null) chain.reasoning = String(reasoning).trim();
+
+          // 同步输入框内容
+          if (typeof document !== "undefined") {
+            const inputs = document.querySelectorAll(".assumption-input-text");
+            inputs.forEach((input) => {
+              const aid = input.dataset.assumptionId;
+              const field = input.dataset.field;
+              if (aid && field) {
+                updateAssumptionInChain(chain, aid, { [field]: input.value });
+              }
+            });
+          }
+
+          saveArgumentChain(state, chain);
+          persistOv5Model(state.ov5);
+          if (typeof syncOv5 === "function") syncOv5();
+          notify?.("已成功保存论证链与假设设定");
+          render();
+        }
         return true;
       }
       if (action === "toggle-ov5-stress") {

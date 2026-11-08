@@ -7,6 +7,7 @@ import { buildOv6cModel } from "./ov6cBuilder.js";
 import { buildOv4Model } from "./ov4Builder.js";
 import { buildOv5aModel, buildOv6aModel, buildOv6bModel } from "./dodafOperationalBuilders.js";
 import { enrichIssuesWithLocatorAndRepair } from "./consistencyLocatorStore.js";
+import { evaluateAssumptionImpact, normalizeArgumentChain } from "./argumentChainStore.js";
 
 export function hasPersistedValidation(ov5Model, oodaModel, scenario, ov1Model) {
   try {
@@ -124,6 +125,24 @@ export function generateValidation(ov5Model, oodaModel, scenario, ov1Model, cont
     });
   }
 
+  // M7-T7.1 论证链与关键假设规则核查
+  const rawArgumentChain = ov5Model?.argumentChain || context?.argumentChain;
+  let assumptionImpacts = [];
+  if (rawArgumentChain) {
+    const chain = normalizeArgumentChain(rawArgumentChain, context?.brief || {});
+    assumptionImpacts = evaluateAssumptionImpact(chain, ov5Model, forceMission, context?.phaseAction);
+    (chain.assumptions || []).forEach((asm) => {
+      if (asm.confidence === "低") {
+        if (!asm.activityRefs || asm.activityRefs.length === 0) {
+          issues.push(createIssue("medium", "低置信度假设未关联活动", `关键假设“${asm.text}”置信度为低，但尚未关联具体的支撑活动，存在机理脱节与落地风险。`, asm.id));
+        }
+        if (!asm.ifFalse || asm.ifFalse.length < 5 || asm.ifFalse.includes("待定义")) {
+          issues.push(createIssue("high", "低置信度假设缺少失效推论", `关键假设“${asm.text}”置信度为低，缺少明确的“一旦被推翻的失效后果说明”，无法进行抗毁推演。`, asm.id));
+        }
+      }
+    });
+  }
+
   const enrichedIssues = enrichIssuesWithLocatorAndRepair(issues, { ov5Model, oodaModel, scenario, ov1Model });
 
   const result = {
@@ -132,6 +151,7 @@ export function generateValidation(ov5Model, oodaModel, scenario, ov1Model, cont
     generatedAt: new Date().toISOString(),
     inputSignature: createInputSignature(ov5Model, oodaModel, scenario, ov1Model),
     oodaDuration,
+    assumptionImpacts,
     scores: [
       { label: "活动连通性", score: Math.max(0, 100 - countIssues(issues, "活动关联") * 22) },
       { label: "信息闭环", score: Math.max(0, 100 - countIssues(issues, "输入输出") * 26) },
