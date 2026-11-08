@@ -251,10 +251,22 @@
 > 前面的 M1～M5 主要解决"可信、可控、好懂"，**基本没有增加新能力**。本里程碑补上两条主线各自缺的核心功能。
 > 全部功能都在**概念层面**实现，遵守第一部分第 9 条的安全边界。
 
-**T7.0 功能盘点（只读，不写代码，必须最先做）**
-- 逐项核对本节列出的功能，现有代码中是否已有雏形。重点查看这些模块：`directions`、`inspiration*`、`redTeam*`、`schemeScoring`、`scenario*`、`simulationAdapter*`、`collaboration*`、`researchChat`。
-- 产出一张表：功能、已有程度（无 / 雏形 / 可用）、相关文件。
-- 已有雏形的功能，后续卡片改为"补全"，**不得重建**。
+- [x] **T7.0 功能盘点（只读，不写代码，必须最先做）**（2026-11-09 已完成盘点）
+  - 逐项核对 M7 规划功能在现有代码中的雏形，产出对照盘点表；已有雏形的功能后续卡片一律按“补全/增强”推进，严禁未经盘点重复造轮子。
+
+| 规划任务 | 功能目标 | 已有程度 | 现状分析与已有雏形 | 涉及/复用相关文件 | 后续卡片策略 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **T7.1 论证链与关键假设** | 制胜机理挂接论证链、关键假设清单与置信度排序、失效波及分析 | **雏形** | `state.brief.assumptions` 仅为单段纯文本；`ov5MechanismView.js` 展示了制胜机理和活动链但无独立论证链结构；评估页缺少假设失效波及矩阵 | `design-studio/src/briefStore.js`, `ov5MechanismView.js`, `validationStore.js`, `schemeScoring.js` | **补全增强**：扩展制胜机理挂接结构化 `argumentChain`，提供假设清单与波及推演 |
+| **T7.2 对抗循环** | 红队提出对手反制，我方应对或接受风险闭环，生成风险反制章 | **雏形** | M6-T6.2 已建立红队意见（`findings`）、状态机（`accepted/rejected/revised`）与要素绑定，但未形成对手反制（countermeasure）与我方应对（response）闭环对偶结构 | `design-studio/src/redTeamStore.js`, `redTeamController.js`, `redTeamView.js`, `reportBuilder.js` | **补全增强**：在已有红队审查框架上扩展对抗链条与未闭合看板 |
+| **T7.3 战例借鉴** | 知识库检索历史相似战例，生成可借鉴点/不适用点对照卡并引用 | **雏形** | M2 知识检索（`knowledge.js`）与灵感建议（`inspirationStore.js`）已具备检索与推荐能力，但缺少战例对照卡片（借鉴点/不适用点）数据契约与卡片视图 | `shared/knowledge.js`, `design-studio/src/inspirationStore.js`, `inspirationView.js` | **补全增强**：复用检索与灵感卡片，接入战例对比模板与论证链引用 |
+| **T7.4 战法库** | 已确认战法跨项目复用库，存入/复制起点 | **无** | 仅有单项目内的多方案对比（`schemeStore.js`）与快照，无跨项目持久化的独立战法库（Tactics Library） | `server/routes/projects.mjs`, `design-studio/src/schemeStore.js` | **新建**：按标准持久化与独立路由设计轻量战法库 |
+| **T7.5 红蓝分立与信息隔离** | 导演部/红方/蓝方视角与信息过滤，协同权限映射 | **雏形** | 已有协作身份与角色框架（`projectCollaborationPolicy.mjs`，`collaborationController.js`），但未与想定中的红/蓝/导演部视角及要素可见性过滤联动 | `server/projectCollaborationPolicy.mjs`, `design-studio/src/scenarioStore.js`, `scenarioView.js` | **补全增强**：建立视角映射与要素过滤管道 |
+| **T7.6 推演回合与导调** | 回合制推进（意图提交、事件注入卡库、导调裁决建议、进入下回合） | **雏形** | 已有静态想定部署（`scenarioStore.js`）与外部仿真结果适配（`simulationAdapter.js`），但缺少回合交互循环、预置事件卡库与导调裁决 | `design-studio/src/scenarioStore.js`, `scenarioView.js`, `simulationAdapter.js`, `simulationRecycleStore.js` | **补全增强**：在想定与仿真适配层扩展回合制推进引擎与导调看板 |
+| **T7.7 推演日志与时间线** | 回合推演流水线记录与 what-if 分支派生 | **雏形** | 已有推演结果记录与快照分支能力（`modelSnapshotStore.js`），但无回合级时序流水线（Turn Timeline）呈现与一键派生 | `design-studio/src/simulationRecycleStore.js`, `modelSnapshotStore.js`, `scenarioView.js` | **补全增强**：串联回合日志与快照派生 |
+| **T7.8 复盘生成** | 根据推演日志自动起草复盘报告（`wargame-review`） | **可用** | M4 报告引擎与 M6-T6.3 已支持 `wargame-review` 模板、阶段成效表格与活动执行偏差回填，契约已全闭环 | `design-studio/src/reportBuilder.js`, `simulationRecycleStore.js` | **无缝接驳**：直接串联回合日志即可，无需重建 |
+| **T7.9 上下文 AI 研讨助手** | 研讨助手感知当前步骤模型与引用，生成候选并事务应用 | **雏形** | `researchChat/` 目录有完整对话流、上下文同步，但未自动感知当前步骤视图的模型摘要与证据注入，缺少事务安全候选框 | `design-studio/src/researchChat/` 全套控制器与视图 | **补全增强**：为研讨助手注入当前步骤上下文与安全候选事务框 |
+| **T7.10 评审与签批流程** | 草稿→送审（冻结快照）→修改→定稿（只读） | **雏形** | 已有项目状态字段与快照冻结（`modelSnapshotStore.js`），但无正规工作流流转与定稿只读守卫 | `design-studio/src/projectStorageStore.js`, `modelSnapshotStore.js` | **补全增强**：补齐工作流状态流转与界面门禁 |
+| **T7.11 全局搜索** | 跨项目要素、战法与日志搜索，集成至命令面板 | **雏形** | T3.7 已落地命令面板（`commandPaletteView.js`），但仅支持视图导航与内置动作，未索引要素与推演记录 | `design-studio/src/commandPaletteController.js`, `commandPaletteView.js` | **补全增强**：扩展命令面板数据源，支持要素与知识全文搜索 |
 
 #### A. 战法设计线
 
@@ -993,6 +1005,18 @@ node scripts/smoke-ui.mjs
 
 > **M6 里程碑（研究闭环）全量圆满收官！**
 > 4 项任务卡全部 100% 落地闭环（T6.1 多方案分支派生与排行榜并排对比、T6.2 红队意见要素关联与状态机追踪、T6.3 推演结果回填阶段与活动及偏差清单提炼、T6.4 一致性问题一键定位跳转与事务自动修复）。
+
+### 2026-11-09 T7.0 现有功能雏形盘点（只读核对先行，严禁重复造轮子）
+
+- **实施内容**：
+  1. 对照 M7 列出的全部 11 项核心功能（战法设计线 T7.1~T7.4、想定推演线 T7.5~T7.8、共用线 T7.9~T7.11），逐项检视 `directions`、`inspiration*`、`redTeam*`、`schemeScoring`、`scenario*`、`simulationAdapter*`、`collaboration*`、`researchChat` 等模块源码；
+  2. 产出详尽盘点对照表：9 项功能已具备重要雏形，1 项（T7.8 复盘报告）基本可用无需重建，仅 1 项（T7.4 跨项目战法库）需新建；
+  3. 确立后续单卡推进方针：已有雏形的功能卡片一律按“补全/增强既有模块”实施，避免重写与破坏向后兼容；
+  4. 遵守只读盘点规范，未改动任何业务代码与测试断言。
+- **验证命令与结果**：
+  - `node scripts/run-checks.mjs all`：157/157 PASS (100% 全绿)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 
 
 
