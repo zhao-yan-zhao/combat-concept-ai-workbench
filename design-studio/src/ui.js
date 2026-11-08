@@ -429,6 +429,7 @@ function renderReport(state) {
     inspiration: state.inspiration,
     direction: state.direction,
     forceMission: state.forceMission,
+    phaseAction: state.phaseAction,
     ov1: state.ov1,
     ov1c: state.ov1c,
     ov2: state.ov2,

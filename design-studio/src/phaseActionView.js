@@ -247,7 +247,7 @@ function renderPhaseChain({ phases, transitions, focusId, busy, focusConfirmed, 
                 <span class="phase-chain-index">${seq}</span>
                 <span class="phase-chain-body">
                   <strong>${escapeHtml(phase.name)}</strong>
-                  <small>${escapeHtml(phase.timeWindow || clip(phase.objective, 42))}</small>
+                  <small>${escapeHtml(phase.timeWindow || clip(phase.objective, 42))}</small>${phase.simulationOutcome ? `<span class="phase-sim-badge" style="display:inline-block; margin-top:2px; font-size:11px; padding:1px 6px; border-radius:4px; background:${phase.simulationOutcome.status === "achieved" ? "#ecfdf5" : "#fef2f2"}; color:${phase.simulationOutcome.status === "achieved" ? "#047857" : "#b91c1c"};">${escapeHtml(phase.simulationOutcome.statusLabel)} · 战损 ${escapeHtml(phase.simulationOutcome.lossRate)} (${escapeHtml(phase.simulationOutcome.durationDelta)})</span>` : ""}
                 </span>
               </button>
               ${next ? `<div class="phase-chain-edge" title="${escapeHtml(edge?.condition || "相邻转换待补")}">
@@ -280,6 +280,7 @@ function renderPhaseDetail({
           <small>专业 CONOPS · 时窗（有依据） · 蓝/红对抗 · 阶段门槛 · 转换条件</small>
         </header>
         <div class="phase-detail-body">
+        ${focus?.simulationOutcome ? `<div class="phase-sim-callout" style="margin:0 0 10px 0; padding:8px 12px; border-left:3px solid #3b82f6; background:#eff6ff; font-size:12px; border-radius:4px;"><b>推演成果回填</b>：${escapeHtml(focus.simulationOutcome.statusLabel)} · 战损率 ${escapeHtml(focus.simulationOutcome.lossRate)} · 时差 ${escapeHtml(focus.simulationOutcome.durationDelta)}<div style="color:#4b5563; margin-top:2px;">${escapeHtml(focus.simulationOutcome.summary)}</div></div>` : ""}
         ${focus ? `
           <div class="phase-adjacent-strip" aria-label="相邻转换">
             <div class="phase-adjacent-block">

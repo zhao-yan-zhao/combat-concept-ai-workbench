@@ -793,6 +793,7 @@ export function renderActivityCard(act, selectedId, edges, selectedUpstream = ne
       <div class="card-topline">
         <span class="domain-badge">${escapeHtml(act.domain || "综合")}</span>
         ${originBadge}
+        ${act.simulationOutcome?.hasDeviation ? `<span class="status-tag review" style="font-size:10px; padding:1px 4px;" title="检出推演执行偏差 ${act.simulationOutcome.deviationCount} 项">⚠️ 推演偏差</span>` : ""}
         <span class="autonomy-pill ${autonomy.toLowerCase()}">${autonomy}</span>
         <span class="io-flow-pill" title="上游来源 ${inCount} 项，下游驱动 ${outCount} 项">↑${inCount} ↓${outCount}</span>
         ${act.timingWindow ? `<span class="timing-badge">${escapeHtml(act.timingWindow)}</span>` : ""}

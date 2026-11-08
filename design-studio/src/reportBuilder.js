@@ -13,6 +13,12 @@ import { buildOv5aModel, buildOv6aModel, buildOv6bModel } from "./dodafOperation
 import { filterKnowledgeForReportCitation } from "../../server/projectKnowledgeCitationPolicy.mjs";
 import { getReportTemplate } from "./reportTemplateStore.js";
 import { buildOv1cModel, buildOv7Model } from "./mappingProductStore.js";
+import {
+  extractSimulationPhaseOutcomes,
+  extractSimulationDeviations,
+  renderPhaseOutcomesTableMarkdown,
+  renderDeviationsTableMarkdown
+} from "./simulationRecycleStore.js";
 
 export function buildExportArtifact(type, context) {
   return buildExportArtifactFromPayload(type, buildReportPayload(context));
@@ -69,7 +75,7 @@ export function buildExportArtifactFromPayload(type, payload) {
   };
 }
 
-export function buildReportPayload({ project, brief, inspiration, direction, forceMission = null, ov1, ov5, ooda, scenario, validationResult, knowledge, deployment, modelSnapshots = [], modelComparison = null, projectRepository = null, collaboration = null, knowledgeCitationApprovals = [], reportTemplate = null, ov1c: persistedOv1c = null, ov2: persistedOv2 = null, ov3: persistedOv3 = null, ov4: persistedOv4 = null, ov5a: persistedOv5a = null, ov6a: persistedOv6a = null, ov6b: persistedOv6b = null, ov6c: persistedOv6c = null, ov7: persistedOv7 = null }) {
+export function buildReportPayload({ project, brief, inspiration, direction, forceMission = null, phaseAction = null, ov1, ov5, ooda, scenario, validationResult, knowledge, deployment, modelSnapshots = [], modelComparison = null, projectRepository = null, collaboration = null, knowledgeCitationApprovals = [], reportTemplate = null, ov1c: persistedOv1c = null, ov2: persistedOv2 = null, ov3: persistedOv3 = null, ov4: persistedOv4 = null, ov5a: persistedOv5a = null, ov6a: persistedOv6a = null, ov6b: persistedOv6b = null, ov6c: persistedOv6c = null, ov7: persistedOv7 = null }) {
   const activityRefs = unique(ov5.activities.flatMap((activity) => activity.refs || []));
   const deploymentData = scenario ? createDeploymentData(scenario) : null;
   const knowledgeSummary = buildKnowledgeSummary(knowledge, activityRefs, knowledgeCitationApprovals);
@@ -179,7 +185,8 @@ export function buildReportPayload({ project, brief, inspiration, direction, for
     collaboration: buildCollaborationSummary(collaboration, knowledge),
     projectAudit: buildProjectAuditSummary(collaboration?.auditEntries),
     modelGovernance: buildModelGovernance(modelSnapshots, modelComparison),
-    projectRepository: buildProjectRepositorySummary(projectRepository)
+    projectRepository: buildProjectRepositorySummary(projectRepository),
+    phaseAction: phaseAction || null
   };
 }
 
@@ -480,7 +487,16 @@ function buildWargameReviewMarkdown(payload, template) {
     ...renderOv4Section(payload.ov4),
     "",
     "## 二、各阶段推进结果与战损",
-    ...renderOv6cSection(payload.ov6c),
+    ...(() => {
+      const phaseOutcomes = extractSimulationPhaseOutcomes(payload.scenario, payload.phaseAction);
+      return [
+        "### 推演阶段推进成效与战损评估",
+        ...renderPhaseOutcomesTableMarkdown(phaseOutcomes),
+        "",
+        "### 事件时序追踪 (OV-6c)",
+        ...renderOv6cSection(payload.ov6c)
+      ];
+    })(),
     "### 关键活动因果达成度",
     ...renderActivityDecompositions(payload.ov5a, payload.ov5.activities),
     "",
@@ -493,6 +509,19 @@ function buildWargameReviewMarkdown(payload, template) {
     `- 红方质询与博弈结论：${inline(payload.validation?.redTeam || "无")}`,
     "",
     "## 四、执行偏差与成因深度剖析",
+    ...(() => {
+      const deviations = extractSimulationDeviations({
+        scenario: payload.scenario,
+        phaseAction: payload.phaseAction,
+        ov5: payload.ov5
+      });
+      return [
+        "### 推演执行偏差清单 (Deviation List)",
+        ...renderDeviationsTableMarkdown(deviations),
+        "",
+        "### 概念设计与追踪诊断"
+      ];
+    })(),
     ...renderValidationSection(payload.validation),
     ...renderTraceabilityDiagnosticsSection(payload.validation?.traceabilityDiagnostics),
     ...renderFlowDiagnosticsSection(payload.validation?.flowDiagnostics),
@@ -1230,6 +1259,8 @@ function buildSimulationReportSummary(scenario) {
   return {
     state: diagnostics.state,
     runCount: diagnostics.runCount,
+    phaseOutcomes: scenario?.simulation?.phaseOutcomes || null,
+    deviations: scenario?.simulation?.deviations || null,
     latestRun: latest ? {
       id: latest.id,
       adapterName: latest.adapterName,
@@ -1280,6 +1311,16 @@ function renderXmlSimulationSummary(simulation) {
       "        </result>"
     ] : ["        <result status=\"not-recorded\"/>"]),
     "      </latestRun>",
+    ...(Array.isArray(simulation.phaseOutcomes) ? [
+      "      <phaseOutcomes>",
+      ...simulation.phaseOutcomes.map((po) => `        <phaseOutcome phaseId="${xml(po.phaseId)}" status="${xml(po.status)}" lossRate="${xml(po.lossRate)}" durationDelta="${xml(po.durationDelta)}"><name>${xml(po.phaseName)}</name><summary>${xml(po.summary)}</summary></phaseOutcome>`),
+      "      </phaseOutcomes>"
+    ] : []),
+    ...(Array.isArray(simulation.deviations) ? [
+      "      <deviations>",
+      ...simulation.deviations.map((dev) => `        <deviation id="${xml(dev.id)}" targetType="${xml(dev.targetType)}" category="${xml(dev.category)}" severity="${xml(dev.severity)}"><targetName>${xml(dev.targetName)}</targetName><planned>${xml(dev.planned)}</planned><actual>${xml(dev.actual)}</actual><gap>${xml(dev.gap)}</gap><rootCause>${xml(dev.rootCause)}</rootCause><recommendation>${xml(dev.recommendation)}</recommendation></deviation>`),
+      "      </deviations>"
+    ] : []),
     "    </simulation>"
   ];
 }

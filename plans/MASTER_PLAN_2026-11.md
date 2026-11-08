@@ -243,7 +243,7 @@
 
 - [x] **T6.1 多方案分支**：基于快照派生方案 B/C，用 `modelComparisonBuilder` 并排对比，用 `schemeScoring` 比较评分。（2026-11-08 已落地）
 - [x] **T6.2 红队意见追踪**：每条意见关联具体要素，带"接受 / 驳回（需填理由）/ 已修订"状态，结果进入报告。（2026-11-08 已落地）
-- **T6.3 推演结果回收**：仿真适配器的结果回填到阶段与活动，生成偏差清单，进入复盘模板。
+- [x] **T6.3 推演结果回收**：仿真适配器的结果回填到阶段与活动，生成偏差清单，进入复盘模板。（2026-11-08 已落地）
 - **T6.4 一致性问题一键定位**：每个问题都提供跳转定位；能自动修的给出修复建议，经人工确认后应用，并走 M1 的事务包装。
 
 ### M7 功能补强：让两条主线真正"能干活"
@@ -929,6 +929,40 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs ui-static`：36/36 PASS (100%)
   - `node scripts/run-checks.mjs all`：155/155 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+### 2026-11-08 T6.3 真实落地：推演结果回收（仿真结果回填阶段与活动、偏差清单提炼与复盘模板注入）
+
+- **实施内容**：
+  1. 推演成果与偏差提炼核心引擎 (`design-studio/src/simulationRecycleStore.js`)：
+     - 新建高内聚模块，导出 `extractSimulationPhaseOutcomes`、`extractSimulationActivityDeviations` 与 `extractSimulationDeviations`；
+     - 支持从外部回传结果读取，或基于本地抽象网格指标（边界、区域覆盖、时序完整性、诊断就绪）自动推导各阶段达成状态（`achieved | partial | failed`）、战损比估算与时差；
+     - 自动提炼结构化执行偏差清单（Deviation List，涵盖 `schedule`、`loss`、`effect`、`coordination` 四大维度，包含严重度、计划基准 vs 仿真实际、差值差距、成因深度剖析与处置建议）；
+     - 导出 `recycleSimulationToPhasesAndActivities`，将推演战损与偏差双向回填至 `phaseAction.phases` 和 `ov5.activities`，并在 `scenario.simulation` 固化偏差清单；
+     - 导出 Markdown 表格渲染器：`renderPhaseOutcomesTableMarkdown` 与 `renderDeviationsTableMarkdown`；
+  2. 仿真适配模型扩展 (`design-studio/src/simulationAdapter.js`)：
+     - `recordSimulationResult` 支持可选接收结构化 `phaseOutcomes` 与 `activityDeviations` 回传；
+  3. 推演复盘报告（wargame-review）与多格式导出集成 (`design-studio/src/reportBuilder.js`)：
+     - `buildReportPayload` 新增接收 `phaseAction`；并在 `buildSimulationReportSummary` 中保留 `phaseOutcomes` 与 `deviations`；
+     - 复盘模板（`wargame-review`）在“二、各阶段推进结果与战损”自动注入推演阶段成效与战损评估表格；
+     - 复盘模板在“四、执行偏差与成因深度剖析”自动注入推演执行偏差清单（Deviation List）及成因深度剖析；
+     - XML 报告（`buildXmlReport`）同步输出 `<phaseOutcomes>` 与 `<deviations>` 规范节点；
+     - 在 `ui.js` 和 `obsidianArchiveController.js` 中补全 `phaseAction: state.phaseAction` 传参；
+  4. 工作台界面呈现与控制器交互闭环 (`design-studio/src/simulationAdapterView.js`, `simulationAdapterController.js`, `phaseActionView.js`, `ov5MechanismView.js`, `wireControllers.js`)：
+     - 仿真适配面板新增“推演结果回收与偏差提炼”看板，展示回填状态、各风险级别偏差统计徽标、阶段战损表格与偏差清单；
+     - 提供 `[一键回填到阶段与活动]` 操作（`data-action="recycle-simulation-to-phases-and-activities"`），点击后触发阶段与活动模型更新、持久化与服务端同步（`syncPhaseAction`、`syncOv5`、`syncScenario`）；
+     - 阶段与行动视图（`phaseActionView.js`）：阶段卡片呈现推演达成与战损徽标（如 `顺利达成 · 战损 1.5% (+0h)`），详情呈现推演回填提示；
+     - 活动视图（`ov5MechanismView.js`）：活动卡片 topline 呈现 `⚠️ 推演偏差` 指示；
+     - 术语词典扩展 (`shared/glossary.js`)：收录 `DEV`（Deviation，推演执行偏差），满足全覆盖断言；
+     - 存储层补充 (`design-studio/src/ov5Store.js`)：别名导出 `persistOv5`；
+  5. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m6-simulation-result-recycle.mjs`：全量覆盖推演阶段成效推导、活动级偏差提炼、全量偏差清单生成、模型双向回填、Markdown/XML 报告注入与前端视图控制器静态契约；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
+- **验证命令与结果**：
+  - `node scripts/check-m6-simulation-result-recycle.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：37/37 PASS (100%)
+  - `node scripts/run-checks.mjs all`：156/156 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 
 
 

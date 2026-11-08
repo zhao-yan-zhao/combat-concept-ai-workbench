@@ -24,6 +24,7 @@ export function createObsidianArchiveController({ getState, render, notify, proj
         brief: state.brief,
         inspiration: state.inspiration,
         direction: state.direction,
+        phaseAction: state.phaseAction,
         ov1: state.ov1,
         ov5: state.ov5,
         ooda: state.ooda,

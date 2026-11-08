@@ -461,7 +461,9 @@ export function wireControllers({
     notify: showToast,
     downloadArtifact,
     invalidateValidation,
-    syncScenario: projectScenarioSyncController.sync
+    syncScenario: projectScenarioSyncController.sync,
+    syncPhaseAction: (...args) => projectPhaseActionSyncController.sync(...args),
+    syncOv5: (...args) => projectOv5SyncController.sync(...args)
   });
 
   const validationController = createValidationController({

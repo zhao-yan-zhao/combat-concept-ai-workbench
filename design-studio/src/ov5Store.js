@@ -71,6 +71,8 @@ export function persistOv5Model(model) {
   return normalized;
 }
 
+export const persistOv5 = persistOv5Model;
+
 export function addActivity(model) {
   const activity = {
     id: `activity-${Date.now()}`,

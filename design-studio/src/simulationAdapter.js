@@ -93,7 +93,9 @@ export function recordSimulationResult(scenario, runId, value = {}) {
     summary: inputMatch === "mismatch" ? `输入指纹不匹配；${clean(value.summary, 1500) || "请复核结果来源。"}` : clean(value.summary, 1600) || "未提供仿真结果摘要。",
     inputFingerprint: receivedInputFingerprint,
     inputMatch,
-    metrics: normalizeMetrics(value.metrics)
+    metrics: normalizeMetrics(value.metrics),
+    phaseOutcomes: Array.isArray(value.phaseOutcomes) ? value.phaseOutcomes : undefined,
+    activityDeviations: Array.isArray(value.activityDeviations) ? value.activityDeviations : undefined
   };
   const runs = scenario.simulation.runs.map((run) => run.id === runId
     ? { ...run, status: "result-recorded", completedAt, result }

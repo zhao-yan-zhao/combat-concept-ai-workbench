@@ -135,7 +135,8 @@
     "check-m5-offline-and-local-model.mjs",
     "check-m5-prompt-history-and-diff.mjs",
     "check-m6-multi-scheme-branching.mjs",
-    "check-m6-red-team-tracking.mjs"
+    "check-m6-red-team-tracking.mjs",
+    "check-m6-simulation-result-recycle.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",
