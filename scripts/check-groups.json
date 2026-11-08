@@ -139,7 +139,8 @@
     "check-m6-simulation-result-recycle.mjs",
     "check-m6-consistency-repair.mjs",
     "check-m7-argument-chain-and-assumptions.mjs",
-    "check-m7-adversarial-countermeasures.mjs"
+    "check-m7-adversarial-countermeasures.mjs",
+    "check-m7-wargame-turn-engine.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",

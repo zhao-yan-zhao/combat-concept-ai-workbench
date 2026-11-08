@@ -4,6 +4,7 @@ import { renderProjectStorageState } from "./projectStorageView.js";
 import { getScenarioFreshness } from "./scenarioStore.js";
 import { renderSimulationAdapter } from "./simulationAdapterView.js";
 import { renderValidation } from "./validationView.js";
+import { normalizeWargameState, PRESET_EVENT_CARDS } from "./wargameTurnStore.js";
 
 export function renderScenario(state) {
   const scenario = state.scenario;
@@ -63,6 +64,9 @@ export function renderScenario(state) {
               </button>
               <button type="button" class="view-pill ${viewMode === "timeline" ? "active" : ""}" data-action="switch-scenario-view-mode" data-view-mode="timeline">
                 🗺️ 空间部署与时序
+              </button>
+              <button type="button" class="view-pill ${viewMode === "wargame-turns" ? "active" : ""}" data-action="switch-scenario-view-mode" data-view-mode="wargame-turns">
+                🎲 回合制推演与导调
               </button>
             </div>
           </div>
@@ -133,6 +137,10 @@ export function renderScenario(state) {
       ` : viewMode === "timeline" ? `
         <div class="scenario-timeline-viewport">
           ${renderFullTimelineView(scenario, state)}
+        </div>
+      ` : viewMode === "wargame-turns" ? `
+        <div class="scenario-wargame-viewport">
+          ${renderWargameTurnsView(state)}
         </div>
       ` : `
         <div class="scenario-workbench-body">
@@ -322,4 +330,204 @@ function unitGlyph(role, side) {
 
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[character]));
+}
+
+export function renderWargameTurnsView(state) {
+  const scenario = state.scenario;
+  const phases = state.phaseAction?.phases || [];
+  const activities = state.ov5?.activities || [];
+  const wargame = normalizeWargameState(scenario?.wargame, { phases });
+
+  const currentTurnIndex = state.wargameCurrentTurnIndex || wargame.currentTurnIndex || wargame.turns.length;
+  const currentTurn = wargame.turns.find((t) => t.turnNumber === currentTurnIndex) || wargame.turns[wargame.turns.length - 1];
+
+  const statusMap = {
+    "intents-planning": { label: "意图筹划中", class: "review" },
+    "event-injection": { label: "导调注入中", class: "is-warn" },
+    "adjudicating": { label: "导演部裁决中", class: "is-warn" },
+    "completed": { label: "本回合已闭环", class: "is-ready" }
+  };
+  const curStatus = statusMap[currentTurn.status] || { label: currentTurn.status, class: "muted" };
+
+  return `
+    <div class="wargame-turns-container" data-turn-number="${currentTurn.turnNumber}">
+      <!-- 回合流转顶部总控行 -->
+      <header class="wargame-turn-header">
+        <div class="wargame-turn-nav-group">
+          <span class="wargame-nav-label">推演回合：</span>
+          <div class="wargame-turn-pills" role="tablist">
+            ${wargame.turns.map((t) => `
+              <button type="button" class="view-pill wargame-turn-pill ${t.turnNumber === currentTurn.turnNumber ? "active" : ""}" data-action="select-wargame-turn" data-turn-number="${t.turnNumber}">
+                第 ${t.turnNumber} 回合 ${t.turnNumber === currentTurn.turnNumber ? "★" : ""}
+              </button>
+            `).join("")}
+          </div>
+        </div>
+        <div class="wargame-turn-meta">
+          <span class="wargame-meta-item">作战阶段：<strong>${escapeHtml(currentTurn.phaseName)}</strong></span>
+          <span class="status-tag ${curStatus.class}">${curStatus.label}</span>
+          <button type="button" class="primary-btn wargame-advance-btn" data-action="advance-wargame-turn" ${currentTurn.status !== "completed" ? "disabled title='需先裁决并保存当前回合方可推进'" : ""}>
+            推进至下一回合 (Turn ${currentTurn.turnNumber + 1}) ➔
+          </button>
+        </div>
+      </header>
+
+      <!-- 三栏协同工作区 -->
+      <div class="wargame-workspace-grid">
+        <!-- 栏 1：双方意图输入与阶段活动关联 -->
+        <section class="surface wargame-card wargame-intents-pane">
+          <div class="wargame-card-head">
+            <h3>1. 红蓝双方作战概念意图</h3>
+            <small>宏观因果与协同构想</small>
+          </div>
+          <div class="wargame-intent-box is-red">
+            <header>
+              <strong style="color: #f87171;">红方对抗意图 (Opponent Intent)</strong>
+              <small>多轴突击 / 佯动 / 电子压制</small>
+            </header>
+            <textarea class="wargame-textarea" id="wargameRedIntent" placeholder="描述红方行动意图与战术动作...">${escapeHtml(currentTurn.intents.red?.text || "")}</textarea>
+            <div class="wargame-intent-refs">
+              <label>关联阶段活动：</label>
+              <div class="wargame-ref-tags">
+                ${activities.slice(0, 5).map((act) => `
+                  <label class="wargame-checkbox-label">
+                    <input type="checkbox" name="redActivityRefs" value="${act.id}" ${currentTurn.intents.red?.activityRefs?.includes(act.id) ? "checked" : ""}>
+                    <span>${escapeHtml(act.name)}</span>
+                  </label>
+                `).join("")}
+              </div>
+            </div>
+          </div>
+
+          <div class="wargame-intent-box is-blue">
+            <header>
+              <strong style="color: #38bdf8;">蓝方作战意图 (Blue Intent)</strong>
+              <small>防区抗击 / 跨域协同 / 韧性重组</small>
+            </header>
+            <textarea class="wargame-textarea" id="wargameBlueIntent" placeholder="描述蓝方行动意图与战术动作...">${escapeHtml(currentTurn.intents.blue?.text || "")}</textarea>
+            <div class="wargame-intent-refs">
+              <label>关联阶段活动：</label>
+              <div class="wargame-ref-tags">
+                ${activities.slice(0, 5).map((act) => `
+                  <label class="wargame-checkbox-label">
+                    <input type="checkbox" name="blueActivityRefs" value="${act.id}" ${currentTurn.intents.blue?.activityRefs?.includes(act.id) ? "checked" : ""}>
+                    <span>${escapeHtml(act.name)}</span>
+                  </label>
+                `).join("")}
+              </div>
+            </div>
+          </div>
+
+          <div class="wargame-pane-footer">
+            <button type="button" class="primary-btn" data-action="save-wargame-intent" data-turn-number="${currentTurn.turnNumber}">
+              💾 保存双方意图
+            </button>
+          </div>
+        </section>
+
+        <!-- 栏 2：导演部事件注入 -->
+        <section class="surface wargame-card wargame-events-pane">
+          <div class="wargame-card-head">
+            <h3>2. 导演部突发事件注入</h3>
+            <small>电磁/网络/气象/装备扰动 (${currentTurn.injectedEvents.length})</small>
+          </div>
+
+          <!-- 已注入列表 -->
+          <div class="wargame-injected-list">
+            ${currentTurn.injectedEvents.length === 0 ? `
+              <div class="wargame-empty-state">
+                本回合暂未注入突发事件（对抗将按既定战术逻辑推进）
+              </div>
+            ` : currentTurn.injectedEvents.map((e) => `
+              <article class="wargame-injected-item" data-injection-id="${e.id}">
+                <div class="wargame-injected-header">
+                  <strong>${escapeHtml(e.title)}</strong>
+                  <span class="status-tag is-warn">${escapeHtml(e.category)}</span>
+                  <button type="button" class="quiet-button wargame-del-btn" data-action="remove-wargame-event" data-turn-number="${currentTurn.turnNumber}" data-injection-id="${e.id}" title="撤回此事件">✕ 撤回</button>
+                </div>
+                <p>${escapeHtml(e.detail)}</p>
+              </article>
+            `).join("")}
+          </div>
+
+          <!-- 预置事件卡库快捷注入 -->
+          <div class="wargame-card-library-section">
+            <div class="wargame-library-title"><strong>预置扰动事件卡库 (点击一键注入)：</strong></div>
+            <div class="wargame-card-library-grid">
+              ${wargame.eventCardLibrary.slice(0, 6).map((card) => `
+                <div class="wargame-preset-card">
+                  <div class="wargame-preset-card-head">
+                    <b>${escapeHtml(card.title)}</b>
+                    <small>${escapeHtml(card.category)}</small>
+                  </div>
+                  <p>${escapeHtml(card.suggestedImpact)}</p>
+                  <button type="button" class="quiet-button wargame-inject-btn" data-action="inject-wargame-card" data-turn-number="${currentTurn.turnNumber}" data-card-id="${card.id}">
+                    + 注入本回合
+                  </button>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+
+          <!-- 自定义事件注入输入折叠 -->
+          <details class="wargame-custom-card-details">
+            <summary class="quiet-button">＋ 自定义战场扰动事件</summary>
+            <div class="wargame-custom-card-form">
+              <input type="text" class="wargame-input" id="customCardTitle" placeholder="事件标题（如：无人艇侦察浮标脱网）" />
+              <input type="text" class="wargame-input" id="customCardCategory" placeholder="扰动类别（如：无人自主系统）" />
+              <textarea class="wargame-textarea" id="customCardDetail" rows="2" placeholder="事件详情与潜在影响..."></textarea>
+              <button type="button" class="quiet-button" data-action="add-custom-wargame-card" data-turn-number="${currentTurn.turnNumber}">
+                注入自定义事件
+              </button>
+            </div>
+          </details>
+        </section>
+
+        <!-- 栏 3：导演部裁决工作台 -->
+        <section class="surface wargame-card wargame-adjudication-pane">
+          <div class="wargame-card-head">
+            <h3>3. 导演部对抗裁决与机理</h3>
+            <small>因果逻辑推导（绝无数值化杀伤计算）</small>
+          </div>
+
+          <!-- AI / 本地导调建议区 -->
+          <div class="wargame-advice-panel">
+            <div class="wargame-advice-head">
+              <strong>导调裁决建议：</strong>
+              <button type="button" class="quiet-button" data-action="request-wargame-adjudication-advice" data-turn-number="${currentTurn.turnNumber}">
+                ⚡ 获取导调裁决建议
+              </button>
+            </div>
+            ${currentTurn.adjudication?.aiAdvice ? `
+              <div class="wargame-advice-body">
+                <p>${escapeHtml(currentTurn.adjudication.aiAdvice)}</p>
+                <button type="button" class="quiet-button wargame-adopt-btn" data-action="adopt-wargame-advice" data-turn-number="${currentTurn.turnNumber}">
+                  采纳填入裁决 ➔
+                </button>
+              </div>
+            ` : `
+              <div class="wargame-empty-state">
+                点击上方按钮，系统将根据双方意图与注入事件，生成宏观对抗机理建议。
+              </div>
+            `}
+          </div>
+
+          <!-- 裁决输入表单 -->
+          <div class="wargame-adjudication-form">
+            <label><strong>裁决结论：</strong></label>
+            <input type="text" class="wargame-input" id="wargameOutcome" placeholder="如：蓝方保持局部感知优势，红方佯动受挫但牵制了主力预警..." value="${escapeHtml(currentTurn.adjudication?.outcome || "")}" />
+
+            <label style="margin-top: 10px; display: block;"><strong>对抗因果机理与体系韧性阐释：</strong></label>
+            <textarea class="wargame-textarea" id="wargameRationale" rows="5" placeholder="阐释态势演进机理：攻防双方因何种协同机制或扰动产生此结果？对后续作战阶段有何影响？">${escapeHtml(currentTurn.adjudication?.rationale || "")}</textarea>
+          </div>
+
+          <div class="wargame-pane-footer">
+            <button type="button" class="primary-btn" data-action="save-wargame-adjudication" data-turn-number="${currentTurn.turnNumber}">
+              ✓ 保存并确认本回合裁决
+            </button>
+          </div>
+        </section>
+      </div>
+    </div>
+  `;
 }

@@ -4,6 +4,7 @@ import { createCollaborationAuthHandlers } from "./routes/collaborationAuth.mjs"
 import { createProjectResourceHandlers } from "./routes/projectResources.mjs";
 import { createAiHandlers } from "./routes/aiRoutes.mjs";
 import { createOfficeReportHandlers } from "./routes/officeReports.mjs";
+import { generateLocalAdjudicationAdvice } from "../design-studio/src/wargameTurnStore.js";
 
 export function createRequestHandler(runtime) {
   const auth = createCollaborationAuthHandlers(runtime);
@@ -431,6 +432,26 @@ export function createRequestHandler(runtime) {
           });
         } catch (error) {
           send(response, error.statusCode || 400, error.message, "text/plain;charset=utf-8");
+        }
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/simulation/wargame-adjudication") {
+        try {
+          const input = await readJson(request);
+          let advice = null;
+          if (getAiApiKey() && openAi?.callOpenAiWargameAdjudication) {
+            try {
+              advice = await openAi.callOpenAiWargameAdjudication(input);
+              advice.mode = "ai";
+            } catch (err) {
+              advice = { ...generateLocalAdjudicationAdvice(input?.turn), mode: "fallback" };
+            }
+          } else {
+            advice = { ...generateLocalAdjudicationAdvice(input?.turn), mode: "fallback" };
+          }
+          sendJson(response, 200, advice);
+        } catch (error) {
+          send(response, 400, error.message, "text/plain;charset=utf-8");
         }
         return;
       }

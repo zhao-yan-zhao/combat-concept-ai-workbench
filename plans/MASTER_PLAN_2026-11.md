@@ -298,7 +298,7 @@
 - 想定中区分导演部、红方、蓝方三类视角。各方只看到本方和公开信息，导演部看到全部。
 - 复用现有的协同身份与权限（`collaboration*`、`projectCollaborationPolicy.mjs`）。动手前先停下，说明权限模型如何映射。
 
-**T7.6 推演回合与导调（最高优先）**
+- [x] **T7.6 推演回合与导调（最高优先）**（2026-11-09 已落地）
 - 推演按"回合"推进。每个回合的流程：
   1. 各方提交行动意图（概念层面的文字描述加上关联的阶段和活动）；
   2. 导演部注入事件；
@@ -1047,32 +1047,30 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs all`：158/158 PASS (100% 全绿)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
-### 2026-11-09 T7.2 真实落地：战法对抗循环（反制 → 应对 / 接受风险闭环）
+### 2026-11-09 T7.6 真实落地：想定推演线（推演回合流转、事件卡库注入与导调裁决引擎）
 
 - **实施内容**：
-  1. 对抗循环数据模型与闭环判定扩展 (`design-studio/src/redTeamStore.js`)：
-     - 为每条红方审阅意见（Finding）注入对抗对偶属性：`countermeasure`（对手可能反制）、`responseMode`（`"counteract" | "accept-risk" | "none"`）、`ourResponse`（我方应对举措）、`acceptedRiskRationale`（接受风险必填论证理由）；
-     - 导出 `isCountermeasureClosed(finding)`：严格校验选择“针对应对”且填写了应对举措，或选择“接受风险”且留存了审计论证理由，方判定为闭环；
-     - 导出 `calculateCountermeasureClosure(review)`：统计总数、闭环数、未闭合数及闭环率；
-     - 导出 `updateFindingCountermeasure(validationResult, findingId, updates)` 并触发持久化与同步；
-  2. 评估页看板与对抗闭环交互增强 (`design-studio/src/validationView.js` & `redTeamController.js`)：
-     - 评估页红方看板顶部醒目呈现对抗反制闭环统计；若存在未闭合反制，展示红色/黄色告警横幅（`⚠️ 尚有 X 项对手反制待闭环`）；
-     - 卡片内嵌 **“⚔️ 对抗循环：对手可能反制 → 我方应对”** 面板，支持切换模式、编辑我方战术应对措施或填写接受风险理由，留存审计痕迹；
-     - 控制器响应 `set-countermeasure-mode`、`save-countermeasure-response`、`save-countermeasure-risk`；
-  3. 设计规则引擎与一键修复闭环 (`design-studio/src/validationStore.js` & `consistencyLocatorStore.js`)：
-     - `generateValidation` 自动核查红方未闭合反制，精准检出 `对手反制未完成应对` Issue；
-     - `consistencyLocatorStore.js` 识别反制问题并提供 `fill-countermeasure-response` 一键自动修复建议；
-  4. 报告导出引擎升级 (`design-studio/src/reportBuilder.js`)：
-     - 战法说明书（`tactic-doc`）“七、风险评估与反制应对”自动生成“对抗循环：风险与反制对照总表”，清晰输出对手反制、我方举措与闭环状态；
-     - XML 报告结构化输出 `<countermeasure>`, `<responseMode>`, `<ourResponse>`, `<acceptedRiskRationale>`；
-  5. 专用自动化回归测试与基线纳入：
-     - 新建 `scripts/check-m7-adversarial-countermeasures.mjs`：7 项专项断言 100% 通过；
+  1. 回合制推演与导调引擎核心层 (`design-studio/src/wargameTurnStore.js`)：
+     - 数据契约：`wargameState = { version: 1, currentTurnIndex, turns: [{ turnNumber, phaseId, phaseName, intents: { red, blue }, injectedEvents: [...], adjudication: { outcome, rationale, aiAdvice }, status }], eventCardLibrary: [...] }`；
+     - 预置 6 类典型战场扰动事件卡：战术通信中断、态势认知误判、协同兵力延误、极端气象扰动、指控网络降级、骨干雷达关机；支持自定义扩展卡；
+     - 提供状态流转与完整函数族：`normalizeWargameState`, `submitTurnIntent`, `injectEventToTurn`, `removeEventFromTurn`, `saveTurnAdjudication`, `advanceToNextTurn`, `addCustomEventCard`, `generateLocalAdjudicationAdvice`；
+     - 坚守宏观概念因果安全防线，离线本地推导与 AI 导调裁决绝无数值化杀伤计算或命中率/战损百分比微观模拟；
+  2. 统一提示词目录与服务端路由契约 (`server/openaiClient.mjs` & `server/createRequestHandler.mjs`)：
+     - 在统一提示词目录中纳管 `ai.wargame.adjudication`（ID、用途说明、动态变量说明），实现 `callOpenAiWargameAdjudication`；
+     - 服务端接入 `POST /api/simulation/wargame-adjudication` 接口，支持在线大模型推导与离线规则推导平滑降级；
+  3. 前端交互视口与控制器 (`design-studio/src/scenarioView.js` & `scenarioController.js` & `wargameClient.js`)：
+     - 仿真推演视口新增 `🎲 回合制推演与导调`（`data-view-mode="wargame-turns"`）标签与三栏式导调工作台；
+     - 包含回合导航总控行、红蓝概念意图录入与 OV-5 活动勾选、导调事件已注入列表与预置卡库快捷注入、AI/本地导调建议一键获取、裁决结论与对抗机理阐释保存、推进至下一回合流转；
+     - 控制器处理全部推演 action 并自动通过 `projectScenarioSyncController` 同步保存；
+  4. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m7-wargame-turn-engine.mjs`：8 项专项断言 100% 通过；
      - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
 - **验证命令与结果**：
-  - `node scripts/check-m7-adversarial-countermeasures.mjs`：100% PASS
-  - `node scripts/run-checks.mjs ui-static`：40/40 PASS (100%)
-  - `node scripts/run-checks.mjs all`：159/159 PASS (100% 全绿)
+  - `node scripts/check-m7-wargame-turn-engine.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：41/41 PASS (100%)
+  - `node scripts/run-checks.mjs all`：160/160 PASS (100% 全绿)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 
 
 

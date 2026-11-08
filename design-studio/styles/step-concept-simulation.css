@@ -686,6 +686,344 @@
 }
 
 .scenario-timeline-viewport,
-.scenario-validation-viewport {
+.scenario-validation-viewport,
+.scenario-wargame-viewport {
   padding: 6px 0;
+}
+
+/* ==========================================================================
+   回合制推演与导调引擎样式 (M7-T7.6)
+   ========================================================================== */
+.wargame-turns-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wargame-turn-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.wargame-turn-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.wargame-nav-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.wargame-turn-pills {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.wargame-turn-pill {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.wargame-turn-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.wargame-meta-item {
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.wargame-advance-btn {
+  font-size: 12.5px;
+  padding: 5px 14px;
+}
+
+.wargame-workspace-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1.15fr 1.1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 1200px) {
+  .wargame-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wargame-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+}
+
+.wargame-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  padding-bottom: 8px;
+}
+
+.wargame-card-head h3 {
+  margin: 0;
+  font-size: 14px;
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.wargame-card-head small {
+  color: #94a3b8;
+  font-size: 11.5px;
+}
+
+.wargame-intent-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.wargame-intent-box.is-red {
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.wargame-intent-box.is-blue {
+  background: rgba(56, 189, 248, 0.05);
+  border-color: rgba(56, 189, 248, 0.25);
+}
+
+.wargame-intent-box header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.wargame-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12.5px;
+  line-height: 1.5;
+  background: rgba(2, 6, 23, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 5px;
+  color: #f1f5f9;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.wargame-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12.5px;
+  background: rgba(2, 6, 23, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 5px;
+  color: #f1f5f9;
+  padding: 6px 10px;
+}
+
+.wargame-intent-refs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+.wargame-ref-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wargame-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #cbd5e1;
+  background: rgba(30, 41, 59, 0.6);
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.wargame-injected-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 50px;
+}
+
+.wargame-injected-item {
+  padding: 8px 10px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wargame-injected-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wargame-injected-header strong {
+  font-size: 12.5px;
+  color: #fbbf24;
+}
+
+.wargame-del-btn {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 1px 6px;
+  color: #f87171;
+}
+
+.wargame-card-library-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wargame-library-title {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.wargame-card-library-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.wargame-preset-card {
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.wargame-preset-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wargame-preset-card-head b {
+  font-size: 12px;
+  color: #38bdf8;
+}
+
+.wargame-preset-card-head small {
+  font-size: 10.5px;
+  color: #64748b;
+}
+
+.wargame-preset-card p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #cbd5e1;
+}
+
+.wargame-inject-btn {
+  align-self: flex-end;
+  font-size: 11px;
+  padding: 2px 8px;
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.wargame-custom-card-details {
+  border-top: 1px dashed rgba(148, 163, 184, 0.16);
+  padding-top: 8px;
+}
+
+.wargame-custom-card-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.wargame-advice-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 6px;
+}
+
+.wargame-advice-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wargame-advice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wargame-advice-body p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #7dd3fc;
+  background: rgba(14, 165, 233, 0.08);
+  padding: 8px 10px;
+  border-radius: 4px;
+}
+
+.wargame-adopt-btn {
+  align-self: flex-end;
+  font-size: 11.5px;
+  color: #38bdf8;
+}
+
+.wargame-empty-state {
+  font-size: 11.5px;
+  color: #64748b;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+.wargame-pane-footer {
+  margin-top: 6px;
+  display: flex;
+  justify-content: flex-end;
 }

@@ -1020,7 +1020,7 @@ async function handleAction(action, source = null) {
   if (collaborationController.handleAction(action)) return;
   if (oodaController.handleAction(action)) return;
   if (simulationAdapterController.handleAction(action)) return;
-  if (scenarioController.handleAction(action)) return;
+  if (scenarioController.handleAction(action, source)) return;
   if (await validationController.handleAction(action, source)) return;
   if (handleReportAction(action, source, getReportCtx())) return;
   showToast("已创建概念注释");
