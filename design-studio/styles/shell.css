@@ -330,7 +330,8 @@
   height: var(--step-path-h);
   margin: 0;
   padding: 0;
-  display: block;
+  display: flex;
+  flex-direction: column;
   background: transparent;
   border: 0;
   overflow: visible;
@@ -344,6 +345,9 @@
   position: relative;
   width: 100%;
   height: 100%;
-  display: block;
+  flex: 1 1 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   pointer-events: auto;
 }
