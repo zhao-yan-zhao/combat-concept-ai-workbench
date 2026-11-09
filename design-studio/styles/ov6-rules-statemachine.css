@@ -2465,6 +2465,10 @@ button.primary-btn.compact {
   grid-template-rows: auto minmax(0, 1fr);
   background: #07101c;
 }
+.operational-task-workbench.is-embedded {
+  grid-template-rows: minmax(0, 1fr);
+  background: transparent;
+}
 
 .operational-task-workbench > .force-next-banner { margin: 0 20px 12px; }
 

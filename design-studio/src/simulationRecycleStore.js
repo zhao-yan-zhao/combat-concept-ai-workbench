@@ -51,8 +51,8 @@ export function extractSimulationPhaseOutcomes(scenario, phaseAction) {
         status,
         statusLabel: ({ achieved: "顺利达成", partial: "部分达成", failed: "未达成" })[status] || "顺利达成",
         summary: clean(item.summary, 500) || "阶段目标在推演中按计划完成。",
-        sourceType: "[定量仿真回传]",
-        isQuantitative: true,
+        sourceType: clean(item.sourceType, 60) || "[定量仿真回传]",
+        isQuantitative: typeof item.isQuantitative === "boolean" ? item.isQuantitative : true,
         riskLevel,
         riskAssessment: clean(item.riskAssessment, 200) || (status === "achieved" ? "仿真回传：执行顺利闭环" : "仿真回传：存在指标偏差")
       };
@@ -428,4 +428,172 @@ function normalizeActivityDeviation(item, matchedAct, index) {
     rootCause: clean(item.rootCause, 500) || "推演对抗中受外部条件制约",
     recommendation: clean(item.recommendation, 500) || "优化要素协同关系与资源配置"
   };
+}
+
+/**
+ * 将回合制兵棋对抗流水线 (wargameState) 编译为仿真推演结果 (simulationResult) (M8-T8.5)
+ */
+export function compileWargameTurnsToSimulationResult(wargameState, phaseAction = {}, ov5 = {}) {
+  const turns = Array.isArray(wargameState?.turns) ? wargameState.turns : [];
+  const phases = Array.isArray(phaseAction?.phases) ? phaseAction.phases : [];
+  const activities = Array.isArray(ov5?.activities) ? ov5.activities : [];
+
+  const adjudicatedTurns = turns.filter((t) => t.adjudication && t.adjudication.outcome);
+
+  const phaseOutcomes = phases.map((phase, idx) => {
+    const matchingTurns = adjudicatedTurns.filter((t) => t.phaseId === phase.id);
+
+    if (!matchingTurns.length) {
+      return {
+        phaseId: phase.id,
+        phaseName: phase.name,
+        plannedTime: phase.timeWindow || `第 ${idx + 1} 阶段时窗`,
+        actualDuration: "待兵棋推演实施",
+        durationDelta: "+0h",
+        lossRate: "0% (待推演评估)",
+        status: "achieved",
+        statusLabel: "待推演",
+        summary: `阶段 [${phase.name}] 尚未录入兵棋对抗回合裁决数据。`,
+        sourceType: "[兵棋对抗裁决编译]",
+        isQuantitative: false,
+        riskLevel: "low",
+        riskAssessment: "阶段尚未展开回合对抗，暂无态势对抗风险。",
+        wargameTurnsCount: 0
+      };
+    }
+
+    const combinedOutcomes = matchingTurns.map((t) => t.adjudication.outcome).join("；");
+    const combinedRationales = matchingTurns.map((t) => t.adjudication.rationale).filter(Boolean).join("；");
+    const totalEventsInPhase = matchingTurns.reduce((sum, t) => sum + (t.injectedEvents?.length || 0), 0);
+
+    const hasFailure = /未达成|失利|中断|击溃|行动失败|严重受挫|防空反击成功/i.test(combinedOutcomes);
+    const hasDelayOrPartial = /胶着|受阻|延滞|互有损耗|推进受限|行动迟滞|窗口漂移|协同脱节|受制于|遭受干扰/i.test(combinedOutcomes);
+
+    let status = "achieved";
+    let lossRate = "1.0% (兵棋裁决轻微损耗)";
+    let durationDelta = "+0h";
+    let riskLevel = "low";
+    let riskAssessment = "兵力展开与对抗推进符合推演意图，红蓝对抗顺利达成。";
+
+    if (hasFailure) {
+      status = "failed";
+      lossRate = "12.0% (兵棋对抗严重受挫)";
+      durationDelta = `+${matchingTurns.length * 1.5}h`;
+      riskLevel = "high";
+      riskAssessment = "裁决判定关键战术动作中断或遭红方有效拦截，阶段目标未达成。";
+    } else if (hasDelayOrPartial || totalEventsInPhase >= 2) {
+      status = "partial";
+      lossRate = "4.5% (兵棋对抗局部受损)";
+      durationDelta = `+${Math.max(1, totalEventsInPhase * 0.5)}h`;
+      riskLevel = "medium";
+      riskAssessment = "受红方反制与战场导调事件扰动，推进节奏延缓，互有消耗。";
+    }
+
+    const summary = combinedRationales
+      ? `【裁决表现】${combinedOutcomes}。【机理剖析】${combinedRationales}`
+      : `【裁决表现】${combinedOutcomes}。`;
+
+    return {
+      phaseId: phase.id,
+      phaseName: phase.name,
+      plannedTime: phase.timeWindow || `第 ${idx + 1} 阶段时窗`,
+      actualDuration: phase.timeWindow ? `${phase.timeWindow} (兵棋实测)` : "符合预设",
+      durationDelta,
+      lossRate,
+      status,
+      statusLabel: ({ achieved: "顺利达成", partial: "部分达成", failed: "未达成" })[status] || "顺利达成",
+      summary: clean(summary, 500),
+      sourceType: "[兵棋对抗裁决编译]",
+      isQuantitative: false,
+      riskLevel,
+      riskAssessment,
+      evidenceBasis: `源自兵棋推演回合 [${matchingTurns.map((t) => t.turnNumber).join(", ")}] 裁决判定`,
+      wargameTurnsCount: matchingTurns.length
+    };
+  });
+
+  const activityDeviations = [];
+  adjudicatedTurns.forEach((turn) => {
+    const outcomeText = turn.adjudication?.outcome || "";
+    const rationaleText = turn.adjudication?.rationale || "";
+    const isImpeded = /胶着|受阻|延滞|推进受限|行动迟滞|窗口漂移|协同脱节|受制于|遭受干扰|未达成|失利|中断|击溃|行动失败|严重受挫/i.test(outcomeText);
+    const isSevere = /未达成|失利|中断|击溃|行动失败|严重受挫/i.test(outcomeText);
+
+    if (isImpeded) {
+      const blueActRefs = Array.isArray(turn.intents?.blue?.activityRefs) ? turn.intents.blue.activityRefs : [];
+      const redActRefs = Array.isArray(turn.intents?.red?.activityRefs) ? turn.intents.red.activityRefs : [];
+      const targetActIds = [...new Set([...blueActRefs, ...redActRefs])];
+
+      const finalActs = targetActIds.length > 0
+        ? targetActIds.map((id) => activities.find((a) => a.id === id)).filter(Boolean)
+        : activities.slice(0, 2);
+
+      finalActs.forEach((act, actIdx) => {
+        const category = /延滞|窗口|时序/i.test(outcomeText) ? "schedule" : /协同|协同脱节|指控/i.test(outcomeText) ? "coordination" : "effect";
+        activityDeviations.push({
+          id: `dev-turn-${turn.turnNumber}-${actIdx + 1}`,
+          activityId: act.id,
+          activityName: act.name,
+          category,
+          severity: isSevere ? "high" : "medium",
+          planned: `活动 [${act.name}] 按作战概念预设顺畅实施`,
+          actual: `第 ${turn.turnNumber} 回合兵棋对抗裁决判定：${outcomeText}`,
+          gap: isSevere ? "行动严重受阻，未形成作战效能" : "行动推进迟滞，存在协同摩擦",
+          rootCause: rationaleText || `回合 ${turn.turnNumber} 遭遇对手反制与战场扰动（包含 ${turn.injectedEvents?.length || 0} 项导调事件）`,
+          recommendation: "在战法设计中补全应对反制机制，预留备用协同旁路与机动窗口",
+          sourceType: "[兵棋对抗裁决编译]",
+          turnNumber: turn.turnNumber
+        });
+      });
+    }
+  });
+
+  const totalInjectedEvents = adjudicatedTurns.reduce((sum, t) => sum + (t.injectedEvents?.length || 0), 0);
+  const achievedPhases = phaseOutcomes.filter((p) => p.status === "achieved").length;
+  const successRate = phaseOutcomes.length > 0 ? Math.round((achievedPhases / phaseOutcomes.length) * 100) : 100;
+
+  return {
+    status: "completed",
+    compiler: "wargame-turn-compiler",
+    compiledAt: new Date().toISOString(),
+    summary: `基于回合制兵棋对抗流水线自动编译，覆盖 ${adjudicatedTurns.length} 个对抗回合，提炼 ${phaseOutcomes.length} 个阶段成效与 ${activityDeviations.length} 项作战活动偏差。`,
+    sourceType: "[兵棋对抗裁决编译]",
+    metrics: [
+      { id: "wargame-turns", label: "已裁决回合数", value: adjudicatedTurns.length, unit: "回合" },
+      { id: "wargame-events", label: "导调事件注入数", value: totalInjectedEvents, unit: "项" },
+      { id: "wargame-success-rate", label: "蓝方达成率", value: successRate, unit: "%" }
+    ],
+    phaseOutcomes,
+    activityDeviations
+  };
+}
+
+/**
+ * 将兵棋推演裁决结果一键同步至想定推演运行记录与阶段/活动模型 (M8-T8.5)
+ */
+export function syncWargameToScenarioSimulation({ wargame, scenario, phaseAction, ov5 }) {
+  const compiledResult = compileWargameTurnsToSimulationResult(wargame, phaseAction, ov5);
+  const runId = `run-wargame-${Date.now()}`;
+
+  const wargameRun = {
+    id: runId,
+    adapter: { id: "wargame-turn-compiler", name: "兵棋推演对抗裁决编译", version: "v1" },
+    status: "result-recorded",
+    createdAt: compiledResult.compiledAt,
+    result: compiledResult
+  };
+
+  const nextScenario = {
+    ...(scenario || {}),
+    simulation: {
+      ...((scenario && scenario.simulation) || {}),
+      runs: [wargameRun, ...(((scenario && scenario.simulation && scenario.simulation.runs) || []).filter((r) => r.adapter?.id !== "wargame-turn-compiler"))]
+    }
+  };
+
+  return recycleSimulationToPhasesAndActivities({
+    scenario: nextScenario,
+    phaseAction,
+    ov5
+  });
 }

@@ -4,7 +4,7 @@ import { listCmoMissionTypes } from "./forceMissionStore.js";
 const AREA_TYPES = [["patrol", "巡逻区"], ["prosecution", "交战/追击区"], ["support", "支援区"], ["transit", "航渡走廊"], ["target", "目标区"], ["exclusion", "禁入区"], ["other", "其他"]];
 const GEOMETRY_TYPES = [["point", "点位"], ["circle", "圆形区"], ["polygon", "多边形区"], ["corridor", "走廊"]];
 
-export function renderOperationalTasks(state = {}) {
+export function renderOperationalTasks(state = {}, { embedded = false } = {}) {
   const tasks = Array.isArray(state.forceMission?.tasks) ? state.forceMission.tasks : [];
   const phases = Array.isArray(state.phaseAction?.phases) ? state.phaseAction.phases : [];
   const phaseNames = new Map(phases.map((phase) => [phase.id, phase.name]));
@@ -17,11 +17,11 @@ export function renderOperationalTasks(state = {}) {
   const source = state.forceMission?.generation?.source || "";
   const completeCount = tasks.filter((task) => task.area?.name && task.area.name !== "待人工明确" && (task.area.points || []).some((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude))).length;
   const incompleteAreaCount = tasks.filter((task) => !task.area?.name || task.area.name === "待人工明确" || !(task.area.points || []).some((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude))).length;
-  return `<section class="operational-task-workbench">
-    <header class="operational-task-header">
+  return `<section class="operational-task-workbench ${embedded ? "is-embedded" : ""}">
+    ${embedded ? "" : `<header class="operational-task-header">
       <div><div class="operational-task-title-line"><h2>作战任务</h2>${renderStatus(confirmed, generating, source)}</div></div>
       <div class="operational-task-actions"><button type="button" class="${tasks.length ? "quiet-button" : "primary-btn"}" data-action="generate-operational-tasks" ${ready && !generating ? "" : "disabled"}>${generating ? generationLabel : tasks.length ? "AI 一键重新生成" : "AI 一键生成"}</button><button type="button" data-action="confirm-operational-tasks" ${tasks.length && !confirmed && !generating && !incompleteAreaCount ? "" : "disabled"}>${confirmed ? "任务已确认" : incompleteAreaCount ? `${incompleteAreaCount} 项区域待补齐` : "确认作战任务"}</button>${confirmed ? `<button type="button" class="primary-btn" data-action="select-force-mission-layer" data-layer="concept" data-view="force-mission" title="作战任务已就绪，进入概念兵力与编成设计">下一步：概念兵力设计 →</button>` : ""}</div>
-    </header>
+    </header>`}
     ${!ready ? `<p class="force-next-banner is-warn">请先在“阶段行动”中生成阶段，再生成作战任务与区域候选。</p>` : ""}
     <div class="operational-task-layout ${selected ? "has-selection" : "is-empty"}">
       <aside class="operational-task-list" aria-label="作战任务列表" data-grouped-list-panel="operational-task" data-grouped-list-dimensions="阶段:phase|阵营:side|任务类型:type|状态:status" data-grouped-list-default-group="phase"><div class="operational-pane-head"><div><span>任务清单</span><strong>${tasks.length}</strong></div><div><small>按阶段与阵营</small><button type="button" class="quiet-button compact" data-action="add-operational-task" ${generating ? "disabled" : ""} title="新增作战任务">＋ 新增</button></div></div><div class="operational-task-list-scroll" data-grouped-list-items>${tasks.map((task, index) => renderTaskListItem(task, index, selected?.id, phaseNames, confirmed)).join("") || renderEmpty()}</div><div class="operational-task-completion"><span>区域补全</span><strong>${completeCount}/${tasks.length}</strong></div></aside>

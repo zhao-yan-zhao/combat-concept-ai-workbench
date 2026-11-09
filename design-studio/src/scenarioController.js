@@ -1,5 +1,6 @@
 import { generateWithAi, isAiOutput } from "../../shared/aiClient.js";
 import { generateScenario, recommendScenarioDeployment } from "./scenarioStore.js";
+import { syncWargameToScenarioSimulation } from "./simulationRecycleStore.js";
 import {
   normalizeWargameState,
   submitTurnIntent,
@@ -13,7 +14,14 @@ import {
 import { requestWargameAdjudication } from "./wargameClient.js";
 import { resolveUserPerspective } from "./wargamePerspectiveFilter.js";
 
-export function createScenarioController({ getState, render, notify, invalidateValidation, syncScenario }) {
+export function createScenarioController({
+  getState,
+  render,
+  notify,
+  invalidateValidation,
+  syncScenario,
+  applyWithRecoveryPoint
+}) {
   function ensureScenarioInitialized(state) {
     if (!state.scenario) {
       state.scenario = generateScenario(state);
@@ -58,6 +66,39 @@ export function createScenarioController({ getState, render, notify, invalidateV
       if (action === "select-wargame-turn") {
         const turnNum = Number(source?.dataset?.turnNumber) || 1;
         state.wargameCurrentTurnIndex = turnNum;
+        render();
+        return true;
+      }
+
+      if (action === "sync-wargame-to-simulation") {
+        const wargame = state.scenario?.wargame;
+        if (!wargame || !wargame.turns || !wargame.turns.some((t) => t.adjudication?.outcome)) {
+          notify("兵棋推演暂无已裁决的回合，请至少完成一轮红蓝裁决后再同步", "warn");
+          return true;
+        }
+        const doSync = () => {
+          const synced = syncWargameToScenarioSimulation({
+            wargame: state.scenario.wargame,
+            scenario: state.scenario,
+            phaseAction: state.phaseAction,
+            ov5: state.ov5
+          });
+          state.scenario = synced.scenario;
+          state.phaseAction = synced.phaseAction;
+          state.ov5 = synced.ov5;
+        };
+
+        if (typeof applyWithRecoveryPoint === "function") {
+          void applyWithRecoveryPoint(
+            { label: "同步兵棋推演裁决至仿真回收", source: "wargame-sync" },
+            doSync
+          );
+        } else {
+          doSync();
+        }
+        invalidateValidation();
+        void syncScenario?.(state.scenario, { source: "wargame-sync" });
+        notify(`已将兵棋对抗裁决成果同步至仿真回收看板（更新 ${state.phaseAction?.phases?.length || 0} 个阶段）`);
         render();
         return true;
       }

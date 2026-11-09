@@ -1232,7 +1232,11 @@ node scripts/smoke-ui.mjs
     * 区分定量真实仿真回传（`sourceType: "[定量仿真回传]"`, `isQuantitative: true`）与本地机理推导（`sourceType: "[定性推演/机理推导]"`, `isQuantitative: false`）；
     * 依据态势感知覆盖度、边界合规率与时序完整性健康度，科学推导三级态势风险（`low/medium/high`）、定性战损区间预估（如 `0.5% (预估轻微损耗)`、`5.0% (局部受阻预估)`、`15.0% (严重受挫预估)`）与可追溯的证据依据（`evidenceBasis`）；
     * 新增自动化回归脚本 `scripts/check-m8-honest-recycle-derivation.mjs`，既有 `check-m6-simulation-result-recycle.mjs` 100% PASS。
-  - **T8.5** 打通回合制兵棋导调（`wargameTurnStore`）到仿真结果回收（`simulationRecycleStore`）的自动编译桥
+  - **T8.5（已落地）** 打通回合制兵棋导调（`wargameTurnStore`）到仿真结果回收（`simulationRecycleStore`）的自动编译桥：
+    * 新增 `compileWargameTurnsToSimulationResult`，将红蓝对抗意图、导调事件与裁决结论自动编译为标准 `simulationResult`；
+    * 精准提取受阻回合对应的 OV-5 作战活动，生成活动级执行偏差（`activityDeviations`）与阶段成效溯源；
+    * 新增 `syncWargameToScenarioSimulation` 一键同步引擎与前端推演舱操作按钮（`⚡ 同步至仿真结果回收`），经 `applyWithRecoveryPoint` 事务包装安全回填至 `phaseAction` 与 `ov5`；
+    * 新增自动化回归脚本 `scripts/check-m8-wargame-recycle-bridge.mjs`，相关 workflow 组与 wargame 专项测试 100% PASS。
   - **T8.6** 升级本地抽象网格推演内核（Abstract Grid Discrete-Event Evaluator）
   - **T8.7** 基于威胁轴线与 OV-2/OV-5 协同引力的抽象网格部署算法
 - **Batch 3 空间拓扑布局、复合评分与 DoDAF 深度校核**：

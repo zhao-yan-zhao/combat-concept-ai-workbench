@@ -383,6 +383,9 @@ export function renderWargameTurnsView(state) {
             <button type="button" class="primary-btn wargame-advance-btn" data-action="advance-wargame-turn" ${currentTurn.status !== "completed" ? "disabled title='需先裁决并保存当前回合方可推进'" : ""}>
               推进至下一回合 (Turn ${currentTurn.turnNumber + 1}) ➔
             </button>
+            <button type="button" class="quiet-button wargame-sync-btn" data-action="sync-wargame-to-simulation" title="将已裁决的兵棋对抗成果自动编译并回流至仿真推演结果与阶段/活动模型">
+              ⚡ 同步至仿真结果回收
+            </button>
           ` : `
             <span style="font-size:12px; color:#94a3b8; font-style:italic;">(非导演部视角，由导演部统一推进回合)</span>
           `}

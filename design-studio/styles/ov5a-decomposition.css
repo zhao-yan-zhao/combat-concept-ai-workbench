@@ -1118,6 +1118,19 @@
   border-bottom: 1px solid rgba(120, 150, 150, 0.18);
   background: rgba(0, 0, 0, 0.14);
 }
+.force-layer-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.force-layer-toolbar-actions button {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
 .force-layer-seg {
   display: inline-flex;
   align-items: stretch;

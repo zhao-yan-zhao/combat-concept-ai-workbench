@@ -76,18 +76,12 @@ export function renderForceMission(state) {
     .filter((phase) => phase?.id)
     .sort((a, b) => (Number(a.sequence) || 0) - (Number(b.sequence) || 0));
   const focusId = resolveForceMissionFocusId(state, phases);
-  const focusPhase = phases.find((phase) => phase.id === focusId) || null;
-  const phaseConceptForces = filterConceptForcesForPhase(forces, focusId, phases.length > 0);
-  const phaseCombatForces = filterCombatForcesForPhase(combatForces, forces, focusId, phases.length > 0);
-  const phaseLabel = focusPhase
-    ? `阶段${focusPhase.sequence || ""} ${focusPhase.name || focusPhase.id}`
-    : (phases.length ? "未选阶段" : "全部");
   const defaultTab = (!tasksReady || !hasDraft) ? "task" : "concept";
   const layerTab = ["task", "concept", "combat"].includes(state.forceMissionLayerTab)
     ? state.forceMissionLayerTab
     : defaultTab;
-  const conceptCountLabel = formatPhaseSideCounts(phaseConceptForces);
-  const combatCountLabel = formatPhaseSideCounts(phaseCombatForces);
+  const conceptCountLabel = formatPhaseSideCounts(forces);
+  const combatCountLabel = formatPhaseSideCounts(combatForces);
   const conceptMissingEquip = forces.filter((force) => !formatConceptEquipment(force)).length;
   const combatMissingPlatform = combatForces.filter((force) => !(force.platforms || []).length).length;
   const combatUnlinked = combatForces.filter((force) => {
@@ -115,9 +109,10 @@ export function renderForceMission(state) {
     recommendRunning: Boolean(recommend.running)
   });
 
-  const conceptBody = phaseConceptForces.length
-    ? renderConceptForceRoster(phaseConceptForces, {
+  const conceptBody = forces.length
+    ? renderConceptForceRoster(forces, {
       tasks: plan.tasks || [],
+      phases,
       picker,
       catalogOpen,
       editable,
@@ -131,14 +126,15 @@ export function renderForceMission(state) {
       tasksCount,
       canGenerate: canGenerateConcept,
       generating: generating && (generatingLayer === "concept" || generatingLayer === "both"),
-      phaseLabel
+      phaseLabel: "全作战阶段"
     });
 
-  const combatBody = phaseCombatForces.length
-    ? renderCombatCompositionTables(phaseCombatForces, {
+  const combatBody = combatForces.length
+    ? renderCombatCompositionTables(combatForces, {
       tasks: plan.tasks || [],
       missionTypes,
       conceptForces: forces,
+      phases,
       picker,
       catalogOpen,
       editable,
@@ -151,7 +147,7 @@ export function renderForceMission(state) {
       hasConcept: forces.length > 0,
       canGenerate: canGenerateCombat,
       generating: generating && (generatingLayer === "combat" || generatingLayer === "both"),
-      phaseLabel
+      phaseLabel: "全作战阶段"
     });
 
   const conceptBtnLabel = generating && (generatingLayer === "concept" || generatingLayer === "both")
@@ -184,32 +180,7 @@ export function renderForceMission(state) {
     })}
     ${renderForceResourceSubflowBar(state, "force-mission")}
     <div class="force-mission-workbench">
-      <div class="force-mission-left">
-        ${renderForceMissionRail({
-          phases,
-          focusId,
-          tasks: plan.tasks || [],
-          conceptForces: forces,
-          combatForces
-        })}
-        ${renderForceMissionRailActions({
-          workflow,
-          layerTab,
-          tasksReady,
-          tasksCount,
-          canGenerateConcept,
-          canGenerateCombat,
-          canConfirm,
-          canConfirmConcept,
-          conceptConfirmed,
-          canRecommendCombat,
-          conceptBtnLabel,
-          combatBtnLabel,
-          confirmBtnLabel,
-          recommendRunning: recommend.running
-        })}
-      </div>
-      <div class="force-mission-body" data-force-phase-panel="${escapeAttribute(focusId || "all")}">
+      <div class="force-mission-body">
         <article class="planning-card force-layer-pager" aria-label="任务与兵力工作台">
           <div class="force-layer-toolbar">
             <div class="force-layer-seg" role="tablist" aria-label="任务与兵力分层">
@@ -237,7 +208,7 @@ export function renderForceMission(state) {
                 <span class="force-layer-seg-index">2</span>
                 <span class="force-layer-seg-copy">
                   <strong>概念兵力</strong>
-                  <small title="当前阶段">${escapeHtml(conceptCountLabel)}</small>
+                  <small title="全量概念兵力">${escapeHtml(conceptCountLabel)}</small>
                 </span>
                 ${conceptMissingEquip ? `<span class="force-layer-seg-badge is-warn">${conceptMissingEquip}</span>` : forces.length ? `<span class="force-layer-seg-badge is-ok">✓</span>` : ""}
               </button>
@@ -251,7 +222,7 @@ export function renderForceMission(state) {
                 <span class="force-layer-seg-index">3</span>
                 <span class="force-layer-seg-copy">
                   <strong>作战编成</strong>
-                  <small title="当前阶段">${escapeHtml(combatCountLabel)}</small>
+                  <small title="全量作战编成">${escapeHtml(combatCountLabel)}</small>
                 </span>
                 ${!forces.length
                   ? ""
@@ -262,24 +233,30 @@ export function renderForceMission(state) {
                       : ""}
               </button>
             </div>
-            <div class="force-layer-toolbar-meta">
-              <span class="force-layer-phase-label">${escapeHtml(phaseLabel)}</span>
-              ${layerTab === "task"
-                ? tasksReady
-                  ? `<span class="mini-tag is-ok">任务已确认 ✓</span>`
-                  : `<span class="mini-tag review">${tasksCount ? `${tasksCount} 待确认` : "待分解"}</span>`
-                : layerTab === "combat" && combatUnlinked > 0
-                  ? `<span class="mini-tag review">${combatUnlinked} 未挂概念</span>`
-                  : layerTab === "concept" && conceptMissingEquip > 0
-                    ? `<span class="mini-tag review">${conceptMissingEquip} 待挂装备</span>`
-                    : confirmed
-                      ? ""
-                      : `<span class="mini-tag">${escapeHtml(status)}</span>`}
-            </div>
+            ${renderForceMissionToolbarActions({
+              workflow,
+              layerTab,
+              tasksReady,
+              tasksCount,
+              canGenerateConcept,
+              canGenerateCombat,
+              canConfirm,
+              canConfirmConcept,
+              conceptConfirmed,
+              combatConfirmed,
+              confirmed,
+              canRecommendCombat,
+              conceptBtnLabel,
+              combatBtnLabel,
+              confirmBtnLabel,
+              recommendRunning: recommend.running,
+              hasForces: Boolean(forces.length || combatForces.length),
+              incompleteAreaCount
+            })}
           </div>
           <div class="force-layer-panel ${layerTab === "task" ? "is-task-panel" : ""}" role="tabpanel">
             ${layerTab === "task"
-              ? renderOperationalTasks(state)
+              ? renderOperationalTasks(state, { embedded: true })
               : (!catalogOpen && hasDraft
                 ? `<p class="planning-meta force-catalog-hint">CMO 装备目录未连接：可继续审阅职责与任务；挂接真实平台请到系统管理配置 DB3。</p>`
                 : "") + (layerTab === "combat" ? combatBody : conceptBody)}

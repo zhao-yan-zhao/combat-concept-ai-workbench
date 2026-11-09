@@ -453,7 +453,12 @@ export function wireControllers({
     render,
     notify: showToast,
     invalidateValidation,
-    syncScenario: projectScenarioSyncController.sync
+    syncScenario: projectScenarioSyncController.sync,
+    applyWithRecoveryPoint: (meta, mutate) => applyWithRecoveryPoint(
+      { state, render, showToast, projectModelSnapshotSyncController },
+      meta,
+      mutate
+    )
   });
 
   const simulationAdapterController = createSimulationAdapterController({

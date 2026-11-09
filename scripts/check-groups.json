@@ -52,7 +52,8 @@
     "check-workflow-restructuring-batch4.mjs",
     "check-ov5-knowledge-citation-chain.mjs",
     "check-workflow-step-next-bar.mjs",
-    "check-m8-honest-recycle-derivation.mjs"
+    "check-m8-honest-recycle-derivation.mjs",
+    "check-m8-wargame-recycle-bridge.mjs"
   ],
   "dodaf": [
     "check-dodaf-consistency-snapshot-import.mjs",
