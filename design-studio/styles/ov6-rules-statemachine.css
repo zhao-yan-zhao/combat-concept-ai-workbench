@@ -2690,7 +2690,7 @@ button.primary-btn.compact {
 .project-rail:hover .step-node.has-related .step-expand,
 .project-rail:focus-within .step-node.has-related .step-expand { display: none; }
 
-.step-related-node { min-height: 22px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
+.step-related-node { min-height: 22px; }
 .step-related-button {
   position: relative;
   display: grid;
