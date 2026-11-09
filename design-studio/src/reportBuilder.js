@@ -167,7 +167,8 @@ export function buildReportPayload({ project, brief, inspiration, direction, for
       updatedAt: scenario.updatedAt || scenario.generatedAt,
       deploymentPlan: scenario.deploymentPlan || null,
       deploymentData,
-      simulation: buildSimulationReportSummary(scenario)
+      simulation: buildSimulationReportSummary(scenario),
+      wargame: scenario.wargame || null
     } : null,
     deploymentBridge: buildDeploymentBridgeSummary(deployment, scenario),
     traceability,
@@ -504,6 +505,7 @@ function buildWargameReviewMarkdown(payload, template) {
         ...renderOv6cSection(payload.ov6c)
       ];
     })(),
+    ...renderWargameTurnsSection(payload.scenario?.wargame),
     "### 关键活动因果达成度",
     ...renderActivityDecompositions(payload.ov5a, payload.ov5.activities),
     "",
