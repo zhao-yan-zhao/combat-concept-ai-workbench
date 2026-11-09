@@ -1237,7 +1237,12 @@ node scripts/smoke-ui.mjs
     * 精准提取受阻回合对应的 OV-5 作战活动，生成活动级执行偏差（`activityDeviations`）与阶段成效溯源；
     * 新增 `syncWargameToScenarioSimulation` 一键同步引擎与前端推演舱操作按钮（`⚡ 同步至仿真结果回收`），经 `applyWithRecoveryPoint` 事务包装安全回填至 `phaseAction` 与 `ov5`；
     * 新增自动化回归脚本 `scripts/check-m8-wargame-recycle-bridge.mjs`，相关 workflow 组与 wargame 专项测试 100% PASS。
-  - **T8.6** 升级本地抽象网格推演内核（Abstract Grid Discrete-Event Evaluator）
+  - **T8.6（已落地）** 升级本地抽象网格推演内核（Abstract Grid Discrete-Event Evaluator）：
+    * 实现 `calculateSensorCoverage`：基于侦察实体角色、半径与距离衰减模型，计算对任务区域的确定性感知覆盖度；
+    * 实现 `calculateC2Connectivity`：构建无向通信可达图，利用 BFS 寻找最大连通块并精准识别孤立脱节实体（`isolatedIds`）；
+    * 实现 `calculateCausalSmoothness`：校验 timeline 离散事件时间单调性与 OV-5 拓扑依赖因果先序，识别时序倒挂并量化扣分；
+    * 实现 `calculateForceDispersion`：量化防区实体邻近距离，识别过密聚集（易被面杀伤）与过疏脱节（失联）风险；
+    * 整合为 6 项完整战术机理指标并输出 `evaluatorDetails`；新增 `scripts/check-m8-abstract-grid-des.mjs` 100% PASS。
   - **T8.7** 基于威胁轴线与 OV-2/OV-5 协同引力的抽象网格部署算法
 - **Batch 3 空间拓扑布局、复合评分与 DoDAF 深度校核**：
   - **T8.8** 融合“机理动力学 + 假设脆弱性 + 推演成效”的多方案定量评分引擎

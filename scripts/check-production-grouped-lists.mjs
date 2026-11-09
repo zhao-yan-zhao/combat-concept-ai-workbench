@@ -67,9 +67,8 @@ assert.ok(!ov1bSource.includes("ov1b-party-tabs"), "OV1b must expose all task gr
 assert.ok(ov1bSource.includes("groups.map"), "OV1b must render the complete task-group collection");
 const forceSource = await read("design-studio/src/forceMissionView.js");
 assert.ok(forceSource.includes("force-concept-columns is-grouped"), "Force lists must use one complete data column before grouping");
-assert.ok(forceSource.includes("force-mission-workbench") && forceSource.includes("force-mission-left") && forceSource.includes("force-mission-rail"), "Force-mission must keep generate/confirm actions in a left column beside the list");
-assert.match(css, /\.force-mission-left\s*\{[^}]*flex:\s*0 0 220px/s);
-assert.match(css, /\.force-mission-rail-actions\s*\{[^}]*flex:\s*0 0 auto/s);
+assert.ok(forceSource.includes("force-mission-workbench") && forceSource.includes("force-layer-toolbar-actions"), "Force-mission must keep generate/confirm actions in toolbar beside tabs");
+assert.match(css, /\.force-layer-toolbar-actions\s*\{[^}]*display:\s*flex/s);
 assert.match(css, /\.force-mission-workbench\s*\{[^}]*overflow:\s*hidden/s);
 assert.match(css, /\.force-mission-main-stage\s*\{[^}]*overflow:\s*hidden/s);
 assert.match(css, /\.force-roster-list\s*\{[^}]*max-height:\s*none/s);

@@ -53,7 +53,8 @@
     "check-ov5-knowledge-citation-chain.mjs",
     "check-workflow-step-next-bar.mjs",
     "check-m8-honest-recycle-derivation.mjs",
-    "check-m8-wargame-recycle-bridge.mjs"
+    "check-m8-wargame-recycle-bridge.mjs",
+    "check-m8-abstract-grid-des.mjs"
   ],
   "dodaf": [
     "check-dodaf-consistency-snapshot-import.mjs",

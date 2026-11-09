@@ -158,6 +158,7 @@ export function renderForceMission(state) {
     : combatForces.length ? "重新生成作战兵力" : "生成作战兵力";
   const confirmBtnLabel = (confirmed || (forces.length > 0 && combatForces.length > 0)) ? "兵力已就绪" : "确认放行";
   const canRecommendCombat = !busy && catalogOpen && combatForces.length > 0;
+  const incompleteAreaCount = (plan.tasks || []).filter((task) => !task.area?.name || task.area.name === "待人工明确" || !(task.area.points || []).some((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude))).length;
 
   const mainBody = `
     ${renderForceMissionChrome({
@@ -550,7 +551,7 @@ function renderForceMissionRail({
   </aside>`;
 }
 
-function renderForceMissionRailActions({
+function renderForceMissionToolbarActions({
   workflow = {},
   layerTab = "task",
   tasksReady = false,
@@ -560,14 +561,18 @@ function renderForceMissionRailActions({
   canConfirm = false,
   canConfirmConcept = false,
   conceptConfirmed = false,
+  combatConfirmed = false,
+  confirmed = false,
   canRecommendCombat = false,
   conceptBtnLabel = "生成概念兵力",
   combatBtnLabel = "生成作战兵力",
   confirmBtnLabel = "全量确认放行",
-  recommendRunning = false
+  recommendRunning = false,
+  hasForces = false,
+  incompleteAreaCount = 0
 }) {
   if (layerTab === "task") {
-    return `<div class="force-mission-rail-actions planning-actions" aria-label="作战任务动作">
+    return `<div class="force-layer-toolbar-actions" aria-label="作战任务动作">
       <button type="button"
         class="${tasksCount ? "quiet-button" : "primary-btn"}"
         data-action="generate-operational-tasks"
@@ -580,8 +585,9 @@ function renderForceMissionRailActions({
       <button type="button"
         class="${tasksReady ? "quiet-button" : "primary-btn"}"
         data-action="confirm-operational-tasks"
-        ${tasksCount && !tasksReady ? "" : "disabled"}>
-        ${tasksReady ? "任务已确认 ✓" : "确认作战任务"}
+        ${tasksCount && !tasksReady && !incompleteAreaCount ? "" : "disabled"}
+        title="${incompleteAreaCount ? `${incompleteAreaCount} 项区域待补齐` : tasksReady ? "任务已确认" : "确认作战任务"}">
+        ${tasksReady ? "任务已确认 ✓" : incompleteAreaCount ? `${incompleteAreaCount} 项区域待补齐` : "确认作战任务"}
       </button>
       ${tasksReady
         ? `<button type="button" class="primary-btn" data-action="select-force-mission-layer" data-layer="concept" title="进入第 2 步概念兵力设计">
@@ -591,58 +597,58 @@ function renderForceMissionRailActions({
     </div>`;
   }
 
-  const isTaskReady = Boolean(workflow.tasksReady ?? tasksReady);
-  const count = workflow.tasksCount ?? tasksCount;
-  const taskGateNotice = !isTaskReady
-    ? `<div class="force-rail-task-gate" style="margin-bottom: 10px; padding: 8px 10px; background: var(--color-bg-subtle, #f8fafc); border: 1px solid var(--color-border-subtle, #e2e8f0); border-radius: 6px; font-size: 12px;">
-        <div style="font-weight: 600; color: var(--color-warn-text, #b45309); margin-bottom: 4px;">前置：需核定作战任务</div>
-        <p style="margin: 0 0 6px 0; color: var(--color-text-muted, #64748b); line-height: 1.4;">${count ? `${count} 项任务待确认放行` : "尚未生成作战任务"}</p>
-        <button type="button" class="primary-btn compact" data-action="select-force-mission-layer" data-layer="task" style="width: 100%;">前往作战任务 →</button>
-      </div>`
-    : `<div style="margin-bottom: 8px;">
-        <button type="button" class="quiet-button compact" data-action="select-force-mission-layer" data-layer="task" style="width: 100%; text-align: left; font-size: 11px;">
-          ← 回看作战任务 (${tasksCount}项)
-        </button>
-      </div>`;
-  const generateButtons = `${taskGateNotice}<button type="button"
-      class="${workflow.primaryAction === "concept" ? "" : "quiet-button"}"
-      data-action="generate-concept-forces"
-      ${canGenerateConcept ? "" : "disabled"}>${escapeHtml(conceptBtnLabel)}</button>
+  if (layerTab === "concept") {
+    return `<div class="force-layer-toolbar-actions" aria-label="概念兵力动作">
+      <button type="button"
+        class="${workflow.primaryAction === "concept" ? "" : "quiet-button"}"
+        data-action="generate-concept-forces"
+        ${canGenerateConcept ? "" : "disabled"}>
+        ${escapeHtml(conceptBtnLabel)}
+      </button>
+      <button type="button"
+        class="${conceptConfirmed ? "quiet-button" : workflow.primaryAction === "confirm-concept" ? "" : "primary-btn"}"
+        data-action="confirm-concept-forces"
+        title="单独确认概念能力单元，可提前解锁 OV-1 作战概念图"
+        ${canConfirmConcept ? "" : "disabled"}>
+        ${conceptConfirmed ? "概念能力已就绪 ✓" : "确认概念能力"}
+      </button>
+      ${conceptConfirmed || canConfirmConcept
+        ? `<button type="button" class="primary-btn" data-action="select-force-mission-layer" data-layer="combat" title="进入第 3 步作战编成包设计">
+            下一步：作战编成 →
+          </button>`
+        : ""}
+    </div>`;
+  }
+
+  return `<div class="force-layer-toolbar-actions" aria-label="作战编成动作">
     <button type="button"
       class="${workflow.primaryAction === "combat" ? "" : "quiet-button"}"
       data-action="generate-combat-forces"
-      ${canGenerateCombat ? "" : "disabled"}>${escapeHtml(combatBtnLabel)}</button>
+      ${canGenerateCombat ? "" : "disabled"}>
+      ${escapeHtml(combatBtnLabel)}
+    </button>
     <button type="button" class="quiet-button" data-action="derive-combat-forces" title="直接从概念兵力快速派生作战编成草案"
-      ${canGenerateCombat ? "" : "disabled"}>从概念派生作战</button>
+      ${canGenerateCombat ? "" : "disabled"}>
+      从概念派生
+    </button>
     ${canRecommendCombat ? `<button type="button" class="quiet-button" data-action="recommend-platforms-from-phases"
-      ${recommendRunning ? "disabled" : ""}>${recommendRunning ? "正在挂接平台…" : "为作战兵力补挂平台"}</button>` : ""}`;
-  const hasForces = Boolean(workflow.hasConcept || workflow.hasCombat);
-  const clearButton = hasForces
-    ? `<button type="button" class="quiet-button danger-quiet" data-action="clear-all-forces" ${workflow.busy ? "disabled" : ""} title="清空已生成的全部概念兵力与作战编成">清空全部兵力</button>`
-    : "";
-  const confirmedIdle = Boolean(workflow.confirmed) && !workflow.busy;
-  if (confirmedIdle) {
-    return `<div class="force-mission-rail-actions planning-actions is-collapsed" aria-label="兵力动作">
-      <details class="force-mission-rail-regen">
-        <summary>重新生成</summary>
-        ${generateButtons}
-        ${clearButton}
-      </details>
-    </div>`;
-  }
-  return `<div class="force-mission-rail-actions planning-actions" aria-label="兵力动作">
-    ${generateButtons}
-    <button type="button"
-      class="${workflow.primaryAction === "confirm-concept" ? "" : "quiet-button"}"
-      data-action="confirm-concept-forces"
-      title="单独确认概念能力单元，可提前解锁 OV-1 作战概念图"
-      ${canConfirmConcept ? "" : "disabled"}>${conceptConfirmed ? "概念能力已就绪 ✓" : "概念能力就绪"}</button>
+      ${recommendRunning ? "disabled" : ""}>
+      ${recommendRunning ? "正在挂接平台…" : "为作战兵力补挂平台"}
+    </button>` : ""}
     <button type="button"
       class="${workflow.primaryAction === "confirm" ? "" : "quiet-button"}"
       data-action="confirm-force-mission"
-      ${canConfirm ? "" : "disabled"}>${escapeHtml(confirmBtnLabel)}</button>
-    ${clearButton}
+      ${canConfirm ? "" : "disabled"}>
+      ${confirmed ? "全量放行已确认 ✓" : escapeHtml(confirmBtnLabel)}
+    </button>
+    ${hasForces
+      ? `<button type="button" class="quiet-button danger-quiet" data-action="clear-all-forces" ${workflow.busy ? "disabled" : ""} title="清空已生成的全部概念兵力与作战编成">清空兵力</button>`
+      : ""}
   </div>`;
+}
+
+function renderForceMissionRailActions(options = {}) {
+  return renderForceMissionToolbarActions(options);
 }
 
 function renderLayerEmpty({
@@ -747,11 +753,21 @@ function filterCombatForcesForPhase(combatForces = [], conceptForces = [], phase
   });
 }
 
+function formatForcePhases(phaseIds = [], phases = []) {
+  if (!phases.length) return "全作战阶段";
+  const ids = Array.isArray(phaseIds) ? phaseIds : [];
+  if (!ids.length) return "全作战阶段";
+  const matched = phases.filter((p) => ids.includes(p.id));
+  if (!matched.length) return "未挂接阶段";
+  if (matched.length === phases.length) return "全作战阶段";
+  return matched.map((p) => p.name || `阶段${p.sequence || ""}`).join("、");
+}
+
 /**
  * 概念兵力：左名单 + 右详情边栏（点选不顶开列表）。
  */
 function renderConceptForceRoster(forces = [], options = {}) {
-  const { tasks = [], picker = {}, catalogOpen = false, editable = false, confirmed = false, drawerEnter = false } = options;
+  const { tasks = [], phases = [], picker = {}, catalogOpen = false, editable = false, confirmed = false, drawerEnter = false } = options;
   const activeId = picker.layer === "concept" ? picker.forceId : "";
   const activeForce = forces.find((force) => force.id === activeId) || null;
 
@@ -762,8 +778,9 @@ function renderConceptForceRoster(forces = [], options = {}) {
           title: "概念兵力",
           className: "is-grouped",
           items: forces,
+          phases,
           tasks,
-          emptyText: "本阶段暂无概念兵力。",
+          emptyText: "暂无概念兵力。",
           activeId,
           confirmed
         })}
@@ -776,8 +793,8 @@ function renderConceptForceRoster(forces = [], options = {}) {
   </div>`;
 }
 
-function renderConceptSideColumn({ title, className, items = [], tasks = [], emptyText = "", activeId = "", confirmed = false }) {
-  return `<section class="force-roster-col ${className}" aria-label="${escapeAttribute(title)}" data-grouped-list-panel="force-concept" data-grouped-list-dimensions="阵营:side|职责:role|状态:status" data-grouped-list-default-group="side">
+function renderConceptSideColumn({ title, className, items = [], phases = [], tasks = [], emptyText = "", activeId = "", confirmed = false }) {
+  return `<section class="force-roster-col ${className}" aria-label="${escapeAttribute(title)}" data-grouped-list-panel="force-concept" data-grouped-list-dimensions="阵营:side|阶段:phase|职责:role|状态:status" data-grouped-list-default-group="side">
     ${items.length
       ? `<ul class="force-roster-list" data-grouped-list-items>${items.map((force, index) => {
           const equip = formatConceptEquipment(force);
@@ -787,7 +804,9 @@ function renderConceptSideColumn({ title, className, items = [], tasks = [], emp
           const matchedTasks = (tasks || []).filter((t) => taskRefs.includes(t.id));
           const taskNames = matchedTasks.map((t) => t.name).filter(Boolean).join("、");
           const taskLine = taskNames ? `承接: ${taskNames}` : "";
+          const phaseText = formatForcePhases(force.phaseIds, phases);
           const line2Parts = [];
+          if (phaseText) line2Parts.push(phaseText);
           if (taskLine) line2Parts.push(taskLine);
           if (equip) line2Parts.push(`装备  ${equip}`);
           else line2Parts.push("装备  待挂");
@@ -802,16 +821,17 @@ function renderConceptSideColumn({ title, className, items = [], tasks = [], emp
             role: roleLabel(force.role),
             line2,
             line2Missing: !equip,
-            title: [force.task, taskLine, equip].filter(Boolean).join(" | ") || name,
+            title: [force.task, phaseText, taskLine, equip].filter(Boolean).join(" | ") || name,
             groups: {
               side: sideLabel(force.side),
+              phase: phaseText,
               role: roleLabel(force.role),
               status: (confirmed || equip) ? "已就绪" : "待补全"
             },
-            search: [force.id, name, force.task, taskLine, equip, sideLabel(force.side), roleLabel(force.role)].filter(Boolean).join(" ")
+            search: [force.id, name, force.task, phaseText, taskLine, equip, sideLabel(force.side), roleLabel(force.role)].filter(Boolean).join(" ")
           });
         }).join("")}</ul>`
-      : `<div class="force-roster-empty-block"><p class="empty-inspector force-concept-empty">${escapeHtml(emptyText || "本阶段暂无概念兵力。")}</p><button type="button" class="quiet-button compact" data-action="generate-concept-forces">生成概念兵力</button></div>`}
+      : `<div class="force-roster-empty-block"><p class="empty-inspector force-concept-empty">${escapeHtml(emptyText || "暂无概念兵力。")}</p><button type="button" class="quiet-button compact" data-action="generate-concept-forces">生成概念兵力</button></div>`}
   </section>`;
 }
 
@@ -831,7 +851,7 @@ function renderForceRosterItem({
   groups = {},
   search = ""
 }) {
-  return `<li class="force-roster-item ${active ? "is-active" : ""} ${warn ? "is-warn" : ""}" data-grouped-list-item data-group-side="${escapeAttribute(groups.side || "未分类")}" data-group-role="${escapeAttribute(groups.role || "未分类")}" data-group-type="${escapeAttribute(groups.type || "未分类")}" data-group-status="${escapeAttribute(groups.status || "已就绪")}" data-search="${escapeAttribute(search || name)}">
+  return `<li class="force-roster-item ${active ? "is-active" : ""} ${warn ? "is-warn" : ""}" data-grouped-list-item data-group-side="${escapeAttribute(groups.side || "未分类")}" data-group-phase="${escapeAttribute(groups.phase || "全作战阶段")}" data-group-role="${escapeAttribute(groups.role || "未分类")}" data-group-type="${escapeAttribute(groups.type || "未分类")}" data-group-status="${escapeAttribute(groups.status || "已就绪")}" data-search="${escapeAttribute(search || name)}">
     <div class="force-roster-hit"
       role="button"
       tabindex="0"
@@ -844,6 +864,7 @@ function renderForceRosterItem({
         <span class="force-roster-name-row">
           <span class="force-roster-name">${escapeHtml(name || "未命名")}</span>
           ${role ? `<span class="force-roster-tag">${escapeHtml(role)}</span>` : ""}
+          ${groups.phase && groups.phase !== "全作战阶段" ? `<span class="force-roster-tag is-phase" style="font-size:10px; opacity:0.85;">${escapeHtml(groups.phase)}</span>` : ""}
           ${badge ? `<span class="force-roster-tag is-warn">${escapeHtml(badge)}</span>` : ""}
         </span>
         ${line2 ? `<span class="force-roster-line force-roster-line2 ${line2Missing ? "is-missing" : ""}">${escapeHtml(line2)}</span>` : ""}
@@ -922,8 +943,10 @@ function renderCombatCompositionTables(forces = [], options = {}) {
           title: "作战编成",
           className: "is-grouped",
           items: forces,
+          phases,
+          conceptForces,
           tasks,
-          emptyText: "本阶段暂无作战编成。",
+          emptyText: "暂无作战编成。",
           activeId,
           missionTypes,
           confirmed
@@ -950,13 +973,15 @@ function renderCombatSideColumn({
   title,
   className,
   items = [],
+  phases = [],
+  conceptForces = [],
   tasks = [],
   emptyText = "",
   activeId = "",
   missionTypes = [],
   confirmed = false
 }) {
-  return `<section class="force-roster-col force-combat-column ${className}" aria-label="${escapeAttribute(title)}" data-grouped-list-panel="force-combat" data-grouped-list-dimensions="阵营:side|职责:role|任务类型:type|状态:status" data-grouped-list-default-group="side">
+  return `<section class="force-roster-col force-combat-column ${className}" aria-label="${escapeAttribute(title)}" data-grouped-list-panel="force-combat" data-grouped-list-dimensions="阵营:side|阶段:phase|职责:role|任务类型:type|状态:status" data-grouped-list-default-group="side">
     <div class="force-roster-col-toolbar">
       <button type="button" class="quiet-button" data-action="add-combat-force" data-side="friendly" title="添加蓝方作战编组">+ 蓝方编组</button>
       <button type="button" class="quiet-button" data-action="add-combat-force" data-side="hostile" title="添加红方作战编组">+ 红方编组</button>
@@ -986,7 +1011,18 @@ function renderCombatSideColumn({
           const matchedTasks = (tasks || []).filter((t) => taskRefs.includes(t.id));
           const taskNames = matchedTasks.map((t) => t.name).filter(Boolean).join("、");
           const taskLine = taskNames ? `承接: ${taskNames}` : "";
+
+          const ownPhases = Array.isArray(force.phaseIds) ? force.phaseIds : [];
+          let effectivePhases = ownPhases;
+          if (!effectivePhases.length && linkedIds.length) {
+            const linkedPhases = new Set();
+            conceptForces.filter((c) => linkedIds.includes(c.id)).forEach((c) => (c.phaseIds || []).forEach((p) => linkedPhases.add(p)));
+            effectivePhases = Array.from(linkedPhases);
+          }
+          const phaseText = formatForcePhases(effectivePhases, phases);
+
           const line2Parts = [];
+          if (phaseText) line2Parts.push(phaseText);
           if (taskLine) line2Parts.push(taskLine);
           if (missingPlatform) line2Parts.push("平台  待挂");
           else line2Parts.push(`平台  ${platformSummary}`);
@@ -1002,17 +1038,18 @@ function renderCombatSideColumn({
             badge: hasConceptLink ? "" : "未挂概念",
             line2,
             line2Missing: missingPlatform,
-            title: [force.task, taskLine, platformSummary].filter(Boolean).join(" | ") || name,
+            title: [force.task, phaseText, taskLine, platformSummary].filter(Boolean).join(" | ") || name,
             groups: {
               side: sideLabel(force.side),
+              phase: phaseText,
               role: roleLabel(force.role),
               type: missionType || "未分类",
               status: (confirmed || (!missingPlatform && hasConceptLink)) ? "已就绪" : "待补全"
             },
-            search: [force.id, name, force.task, missionType, unitType, platformSummary, sideLabel(force.side), roleLabel(force.role), pkgLabel].filter(Boolean).join(" ")
+            search: [force.id, name, force.task, phaseText, missionType, unitType, platformSummary, sideLabel(force.side), roleLabel(force.role), pkgLabel].filter(Boolean).join(" ")
           });
         }).join("")}</ul>`
-      : `<div class="force-roster-empty-block"><p class="empty-inspector force-combat-empty">${escapeHtml(emptyText || "本阶段暂无作战编成。可点击上方按钮添加，或由 AI 自动根据概念兵力扩展。")}</p><button type="button" class="quiet-button compact" data-action="generate-combat-forces">生成作战编成</button></div>`}
+      : `<div class="force-roster-empty-block"><p class="empty-inspector force-combat-empty">${escapeHtml(emptyText || "暂无作战编成。可点击上方按钮添加，或由 AI 自动根据概念兵力扩展。")}</p><button type="button" class="quiet-button compact" data-action="generate-combat-forces">生成作战编成</button></div>`}
   </section>`;
 }
 

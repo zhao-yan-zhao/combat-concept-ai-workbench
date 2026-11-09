@@ -116,6 +116,12 @@ export function runLocalAbstractSimulation(scenario, now = () => new Date().toIS
   const areas = packagePayload.scenario.areas;
   const timeline = packagePayload.scenario.timeline;
   const diagnostics = packagePayload.scenario.deployment?.diagnosticStates || [];
+
+  const sensorCoverage = calculateSensorCoverage(entities, areas);
+  const c2Connectivity = calculateC2Connectivity(entities);
+  const causalSmoothness = calculateCausalSmoothness(timeline, scenario.ov5 || {});
+  const forceDispersion = calculateForceDispersion(entities);
+
   const run = {
     id: `simulation-run-local-${stableHash(`${packagePayload.packageId}:${executedAt}`)}`,
     adapter: { id: "local-abstract-grid", name: "本地抽象网格评估", version: "v1", mode: "local-deterministic" },
@@ -128,15 +134,23 @@ export function runLocalAbstractSimulation(scenario, now = () => new Date().toIS
     result: {
       receivedAt: executedAt,
       status: "completed",
-      summary: "本地确定性抽象评估已完成；仅检查网格部署、区域覆盖、时间线和部署诊断，结论需人工复核。",
+      summary: `本地确定性战术离散评估完成：感知覆盖 ${sensorCoverage.score}%，指控连通 ${c2Connectivity.score}%，因果顺畅 ${causalSmoothness.score}%，防区疏散 ${forceDispersion.score}%。`,
       inputFingerprint: packagePayload.scenario.inputFingerprint,
       inputMatch: "matched",
       metrics: [
         metric("grid-bounds", "网格边界合规", percentage(entities.filter((item) => inBounds(item.position)).length, entities.length), "%"),
-        metric("area-coverage", "区域覆盖一致性", coverageScore(entities, areas), "%"),
+        metric("area-coverage", "区域感知覆盖率", sensorCoverage.score, "%"),
+        metric("c2-connectivity", "指控通信连通率", c2Connectivity.score, "%"),
         metric("timeline-completeness", "时间线完整性", percentage(timeline.filter((item) => item.sourceNodeId).length, timeline.length), "%"),
-        metric("deployment-diagnostics", "部署诊断就绪", percentage(diagnostics.filter((item) => item.state === "ready").length, diagnostics.length), "%")
-      ]
+        metric("causal-smoothness", "时序因果顺畅度", causalSmoothness.score, "%"),
+        metric("force-dispersion", "防区分散健康度", forceDispersion.score, "%")
+      ],
+      evaluatorDetails: {
+        sensorCoverage,
+        c2Connectivity,
+        causalSmoothness,
+        forceDispersion
+      }
     }
   };
   return withSimulation({ ...scenario, updatedAt: executedAt }, run, run.adapter);
@@ -233,14 +247,203 @@ function metric(id, label, value, unit) { return { id, label, value, unit }; }
 function percentage(numerator, denominator) { return denominator ? Number((Math.max(0, numerator) / denominator * 100).toFixed(2)) : 0; }
 function inBounds(positionValue) { const [x, y] = position(positionValue); return x >= 0 && x <= 100 && y >= 0 && y <= 100; }
 function coverageScore(entities, areas) {
-  if (!entities.length || !areas.length) return 0;
-  const covered = entities.filter((entity) => areas.some((area) => {
-    const [x, y] = entity.position;
-    const [areaX, areaY] = area.position;
-    const radius = Math.max(1, Math.min(100, Number(area.size || 0) / 10));
-    return Math.hypot(x - areaX, y - areaY) <= radius;
-  })).length;
-  return percentage(covered, entities.length);
+  return calculateSensorCoverage(entities, areas).score;
+}
+
+/**
+ * 战术机理计算 1：网格多域感知覆盖率 (Sensor Coverage Rate) (M8-T8.6)
+ */
+export function calculateSensorCoverage(entities = [], areas = []) {
+  if (!entities.length || !areas.length) {
+    return { score: entities.length ? 100 : 0, uncoveredAreaCount: 0, details: [] };
+  }
+  const sensorEntities = entities.filter((e) => {
+    const role = String(e.role || e.type || e.id || "").toLowerCase();
+    return /radar|uav|recon|sensor|aew|scout|warn|预警|侦察|探测/.test(role);
+  });
+  const defaultRadius = 15;
+  const areaDetails = areas.map((area) => {
+    const [ax, ay] = position(area.position);
+    let maxCoverage = 0;
+    const candidates = sensorEntities.length > 0 ? sensorEntities : entities;
+    candidates.forEach((e) => {
+      const [ex, ey] = position(e.position);
+      const role = String(e.role || e.type || e.id || "").toLowerCase();
+      const sensorRadius = /aew|warn|预警/.test(role) ? 45 : /radar|雷达/.test(role) ? 35 : /uav|无人机/.test(role) ? 25 : defaultRadius;
+      const dist = Math.hypot(ex - ax, ey - ay);
+      if (dist <= sensorRadius) {
+        const localRatio = Math.max(0, 1 - (dist / sensorRadius) * 0.7);
+        if (localRatio > maxCoverage) maxCoverage = localRatio;
+      }
+    });
+
+    return {
+      areaId: area.id || "unnamed-area",
+      coverageRatio: Number((maxCoverage * 100).toFixed(1)),
+      isCovered: maxCoverage >= 0.4
+    };
+  });
+
+  const totalRatio = areaDetails.reduce((sum, d) => sum + d.coverageRatio, 0);
+  const avgScore = Number((totalRatio / areaDetails.length).toFixed(1));
+  const uncoveredCount = areaDetails.filter((d) => !d.isCovered).length;
+
+  return {
+    score: avgScore,
+    uncoveredAreaCount: uncoveredCount,
+    details: areaDetails
+  };
+}
+
+/**
+ * 战术机理计算 2：指控通信网络连通率 (C2 Connectivity Rate) (M8-T8.6)
+ */
+export function calculateC2Connectivity(entities = [], defaultRadius = 35) {
+  if (!entities.length) return { score: 100, connectedCount: 0, totalCount: 0, isolatedIds: [] };
+  if (entities.length === 1) return { score: 100, connectedCount: 1, totalCount: 1, isolatedIds: [] };
+
+  const n = entities.length;
+  const adj = Array.from({ length: n }, () => []);
+  for (let i = 0; i < n; i++) {
+    const [x1, y1] = position(entities[i].position);
+    const role1 = String(entities[i].role || "").toLowerCase();
+    const r1 = /relay|satellite|c2|指挥|中继|卫星/.test(role1) ? 55 : defaultRadius;
+    for (let j = i + 1; j < n; j++) {
+      const [x2, y2] = position(entities[j].position);
+      const role2 = String(entities[j].role || "").toLowerCase();
+      const r2 = /relay|satellite|c2|指挥|中继|卫星/.test(role2) ? 55 : defaultRadius;
+      const effectiveRadius = Math.max(r1, r2);
+      if (Math.hypot(x1 - x2, y1 - y2) <= effectiveRadius) {
+        adj[i].push(j);
+        adj[j].push(i);
+      }
+    }
+  }
+
+  const visited = new Array(n).fill(false);
+  let maxComponentSize = 0;
+  let maxComponentNodes = [];
+
+  for (let i = 0; i < n; i++) {
+    if (!visited[i]) {
+      const component = [];
+      const queue = [i];
+      visited[i] = true;
+      while (queue.length > 0) {
+        const u = queue.shift();
+        component.push(u);
+        for (const v of adj[u]) {
+          if (!visited[v]) {
+            visited[v] = true;
+            queue.push(v);
+          }
+        }
+      }
+      if (component.length > maxComponentSize) {
+        maxComponentSize = component.length;
+        maxComponentNodes = component;
+      }
+    }
+  }
+
+  const isolatedIndices = entities.map((_, i) => i).filter((i) => !maxComponentNodes.includes(i));
+  const isolatedIds = isolatedIndices.map((i) => entities[i].id || `entity-${i + 1}`);
+  const score = Number(((maxComponentSize / n) * 100).toFixed(1));
+
+  return {
+    score,
+    connectedCount: maxComponentSize,
+    totalCount: n,
+    isolatedIds
+  };
+}
+
+/**
+ * 战术机理计算 3：时序因果顺畅度 (Causal Smoothness Rate) (M8-T8.6)
+ */
+export function calculateCausalSmoothness(timeline = [], ov5 = {}) {
+  if (!Array.isArray(timeline) || timeline.length <= 1) {
+    return { score: 100, inversionCount: 0, details: [] };
+  }
+
+  let inversions = 0;
+  const issues = [];
+
+  const parseEventTime = (t) => {
+    if (typeof t === "number") return t;
+    const str = String(t || "").trim();
+    const matchH = str.match(/([+-]?\d+(?:\.\d+)?)/);
+    return matchH ? parseFloat(matchH[1]) : 0;
+  };
+
+  for (let i = 0; i < timeline.length - 1; i++) {
+    const t1 = parseEventTime(timeline[i].time);
+    const t2 = parseEventTime(timeline[i + 1].time);
+    if (t1 > t2) {
+      inversions += 1;
+      issues.push(`事件 [${timeline[i].id || i + 1}] 时间 (${timeline[i].time}) 晚于后续事件 (${timeline[i + 1].time})，存在时序倒挂`);
+    }
+  }
+
+  const edges = Array.isArray(ov5?.edges) ? ov5.edges : [];
+  if (edges.length > 0) {
+    edges.forEach((edge) => {
+      const fromIdx = timeline.findIndex((e) => e.sourceNodeId === edge.from || e.activityId === edge.from);
+      const toIdx = timeline.findIndex((e) => e.sourceNodeId === edge.to || e.activityId === edge.to);
+      if (fromIdx >= 0 && toIdx >= 0 && fromIdx > toIdx) {
+        inversions += 1;
+        issues.push(`前置依赖活动 [${edge.from}] 在时间线上出现于后置活动 [${edge.to}] 之后，违背因果逻辑`);
+      }
+    });
+  }
+
+  const penalty = Math.min(80, inversions * 20);
+  const score = Math.max(0, 100 - penalty);
+
+  return {
+    score,
+    inversionCount: inversions,
+    details: issues
+  };
+}
+
+/**
+ * 战术机理计算 4：防区分布式疏散健康度 (Force Dispersion Index) (M8-T8.6)
+ */
+export function calculateForceDispersion(entities = [], minSafeDist = 8, maxCollabDist = 45) {
+  if (!entities.length || entities.length === 1) {
+    return { score: 100, clusterRiskCount: 0, isolatedRiskCount: 0, avgNeighborDist: 0 };
+  }
+
+  const n = entities.length;
+  let clusterRisks = 0;
+  let isolatedRisks = 0;
+  let totalMinDist = 0;
+
+  for (let i = 0; i < n; i++) {
+    const [x1, y1] = position(entities[i].position);
+    let nearestDist = Infinity;
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      const [x2, y2] = position(entities[j].position);
+      const dist = Math.hypot(x1 - x2, y1 - y2);
+      if (dist < nearestDist) nearestDist = dist;
+    }
+    totalMinDist += nearestDist;
+    if (nearestDist < minSafeDist) clusterRisks += 1;
+    if (nearestDist > maxCollabDist) isolatedRisks += 1;
+  }
+
+  const avgMinDist = Number((totalMinDist / n).toFixed(1));
+  const penalty = Math.min(80, clusterRisks * 15 + isolatedRisks * 10);
+  const score = Math.max(20, 100 - penalty);
+
+  return {
+    score,
+    clusterRiskCount: clusterRisks,
+    isolatedRiskCount: isolatedRisks,
+    avgNeighborDist: avgMinDist
+  };
 }
 
 function diagnostic(id, label, state, detail) {

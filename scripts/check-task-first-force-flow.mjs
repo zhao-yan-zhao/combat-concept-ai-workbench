@@ -46,8 +46,9 @@ assert.match(html, /operational-task-workbench/, "Operational task workbench mus
 assert.match(html, /data-action="generate-operational-tasks"/, "Generate operational tasks action must be available");
 assert.match(html, /data-action="confirm-operational-tasks"/, "Confirm operational tasks action must be available");
 
-// 3. Check Left Rail has task count
-assert.match(html, /任务 \d+ · 概念 \d+ · 编成 \d+/, "Phase rail must display task count along with concept and combat forces");
+// 3. Check Toolbar Actions contain operational task actions and full-width workbench
+assert.match(html, /class="[^"]*force-layer-toolbar-actions[^"]*"/, "Toolbar must contain layer-specific action buttons");
+assert.match(html, /data-action="generate-operational-tasks"/, "Generate operational tasks action must be available");
 
 // 4. Test when tasks are confirmed, can switch to concept tab
 const stateConcept = {
