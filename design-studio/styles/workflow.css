@@ -1,7 +1,3 @@
-  /* capture hover across the whole spine so all labels stay open between circles */
-  pointer-events: auto;
-}
-
 .step-spine {
   --step-count: 16;
   position: relative;
@@ -432,7 +428,6 @@
 @keyframes step-halo-soft {
   0%, 100% { opacity: .55; transform: scale(0.92); }
   50% { opacity: 1; transform: scale(1.05); }
-}
 }
 @keyframes step-expand-active-glow {
   0%, 100% {

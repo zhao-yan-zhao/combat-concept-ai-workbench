@@ -8,6 +8,7 @@
  * 3. 登录、新建项目、切换六步主线视图、验证 OV-1 制图图例渲染；
  * 4. 监听 Runtime.exceptionThrown / Console error，确保无未捕获异常。
  */
+import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -264,6 +265,32 @@ try {
   }
 
   // 5. Navigate through the 6 mainline steps
+  const railMetrics = await evalInPage(`(() => {
+    const rail = document.querySelector(".project-rail");
+    const spine = document.querySelector(".step-spine");
+    const path = document.querySelector(".step-path");
+    const nodes = Array.from(document.querySelectorAll(".step-node"));
+    const r = rail ? rail.getBoundingClientRect() : {};
+    const s = spine ? spine.getBoundingClientRect() : {};
+    const p = path ? path.getBoundingClientRect() : {};
+    return {
+      rail: { top: Math.round(r.top), height: Math.round(r.height) },
+      spine: { top: Math.round(s.top), height: Math.round(s.height) },
+      path: { top: Math.round(p.top), height: Math.round(p.height) },
+      nodes: nodes.map(n => Math.round(n.getBoundingClientRect().top))
+    };
+  })()`);
+  console.log("[Smoke] Rail layout metrics:", JSON.stringify(railMetrics));
+
+  // Assert rail metrics to prevent node pile-up regression
+  const nodeTops = railMetrics.nodes || [];
+  assert.equal(nodeTops.length, 6, "Must render exactly 6 mainline step nodes");
+  for (let i = 1; i < nodeTops.length; i++) {
+    const gap = nodeTops[i] - nodeTops[i - 1];
+    assert(gap >= 80, `Step node spacing must be at least 80px to avoid pile-up, got ${gap}px between ${i-1} and ${i}`);
+  }
+  console.log("[Smoke] ✓ Step rail node vertical distribution verified (spacing >= 80px)");
+
   const MAINLINE_STEPS = ["brief", "phase-action", "force-mission", "ov5", "ov1", "scenario"];
   for (const step of MAINLINE_STEPS) {
     console.log(`[Smoke] Switching to mainline step: ${step} ...`);
