@@ -21,7 +21,7 @@ export function hasPersistedOodaModel() {
  * @param {object} ov5Model OV-5 作战活动模型 (含 activities 和 edges)
  * @returns {{ categorized: object, diagnostics: Array<object>, healthScore: number, loopClosed: boolean, feedbackEdges: Array<object> }}
  */
-export function evaluateOodaLoopHealth(ov5Model = {}) {
+export function evaluateOodaLoopHealth(ov5Model = {}, options = {}) {
   const activities = Array.isArray(ov5Model?.activities) ? ov5Model.activities : [];
   const edges = Array.isArray(ov5Model?.edges) ? ov5Model.edges : [];
   const activityMap = new Map(activities.map((a) => [a.id, a]));
@@ -113,7 +113,20 @@ export function evaluateOodaLoopHealth(ov5Model = {}) {
     });
   }
 
-  // 4. 计算综合健康度得分 (0 - 100)
+  // 4. 深度动力学测算：DAG 关键路径时延预算、单点脆弱性(SPOF)与自主等级评估
+  const targetWindowSeconds = Number(options?.targetWindowSeconds || ov5Model?.targetWindowSeconds || 1800);
+  const latencyBudget = calculateLatencyBudget(activities, edges, { targetWindowSeconds, categorized });
+
+  if (latencyBudget.exceedsBudget) {
+    diagnostics.push({
+      level: "warn",
+      code: "KILL_CHAIN_LATENCY_EXCEEDED",
+      label: `杀伤网时延超出窗口 (${latencyBudget.formattedTotal} > ${latencyBudget.formattedBudget})`,
+      message: `杀伤网关键路径耗时达 ${latencyBudget.formattedTotal}，超出设定的目标暴露时间窗（${latencyBudget.formattedBudget}）。关键耗时路径：${latencyBudget.criticalPathLabels?.join(" ➔ ") || "关键路径"}。`
+    });
+  }
+
+  // 5. 计算综合健康度得分 (0 - 100)
   let score = 100;
   for (const d of diagnostics) {
     if (d.level === "critical_gap") score -= 30;
@@ -123,8 +136,6 @@ export function evaluateOodaLoopHealth(ov5Model = {}) {
   if (!activities.length) score = 0;
   const healthScore = Math.max(0, Math.min(100, score));
 
-  // 5. 深度动力学测算：时延预算、单点脆弱性(SPOF)与自主等级评估
-  const latencyBudget = calculateLatencyBudget(activities, edges);
   const bottlenecks = findSinglePointsOfFailure(activities, edges);
   const autonomyStats = calculateAutonomyStats(activities);
   const domainCoverage = [...new Set(activities.map((a) => a.domain || "综合").filter(Boolean))];
@@ -149,41 +160,354 @@ export function evaluateOodaLoopHealth(ov5Model = {}) {
   };
 }
 
-function calculateLatencyBudget(activities = [], edges = []) {
-  let totalSeconds = 0;
-  const parseSeconds = (durationStr) => {
-    const text = String(durationStr || "").trim().toLowerCase();
-    if (!text || text === "待估算" || text === "持续") return 60;
-    const minMatch = text.match(/(\d+)(?:-(\d+))?\s*(?:m|min|分钟)/i);
-    if (minMatch) {
-      const min = Number(minMatch[2] || minMatch[1]);
-      return min * 60;
-    }
-    const secMatch = text.match(/(\d+)(?:-(\d+))?\s*(?:s|sec|秒)/i);
-    if (secMatch) {
-      return Number(secMatch[2] || secMatch[1]);
-    }
-    const hourMatch = text.match(/(\d+)(?:-(\d+))?\s*(?:h|hour|小时)/i);
-    if (hourMatch) {
-      return Number(hourMatch[2] || hourMatch[1]) * 3600;
-    }
-    return 120;
-  };
+/**
+ * 解析活动耗时（秒）
+ * 匹配 "120s"、"5m"、"10分钟"、"1.5小时"、"5-10m" 等，未填写默认 60s
+ */
+export function parseActivitySeconds(durationStr) {
+  const text = String(durationStr || "").trim().toLowerCase();
+  if (!text || text === "待估算" || text === "持续") return 60;
+  const minMatch = text.match(/(\d+(?:\.\d+)?)(?:-(\d+(?:\.\d+)?))?\s*(?:m|min|分钟)/i);
+  if (minMatch) {
+    const min = Number(minMatch[2] || minMatch[1]);
+    return Math.round(min * 60);
+  }
+  const secMatch = text.match(/(\d+(?:\.\d+)?)(?:-(\d+(?:\.\d+)?))?\s*(?:s|sec|秒)/i);
+  if (secMatch) {
+    return Math.round(Number(secMatch[2] || secMatch[1]));
+  }
+  const hourMatch = text.match(/(\d+(?:\.\d+)?)(?:-(\d+(?:\.\d+)?))?\s*(?:h|hour|小时)/i);
+  if (hourMatch) {
+    return Math.round(Number(hourMatch[2] || hourMatch[1]) * 3600);
+  }
+  return 120;
+}
 
-  activities.forEach((act) => {
-    totalSeconds += parseSeconds(act.duration || act.timingWindow);
+/**
+ * 格式化持续时长
+ */
+export function formatDurationSeconds(totalSeconds) {
+  const sec = Math.max(0, Math.round(Number(totalSeconds) || 0));
+  if (sec >= 3600) {
+    return `${(sec / 3600).toFixed(1)} 小时`;
+  }
+  if (sec >= 60) {
+    const mins = sec / 60;
+    return mins % 1 === 0 ? `${mins} 分钟` : `${mins.toFixed(1)} 分钟`;
+  }
+  return `${sec} 秒`;
+}
+
+/**
+ * 有向图自动破除反馈边（避免循环死锁）
+ */
+export function filterForwardDagEdges(activities = [], edges = [], categorized = null) {
+  const nodeIds = new Set(activities.map((a) => a.id));
+  const validEdges = edges.filter((e) => nodeIds.has(e.sourceId) && nodeIds.has(e.targetId) && e.sourceId !== e.targetId);
+
+  const actAndFeedback = new Set([
+    ...(categorized?.act || []).map((a) => a.id),
+    ...(categorized?.feedback || []).map((a) => a.id)
+  ]);
+  const observeAndDecide = new Set([
+    ...(categorized?.observe || []).map((a) => a.id),
+    ...(categorized?.orient || []).map((a) => a.id),
+    ...(categorized?.decide || []).map((a) => a.id)
+  ]);
+
+  const sortedCandidateEdges = [...validEdges].sort((a, b) => {
+    const aIsFeedback = actAndFeedback.has(a.sourceId) && observeAndDecide.has(a.targetId);
+    const bIsFeedback = actAndFeedback.has(b.sourceId) && observeAndDecide.has(b.targetId);
+    if (aIsFeedback && !bIsFeedback) return 1;
+    if (!aIsFeedback && bIsFeedback) return -1;
+    return 0;
   });
 
-  const formattedTotal = totalSeconds >= 3600
-    ? `${(totalSeconds / 3600).toFixed(1)} 小时`
-    : totalSeconds >= 60
-      ? `${Math.round(totalSeconds / 60)} 分钟`
-      : `${totalSeconds} 秒`;
+  const adj = new Map();
+  for (const id of nodeIds) adj.set(id, []);
+
+  function hasCycle(src, tgt, currentAdj) {
+    const visited = new Set();
+    const queue = [tgt];
+    while (queue.length > 0) {
+      const curr = queue.shift();
+      if (curr === src) return true;
+      if (!visited.has(curr)) {
+        visited.add(curr);
+        const neighbors = currentAdj.get(curr) || [];
+        for (const n of neighbors) {
+          if (!visited.has(n)) queue.push(n);
+        }
+      }
+    }
+    return false;
+  }
+
+  const forwardEdges = [];
+  for (const edge of sortedCandidateEdges) {
+    if (hasCycle(edge.sourceId, edge.targetId, adj)) {
+      continue;
+    }
+    adj.get(edge.sourceId).push(edge.targetId);
+    forwardEdges.push(edge);
+  }
+
+  return forwardEdges;
+}
+
+/**
+ * 求解前向 DAG 关键路径 (CPM) 与最短杀伤链
+ */
+export function solveDagPaths(activities = [], forwardEdges = [], durationMap = new Map(), categorized = null) {
+  if (!activities.length) {
+    return {
+      criticalPathSeconds: 0,
+      criticalPathIds: [],
+      fastestKillChainSeconds: 0,
+      fastestKillChainIds: []
+    };
+  }
+
+  const actIds = new Set((categorized?.act || []).map((a) => a.id));
+  const obsIds = new Set((categorized?.observe || []).map((a) => a.id));
+
+  const adj = new Map();
+  const inDeg = new Map();
+  const outDeg = new Map();
+  for (const a of activities) {
+    adj.set(a.id, []);
+    inDeg.set(a.id, 0);
+    outDeg.set(a.id, 0);
+  }
+  for (const e of forwardEdges) {
+    adj.get(e.sourceId)?.push(e.targetId);
+    inDeg.set(e.targetId, (inDeg.get(e.targetId) || 0) + 1);
+    outDeg.set(e.sourceId, (outDeg.get(e.sourceId) || 0) + 1);
+  }
+
+  // 源节点优先使用 Observe 节点或入度为 0 的节点
+  let sources = activities.filter((a) => obsIds.has(a.id) || (inDeg.get(a.id) || 0) === 0);
+  if (!sources.length) sources = activities.filter((a) => (inDeg.get(a.id) || 0) === 0);
+  if (!sources.length) sources = activities;
+
+  // 汇节点优先使用 Act 行动节点（杀伤链末端）；若无则使用出度为 0 的节点
+  const preferActSinks = actIds.size > 0;
+  const targetSinkIds = preferActSinks ? actIds : new Set(activities.filter((a) => (outDeg.get(a.id) || 0) === 0).map((a) => a.id));
+
+  // 记忆化搜索：从节点 u 到目标汇节点的最长和最短路径
+  const memoLongest = new Map();
+  const memoShortest = new Map();
+
+  function findLongest(uId) {
+    if (memoLongest.has(uId)) return memoLongest.get(uId);
+
+    // 如果当前节点就是目标行动汇点
+    if (targetSinkIds.has(uId)) {
+      const res = { dist: 0, path: [uId], reachable: true };
+      memoLongest.set(uId, res);
+      return res;
+    }
+
+    const neighbors = adj.get(uId) || [];
+    if (neighbors.length === 0) {
+      // 达到终点但若不是目标 Act 且有指定 Act，则标记不可达完整杀伤链
+      const res = { dist: 0, path: [uId], reachable: !preferActSinks };
+      memoLongest.set(uId, res);
+      return res;
+    }
+
+    let maxDist = -1;
+    let bestPath = [uId];
+    let reachable = false;
+
+    for (const v of neighbors) {
+      const vWeight = durationMap.get(v) ?? 60;
+      const sub = findLongest(v);
+      if (sub.reachable) {
+        reachable = true;
+        const total = vWeight + sub.dist;
+        if (total > maxDist) {
+          maxDist = total;
+          bestPath = [uId, ...sub.path];
+        }
+      }
+    }
+
+    // 若下游无法到达目标 Act，但在普通图情况下允许任意出度为0的节点
+    if (!reachable && !preferActSinks) {
+      reachable = true;
+      maxDist = 0;
+    }
+
+    const res = { dist: Math.max(0, maxDist), path: bestPath, reachable };
+    memoLongest.set(uId, res);
+    return res;
+  }
+
+  function findShortest(uId) {
+    if (memoShortest.has(uId)) return memoShortest.get(uId);
+
+    if (targetSinkIds.has(uId)) {
+      const res = { dist: 0, path: [uId], reachable: true };
+      memoShortest.set(uId, res);
+      return res;
+    }
+
+    const neighbors = adj.get(uId) || [];
+    if (neighbors.length === 0) {
+      const res = { dist: 0, path: [uId], reachable: !preferActSinks };
+      memoShortest.set(uId, res);
+      return res;
+    }
+
+    let minDist = Infinity;
+    let bestPath = [uId];
+    let reachable = false;
+
+    for (const v of neighbors) {
+      const vWeight = durationMap.get(v) ?? 60;
+      const sub = findShortest(v);
+      if (sub.reachable) {
+        reachable = true;
+        const total = vWeight + sub.dist;
+        if (total < minDist) {
+          minDist = total;
+          bestPath = [uId, ...sub.path];
+        }
+      }
+    }
+
+    if (!reachable && !preferActSinks) {
+      reachable = true;
+      minDist = 0;
+    }
+
+    const res = { dist: minDist === Infinity ? 0 : minDist, path: bestPath, reachable };
+    memoShortest.set(uId, res);
+    return res;
+  }
+
+  let criticalPathSeconds = 0;
+  let criticalPathIds = [];
+
+  let fastestKillChainSeconds = Infinity;
+  let fastestKillChainIds = [];
+
+  for (const s of sources) {
+    const sWeight = durationMap.get(s.id) ?? 60;
+    const lRes = findLongest(s.id);
+    if (lRes.reachable) {
+      const lTotal = sWeight + lRes.dist;
+      if (lTotal > criticalPathSeconds) {
+        criticalPathSeconds = lTotal;
+        criticalPathIds = lRes.path;
+      }
+    }
+
+    const sRes = findShortest(s.id);
+    if (sRes.reachable) {
+      const sTotal = sWeight + sRes.dist;
+      if (sTotal < fastestKillChainSeconds) {
+        fastestKillChainSeconds = sTotal;
+        fastestKillChainIds = sRes.path;
+      }
+    }
+  }
+
+  // 若未能找到连接到 Act 的完整链条，回退使用入度0到出度0的全局最长/最短路
+  if (!criticalPathIds.length) {
+    for (const s of sources) {
+      const sWeight = durationMap.get(s.id) ?? 60;
+      let curr = s.id;
+      let visited = new Set([curr]);
+      let path = [curr];
+      let dist = sWeight;
+      while (true) {
+        const nexts = (adj.get(curr) || []).filter((n) => !visited.has(n));
+        if (!nexts.length) break;
+        // 贪心选择耗时最大的后继
+        nexts.sort((a, b) => (durationMap.get(b) || 60) - (durationMap.get(a) || 60));
+        const bestNext = nexts[0];
+        visited.add(bestNext);
+        path.push(bestNext);
+        dist += durationMap.get(bestNext) || 60;
+        curr = bestNext;
+      }
+      if (dist > criticalPathSeconds) {
+        criticalPathSeconds = dist;
+        criticalPathIds = path;
+      }
+    }
+  }
+
+  if (fastestKillChainSeconds === Infinity) {
+    fastestKillChainSeconds = criticalPathSeconds;
+    fastestKillChainIds = [...criticalPathIds];
+  }
 
   return {
-    totalSeconds,
+    criticalPathSeconds,
+    criticalPathIds,
+    fastestKillChainSeconds,
+    fastestKillChainIds
+  };
+}
+
+/**
+ * 杀伤网时延预算测算（支持 DAG 关键路径 CPM 与并行支路分析）
+ */
+export function calculateLatencyBudget(activities = [], edges = [], options = {}) {
+  const budgetSeconds = Number(options?.targetWindowSeconds) > 0 ? Number(options.targetWindowSeconds) : 1800;
+  const durationMap = new Map(activities.map((a) => [a.id, parseActivitySeconds(a.duration || a.timingWindow)]));
+  const totalSumSeconds = [...durationMap.values()].reduce((acc, v) => acc + v, 0);
+
+  const categorized = options?.categorized || {
+    observe: activities.filter((a) => {
+      const text = `${a.type || ""} ${a.title || ""} ${a.text || ""}`;
+      return ["感知", "侦察", "监视", "探测", "预警", "巡逻", "搜潜", "雷达"].some((kw) => text.includes(kw));
+    }),
+    act: activities.filter((a) => {
+      const text = `${a.type || ""} ${a.title || ""} ${a.text || ""}`;
+      return ["打击", "干扰", "机动", "发射", "防护", "拦截", "突击", "压制", "控制", "行动"].some((kw) => text.includes(kw));
+    }),
+    feedback: activities.filter((a) => {
+      const text = `${a.type || ""} ${a.title || ""} ${a.text || ""}`;
+      return ["战损评估", "战果确认", "态势更新", "回传", "毁伤", "效果评估", "反馈", "重组", "评估"].some((kw) => text.includes(kw));
+    })
+  };
+
+  const forwardEdges = filterForwardDagEdges(activities, edges, categorized);
+  const { criticalPathSeconds, criticalPathIds, fastestKillChainSeconds, fastestKillChainIds } = solveDagPaths(
+    activities,
+    forwardEdges,
+    durationMap,
+    categorized
+  );
+
+  const actMap = new Map(activities.map((a) => [a.id, a]));
+  const criticalPathLabels = criticalPathIds.map((id) => actMap.get(id)?.title || id);
+  const fastestKillChainLabels = fastestKillChainIds.map((id) => actMap.get(id)?.title || id);
+
+  const formattedTotal = formatDurationSeconds(criticalPathSeconds);
+  const formattedBudget = formatDurationSeconds(budgetSeconds);
+  const formattedFastest = formatDurationSeconds(fastestKillChainSeconds);
+  const formattedParallelSum = formatDurationSeconds(totalSumSeconds);
+
+  return {
+    totalSeconds: criticalPathSeconds,
+    criticalPathSeconds,
+    criticalPathIds,
+    criticalPathLabels,
+    fastestKillChainSeconds,
+    fastestKillChainIds,
+    fastestKillChainLabels,
+    parallelSumSeconds: totalSumSeconds,
+    budgetSeconds,
     formattedTotal,
-    exceedsBudget: totalSeconds > 7200
+    formattedBudget,
+    formattedFastest,
+    formattedParallelSum,
+    exceedsBudget: criticalPathSeconds > budgetSeconds
   };
 }
 

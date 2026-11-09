@@ -60,7 +60,7 @@ export function renderOv5Workbench(state, context = {}) {
               <span class="mini-tag count-pill">${activities.length} 项活动 · ${edges.length} 条关联</span>
               <span class="mini-tag coverage-pill" title="有知识依据的活动数量占比">${evidenceCoverage.label}</span>
               <span class="mini-tag ${scoreClass}">OODA ${oodaHealth.healthScore}分</span>
-              <span class="mini-tag ${latencyBudget.exceedsBudget ? "review" : ""}">全链 ${latencyBudget.formattedTotal}</span>
+              <span class="mini-tag ${latencyBudget.exceedsBudget ? "review" : ""}" title="关键路径(CPM): ${latencyBudget.formattedTotal} · 最短杀伤链: ${latencyBudget.formattedFastest} · 资源并行总耗时: ${latencyBudget.formattedParallelSum} · 目标暴露窗口: ${latencyBudget.formattedBudget}">关键路径 ${latencyBudget.formattedTotal}${latencyBudget.exceedsBudget ? " (超限)" : ""}</span>
               <span class="mini-tag">自主 H:${autonomyStats.hitl}/O:${autonomyStats.hotl}/X:${autonomyStats.hootl}</span>
             </div>
           </div>
@@ -181,9 +181,19 @@ export function renderOv5Workbench(state, context = {}) {
           <!-- 时延预算剖面 -->
           <div class="mechanism-metric-block">
             <div class="metric-title">
-              <strong>时效预算分配</strong>
-              <span>总估算 ${latencyBudget.formattedTotal}</span>
+              <strong>时效预算 (CPM 关键路径)</strong>
+              <span>关键链 ${latencyBudget.formattedTotal}</span>
             </div>
+            <div class="metric-meta-details" style="font-size:11px;color:#94a3b8;margin:4px 0 6px;display:flex;flex-wrap:wrap;gap:6px;">
+              <span>最短链: <strong style="color:#7dd3fc">${latencyBudget.formattedFastest}</strong></span>
+              <span>· 目标窗口: <strong style="color:${latencyBudget.exceedsBudget ? '#f87171' : '#34d399'}">${latencyBudget.formattedBudget}</strong></span>
+              ${latencyBudget.exceedsBudget ? `<span style="color:#f87171;font-weight:700;">(超限)</span>` : ""}
+            </div>
+            ${latencyBudget.criticalPathLabels?.length ? `
+              <div class="metric-cpm-chain" style="font-size:11px;color:#cbd5e1;background:rgba(2,6,23,0.4);padding:4px 8px;border-radius:4px;margin-bottom:6px;line-height:1.4;">
+                <span style="color:#94a3b8;">关键路径瓶颈: </span>${escapeHtml(latencyBudget.criticalPathLabels.join(" ➔ "))}
+              </div>
+            ` : ""}
             <div class="metric-progress-track">
               <div class="progress-bar obs" style="width: 25%" title="观测截获"></div>
               <div class="progress-bar ori" style="width: 15%" title="判决融合"></div>

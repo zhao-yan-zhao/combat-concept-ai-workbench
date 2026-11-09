@@ -647,6 +647,7 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs workflow`：13/13 PASS (100%)
   - `node scripts/run-checks.mjs all`：139/139 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+  - **2026-11-09 体验优化（方案2落地）**：响应用户对纵向空间占用过大的反馈，将步骤向导与门禁指标完全合并至顶栏工作流门禁胶囊与浮层面板（`renderWorkflowGate` 与 `#viewContext` Tooltip），从主视图 `renderView` 移除前置条，释放 100% 垂直画布空间，通过 `run-checks.mjs workflow ui-static` (62/62 PASS) 与 `smoke-ui.mjs` (0 errors)。
 
 ---
 
@@ -1167,6 +1168,26 @@ node scripts/smoke-ui.mjs
   - `node scripts/check-command-palette.mjs`：100% PASS
   - `node scripts/run-checks.mjs ui-static`：49/49 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+---
+
+## 阶段八：M8 军事仿真深化与机理定量校核（T8.1～T8.10，见 plans/EXECUTION_PLAN_M8.md）
+
+承接已全量收官的 M0～M7（168 项自动化测试全绿），围绕**机理计算科学性、图论拓扑严谨性、推演数据闭环度、仿真器接驳能力**四个专业维度推进 10 项核心任务：
+- **Batch 1 机理动力学与图论算法升级**：
+  - **T8.1** 杀伤网 DAG 关键路径（CPM）时延解算与时敏窗口校核
+  - **T8.2** 基于节点移除可达性的拓扑级 SPOF 单点故障与杀伤网韧性量化
+  - **T8.3** OODA 泳道三级语义分类器（显式属性 + 任务类型映射 + 扩展词表）
+- **Batch 2 兵棋推演—仿真回收闭环与本地离散事件推演**：
+  - **T8.4** 消除硬编码伪造战损，建立基于证据的阶段成效与偏差推导引擎
+  - **T8.5** 打通回合制兵棋导调（`wargameTurnStore`）到仿真结果回收（`simulationRecycleStore`）的自动编译桥
+  - **T8.6** 升级本地抽象网格推演内核（Abstract Grid Discrete-Event Evaluator）
+  - **T8.7** 基于威胁轴线与 OV-2/OV-5 协同引力的抽象网格部署算法
+- **Batch 3 空间拓扑布局、复合评分与 DoDAF 深度校核**：
+  - **T8.8** 融合“机理动力学 + 假设脆弱性 + 推演成效”的多方案定量评分引擎
+  - **T8.9** CMO 装备库定性能力画像提取与“任务—平台能力”匹配度校核
+  - **T8.10** DoDAF 跨视图行为形式化校验（OV-6b 状态机死锁检测 + OV-6c/OV-5b 因果时序逆序检测）
+
 
 
 
