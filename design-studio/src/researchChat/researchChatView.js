@@ -1,4 +1,5 @@
 import { escapeHtml } from "../app/domUtils.js";
+import { renderContextAwareBadge, renderCandidateActionBox } from "./contextAwareAssistant.js";
 
 /**
  * Shared research-chat shell used by brief, phase-action, and future steps.
@@ -22,7 +23,8 @@ export function renderResearchChatPanel({
   formId = "",
   inputId = "",
   threadId = "",
-  interactiveTopic = "consultation"
+  interactiveTopic = "consultation",
+  context = null
 } = {}) {
   const messages = session?.messages || [];
   const busy = Boolean(generating);
@@ -50,6 +52,7 @@ export function renderResearchChatPanel({
         </div>
         ${headerActionsHtml}
       </header>
+      ${context ? renderContextAwareBadge(context) : ""}
       <div class="inspiration-thread research-chat-thread" id="${escapeHtml(resolvedThreadId)}" data-research-chat-thread="${escapeHtml(scope)}" aria-live="polite">
         ${messages.length
           ? messages.map((message) => renderResearchChatMessage(message, { scope, interactiveTopic })).join("")
@@ -157,6 +160,7 @@ export function renderResearchChatMessage(message, { scope = "brief", interactiv
         </details>
       ` : ""}
       <p>${escapeHtml(message.text)}</p>
+      ${message.candidate ? renderCandidateActionBox(message.candidate, { scope }) : ""}
     </div>
   </article>`;
 }

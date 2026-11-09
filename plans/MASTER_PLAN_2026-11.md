@@ -264,7 +264,7 @@
 | **T7.6 推演回合与导调** | 回合制推进（意图提交、事件注入卡库、导调裁决建议、进入下回合） | **已完成** | 回合状态机、6类预置事件卡库、因果机理导调裁决建议（`ai.wargame.adjudication`），绝无数值化杀伤计算 | `design-studio/src/wargameTurnStore.js`, `wargameClient.js`, `scenarioView.js` | **已完成**（2026-11-09） |
 | **T7.7 推演日志与时间线** | 回合推演流水线记录与 what-if 分支派生 | **已完成** | 时序时间轴流水线（`Turn Timeline`）、情报迷雾脱敏过滤、任选历史回合一键纯深拷贝派生 What-If 项目 | `design-studio/src/wargameTimelineStore.js`, `scenarioView.js`, `main.js` | **已完成**（2026-11-09） |
 | **T7.8 复盘生成** | 根据推演日志自动起草复盘报告（`wargame-review`） | **已完成** | 串联回合流水线日志、攻防意图、导调事件与裁决因果机理，支持 Markdown/XML 双向导出与推演视口一键接驳 | `design-studio/src/reportBuilder.js`, `wargameTimelineStore.js`, `main.js` | **已完成**（2026-11-09） |
-| **T7.9 上下文 AI 研讨助手** | 研讨助手感知当前步骤模型与引用，生成候选并事务应用 | **雏形** | `researchChat/` 目录有完整对话流、上下文同步，但未自动感知当前步骤视图的模型摘要与证据注入，缺少事务安全候选框 | `design-studio/src/researchChat/` 全套控制器与视图 | **补全增强**：为研讨助手注入当前步骤上下文与安全候选事务框 |
+| **T7.9 上下文 AI 研讨助手** | 研讨助手感知当前步骤模型与引用，生成候选并事务应用 | **已完成** | 研讨面板自动感知当前步骤视图的模型摘要与引用依据，AI 生成建议仅作为“建议候选”，由人工审定并走 M1 `applyWithRecoveryPoint` 事务包装安全应用，绝不直接静默改动主模型 | `design-studio/src/researchChat/contextAwareAssistant.js`, `researchChatView.js`, `main.js` | **已完成**（2026-11-09） |
 | **T7.10 评审与签批流程** | 草稿→送审（冻结快照）→修改→定稿（只读） | **雏形** | 已有项目状态字段与快照冻结（`modelSnapshotStore.js`），但无正规工作流流转与定稿只读守卫 | `design-studio/src/projectStorageStore.js`, `modelSnapshotStore.js` | **补全增强**：补齐工作流状态流转与界面门禁 |
 | **T7.11 全局搜索** | 跨项目要素、战法与日志搜索，集成至命令面板 | **雏形** | T3.7 已落地命令面板（`commandPaletteView.js`），但仅支持视图导航与内置动作，未索引要素与推演记录 | `design-studio/src/commandPaletteController.js`, `commandPaletteView.js` | **补全增强**：扩展命令面板数据源，支持要素与知识全文搜索 |
 
@@ -1096,6 +1096,28 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs ui-static`：42/42 PASS (100%)
   - `node scripts/run-checks.mjs all`：161/161 PASS (100% 全绿)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+### 2026-11-09 T7.9 真实落地：两条线共用（上下文感知 AI 研讨助手与事务安全候选应用框）
+
+- **实施内容**：
+  1. 上下文感知提取器与候选组件 (`design-studio/src/researchChat/contextAwareAssistant.js`)：
+     - `extractActiveViewContext(state)`：根据 `activeView` 自动提取当前步骤模型摘要（Brief 目标/假设、Phase 阶段链、Force 编组任务、OV-5 制胜论证链、Scenario 回合导调）与知识库高关联引用依据；
+     - `renderContextAwareBadge(context)`：研讨面板顶部视觉感知胶囊，清晰展示“🎯 正在研讨当前步骤: XX”，标注已注入的模型要素与引用依据；
+     - `renderCandidateActionBox(candidate, options)`：AI 研讨建议候选卡片，提供“✓ 采纳并应用”与“✕ 忽略”双态操作，支持待审定、已采纳、已忽略状态机切换，提供操作影响摘要说明；
+  2. 严守铁律：助手绝不直接静默改动主模型：
+     - 提示词与上下文注入明确声明“绝对不可直接虚构已修改主模型，只能提出具体修改建议，交由研究员点击确认应用”；
+     - 前端调度核心 (`design-studio/src/main.js`) 响应 `apply-research-candidate`，强制通过 M1 `applyWithRecoveryPoint` 创建系统级恢复点与 `undoStack` 事务记录，支持秒级撤销；
+  3. 研讨视图与模块装配 (`design-studio/src/researchChat/researchChatView.js` & `index.js`)：
+     - 面板渲染自动挂载顶部上下文感知胶囊；
+     - 助手对话消息自动解析并内嵌候选建议事务卡片；
+  4. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m7-context-aware-research-chat.mjs`：5 项专项断言全部通过；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
+- **验证命令与结果**：
+  - `node scripts/check-m7-context-aware-research-chat.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：47/47 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 
 
 

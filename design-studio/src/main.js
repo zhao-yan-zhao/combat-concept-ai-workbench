@@ -991,6 +991,81 @@ async function handleAction(action, source = null) {
     showToast("已基于推演流水线切换至【推演复盘报告 (wargame-review)】");
     return;
   }
+  if (action === "apply-research-candidate") {
+    const candidateId = source?.dataset?.candidateId;
+    const sessions = [
+      state.inspirationChatSession,
+      state.phaseActionChatSession,
+      state.forceMissionChatSession,
+      state.ruleLibraryChatSession,
+      state.sequenceChatSession,
+      state.stateMachineChatSession
+    ].filter(Boolean);
+
+    let targetCandidate = null;
+    for (const sess of sessions) {
+      for (const msg of sess.messages || []) {
+        if (msg.candidate?.id === candidateId) {
+          targetCandidate = msg.candidate;
+          break;
+        }
+      }
+      if (targetCandidate) break;
+    }
+
+    if (!targetCandidate) {
+      showToast("未找到待应用的建议候选");
+      return;
+    }
+
+    const applied = await applyWithRecoveryPoint(
+      getDodafCtx(),
+      { label: targetCandidate.title || "应用 AI 研讨建议", source: "ai-research-assistant" },
+      async () => {
+        const patch = targetCandidate.patch || {};
+        if (patch.brief && state.brief) {
+          Object.assign(state.brief, patch.brief);
+        }
+        if (Array.isArray(patch.activities) && state.ov5?.activities) {
+          state.ov5.activities.push(...patch.activities);
+        }
+        if (patch.argumentChain && state.ov5?.argumentChain) {
+          Object.assign(state.ov5.argumentChain, patch.argumentChain);
+        }
+        targetCandidate.applied = true;
+        targetCandidate.appliedAt = new Date().toISOString();
+        return true;
+      }
+    );
+
+    if (applied) {
+      showToast(`已安全应用建议「${targetCandidate.title}」（已创建撤销恢复点）`);
+      render();
+    }
+    return;
+  }
+  if (action === "dismiss-research-candidate") {
+    const candidateId = source?.dataset?.candidateId;
+    const sessions = [
+      state.inspirationChatSession,
+      state.phaseActionChatSession,
+      state.forceMissionChatSession,
+      state.ruleLibraryChatSession,
+      state.sequenceChatSession,
+      state.stateMachineChatSession
+    ].filter(Boolean);
+
+    for (const sess of sessions) {
+      for (const msg of sess.messages || []) {
+        if (msg.candidate?.id === candidateId) {
+          msg.candidate.dismissed = true;
+          break;
+        }
+      }
+    }
+    render();
+    return;
+  }
   if (handleConceptPlanningAction(action, source, getConceptPlanningCtx())) return;
   if (action === "open-context-panel") {
     state.contextPanelOpen = true;

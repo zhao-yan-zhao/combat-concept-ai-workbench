@@ -46,3 +46,9 @@ export {
 } from "./researchChatView.js";
 
 export { createResearchChatController } from "./researchChatController.js";
+
+export {
+  extractActiveViewContext,
+  renderContextAwareBadge,
+  renderCandidateActionBox
+} from "./contextAwareAssistant.js";
