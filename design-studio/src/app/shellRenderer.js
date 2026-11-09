@@ -5,7 +5,7 @@ import { renderCollaborationLoginGate } from "../collaborationView.js";
 import { renderAiConfigPanel } from "../aiConfigView.js";
 import { renderAiPromptPanel } from "../aiPromptView.js";
 import { renderTacticsLibraryModal } from "../tacticsLibraryView.js";
-import { renderReviewWorkflowBar, renderFinalizedReadonlyDialog } from "../reviewWorkflowView.js";
+import { renderReviewWorkflowBar, renderReviewWorkflowBadge, renderFinalizedReadonlyDialog } from "../reviewWorkflowView.js";
 import { resolveStepTargetOutput } from "./workflowGate.js";
 
 /**
@@ -167,9 +167,19 @@ export function renderStudioShell(ctx) {
     tacticsLibraryElem.dataset.renderedMarkup = tacticsLibraryMarkup;
   }
 
-  // M7-T7.10 评审与签批流程状态栏与只读弹窗
+  // M7-T7.10 评审与签批流程：顶栏微型状态胶囊与送审/签批弹窗
   const activeProject = (state.projectDirectory?.projects || []).find((p) => p.id === state.activeProjectId) || state.project;
-  const reviewWorkflowMarkup = renderReviewWorkflowBar(activeProject, { session: state.collaboration?.session });
+
+  const reviewBadgeMarkup = renderReviewWorkflowBadge(activeProject);
+  const reviewBadgeElem = $("#reviewWorkflowBadgeRoot");
+  if (reviewBadgeElem && reviewBadgeElem.dataset.renderedMarkup !== reviewBadgeMarkup) {
+    reviewBadgeElem.innerHTML = reviewBadgeMarkup;
+    reviewBadgeElem.dataset.renderedMarkup = reviewBadgeMarkup;
+  }
+
+  const reviewWorkflowMarkup = state.reviewWorkflowDialogOpen
+    ? renderReviewWorkflowBar(activeProject, { session: state.collaboration?.session })
+    : "";
   const reviewWorkflowElem = $("#reviewWorkflowRoot");
   if (reviewWorkflowElem && reviewWorkflowElem.dataset.renderedMarkup !== reviewWorkflowMarkup) {
     reviewWorkflowElem.innerHTML = reviewWorkflowMarkup;

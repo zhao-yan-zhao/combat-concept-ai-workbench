@@ -63,24 +63,90 @@ export function renderReviewWorkflowBar(project, { session } = {}) {
 
   // 只读警告横幅 (如果定稿)
   const readonlyNotice = isFinalized
-    ? `<div class="review-readonly-badge" role="alert">🔒 本方案已正式签批定稿，视口已开启只读保护。如需修改，请点击右侧「派生新修订分支」。</div>`
+    ? `<div class="review-readonly-badge" role="alert">🔒 本方案已正式签批定稿，已开启只读保护。如需修改，请点击右侧「派生新修订分支」。</div>`
     : "";
 
   return `
-    <section class="review-workflow-bar ${meta.badgeClass}" data-review-status="${escapeHtml(status)}" aria-label="成果评审与签批流程">
-      <div class="review-workflow-main">
-        <div class="review-status-indicator">
-          <span class="review-status-badge ${meta.badgeClass}">${meta.icon} ${meta.badgeLabel}</span>
-          <span class="review-status-desc">${escapeHtml(meta.description)}</span>
+    <div class="modal-backdrop review-workflow-modal" data-action="close-review-workflow-dialog" role="dialog" aria-modal="true" aria-labelledby="review-dialog-title">
+      <div class="modal-card surface review-workflow-dialog-card" onclick="event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <h3 id="review-dialog-title">成果评审与签批流转</h3>
+            <span class="review-status-badge ${meta.badgeClass}">${meta.icon} ${meta.badgeLabel}</span>
+          </div>
+          <button type="button" class="modal-close" data-action="close-review-workflow-dialog" aria-label="关闭">×</button>
+        </header>
+        <div class="modal-body review-dialog-body">
+          <div class="review-dialog-project-info">
+            <span class="review-dialog-field-label">当前方案：</span>
+            <strong>${escapeHtml(project.title || project.id || "未命名方案")}</strong>
+          </div>
+          <section class="review-workflow-bar ${meta.badgeClass}" data-review-status="${escapeHtml(status)}" aria-label="成果评审与签批流程">
+            <div class="review-workflow-main">
+              <div class="review-status-indicator">
+                <span class="review-status-badge ${meta.badgeClass}">${meta.icon} ${meta.badgeLabel}</span>
+                <span class="review-status-desc">${escapeHtml(meta.description)}</span>
+              </div>
+              ${approvalDetails}
+              ${readonlyNotice}
+            </div>
+          </section>
         </div>
-        ${approvalDetails}
-        ${readonlyNotice}
+        <footer class="modal-footer review-dialog-footer">
+          <button type="button" class="btn-secondary" data-action="close-review-workflow-dialog">关闭</button>
+          <div class="review-workflow-actions">
+            ${actions.join("")}
+          </div>
+        </footer>
       </div>
-      <div class="review-workflow-actions">
-        ${actions.join("")}
-      </div>
-    </section>
+    </div>
   `;
+}
+
+/**
+ * 渲染顶部导航栏微型评审状态胶囊 (Compact Menubar Review Status Badge)
+ */
+export function renderReviewWorkflowBadge(project) {
+  if (!project) return "";
+  const status = (project.reviewStatus || "draft").toLowerCase();
+  const meta = REVIEW_STATUS_META[status] || REVIEW_STATUS_META.draft;
+  return `
+    <button type="button" class="menubar-review-badge ${meta.badgeClass}" data-action="toggle-review-workflow-dialog" title="方案评审状态：${meta.badgeLabel}（点击查看详情与送审）" aria-label="方案评审状态：${meta.badgeLabel}">
+      <span class="menubar-review-badge-icon" aria-hidden="true">${meta.icon}</span>
+      <span class="menubar-review-badge-text">${meta.badgeLabel}</span>
+    </button>
+  `;
+}
+
+/**
+ * 构造右侧悬浮工具箱中的评审与送审入口配置
+ */
+export function getReviewToolboxRailItem(state = {}) {
+  const activeProject = (state.projectDirectory?.projects || []).find((p) => p.id === state.activeProjectId) || state.project;
+  const status = (activeProject?.reviewStatus || "draft").toLowerCase();
+  const titles = {
+    draft: "草稿 · 点击提交送审",
+    submitted: "送审中 · 查看审核进度",
+    revising: "需修改 · 重新送审",
+    finalized: "已定稿 · 查看/派生新分支"
+  };
+  const icons = {
+    draft: "send",
+    submitted: "check",
+    revising: "doc",
+    finalized: "concept"
+  };
+  const title = titles[status] || "方案评审与签批流转";
+  const icon = icons[status] || "send";
+
+  return {
+    action: "open-review-workflow-dialog",
+    title,
+    label: title,
+    icon,
+    attention: status === "draft" || status === "revising",
+    className: "toolbox-review-entry"
+  };
 }
 
 /**

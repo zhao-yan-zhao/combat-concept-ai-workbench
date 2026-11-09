@@ -1034,6 +1034,7 @@ async function handleAction(action, source = null) {
       if (state.project) state.project.reviewStatus = REVIEW_STATUSES.SUBMITTED;
 
       showToast("方案已成功提交送审，并自动冻结当前模型基线快照！");
+      state.reviewWorkflowDialogOpen = false;
       render({ skipViewRoot: true });
     } catch (err) {
       showToast("提交送审失败: " + err.message);
@@ -1061,6 +1062,7 @@ async function handleAction(action, source = null) {
         state.project.approval = approval;
       }
       showToast("方案已退回修改，进入需修改状态。");
+      state.reviewWorkflowDialogOpen = false;
       render({ skipViewRoot: true });
     } catch (err) {
       showToast("退回修改操作失败: " + err.message);
@@ -1087,6 +1089,7 @@ async function handleAction(action, source = null) {
         state.project.approval = approval;
       }
       showToast("方案已正式签批定稿，已开启只读保护！");
+      state.reviewWorkflowDialogOpen = false;
       render({ skipViewRoot: true });
     } catch (err) {
       showToast("签批定稿失败: " + err.message);
@@ -1108,6 +1111,21 @@ async function handleAction(action, source = null) {
   }
   if (action === "close-readonly-dialog") {
     state.reviewReadonlyDialogOpen = false;
+    render({ skipViewRoot: true });
+    return;
+  }
+  if (action === "open-review-workflow-dialog") {
+    state.reviewWorkflowDialogOpen = true;
+    render({ skipViewRoot: true });
+    return;
+  }
+  if (action === "toggle-review-workflow-dialog") {
+    state.reviewWorkflowDialogOpen = !state.reviewWorkflowDialogOpen;
+    render({ skipViewRoot: true });
+    return;
+  }
+  if (action === "close-review-workflow-dialog") {
+    state.reviewWorkflowDialogOpen = false;
     render({ skipViewRoot: true });
     return;
   }

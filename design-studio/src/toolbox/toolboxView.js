@@ -23,6 +23,7 @@ export const TOOLBOX_ICONS = Object.freeze({
   state: `<rect x="5" y="7" width="14" height="10" rx="2"/><path d="M12 10v4M10 12h4"/>`,
   decision: `<path d="M12 4.5 19.5 12 12 19.5 4.5 12z"/>`,
   transition: `<path d="M5 12h12"/><path d="M13 7l5 5-5 5"/>`,
+  send: `<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>`,
   trash: `<path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M8 7l.7 12h6.6L16 7"/>`
 });
 

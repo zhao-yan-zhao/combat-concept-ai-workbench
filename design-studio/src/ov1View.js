@@ -11,6 +11,7 @@ import {
   renderEdgeMarkerDefs
 } from "./dodafDraftingView.js";
 import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
+import { getReviewToolboxRailItem } from "./reviewWorkflowView.js";
 import { renderConceptMap as renderConceptMapPreview } from "./conceptMapView.js";
 import { renderOriginBadge, renderCitationsAccordion } from "./citationProvenanceView.js";
 
@@ -418,7 +419,9 @@ function renderOv1EditRail(state, panelOpen = false, panelMode = "context", tool
         action: "auto-layout-ov1",
         title: "重排布局",
         icon: "layout"
-      }
+      },
+      "sep",
+      getReviewToolboxRailItem(state)
     ]
   });
 }

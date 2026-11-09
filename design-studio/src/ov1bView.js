@@ -32,8 +32,6 @@ export function renderOv1b(state = {}) {
       </div>
     </div></header>
 
-    ${renderPhaseTimelineStrip(phases, selected, groups)}
-
     <div class="ov1b-layout">
       <aside class="ov1b-task-panel" aria-label="任务组列表" data-grouped-list-panel="ov1b" data-grouped-list-dimensions="整理维度:dimension|状态:status" data-grouped-list-default-group="dimension">
         <header class="sm-panel-head">
@@ -50,27 +48,6 @@ export function renderOv1b(state = {}) {
   </section>`;
 }
 
-function renderPhaseTimelineStrip(phases = [], selectedGroup = null, groups = []) {
-  if (!phases.length) return "";
-  const currentPhaseId = selectedGroup?.phaseRef || "";
-  return `<nav class="ov1b-phase-nav-strip" aria-label="作战阶段时序推进导轨">
-    <div class="ov1b-phase-nav-label"><span>作战阶段推进</span><small>点击定位对应阶段</small></div>
-    <div class="ov1b-phase-nav-scroll">
-      ${phases.map((phase, idx) => {
-        const isCurrent = currentPhaseId === phase.id || (!currentPhaseId && idx === 0);
-        const matchingGroup = groups.find((g) => g.phaseRef === phase.id)
-          || groups.find((g) => g.name?.includes(phase.name) || g.name?.includes(`阶段${idx + 1}`) || g.name?.includes(`Phase ${idx + 1}`))
-          || groups[idx] || null;
-        const targetGroupId = matchingGroup ? matchingGroup.id : "";
-        return `<button type="button" class="ov1b-phase-chip ${isCurrent ? "is-active" : ""}" ${targetGroupId ? `data-action="ov1b-select-group" data-group-id="${escapeHtml(targetGroupId)}"` : ""} title="${escapeHtml(phase.objective || phase.name || "")}">
-          <span class="ov1b-phase-chip-idx">Phase ${idx + 1}</span>
-          <strong class="ov1b-phase-chip-name">${escapeHtml(phase.name || `阶段 ${idx + 1}`)}</strong>
-          <small class="ov1b-phase-chip-time">${escapeHtml(phase.timeWindow || "时间待定")}</small>
-        </button>`;
-      }).join('<span class="ov1b-phase-nav-arrow" aria-hidden="true">→</span>')}
-    </div>
-  </nav>`;
-}
 
 function renderGroupItem(group, index, selectedId, taskById) {
   const dimension = DIMENSION_LABELS[group.dimension] || group.dimension || "自定义";

@@ -1016,3 +1016,63 @@
   gap: 8px;
   flex-shrink: 0;
 }
+
+
+/* Review & Approval Modal Dialog */
+.review-workflow-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 10, 8, 0.72);
+  backdrop-filter: blur(4px);
+  padding: 16px;
+}
+.review-workflow-dialog-card {
+  width: 580px;
+  max-width: 95vw;
+  background: #0f1d18;
+  border: 1px solid rgba(86, 115, 101, 0.45);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(61, 255, 197, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.review-dialog-body {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.review-dialog-project-info {
+  font-size: 13px;
+  color: #e2e8f0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.review-dialog-field-label {
+  color: var(--muted, #94a3b8);
+}
+.review-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px;
+  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.toolbox-review-entry {
+  color: #7dd3fc;
+}
+.toolbox-review-entry.is-attention {
+  color: #fcd34d;
+}

@@ -825,17 +825,6 @@ export function renderWorkflowGate(state) {
         <div class="step-next-bar-target"><span class="step-bar-label">本步产出：</span><strong class="step-bar-target-text">${escapeHtml(targetOutput)}</strong></div>
         <div class="step-next-bar-status"><span class="step-bar-label">完成条件：</span><span class="step-condition-pill ${ready ? "is-ready" : "is-pending"}" title="${escapeHtml(incomplete.join("、"))}">${ready ? "✓ 已就绪 (0项待补充)" : `还差 ${incomplete.length} 项（${escapeHtml(incomplete.slice(0, 3).join("、"))}${incomplete.length > 3 ? "…" : ""}）`}</span></div>
       </div>
-      ${ctx.quickActions && ctx.quickActions.length ? `
-        <div class="workflow-gate-quick-box" role="region" aria-label="快捷门禁">
-          <div class="workflow-gate-quick-title">⚡ 快捷门禁放行</div>
-          ${ctx.quickActions.map((qa) => `
-            <div class="workflow-gate-quick-row">
-              <button type="button" class="workflow-gate-quick-btn" data-action="${escapeHtml(qa.action)}">${escapeHtml(qa.label)}</button>
-              <span class="workflow-gate-quick-hint">${escapeHtml(qa.hint)}</span>
-            </div>
-          `).join("")}
-        </div>
-      ` : ""}
       ${ctx.isStale ? `
         <div class="workflow-gate-stale-alert" role="status">
           <span class="workflow-gate-stale-icon">⚠️</span>

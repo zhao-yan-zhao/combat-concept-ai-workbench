@@ -2,6 +2,7 @@ import { resolveDodafProduct } from "./dodafProductStore.js";
 import { renderProjectStorageActions } from "./projectStorageView.js";
 import { resolveOv4SelectedDiagramId } from "./ov4DiagramStore.js";
 import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
+import { getReviewToolboxRailItem } from "./reviewWorkflowView.js";
 import { buildOv4ForceFingerprint } from "./ov4Builder.js";
 import { renderDodafLegend } from "./dodafDraftingView.js";
 import {
@@ -91,7 +92,7 @@ export function renderOv4(state) {
         ${renderOrganizationCanvas(scoped, diagram, { selectedRoleId, relationFilter })}
       </main>
       ${renderPropertyDock(model, diagram, editorOpen, selectedRoleId)}
-      ${toolsOpen ? renderOv4ToolboxRail(editorOpen) : ""}
+      ${toolsOpen ? renderOv4ToolboxRail(editorOpen, state) : ""}
     </div>
   </section>`;
 }
@@ -105,7 +106,7 @@ export function renderOv4ToolboxFloatButton({ toolsOpen = false } = {}) {
   });
 }
 
-function renderOv4ToolboxRail(editorOpen) {
+function renderOv4ToolboxRail(editorOpen, state = {}) {
   return renderToolboxRail({
     scope: "ov4",
     open: true,
@@ -117,7 +118,9 @@ function renderOv4ToolboxRail(editorOpen) {
     items: [
       { action: "open-subflow-ai", title: "AI 生成组织关系", icon: "sparkle", attention: true },
       "sep",
-      { action: "ov4-toggle-editor", title: "组织关系信息", icon: "relations", active: editorOpen, pressed: editorOpen }
+      { action: "ov4-toggle-editor", title: "组织关系信息", icon: "relations", active: editorOpen, pressed: editorOpen },
+      "sep",
+      getReviewToolboxRailItem(state)
     ]
   });
 }

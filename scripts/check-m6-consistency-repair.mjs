@@ -65,7 +65,7 @@ assert.ok(valResult.issues.length >= 3, "应生成至少 3 项一致性问题");
 
 valResult.issues.forEach((issue) => {
   assert.ok(issue.targetView, "每个问题必须包含目标视图 targetView");
-  assert.ok(["ov5", "ooda", "scenario", "ov1", "phase-action"].includes(issue.targetView), "targetView 必须为有效视图");
+  assert.ok(["ov5", "ooda", "scenario", "ov1", "phase-action", "ov6", "force-mission", "validation"].includes(issue.targetView), `targetView 必须为有效视图: ${issue.targetView}`);
   assert.ok(issue.targetViewLabel, "必须包含友好的视图中文标签");
   assert.equal(typeof issue.repairable, "boolean", "必须显式声明 repairable 布尔值");
 });

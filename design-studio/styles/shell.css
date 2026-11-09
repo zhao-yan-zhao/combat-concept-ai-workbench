@@ -351,3 +351,63 @@
   justify-content: center;
   pointer-events: auto;
 }
+
+
+/* Menubar compact review badge */
+.menubar-review-status {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  margin: 0 4px;
+}
+.menubar-review-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 13px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(148, 163, 184, 0.12);
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.menubar-review-badge:hover {
+  background: rgba(148, 163, 184, 0.22);
+  border-color: rgba(148, 163, 184, 0.5);
+  box-shadow: 0 0 8px rgba(148, 163, 184, 0.2);
+}
+.menubar-review-badge.status-submitted {
+  background: rgba(56, 189, 248, 0.16);
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #7dd3fc;
+}
+.menubar-review-badge.status-submitted:hover {
+  background: rgba(56, 189, 248, 0.26);
+  border-color: rgba(56, 189, 248, 0.7);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+}
+.menubar-review-badge.status-revising {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #fbbf24;
+}
+.menubar-review-badge.status-revising:hover {
+  background: rgba(245, 158, 11, 0.26);
+  border-color: rgba(245, 158, 11, 0.7);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+}
+.menubar-review-badge.status-finalized {
+  background: rgba(52, 211, 153, 0.16);
+  border-color: rgba(52, 211, 153, 0.45);
+  color: #34d399;
+}
+.menubar-review-badge.status-finalized:hover {
+  background: rgba(52, 211, 153, 0.26);
+  border-color: rgba(52, 211, 153, 0.7);
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.25);
+}

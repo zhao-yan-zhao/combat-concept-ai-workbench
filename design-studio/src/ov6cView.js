@@ -21,6 +21,7 @@ import {
 } from "./sequenceDiagramDsl.js";
 import { renderResearchChatDock, renderResearchChatPanel } from "./researchChat/index.js";
 import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
+import { getReviewToolboxRailItem } from "./reviewWorkflowView.js";
 
 const MESSAGE_TYPES = ["message", "response", "status", "exception", "timeout"];
 const SEQUENCE_TYPES = [
@@ -121,9 +122,9 @@ export function renderOv6c(state = {}) {
             model
           })
         })}
-        ${toolsOpen ? renderSequenceToolboxRail({ editorOpen, chatOpen, chatGenerating, sequenceId: selectedId }) : ""}
+        ${toolsOpen ? renderSequenceToolboxRail({ editorOpen, chatOpen, chatGenerating, sequenceId: selectedId, state }) : ""}
       </div>`
-    : renderEmptyWorkbench({ toolsOpen, chatOpen, chatGenerating, chat: state.sequenceChat, model })}
+    : renderEmptyWorkbench({ toolsOpen, chatOpen, chatGenerating, chat: state.sequenceChat, model, state })}
 
     ${(model.diagnostics || []).length
     ? `<section class="seq-diagnostics" aria-label="时序诊断">
@@ -154,7 +155,7 @@ export function renderSequenceToolboxFloatButton({ toolsOpen = false } = {}) {
 
 export const renderSequenceChatFloatButton = renderSequenceToolboxFloatButton;
 
-function renderSequenceToolboxRail({ editorOpen = false, chatOpen = false, chatGenerating = false, sequenceId = "" } = {}) {
+function renderSequenceToolboxRail({ editorOpen = false, chatOpen = false, chatGenerating = false, sequenceId = "", state = {} } = {}) {
   const sequenceAttrs = sequenceId ? { "data-sequence-id": sequenceId } : {};
   return renderToolboxRail({
     scope: "ov6c",
@@ -170,12 +171,14 @@ function renderSequenceToolboxRail({ editorOpen = false, chatOpen = false, chatG
       "sep",
       { action: "ov6c-add-participant", title: "添加参与方", icon: "plus", attrs: sequenceAttrs, disabled: !sequenceId },
       { action: "ov6c-add-message", title: "添加消息", icon: "transition", attrs: sequenceAttrs, disabled: !sequenceId },
-      { action: "ov6c-remove-sequence", title: "删除当前时序图", icon: "trash", className: "is-danger", attrs: sequenceAttrs, disabled: !sequenceId }
+      { action: "ov6c-remove-sequence", title: "删除当前时序图", icon: "trash", className: "is-danger", attrs: sequenceAttrs, disabled: !sequenceId },
+      "sep",
+      getReviewToolboxRailItem(state)
     ]
   });
 }
 
-function renderEmptyWorkbench({ toolsOpen, chatOpen, chatGenerating, chat, model, isPhaseSubflow }) {
+function renderEmptyWorkbench({ toolsOpen, chatOpen, chatGenerating, chat, model, isPhaseSubflow, state = {} }) {
   return `<div class="seq-workbench is-empty ${toolsOpen ? "is-tools-docked" : "is-tools-floating"} ${chatOpen ? "is-chat-open" : "is-chat-collapsed"}">
     <div class="seq-empty-board">
       <strong>尚无时序图</strong>
@@ -200,7 +203,7 @@ function renderEmptyWorkbench({ toolsOpen, chatOpen, chatGenerating, chat, model
       label: "时序对话侧栏",
       contentHtml: renderSequenceChatPanel({ chat, chatGenerating, model })
     })}
-    ${toolsOpen ? renderSequenceToolboxRail({ chatOpen, chatGenerating }) : ""}
+    ${toolsOpen ? renderSequenceToolboxRail({ chatOpen, chatGenerating, state }) : ""}
   </div>`;
 }
 

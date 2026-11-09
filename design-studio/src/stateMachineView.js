@@ -19,6 +19,7 @@ import {
 import { routeSmFlowEdges } from "./stateMachineFlowRouting.js";
 import { renderResearchChatDock, renderResearchChatPanel } from "./researchChat/index.js";
 import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
+import { getReviewToolboxRailItem } from "./reviewWorkflowView.js";
 
 const SUBJECT_LABELS = Object.freeze({
   task: "任务",
@@ -123,9 +124,9 @@ export function renderStateMachineWorkbench(state = {}) {
           subjects
         })}
         ${renderStateMachineChatDock(state, { chatOpen, chatGenerating, model })}
-        ${toolsOpen ? renderStateMachineToolboxRail({ editorOpen, chatOpen, chatGenerating, machineId: selectedId }) : ""}
+        ${toolsOpen ? renderStateMachineToolboxRail({ editorOpen, chatOpen, chatGenerating, machineId: selectedId, state }) : ""}
       </div>`
-    : renderEmptyWorkbench(subjects, { toolsOpen, chatOpen, chatGenerating, chat: state.stateMachineChat, model })}
+    : renderEmptyWorkbench(subjects, { toolsOpen, chatOpen, chatGenerating, chat: state.stateMachineChat, model, state })}
   </section>`;
 }
 
@@ -818,7 +819,7 @@ export function renderStateMachineToolboxFloatButton({ toolsOpen = false, classN
   });
 }
 
-function renderStateMachineToolboxRail({ editorOpen = false, chatOpen = false, chatGenerating = false, machineId = "" } = {}) {
+function renderStateMachineToolboxRail({ editorOpen = false, chatOpen = false, chatGenerating = false, machineId = "", state = {} } = {}) {
   const canEdit = Boolean(machineId);
   const machineAttrs = machineId ? { "data-machine-id": machineId } : {};
   return renderToolboxRail({
@@ -881,12 +882,14 @@ function renderStateMachineToolboxRail({ editorOpen = false, chatOpen = false, c
         className: "sm-palette-item is-danger",
         disabled: !canEdit,
         attrs: { "data-sm-palette": "delete", ...machineAttrs }
-      }
+      },
+      "sep",
+      getReviewToolboxRailItem(state)
     ]
   });
 }
 
-function renderEmptyWorkbench(subjects = [], { toolsOpen = false, chatOpen = false, chatGenerating = false, chat, model } = {}) {
+function renderEmptyWorkbench(subjects = [], { toolsOpen = false, chatOpen = false, chatGenerating = false, chat, model, state = {} } = {}) {
   const hint = subjects.length
     ? `已识别 ${subjects.length} 个建模对象，阶段行动将建成阶段机。`
     : "阶段行动建成阶段机；独立任务或持续对象再分别建机。";
@@ -904,7 +907,7 @@ function renderEmptyWorkbench(subjects = [], { toolsOpen = false, chatOpen = fal
       ${subjects.length ? `<ul class="sm-subject-preview">${subjects.slice(0, 8).map((item) => `<li><b>${escapeHtml(item.name)}</b><small>${escapeHtml(SUBJECT_MACHINE_LABELS[item.subjectType] || SUBJECT_LABELS[item.subjectType] || item.subjectType)} · ${escapeHtml(item.id)}</small></li>`).join("")}</ul>` : ""}
     </div>
     ${renderStateMachineChatDock({ stateMachineChat: chat }, { chatOpen, chatGenerating, model })}
-    ${toolsOpen ? renderStateMachineToolboxRail({ editorOpen: false, chatOpen, chatGenerating }) : ""}
+    ${toolsOpen ? renderStateMachineToolboxRail({ editorOpen: false, chatOpen, chatGenerating, state }) : ""}
   </div>`;
 }
 

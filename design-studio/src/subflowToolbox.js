@@ -1,6 +1,7 @@
 import { escapeHtml } from "./app/domUtils.js";
 import { resolveAiActionLabel } from "./app/aiAvailability.js";
 import { renderToolboxFloatButton, renderToolboxRail } from "./toolbox/index.js";
+import { getReviewToolboxRailItem } from "./reviewWorkflowView.js";
 
 /**
  * Shared toolbox contract for every auxiliary workflow page.
@@ -89,7 +90,9 @@ export function renderSubflowToolboxRail(viewId, state = {}) {
       active: action === "ov1b-review-current" && currentOv1bGroup(state)?.status === "confirmed",
       pressed: action === "ov1b-review-current" ? currentOv1bGroup(state)?.status === "confirmed" : undefined,
       disabled: busy && action !== "open-context-panel"
-    }))
+    })),
+    { type: "sep" },
+    getReviewToolboxRailItem(state)
   ];
   return renderToolboxRail({
     scope: `subflow-${viewId}`,
