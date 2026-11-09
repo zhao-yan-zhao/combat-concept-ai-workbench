@@ -489,7 +489,7 @@ export function createRequestHandler(runtime) {
             const category = url.searchParams.get("category") || "";
             const search = url.searchParams.get("search") || "";
             const tactics = await store.listTactics({ category, search });
-            sendJson(response, 200, { tactics, count: tactics.length });
+            sendJson(response, 200, { tactics, items: tactics, count: tactics.length });
           } catch (error) {
             send(response, 500, error.message, "text/plain;charset=utf-8");
           }

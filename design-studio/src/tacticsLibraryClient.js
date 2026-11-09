@@ -5,8 +5,14 @@
 
 export async function fetchTacticsLibrary({ category = "", search = "" } = {}) {
   const params = new URLSearchParams();
-  if (category) params.set("category", category);
-  if (search) params.set("search", search);
+  const trimmedCat = String(category || "").trim();
+  if (trimmedCat && trimmedCat !== "all" && trimmedCat !== "全部") {
+    params.set("category", trimmedCat);
+  }
+  const trimmedSearch = String(search || "").trim();
+  if (trimmedSearch) {
+    params.set("search", trimmedSearch);
+  }
 
   const query = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(`/api/tactics-library${query}`, {

@@ -7,10 +7,11 @@ export function renderTacticsLibraryModal({ tactics = [], open = false, searchQu
   if (!open) return "";
 
   const categories = ["全部", "反舰突防 / 电子欺骗", "防空压制 / 静默突防", "走廊破门 / 体系破击", "非对称打击 / 港口封锁", "战术战法"];
+  const isAllActive = !activeCategory || activeCategory === "all" || activeCategory === "全部";
 
   return `
     <div class="tactics-library-overlay" style="position:fixed; inset:0; z-index:9999; background:rgba(2,6,23,0.75); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:20px;">
-      <section class="surface tactics-library-dialog" role="dialog" aria-label="作战战法复用库" style="width:100%; max-width:960px; max-height:85vh; display:flex; flex-direction:column; background:#ffffff; border:1px solid #cbd5e1; border-radius:10px; box-shadow:0 20px 40px rgba(0,0,0,0.3); overflow:hidden;">
+      <section class="surface tactics-library-dialog" role="dialog" aria-modal="true" aria-label="作战战法复用库" style="width:100%; max-width:960px; max-height:85vh; display:flex; flex-direction:column; background:#ffffff; border:1px solid #cbd5e1; border-radius:10px; box-shadow:0 20px 40px rgba(0,0,0,0.3); overflow:hidden;">
         
         <!-- 对话框头部 -->
         <header class="tactics-lib-header" style="padding:14px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8fafc;">
@@ -18,26 +19,30 @@ export function renderTacticsLibraryModal({ tactics = [], open = false, searchQu
             <h3 style="margin:0 0 4px 0; font-size:16px; color:#0f172a; display:flex; align-items:center; gap:8px;">
               <span>📚 跨项目战法复用库 (Tactics Library)</span>
               <span class="mini-tag" style="background:#e0f2fe; color:#0369a1; font-size:11px;">M7-T7.4</span>
+              <span class="mini-tag" style="background:#f1f5f9; color:#475569; font-size:11px;">${tactics.length} 项战法已收录</span>
             </h3>
             <p style="margin:0; font-size:12px; color:#64748b;">
               汇聚经过仿真验证与论证闭环的作战战法；支持一键复制成熟战法作为新项目研究起点（纯解耦复制，无脆弱联动）。
             </p>
           </div>
-          <button type="button" class="quiet-button" data-action="close-tactics-library" style="font-size:18px; color:#64748b; padding:2px 8px;" title="关闭">✕</button>
+          <button type="button" class="quiet-button" data-action="close-tactics-library" style="font-size:18px; color:#64748b; padding:2px 8px; cursor:pointer;" title="关闭 (Esc)">✕</button>
         </header>
 
         <!-- 搜索与筛选工具栏 -->
-        <div class="tactics-lib-toolbar" style="padding:10px 20px; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center; gap:12px; background:#fff;">
-          <div style="display:flex; gap:8px; align-items:center; flex:1;">
-            <input type="search" id="tacticsLibSearchInput" value="${escapeHtml(searchQuery)}" placeholder="检索战法名称、核心机制、适用条件..." style="font-size:12px; padding:6px 10px; border:1px solid #cbd5e1; border-radius:6px; flex:1; max-width:360px;" />
-            <button type="button" class="quiet-button compact-btn" data-action="search-tactics-library">🔍 检索</button>
+        <div class="tactics-lib-toolbar" style="padding:10px 20px; border-bottom:1px solid #f1f5f9; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; background:#fff;">
+          <div style="display:flex; gap:8px; align-items:center; flex:1; min-width:280px;">
+            <input type="search" id="tacticsLibSearchInput" class="tactics-search-input" value="${escapeHtml(searchQuery)}" placeholder="检索战法名称、核心机制、适用条件..." style="font-size:12px; padding:6px 10px; border:1px solid #cbd5e1; border-radius:6px; flex:1; max-width:360px;" />
+            <button type="button" class="quiet-button compact-btn" data-action="search-tactics-library" style="cursor:pointer;">🔍 检索</button>
           </div>
-          <div class="tactics-lib-categories" style="display:flex; gap:6px;">
-            ${categories.slice(0, 4).map((cat) => `
-              <button type="button" class="quiet-button compact-btn ${activeCategory === cat ? "active" : ""}" data-action="filter-tactics-category" data-category="${escapeHtml(cat === "全部" ? "" : cat)}" style="font-size:11.5px;">
+          <div class="tactics-lib-categories" style="display:flex; flex-wrap:wrap; gap:6px;">
+            ${categories.map((cat) => {
+              const active = (cat === "全部" && isAllActive) || (activeCategory === cat);
+              return `
+              <button type="button" class="quiet-button compact-btn ${active ? "active" : ""}" data-action="filter-tactics-category" data-category="${escapeHtml(cat === "全部" ? "" : cat)}" style="font-size:11.5px; cursor:pointer; ${active ? "background:#0284c7; color:#ffffff; font-weight:600; border-color:#0284c7;" : ""}">
                 ${escapeHtml(cat)}
               </button>
-            `).join("")}
+            `;
+            }).join("")}
           </div>
         </div>
 
@@ -45,7 +50,8 @@ export function renderTacticsLibraryModal({ tactics = [], open = false, searchQu
         <div class="tactics-lib-list" style="padding:16px 20px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:14px; background:#f8fafc;">
           ${tactics.length === 0 ? `
             <div style="text-align:center; padding:40px 0; color:#94a3b8; font-size:13px;">
-              未找到匹配的战法条目。可尝试清空检索词或在已有项目中点击「存入战法库」。
+              <p style="margin:0 0 10px 0;">未找到匹配的战法条目。可尝试清空检索词或在已有项目中点击「存入战法库」。</p>
+              <button type="button" class="quiet-button compact-btn" data-action="reset-tactics-filter" style="border:1px solid #cbd5e1; padding:4px 12px; border-radius:4px; font-size:12px; cursor:pointer; background:#fff;">🔄 重置筛选与检索</button>
             </div>
           ` : tactics.map((t) => `
             <article class="tactics-lib-card" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:14px 16px; display:flex; flex-direction:column; gap:8px; box-shadow:0 2px 6px rgba(0,0,0,0.03);" data-tactic-id="${escapeHtml(t.id)}">
@@ -61,11 +67,11 @@ export function renderTacticsLibraryModal({ tactics = [], open = false, searchQu
                   </p>
                 </div>
                 <div style="display:flex; gap:8px;">
-                  <button type="button" class="primary-btn compact-btn" data-action="fork-tactic-as-project" data-tactic-id="${escapeHtml(t.id)}" style="font-size:11.5px; white-space:nowrap;">
+                  <button type="button" class="primary-btn compact-btn" data-action="fork-tactic-as-project" data-tactic-id="${escapeHtml(t.id)}" style="font-size:11.5px; white-space:nowrap; cursor:pointer;">
                     🚀 复制为起点创建项目
                   </button>
                   ${t.id.startsWith("tactic-lib-") ? `
-                    <button type="button" class="quiet-button compact-btn" data-action="delete-tactic-entry" data-tactic-id="${escapeHtml(t.id)}" style="color:#ef4444; font-size:11.5px;" title="从战法库移除">
+                    <button type="button" class="quiet-button compact-btn" data-action="delete-tactic-entry" data-tactic-id="${escapeHtml(t.id)}" style="color:#ef4444; font-size:11.5px; cursor:pointer;" title="从战法库移除">
                       删除
                     </button>
                   ` : ""}
@@ -97,8 +103,9 @@ export function renderTacticsLibraryModal({ tactics = [], open = false, searchQu
         </div>
 
         <!-- 对话框底部 -->
-        <footer style="padding:10px 20px; border-top:1px solid #e2e8f0; display:flex; justify-content:flex-end; background:#fff;">
-          <button type="button" class="quiet-button" data-action="close-tactics-library" style="font-size:12px;">关闭</button>
+        <footer style="padding:10px 20px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#fff;">
+          <small style="color:#94a3b8; font-size:11px;">提示：点击弹窗外部空白处或按 Esc 键可快速关闭</small>
+          <button type="button" class="quiet-button" data-action="close-tactics-library" style="font-size:12px; cursor:pointer;">关闭</button>
         </footer>
       </section>
     </div>

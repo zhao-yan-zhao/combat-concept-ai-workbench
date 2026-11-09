@@ -676,7 +676,7 @@ function bindDynamicEvents() {
   });
   document.querySelectorAll("[data-action]").forEach((button) => {
     // Workflow gate uses root-level delegation (survives soft refresh / open toggle).
-    if (button.closest("#workflowGateRoot") || button.closest("#aiConfigRoot") || button.closest("#aiPromptRoot")) return;
+    if (button.closest("#workflowGateRoot") || button.closest("#aiConfigRoot") || button.closest("#aiPromptRoot") || button.closest("#tacticsLibraryRoot")) return;
     const fire = (event) => {
       if (button.dataset.stopClickPropagation === "true" || button.classList.contains("card-inline-edit-btn") || button.classList.contains("sync-inline-edit-btn")) {
         event?.stopPropagation?.();
@@ -860,11 +860,12 @@ async function handleAction(action, source = null) {
     state.tacticsLibraryOpen = true;
     closeMenubarMenus();
     try {
+      const activeCat = (state.tacticsLibraryActiveCategory === "all" || state.tacticsLibraryActiveCategory === "全部") ? "" : (state.tacticsLibraryActiveCategory || "");
       const data = await fetchTacticsLibrary({
-        category: state.tacticsLibraryActiveCategory || "all",
+        category: activeCat,
         search: state.tacticsLibrarySearchQuery || ""
       });
-      state.tacticsLibraryList = data.items || [];
+      state.tacticsLibraryList = data.tactics || data.items || [];
     } catch (err) {
       showToast("战法库加载失败: " + err.message);
     }
@@ -877,14 +878,15 @@ async function handleAction(action, source = null) {
     return;
   }
   if (action === "filter-tactics-category") {
-    const category = source?.dataset?.category || "all";
+    const rawCategory = source?.dataset?.category ?? "";
+    const category = (rawCategory === "all" || rawCategory === "全部") ? "" : rawCategory;
     state.tacticsLibraryActiveCategory = category;
     try {
       const data = await fetchTacticsLibrary({
         category,
         search: state.tacticsLibrarySearchQuery || ""
       });
-      state.tacticsLibraryList = data.items || [];
+      state.tacticsLibraryList = data.tactics || data.items || [];
     } catch (err) {
       showToast("战法库筛选失败: " + err.message);
     }
@@ -892,16 +894,32 @@ async function handleAction(action, source = null) {
     return;
   }
   if (action === "search-tactics-library") {
-    const query = source?.value !== undefined ? source.value : (document.querySelector(".tactics-search-input")?.value || "");
+    const inputEl = document.getElementById("tacticsLibSearchInput") || document.querySelector(".tactics-search-input");
+    const query = inputEl ? inputEl.value.trim() : (source?.value !== undefined ? String(source.value).trim() : "");
     state.tacticsLibrarySearchQuery = query;
     try {
+      const activeCat = (state.tacticsLibraryActiveCategory === "all" || state.tacticsLibraryActiveCategory === "全部") ? "" : (state.tacticsLibraryActiveCategory || "");
       const data = await fetchTacticsLibrary({
-        category: state.tacticsLibraryActiveCategory || "all",
+        category: activeCat,
         search: query
       });
-      state.tacticsLibraryList = data.items || [];
+      state.tacticsLibraryList = data.tactics || data.items || [];
     } catch (err) {
       showToast("战法库搜索失败: " + err.message);
+    }
+    render({ skipViewRoot: true });
+    return;
+  }
+  if (action === "reset-tactics-filter") {
+    state.tacticsLibraryActiveCategory = "";
+    state.tacticsLibrarySearchQuery = "";
+    const inputEl = document.getElementById("tacticsLibSearchInput") || document.querySelector(".tactics-search-input");
+    if (inputEl) inputEl.value = "";
+    try {
+      const data = await fetchTacticsLibrary({ category: "", search: "" });
+      state.tacticsLibraryList = data.tactics || data.items || [];
+    } catch (err) {
+      showToast("战法库重置失败: " + err.message);
     }
     render({ skipViewRoot: true });
     return;
@@ -909,13 +927,15 @@ async function handleAction(action, source = null) {
   if (action === "save-to-tactics-library") {
     try {
       const result = await saveCurrentProjectToLibrary(state);
-      showToast(`已成功将当前战法【${result.item?.name || "作战概念战法"}】存入战法库！`);
+      const savedName = result.tactic?.name || result.item?.name || "作战概念战法";
+      showToast(`已成功将当前战法【${savedName}】存入战法库！`);
       if (state.tacticsLibraryOpen) {
+        const activeCat = (state.tacticsLibraryActiveCategory === "all" || state.tacticsLibraryActiveCategory === "全部") ? "" : (state.tacticsLibraryActiveCategory || "");
         const data = await fetchTacticsLibrary({
-          category: state.tacticsLibraryActiveCategory || "all",
+          category: activeCat,
           search: state.tacticsLibrarySearchQuery || ""
         });
-        state.tacticsLibraryList = data.items || [];
+        state.tacticsLibraryList = data.tactics || data.items || [];
         render({ skipViewRoot: true });
       }
     } catch (err) {
@@ -946,18 +966,19 @@ async function handleAction(action, source = null) {
     }
     return;
   }
-  if (action === "delete-tactic-from-library") {
+  if (action === "delete-tactic-entry" || action === "delete-tactic-from-library") {
     const tacticId = source?.dataset?.tacticId;
     if (!tacticId) return;
     if (!window.confirm("确定要从战法库中移除该战法吗？（已复用创建的项目不受影响）")) return;
     try {
       await deleteTacticFromLibrary(tacticId);
       showToast("战法已从战法库移除");
+      const activeCat = (state.tacticsLibraryActiveCategory === "all" || state.tacticsLibraryActiveCategory === "全部") ? "" : (state.tacticsLibraryActiveCategory || "");
       const data = await fetchTacticsLibrary({
-        category: state.tacticsLibraryActiveCategory || "all",
+        category: activeCat,
         search: state.tacticsLibrarySearchQuery || ""
       });
-      state.tacticsLibraryList = data.items || [];
+      state.tacticsLibraryList = data.tactics || data.items || [];
       render({ skipViewRoot: true });
     } catch (err) {
       showToast("删除战法失败: " + err.message);

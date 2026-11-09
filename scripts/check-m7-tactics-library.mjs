@@ -29,6 +29,11 @@ try {
   assert.equal(categorySearch.length, 1);
   assert.equal(categorySearch[0].id, "tactic-distributed-strike");
 
+  const allCategorySearch1 = await store.listTactics({ category: "all" });
+  assert.equal(allCategorySearch1.length, initialList.length, "category='all' 应返回全部战法");
+  const allCategorySearch2 = await store.listTactics({ category: "全部" });
+  assert.equal(allCategorySearch2.length, initialList.length, "category='全部' 应返回全部战法");
+
   const emptySearch = await store.listTactics({ search: "不存在的关键词xyz" });
   assert.equal(emptySearch.length, 0);
   console.log("✔ 检查项 2: 战法库关键词多维搜索与分类过滤正确");
@@ -95,12 +100,21 @@ try {
   });
   assert.ok(modalHtml.includes("跨项目战法复用库"), "应包含模态弹窗标题");
   assert.ok(modalHtml.includes("tacticsLibSearchInput"), "应包含搜索框");
+  assert.ok(modalHtml.includes("tactics-search-input"), "搜索框应包含类名 tactics-search-input");
   assert.ok(modalHtml.includes("分布式集群多轴饱和突防战法"), "应渲染战法卡片");
   assert.ok(modalHtml.includes('data-action="fork-tactic-as-project"'), "卡片应包含以该战法创建新项目按钮");
   assert.ok(modalHtml.includes('data-action="close-tactics-library"'), "应包含关闭按钮");
+
+  const emptyModalHtml = renderTacticsLibraryModal({
+    open: true,
+    tactics: [],
+    searchQuery: "xyz",
+    activeCategory: ""
+  });
+  assert.ok(emptyModalHtml.includes('data-action="reset-tactics-filter"'), "空结果时应提供重置筛选与检索按钮");
   console.log("✔ 检查项 6: 前端战法库模态弹窗 HTML 契约正确");
 
-  // 7. 检查关键入口静态集成
+  // 7. 检查关键入口静态集成与事件委托闭环
   const projectManagerSource = fs.readFileSync(path.join(process.cwd(), "design-studio/src/projectManagerView.js"), "utf8");
   assert.ok(projectManagerSource.includes('data-action="open-tactics-library"'), "项目管理器中必须提供战法库入口");
 
@@ -114,7 +128,17 @@ try {
   const mainSource = fs.readFileSync(path.join(process.cwd(), "design-studio/src/main.js"), "utf8");
   assert.ok(mainSource.includes('action === "open-tactics-library"'), "main.js 必须处理 open-tactics-library");
   assert.ok(mainSource.includes('action === "fork-tactic-as-project"'), "main.js 必须处理 fork-tactic-as-project");
-  console.log("✔ 检查项 7: 前端关键入口与主调度生命周期静态集成完整");
+  assert.ok(mainSource.includes('action === "close-tactics-library"'), "main.js 必须处理 close-tactics-library");
+  assert.ok(mainSource.includes('action === "reset-tactics-filter"'), "main.js 必须处理 reset-tactics-filter");
+  assert.ok(mainSource.includes('tacticsLibraryRoot'), "main.js 必须对 tacticsLibraryRoot 保持委托隔离");
+
+  const chromeBindingsSource = fs.readFileSync(path.join(process.cwd(), "design-studio/src/app/bindings/chromeBindings.js"), "utf8");
+  assert.ok(chromeBindingsSource.includes('tacticsLibraryRoot'), "chromeBindings 必须为 tacticsLibraryRoot 绑定根级事件委托");
+  assert.ok(chromeBindingsSource.includes('state.tacticsLibraryOpen'), "chromeBindings 必须支持 Esc 键关闭战法库");
+
+  const serverHandlerSource = fs.readFileSync(path.join(process.cwd(), "server/createRequestHandler.mjs"), "utf8");
+  assert.ok(serverHandlerSource.includes('items: tactics'), "后端 GET /api/tactics-library 必须兼顾 items 与 tactics 兼容契约");
+  console.log("✔ 检查项 7: 前端关键入口、事件委托闭环与主调度生命周期集成完整");
 
 } finally {
   if (fs.existsSync(tempFilePath)) {

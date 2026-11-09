@@ -301,6 +301,35 @@ export function bindAiModalsChrome(ctx) {
     });
   }
 
+  const tacticsRoot = document.getElementById("tacticsLibraryRoot");
+  if (tacticsRoot && tacticsRoot.dataset.actionsBound !== "true") {
+    tacticsRoot.dataset.actionsBound = "true";
+    tacticsRoot.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.classList.contains("tactics-library-overlay")) {
+        handleAction("close-tactics-library");
+        return;
+      }
+      const button = target.closest("[data-action]");
+      if (!button || !tacticsRoot.contains(button)) return;
+      handleAction(button.dataset.action, button, event);
+    });
+
+    tacticsRoot.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && event.target?.id === "tacticsLibSearchInput") {
+        event.preventDefault();
+        handleAction("search-tactics-library", event.target);
+      }
+    });
+
+    tacticsRoot.addEventListener("input", (event) => {
+      if (event.target?.id === "tacticsLibSearchInput" && event.target.value === "" && state.tacticsLibrarySearchQuery) {
+        handleAction("search-tactics-library", event.target);
+      }
+    });
+  }
+
   document.addEventListener("keydown", (event) => {
     if ((event.ctrlKey || event.metaKey) && (event.key === "k" || event.key === "K")) {
       event.preventDefault();
@@ -311,6 +340,11 @@ export function bindAiModalsChrome(ctx) {
     if (state.commandPaletteOpen) {
       event.preventDefault();
       handleAction("close-command-palette");
+      return;
+    }
+    if (state.tacticsLibraryOpen) {
+      event.preventDefault();
+      handleAction("close-tactics-library");
       return;
     }
     const overlay = $("#workflowModeOverlay");

@@ -183,5 +183,11 @@ try {
 
   console.log(`Live 8792 DoDAF flow passed (${PROJECT_ID}): health=sqlite; seed/save → architecture writeback → export/import → snapshot restore on ${databasePath}`);
 } finally {
+  try {
+    await repository.updateProject(PROJECT_ID, { archived: true });
+    await repository.deleteProject(PROJECT_ID);
+  } catch {
+    // Best-effort cleanup of test project.
+  }
   repository.close?.();
 }

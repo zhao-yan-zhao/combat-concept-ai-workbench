@@ -1,31 +1,168 @@
-# 作战概念研究工作台
+# AI 作战概念研究工作台 (Combat Concept AI Workbench)
 
-内网研究原型，用于将研究灵感逐步整理为可审查的概念简报、DoDAF 派生视图、抽象想定、设计验证和可归档成果。
+> **定位**：专用于国防与军事研究领域的专业“AI 作战概念研究工作台”，提供从构想输入、知识检索、AI 辅助生成、人机协同研讨、模型推演验证到规范成果输出的完整闭环。本系统运行于**纯概念研究与推演层面**，秉持“严谨、克制、可追溯”的研究工具定位，绝非普通聊天工具或大屏展示系统。
 
-当前试用地址：`http://127.0.0.1:8792/`。
+当前服务入口：`http://127.0.0.1:8792/`。
 
-## 当前状态
+---
 
-- **核心架构**：采用“七步主线 + 关联模型动态拓扑”：
-  - **主线**：`01 概念简报 (brief) -> 02 阶段行动 (phase-action) -> 03 作战任务 (operational-task) -> 04 作战兵力 (force-mission) -> 05 总体图 (ov1) -> 06 概念图 (concept-map) -> 07 仿真演示 (scenario/validation)`。
-  - **关联模型**：沿主线动态挂接 OV-1b（任务组整理）、OV-1c（任务-活动映射）、OV-2（作战资源流）、OV-3（资源流矩阵）、OV-4（组织层级与责任）、OV-5a（活动分解）、OV-5b（四维因果活动机理：杀伤网因果流、跨域协同同步矩阵、人机决策自主阶梯、体系抗毁推演）、OV-6a（规则库）、OV-6b（状态机）、OV-6c（分阵营与逐阶段时序图）、OV-7（状态-活动映射）。
-- **AI 提示词资产管理**：全量 21 个生产提示词统一纳入顶部菜单“工具 → AI 提示词”，支持可视化浏览、自定义编辑、动态变量说明与一键恢复默认。
-- **持久化引擎**：默认使用 Node.js 原生 SQLite 引擎：`data/projects.sqlite`（全量项目数据）与 `data/collaboration-identities.sqlite`（协同身份）。
-- **装备库参考**：集成只读 CMO（Command: Modern Operations）DB3 数据库（`data/DB3K_510.db3`），支持平台检索与装备推荐。
-- **代码布局**：`server.mjs` → `server/app.mjs`；领域与 HTTP 工具在 `server/`；共享库在 `shared/`；UI 在 `design-studio/`（壳层在 `design-studio/src/app/`）。
+## 目录
 
-## 快速启动
+- [核心业务架构](#核心业务架构)
+  - [两条业务主线分流](#两条业务主线分流)
+  - [七步主线工作流与模型拓扑](#七步主线工作流与模型拓扑)
+  - [DoDAF 2.02 / DM2 架构产品全景](#dodaf-202--dm2-架构产品全景)
+- [核心系统能力与亮点](#核心系统能力与亮点)
+  - [1. 战法设计线：制胜机理与对抗闭环](#1-战法设计线制胜机理与对抗闭环)
+  - [2. 想定推演线：回合制导调与分支派生](#2-想定推演线回合制导调与分支派生)
+  - [3. AI 提示词全流程纳管与质量工程](#3-ai-提示词全流程纳管与质量工程)
+  - [4. 可信引用溯源与证据链审查](#4-可信引用溯源与证据链审查)
+  - [5. 可控事务保障与秒级撤销](#5-可控事务保障与秒级撤销)
+  - [6. 规范成果导出与知识库双向接驳](#6-规范成果导出与知识库双向接驳)
+  - [7. 全离线内网部署与自主保障](#7-全离线内网部署与自主保障)
+- [快速启动与环境说明](#快速启动与环境说明)
+- [代码布局与职责分层](#代码布局与职责分层)
+- [自动化测试与防退化体系](#自动化测试与防退化体系)
+- [权威文档索引](#权威文档索引)
+- [使用边界与安全准则](#使用边界与安全准则)
+
+---
+
+## 核心业务架构
+
+### 两条业务主线分流
+
+工作台在项目创建时明确支持两类典型军事研究人员的工作流分流（`project.kind`），底层共享同一套 DoDAF 规范拓扑与协同持久化仓储：
+
+| 维度 | A. 战法设计线 (`tactic`) | B. 想定推演线 (`scenario`) |
+|---|---|---|
+| **核心目标** | 针对特定作战问题与对手弱点，设计并严密论证全新作战打法 | 构建想定背景与红蓝态势，按阶段/回合推演验证并复盘 |
+| **主线侧重** | 侧重制胜机理（OV-5）、因果论证链、关键假设清单与对抗循环 | 侧重兵力编组、回合导调引擎、双盲情报迷雾与时序事件回溯 |
+| **最终成果** | 《战法说明书》（`tactic-doc`）、战法库入库复用 | 《战役想定文书》（`scenario-doc`）、《推演复盘报告》（`wargame-review`） |
+
+---
+
+### 七步主线工作流与模型拓扑
+
+系统以“模型拓扑关联驱动”替代传统线性填表，主线各步骤具备实时状态流转、AI 深度研讨与业务门禁控制：
+
+```text
+[Step 00 概念规划] ──> [Step 01 任务编成] ──> [Step 02 阶段行动] ──> [Step 03 作战兵力]
+        │                                                                     │
+        ▼                                                                     ▼
+[Step 06 推演与验证] <── [Step 05 总体概念] <── [Step 04 活动机理 (OV-5/OODA)] ◄┘
+        │
+        └─> [成果规范输出 / 战法库入库 / Obsidian 回写]
+```
+
+- **Step 00 概念规划 (Brief & Direction)**：作战意图输入、AI 多方向生成与选择、参考构想与战例检索、历史草稿隔离保护。
+- **Step 01 任务编成 (Operational Task)**：基于战略目标分解任务谱系、任务属性标注与空间态势几何绑定。
+- **Step 02 阶段行动 (Phase & Action)**：多阶段作战链分解（Phase Chain）、时序递进关系维护与阶段行动研讨。
+- **Step 03 作战兵力 (Force Mission)**：兵力与任务双层编组、CMO（Command: Modern Operations）DB3 装备库检索对照、协同编成方案生成。
+- **Step 04 活动机理 (OV-5 & OODA)**：
+  - **OV-5a 作战活动分解**：WBS 工序树、标准构造型图、超紧凑双行 Header、I/O 守恒诊断与拖拽重构。
+  - **OV-5b / OODA 动态机制**：杀伤网因果流（Kill-Web）、跨域协同同步矩阵、决策自主阶梯与抗毁韧性仿真。
+  - **制胜论证与对抗闭环**：挂接论证链（Claim/Reasoning/Assumptions）、对手反制与应对闭环。
+- **Step 05 总体概念 (OV-1 & 空间态势)**：
+  - **OV-1a 高层协同图**：跨域主体拓扑与闭环反馈呈现。
+  - **空间态势图**：无缝内嵌外部概念图绘制视口（`combat-map-web`），状态隔离保护。
+  - **体系概念大纲**：构想叙述、时空边界、MOE 预期指标在线研讨与持久化。
+- **Step 06 仿真推演与验证 (Scenario & Validation)**：
+  - **一体化推演舱**：动态态势事件序列、效能雷达评估与红方博弈质询同屏联动。
+  - **精准闭环回改 (`feedback_to`)**：推演缺陷一键直达上游机理/行动/兵力/概念视图进行定向修正。
+
+---
+
+### DoDAF 2.02 / DM2 架构产品全景
+
+工作台深度遵循 DoDAF 2.02 与 DM2（DoD 架构框架元模型）规范：
+
+- **作战视点 (OV)**：
+  - **OV-1 (a/b/c)**：高层协同图、任务组整理、任务-活动映射。
+  - **OV-2**：作战资源流描述矩阵与拓扑。
+  - **OV-3**：作战信息交互需求矩阵（CIIR）。
+  - **OV-4**：组织组织架构与指挥关系。
+  - **OV-5 (a/b)**：作战活动分解与作战因果活动机理模型。
+- **时序与状态视点**：
+  - **OV-6a**：作战规则库（ROE 战术规则）。
+  - **OV-6b**：状态转换描述图与机理。
+  - **OV-6c**：逐阶段事件追踪与交互时序图。
+- **逻辑数据与一致性**：
+  - **OV-7**：逻辑数据模型与 DM2 规范实体契约。
+  - **体系逻辑一致性审阅**：跨视图孤立节点、断链与输入输出守恒自动化诊断。
+
+---
+
+## 核心系统能力与亮点
+
+### 1. 战法设计线：制胜机理与对抗闭环
+
+- **制胜机理论证链**：OV-5 动态机制挂接结构化论证链（`claim` 主张、`reasoning` 推导、`evidenceRefs` 支撑证据、`assumptions` 关键假设）。
+- **关键假设清单与失效波及矩阵**：全局梳理关键假设并按置信度排序（低置信度假设置顶告警），评估页动态计算“若假设被推翻，哪些行动/活动将级联失效”的波及推演。
+- **对抗循环（对手反制 ↔ 我方应对）**：红队审阅提出对手潜在反制措施（Countermeasures），强制闭环要求我方补充应对举措（Response）或明确论证接受风险，消除设计盲区。
+- **战例借鉴与适用性比对**：智能对照经典历史战例，提炼“可借鉴机制（绿）”与“时代局限性（橙）”，一键引用至论证链。
+- **成熟战法库（跨项目复用）**：独立持久化战法库，支持将定型战法沉淀为模板，新建项目时可一键纯深拷贝作为起点，杜绝跨项目脆弱联动。
+
+### 2. 想定推演线：回合制导调与分支派生
+
+- **回合制推演引擎 (Turn Engine)**：按标准兵棋研讨回合递进推进（提交行动意图 → 突发事件卡注入 → 导演部裁决与 AI 因果分析建议 → 进入下一回合）。严禁虚假的数值化杀伤计算，专注体系与战术因果逻辑。
+- **红蓝分立与协同角色映射**：深度集成协同身份（`lead` 导演部全知视角、`researcher` 红方视角、`reviewer` 蓝方视角），支持双向情报迷雾遮蔽、定向事件过滤与防覆写安全保存。
+- **推演时序流水线 (Turn Timeline)**：结构化记录推演全周期日志，支持在历史任意回合一键**纯深拷贝截断派生 What-If 探索项目**，探索不同战场分支可能。
+- **推演复盘报告自动接驳**：一键将推演流水线、攻防意图、突发事件与裁决成因无损导入《推演复盘报告》（`wargame-review`）。
+
+### 3. AI 提示词全流程纳管与质量工程
+
+- **统一目录纳管（27 个生产提示词）**：严格遵守《提示词纳管铁律》，全量 27 个生产提示词纳入顶部菜单“工具 → AI 提示词”，彻底杜绝不可见隐藏提示词。
+- **版本归档与行级 Diff 对比**：零外部依赖行级 LCS Diff 对比引擎，提示词编辑自动单调递增归档（最多保留 30 个历史版本），支持 Unified Diff 视图与一键安全回退（`POST /api/ai-prompts/rollback`）。
+- **Schema 自动递归校验与 1 次自动纠错**：严格把关 AI 输出 JSON 契约，若 Schema 校验失败自动附带错误明细触发 1 次纠错重试，提高解析成功率。
+- **黄金样例库与离线多维评测引擎**：内置 30 条战法/机理/想定高保真黄金用例，提供结构合法率、引用有效率、字段完整率评测脚本（`scripts/eval-prompts.mjs`）。
+
+### 4. 可信引用溯源与证据链审查
+
+- **规范化引用数据模型**：严格落实 `{ chunkId, sourcePath, heading, excerpt, retrievedAt }` 结构化引用，兼容历史字符串证据。
+- **三态来源标记**：所有作战要素明确标注生成来源（`cited` 知识库引证、`ai-inferred` AI 推理、`human` 人工录入/修订）。
+- **全要素交互溯源**：卡片与表格原生展示来源徽章与原文片段折叠板，点击直达知识库原文；成果报告自动附带标准角标 `[n]` 与引用附录。
+- **敏感知识审批流**：敏感或受控外部知识的引入具备审计记录与审批保护机制。
+
+### 5. 可控事务保障与秒级撤销
+
+- **统一事务包装 (`applyWithRecoveryPoint`)**：全系统所有批量修改或覆盖性 AI 操作（如应用候选、模态批量生成、快照恢复）均强制接入事务保护。
+- **秒级撤销机制 (Undo)**：顶栏常驻撤销按钮，维护 20 层快照恢复栈，误操作一键秒级还原。
+- **变更差异可视化预览**：应用 AI 生成候选前自动弹出对比弹窗，明确展示新增、修改、删除要素明细。
+- **写失败防御与状态指示**：顶栏微件实时展示“已同步 / 保存中 / 本地暂存”，断网或后端异常时不丢数据。
+
+### 6. 规范成果导出与知识库双向接驳
+
+- **三套专用成果报告模板**：
+  1. `tactic-doc` 战法说明书（问题剖析 → 力量运用 → 阶段行动 → 制胜机理 → 风险反制 → 引用）；
+  2. `scenario-doc` 想定文书（战役背景 → 红蓝企图与编成 → 阶段与裁决规则 → 态势附件）；
+  3. `wargame-review` 推演复盘报告（推演概况 → 回合流水线 → 关键决策 → 执行偏差分析 → 改进建议）。
+- **四级密级标注与审计记录**：页面与导出文档（公开/内部/秘密/机密）页眉页脚全格式水印标注，导出动作完整记入安全审计日志。
+- **多格式无损导出**：
+  - 纯前端 Markdown、RTF、XML（DM2 标准规范）导出；
+  - 后端 Office / Word 导出（高保真排版，自动绘制并嵌入 OV-1 抽象相对网格 SVG 矢量态势图）。
+- **Obsidian 成果安全双向回写**：绝不篡改已有笔记，自动生成 YAML Frontmatter、四要素元数据与全量双向链接（`[[...]]`）。
+
+### 7. 全离线内网部署与自主保障
+
+- **零外部 CDN / 外部字体依赖**：所有 CSS、字体与静态资源均为本地离线托管，杜绝内网外联漏洞。
+- **大模型接口完全解耦**：标准 OpenAI 协议兼容，可无缝对接内网部署的开源或私有化大模型服务（vLLM、Ollama、LocalAI 等）。
+- **本地降级与手工起草**：无大模型环境时系统自动切换为本地降级模式，提供 4 套符合 DoDAF 标准的手工起草基准模板，核心研讨与架构推演功能 100% 可用。
+
+---
+
+## 快速启动与环境说明
 
 本工作台提供了一键启动与环境自检脚本，支持 Windows 双击、PowerShell 参数化启动以及跨平台 Shell：
 
 ### 方式一：Windows 双击一键启动（推荐）
 直接双击项目根目录下的 **`start.bat`**：
-- 自动检测 Node.js 版本（建议 v22.5.0+ 或 v24+，以支持原生 SQLite 引擎）；
+- 自动检测 Node.js 环境（建议 Node.js v22.5.0+ 或 v24+，以完美支持原生 SQLite 引擎）；
 - 自动检查端口 8792 占用状态（若已在运行则直接打开浏览器，避免重复启动冲突）；
 - 自动检查本地 SQLite 数据库、CMO 装备库与概念图工具路径；
 - 服务就绪后**自动在默认浏览器中打开** `http://127.0.0.1:8792/`。
 
-若需停止服务，可双击 **`stop.bat`** 安全释放 8792 端口。
+若需停止服务，双击根目录下的 **`stop.bat`** 即可安全释放 8792 端口。
 
 ### 方式二：PowerShell 终端启动
 ```powershell
@@ -34,25 +171,24 @@
 
 # 2. 常用参数选项
 .\start.ps1 -Port 8793 -NoBrowser     # 自定义端口且不自动打开浏览器
-.\start.ps1 -CheckOnly                # 纯环境依赖检查模式
-.\start.ps1 -StorageMode file         # 测试模式使用 JSON 文件存储
+.\start.ps1 -CheckOnly                # 纯环境依赖与健康自检模式
+.\start.ps1 -StorageMode file         # 纯测试模式使用临时 JSON 存储
 
 # 3. 停止服务
 .\stop.ps1                            # 停止 8792 端口服务
-.\stop.ps1 -All                       # 同时停止 8792 工作台与 8765 概念图工具
+.\stop.ps1 -All                       # 同时停止 8792 工作台与 8765 伴生概念图工具
 ```
 
-### 方式三：跨平台 Shell 启动 (Git Bash / Linux / macOS)
+### 方式三：跨平台 Shell 启动 (Linux / macOS / Git Bash)
 ```bash
-chmod +x start.sh
+chmod +x start.sh stop.sh
 ./start.sh                           # 默认启动并自动拉起浏览器
-./start.sh 8793 --no-browser         # 自定义端口
+./start.sh 8793 --no-browser         # 自定义端口启动
 ./start.sh --check-only              # 仅执行环境检测
+./stop.sh                            # 停止服务
 ```
 
 ### 方式四：手动传统方式
-在 PowerShell 中执行：
-
 ```powershell
 cd D:\项目\combat-concept-ai-workbench
 $env:PORT = "8792"
@@ -64,35 +200,114 @@ node server.mjs
 ```powershell
 Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8792/api/health
 ```
+*(响应应包含 `status: "ok"` 且 `projectRepository.mode = "sqlite"`)*。
 
-不要使用旧的 `8788` 静态页面方式。未通过批准的安全进程环境提供 AI 凭据时，工作台仍可试用本地功能，但 AI 会处于降级模式；不要把凭据写入命令、文件或配置。
+---
 
-接着：
+## 代码布局与职责分层
 
-1. 按 [TRIAL_GUIDE.md](TRIAL_GUIDE.md) 的顺序试用。
-2. 需要了解 HTTP 契约、权限、版本冲突或归档时，阅读 [INTERFACE_GUIDE.md](INTERFACE_GUIDE.md)。
-3. 需要继续开发前，先阅读 [project-context.md](project-context.md)。
+遵循严格的模块化拆分规范与零外部 npm 运行时依赖原则：
 
-不要在输入、导出、日志、问题记录或会话中放入 API 密钥、密码、Cookie 或敏感 Vault 正文。
+```text
+combat-concept-ai-workbench/
+├── server.mjs                   # 入口文件，加载 server/app.mjs
+├── server/                      # 后端核心逻辑
+│   ├── app.mjs                  # 应用装配
+│   ├── createRuntime.mjs        # 运行时上下文与依赖注入
+│   ├── createRequestHandler.mjs # HTTP 请求分发路由中心
+│   ├── openaiClient.mjs         # OpenAI 协议兼容客户端与 27 个生产提示词契约
+│   ├── aiPromptConfig.mjs       # 提示词版本归档与 Diff 回滚引擎
+│   ├── tacticsLibraryStore.mjs  # 跨项目战法库持久化
+│   └── routes/                  # 业务路由（AI、项目资源、协同认证、报表等）
+├── shared/                      # 前后端共用逻辑与标准契约
+│   ├── dodaf/                   # DoDAF 2.02 / DM2 规范实体与规整器
+│   ├── schemaValidator.js       # 轻量递归 Schema 校验器
+│   ├── textDiff.js              # 行级 LCS 文本 Diff 对比引擎
+│   ├── generator.js             # 离线 Mock 生成与规则模板
+│   └── knowledge.js             # 知识检索与引用溯源共用库
+├── design-studio/               # 前端单页工作台 UI
+│   ├── index.html               # 单页 HTML 骨架
+│   ├── styles.css               # CSS 总层叠入口（严格按领域拆分的 12 个模块引入）
+│   ├── styles/                  # 模块化 CSS 库（base, shell, workflow, ov5*, dodaf* 等）
+│   └── src/                     # 前端 JavaScript 逻辑
+│       ├── main.js              # 核心交互调度中枢（精简解耦至 2,000 行以下）
+│       ├── app/                 # 壳层组件、事件绑定、控制器装配、事务包装
+│       ├── wargameTurnStore.js  # 推演回合状态机与导调事件
+│       ├── wargamePerspectiveFilter.js # 红蓝视角情报迷雾过滤管道
+│       ├── tacticsLibraryView.js# 战法复用库交互视图
+│       └── ...                  # 各业务视点 Controller 与 View
+├── data/                        # 默认数据持久化目录
+│   ├── projects.sqlite          # 原生 SQLite 全量业务数据仓储
+│   ├── collaboration-identities.sqlite # 协同权限与身份库
+│   ├── tactics-library.json     # 成熟战法复用库
+│   └── DB3K_510.db3             # CMO 装备库只读数据库
+├── eval/                        # 黄金用例库与评测数据集
+│   └── cases/                   # 30 条核心黄金用例
+└── scripts/                     # 自动化回归与验收测试脚本集 (168 个脚本)
+    ├── run-checks.mjs           # 统一测试分组运行器
+    └── eval-prompts.mjs         # 提示词质量与引用评测脚本
+```
 
-## 文档入口
+---
 
-| 文档 | 用途 |
-|---|---|
-| [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md) | 全量文档索引、三级权威梯队与使用指南。 |
-| [AGENTS.md](AGENTS.md) | 研发铁律、改动防退化规范与提示词约束。 |
-| [TRIAL_GUIDE.md](TRIAL_GUIDE.md) | 业务试用步骤、七步主线、OV-5 活动机理操作与反馈格式。 |
-| [INTERFACE_GUIDE.md](INTERFACE_GUIDE.md) | 服务端 HTTP 接口、DoDAF 资源读写、提示词管理与权限边界。 |
-| [SOFTWARE_DESIGN.md](SOFTWARE_DESIGN.md) | 完整架构设计与当前原型映射。 |
-| [project-context.md](project-context.md) | 当前唯一交接状态、已落地功能与变更史。 |
-| [plans/WORKFLOW_MAINLINE_MODEL_TOPOLOGY.md](plans/WORKFLOW_MAINLINE_MODEL_TOPOLOGY.md) | 七步主线与关联模型拓扑开发规范。 |
-| [plans/FORCE_MISSION_CMO.md](plans/FORCE_MISSION_CMO.md) | 兵力任务双层编组与 CMO 装备库集成说明。 |
-| [plans/AI_RESEARCH_CHAT.md](plans/AI_RESEARCH_CHAT.md) | AI 研究对话通用壳与流式适配规范。 |
+## 自动化测试与防退化体系
 
-## 试用限制
+为严防“改 A 坏 B”与代码退化，本项目建立了极为严格的交付测试铁律：
 
-- AI 真实生成依赖安全启动的服务进程环境；密钥不写入文件或文档。
-- 浏览器自动化运行脚本缺失，当前使用静态 HTTP 检查和 Node 验收脚本。
-- Office 自动化端点在缺少交互式桌面会话时可能返回 `503`。
-- 默认本地试用不强制项目写入登录；部署可选择启用认证写入。
- 
+### 统一测试运行器 (`run-checks.mjs`)
+
+测试脚本按领域严格分组，支持单组定向秒级验证与全量回归：
+
+```powershell
+# 1. 查看可用分组列表
+node scripts/run-checks.mjs
+
+# 2. 定向运行受本次改动影响的分组（推荐日常开发使用）
+node scripts/run-checks.mjs server          # 运行服务端与路由测试 (23 个)
+node scripts/run-checks.mjs workflow        # 运行七步主线工作流测试 (13 个)
+node scripts/run-checks.mjs ov5             # 运行 OV-5 活动机理测试 (7 个)
+node scripts/run-checks.mjs dodaf           # 运行 DoDAF 规范契约测试 (18 个)
+node scripts/run-checks.mjs force-mission   # 运行兵力任务编成测试 (6 个)
+node scripts/run-checks.mjs storage         # 运行 SQLite 持久化测试 (12 个)
+node scripts/run-checks.mjs ui-static       # 运行前端静态结构与规范测试 (49 个)
+
+# 3. 全量回归测试（全量 168 个测试脚本全绿通过）
+node scripts/run-checks.mjs all
+
+# 4. 无头浏览器 CDP 端到端冒烟测试
+node scripts/smoke-ui.mjs
+```
+
+### 交付铁律
+
+1. **双向回归底线**：严禁修改后不跑测试；必须定向验证改动分组，确保既有历史功能契约 100% 未被破坏。
+2. **零外部 npm 依赖**：严禁在 `package.json` 中随意添加第三方库，保持轻量高效与内网强自主可控。
+3. **零在线大模型测试依赖**：所有自动化测试均基于本地断言、Mock 与规范 Schema，严禁在自动化流水线中调用耗时且不稳定的真实大模型在线接口。
+
+---
+
+## 权威文档索引
+
+关于本工作台历史与细节，必须严格按照以下三级梯队查阅，严禁以历史规划覆盖当前真实代码契约：
+
+| 梯队 | 文档 | 用途与定位 |
+|---|---|---|
+| **第一级：绝对当前基线**<br>*(开发与排查必读)* | [AGENTS.md](AGENTS.md) | 研发铁律、改动防退化规范、端口（8792）与提示词管理铁律 |
+| | [project-context.md](project-context.md) | 当前唯一交接状态、已落地全景功能与变更基线 |
+| | [INTERFACE_GUIDE.md](INTERFACE_GUIDE.md) | 服务端真实 HTTP 路由、数据契约、DoDAF 资源读写与权限边界 |
+| | [README.md](README.md) | 本文档，项目全景概览与快速启动指南 |
+| **第二级：领域业务参考**<br>*(针对特定模块时查阅)* | [plans/WORKFLOW_MAINLINE_MODEL_TOPOLOGY.md](plans/WORKFLOW_MAINLINE_MODEL_TOPOLOGY.md) | 七步主线与关联模型动态拓扑开发规范 |
+| | [plans/FORCE_MISSION_CMO.md](plans/FORCE_MISSION_CMO.md) | 兵力任务双层编组与 CMO 装备库集成说明 |
+| | [plans/AI_RESEARCH_CHAT.md](plans/AI_RESEARCH_CHAT.md) | AI 研究对话通用壳与流式适配规范 |
+| | [SOFTWARE_DESIGN.md](SOFTWARE_DESIGN.md) | 完整架构设计与当前原型映射 |
+| | [CHANGELOG.md](CHANGELOG.md) | 历史版本与里程碑详细演进日志 |
+| **第三级：历史归档与规划**<br>*(仅作需求追溯)* | [plans/MASTER_PLAN_2026-11.md](plans/MASTER_PLAN_2026-11.md) | 2026-11 总体里程碑总计划（M1~M7） |
+| | [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md) | 全量历史与当前文档索引列表 |
+
+---
+
+## 使用边界与安全准则
+
+1. **纯概念层面推演**：本产品是作战概念层面的研究与研讨推演工具。严格限定在抽象网格、因果机理与宏观战术原则层面；绝不涉及真实地理坐标、目标分配、航路规划和武器装备真实性能参数。
+2. **凭据安全规范**：严禁将任何 API Key、密码、Token、Cookie 或敏感知识正文硬编码提交至仓库或写入配置文件；真实 AI 生成依赖安全的系统进程环境变量。
+3. **知识库引用防泄漏**：引用外部研讨文档时严格保留出处标识，敏感或涉密标记内容遵循密级标识与审计策略。
