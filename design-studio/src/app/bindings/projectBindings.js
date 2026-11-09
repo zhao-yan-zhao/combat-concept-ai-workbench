@@ -21,21 +21,32 @@ export async function handleDeleteProject(projectId, title = projectId, ctx) {
   if (!window.confirm(`将永久删除项目“${title}”及其所有数据，此操作无法恢复。确定继续吗？`)) return;
   try {
     const isCurrentActive = projectId === state.activeProjectId;
+    // 自动先标记归档，以满足服务端项目仓储的删除安全契约
+    try {
+      await updateProject(projectId, { archived: true });
+    } catch {
+      // 若已是归档状态或非 lead 直接穿透给后端报错
+    }
     await deleteProject(projectId);
     purgeProjectClientStorage(projectId);
-    showToast("已删除项目");
+    showToast(`已永久删除项目“${title}”`);
     await hydrateProjectDirectory();
     if (isCurrentActive) {
       const remaining = state.projectDirectory.projects || [];
       const nextProject = remaining.find((p) => p.id !== projectId && !p.archived)?.id
-        || remaining.find((p) => p.id !== projectId)?.id
-        || "default";
-      switchProject(nextProject, ctx);
+        || remaining.find((p) => p.id !== projectId)?.id;
+      if (nextProject) {
+        switchProject(nextProject, ctx);
+      } else {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("project");
+        window.location.assign(url);
+      }
       return;
     }
     renderProjectManagerChrome();
   } catch (error) {
-    showToast(error?.status === 403 ? "只有负责人可删除项目" : "项目删除失败：请先归档并确认项目状态");
+    showToast(error?.status === 403 ? "只有负责人可删除项目" : `项目删除失败：${error?.message || "请确认项目状态"}`);
   }
 }
 
