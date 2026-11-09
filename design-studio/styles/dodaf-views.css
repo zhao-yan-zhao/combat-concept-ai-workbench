@@ -2356,6 +2356,335 @@ abbr.glossary-abbr { text-decoration: underline dotted rgba(24, 122, 87, .5); te
 .project-entry .project-manager-trigger { display: none; }
 .project-entry .project-manager-panel { position: static; width: 100%; min-width: 0; max-width: none; box-sizing: border-box; }
 .project-entry .project-manager-list { max-height: 48vh; overflow-y: auto; }
+
+/* ==================== 方案二：启动台 (Launcher) 风格 ==================== */
+.project-entry.project-entry-launcher {
+  width: min(1080px, 96vw);
+  margin: auto;
+  padding: 16px 20px;
+}
+.project-entry-header {
+  text-align: center;
+  margin-bottom: 22px;
+}
+.project-entry-header .launcher-brand-tag {
+  display: inline-block;
+  color: var(--cyan, #38bdf8);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  background: rgba(56, 189, 248, 0.1);
+  padding: 2px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+.project-entry-header h1 {
+  font-size: 24px;
+  color: #f8fafc;
+  margin: 4px 0 8px;
+  font-weight: 700;
+}
+.project-entry-header p {
+  color: var(--muted, #94a3b8);
+  font-size: 13px;
+  margin: 0 auto;
+  max-width: 620px;
+  line-height: 1.5;
+}
+
+.launcher-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 20px;
+  align-items: stretch;
+}
+.launcher-col {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 12px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 0 20px rgba(56, 189, 248, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+}
+.launcher-col-header {
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.15);
+  background: rgba(30, 41, 59, 0.5);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.launcher-col-header .col-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #f1f5f9;
+  font-size: 14px;
+}
+.launcher-col-header .col-count-badge {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+.launcher-col-header .col-sub {
+  color: #64748b;
+  font-size: 11.5px;
+}
+
+/* 左栏：最近项目列表 */
+.launcher-recent-list {
+  padding: 14px;
+  overflow-y: auto;
+  max-height: 520px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.launcher-empty-notice {
+  padding: 60px 20px;
+  text-align: center;
+  color: #94a3b8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: auto;
+}
+.launcher-empty-notice .empty-icon {
+  font-size: 32px;
+  margin-bottom: 4px;
+}
+.launcher-empty-notice strong {
+  color: #e2e8f0;
+  font-size: 14px;
+}
+.launcher-empty-notice p {
+  color: #64748b;
+  font-size: 12px;
+  margin: 0;
+  max-width: 240px;
+  line-height: 1.45;
+}
+
+.launcher-project-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-left: 3px solid #38bdf8;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+.launcher-project-item:hover {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(30, 41, 59, 0.95);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.launcher-item-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.launcher-item-title {
+  color: #f8fafc;
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+.launcher-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.launcher-item-id {
+  color: #64748b;
+  font-size: 11px;
+  font-family: monospace;
+}
+.launcher-enter-btn {
+  padding: 5px 12px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.launcher-enter-btn:hover {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+
+/* 右栏：推荐起点卡片 */
+.launcher-starters-block {
+  padding: 14px 18px 12px;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.4);
+}
+.launcher-starters-block .starters-caption {
+  color: #94a3b8;
+  font-size: 11.5px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.launcher-starters-block .starters-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.starter-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(30, 41, 59, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+}
+.starter-card:hover {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  transform: translateY(-1px);
+}
+.starter-card.starter-tactics {
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(14, 165, 233, 0.08);
+}
+.starter-card-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.starter-card-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.starter-card-body strong {
+  color: #f1f5f9;
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.starter-card-body small {
+  color: #64748b;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+/* 右栏：新建表单卡片 */
+.launcher-form-card {
+  padding: 14px 18px 18px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.launcher-form-heading {
+  color: #94a3b8;
+  font-size: 11.5px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.launcher-form .form-row {
+  margin-bottom: 10px;
+}
+.launcher-form .form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 10px;
+}
+.launcher-form .label-text {
+  display: block;
+  font-size: 11.5px;
+  color: #cbd5e1;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+.launcher-form .required-star {
+  color: #ef4444;
+  font-weight: bold;
+}
+.launcher-form input,
+.launcher-form select,
+.launcher-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: #f1f5f9;
+  font-size: 12px;
+  outline: none;
+  transition: all 0.15s;
+}
+.launcher-form input:focus,
+.launcher-form select:focus,
+.launcher-form textarea:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+  background: rgba(15, 23, 42, 0.95);
+}
+.launcher-form textarea {
+  resize: vertical;
+}
+.launcher-create-submit {
+  width: 100%;
+  padding: 9px 16px;
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  border: 1px solid #38bdf8;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+  margin-top: 4px;
+}
+.launcher-create-submit:hover {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  box-shadow: 0 6px 16px rgba(2, 132, 199, 0.5);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 860px) {
+  .launcher-grid {
+    grid-template-columns: 1fr;
+  }
+  .launcher-starters-block .starters-cards {
+    grid-template-columns: 1fr;
+  }
+}
 .login-gate-panel {
   display: grid; gap: 18px; width: min(440px, 100%); padding: 26px 24px 22px;
   border: 1px solid rgba(61, 255, 197, .22); border-top: 3px solid var(--cyan); border-radius: 10px;
