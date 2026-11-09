@@ -985,6 +985,12 @@ async function handleAction(action, source = null) {
     }
     return;
   }
+  if (action === "generate-wargame-review-report") {
+    state.selectedReportTemplate = "wargame-review";
+    await navigateToResearchView("report");
+    showToast("已基于推演流水线切换至【推演复盘报告 (wargame-review)】");
+    return;
+  }
   if (handleConceptPlanningAction(action, source, getConceptPlanningCtx())) return;
   if (action === "open-context-panel") {
     state.contextPanelOpen = true;

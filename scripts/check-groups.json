@@ -144,7 +144,8 @@
     "check-m7-tactical-case-study.mjs",
     "check-m7-tactics-library.mjs",
     "check-m7-red-blue-isolation.mjs",
-    "check-m7-wargame-timeline.mjs"
+    "check-m7-wargame-timeline.mjs",
+    "check-m7-wargame-review-report.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",

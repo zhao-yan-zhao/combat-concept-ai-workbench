@@ -141,8 +141,11 @@ export function renderWargameTimelineSection({
             记录推演全流程时序因果链路；支持在任意回合节点派生 What-If 分支项目（纯解耦复制，验证不同战术假设）。
           </p>
         </div>
-        <div style="font-size:11.5px; color:#cbd5e1;">
-          共 <strong>${timeline.length}</strong> 个推演节点
+        <div style="font-size:11.5px; color:#cbd5e1; display:flex; align-items:center; gap:10px;">
+          <span>共 <strong>${timeline.length}</strong> 个推演节点</span>
+          <button type="button" class="quiet-button compact-btn" data-action="generate-wargame-review-report" style="font-size:11.5px; color:#38bdf8; border-color:rgba(56,189,248,0.3);">
+            📑 导出复盘报告
+          </button>
         </div>
       </header>
 

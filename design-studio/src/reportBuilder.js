@@ -1030,7 +1030,94 @@ function renderXmlScenario(scenario) {
     `    <spatialData format="geojson" coordinateReference="${xml(scenario.deploymentData?.geojson?.properties?.coordinateReference || "")}" featureCount="${xml(scenario.deploymentData?.geojson?.features?.length || 0)}" deploymentPlanMode="${xml(scenario.deploymentPlan?.mode || "")}" deploymentPlanState="${xml(scenario.deploymentPlan?.state || "")}"/>`,
     `    <deploymentData format="json">${xml(JSON.stringify(scenario.deploymentData || null))}</deploymentData>`,
     ...renderXmlSimulationSummary(scenario.simulation),
+    ...renderXmlWargameTurns(scenario.wargame),
     "  </scenario>"
+  ];
+}
+
+function renderWargameTurnsSection(wargame) {
+  const turns = Array.isArray(wargame?.turns) ? wargame.turns : [];
+  if (!turns.length) {
+    return [
+      "### 推演回合流水线与导调实录",
+      "- 暂无多回合推演与导调记录（推演未开展或仅完成静态部署）。",
+      ""
+    ];
+  }
+
+  const tableHeader = [
+    "| 回合 | 关联阶段 | 状态 | 红方行动意图 | 蓝方行动意图 | 导调注入扰动 | 裁决结论 |",
+    "| --- | --- | --- | --- | --- | --- | --- |"
+  ];
+
+  const tableRows = turns.map((t) => {
+    const eventsStr = (t.injectedEvents || []).map((e) => `${e.title} (${e.targetSide === "red" ? "红" : e.targetSide === "blue" ? "蓝" : "全局"})`).join("、") || "无扰动";
+    const outcomeStr = t.adjudication?.outcome || (t.status === "completed" ? "达成战术平衡" : "裁决中");
+    return `| Turn ${t.turnNumber} | ${cell(t.phaseName)} | ${cell(t.status)} | ${cell(t.intents?.red?.text?.slice(0, 40) || "未录入")} | ${cell(t.intents?.blue?.text?.slice(0, 40) || "未录入")} | ${cell(eventsStr)} | ${cell(outcomeStr)} |`;
+  });
+
+  const details = turns.flatMap((t) => {
+    const lines = [
+      `#### Turn ${t.turnNumber}：${inline(t.phaseName)}`,
+      `- **回合状态**：${inline(t.status)}`,
+      `- **🔴 红方意图**：${inline(t.intents?.red?.text || "未录入")}`,
+      `- **🔵 蓝方意图**：${inline(t.intents?.blue?.text || "未录入")}`
+    ];
+    if (t.injectedEvents?.length) {
+      lines.push("- **⚡ 导调扰动事件**：");
+      for (const e of t.injectedEvents) {
+        lines.push(`  - 【${inline(e.title)}】（${inline(e.category)} · ${e.targetSide === "red" ? "影响红方" : e.targetSide === "blue" ? "影响蓝方" : "全局影响"}）：${inline(e.detail)}`);
+      }
+    } else {
+      lines.push("- **⚡ 导调扰动事件**：无");
+    }
+    if (t.adjudication) {
+      lines.push(`- **⚖️ 导演部裁决结论**：${inline(t.adjudication.outcome)}`);
+      if (t.adjudication.rationale) {
+        lines.push(`- **因果机理与韧性阐释**：${inline(t.adjudication.rationale)}`);
+      }
+      if (t.adjudication.adjudicatedAt) {
+        lines.push(`- **闭环时间戳**：\`${inline(t.adjudication.adjudicatedAt)}\``);
+      }
+    } else {
+      lines.push("- **⚖️ 导演部裁决**：等待裁决");
+    }
+    lines.push("");
+    return lines;
+  });
+
+  return [
+    "### 推演回合流水线与导调实录",
+    ...tableHeader,
+    ...tableRows,
+    "",
+    "### 回合因果对抗机理剖析",
+    ...details
+  ];
+}
+
+function renderXmlWargameTurns(wargame) {
+  const turns = Array.isArray(wargame?.turns) ? wargame.turns : [];
+  if (!turns.length) return [];
+  return [
+    `    <wargameTimeline totalTurns="${turns.length}">`,
+    ...turns.flatMap((t) => [
+      `      <turn number="${t.turnNumber}" phaseId="${xml(t.phaseId)}" phaseName="${xml(t.phaseName)}" status="${xml(t.status)}">`,
+      "        <intents>",
+      `          <red>${xml(t.intents?.red?.text || "")}</red>`,
+      `          <blue>${xml(t.intents?.blue?.text || "")}</blue>`,
+      "        </intents>",
+      "        <injectedEvents>",
+      ...(t.injectedEvents || []).map((e) => `          <event id="${xml(e.id)}" title="${xml(e.title)}" category="${xml(e.category)}" targetSide="${xml(e.targetSide || "both")}">${xml(e.detail)}</event>`),
+      "        </injectedEvents>",
+      ...(t.adjudication ? [
+        `        <adjudication outcome="${xml(t.adjudication.outcome)}" adjudicatedAt="${xml(t.adjudication.adjudicatedAt)}">`,
+        `          <rationale>${xml(t.adjudication.rationale || "")}</rationale>`,
+        "        </adjudication>"
+      ] : []),
+      "      </turn>"
+    ]),
+    "    </wargameTimeline>"
   ];
 }
 
