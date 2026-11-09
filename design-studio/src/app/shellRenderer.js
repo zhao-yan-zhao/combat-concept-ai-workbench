@@ -32,7 +32,7 @@ export function renderStudioShell(ctx) {
   }
   $("#viewEyebrow").textContent = meta.subtitle;
   $("#viewTitle").textContent = meta.label;
-  const targetOutput = resolveStepTargetOutput(state.activeView);
+  const targetOutput = resolveStepTargetOutput(state.activeView, null, { mainViewId: state.relatedModelReturnContext?.mainViewId, state });
   const targetOutputTooltip = targetOutput ? `\n本步产出：${targetOutput}` : "";
   $("#viewContext").title = `${currentProjectTitle()} / ${meta.label}${targetOutputTooltip}`;
 

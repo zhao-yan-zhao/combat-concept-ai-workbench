@@ -8,7 +8,7 @@ import { isAbsolute, join, normalize } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { listCmoMissionTypes } from "../shared/cmoMissionTypes.js";
+import { listCmoMissionTypes, extractPlatformCapabilityFamily } from "../shared/cmoMissionTypes.js";
 
 const DOMAIN_TABLES = Object.freeze({
   aircraft: "DataAircraft",
@@ -260,7 +260,7 @@ export function createCmoDatabaseService({ root, configPath }) {
       `;
       const rows = db.prepare(sql).all(...params);
       for (const row of rows) {
-        results.push({
+        const item = {
           domain: domainKey,
           cmoId: Number(row.cmoId) || 0,
           name: String(row.name || ""),
@@ -268,7 +268,9 @@ export function createCmoDatabaseService({ root, configPath }) {
           category: String(row.category || ""),
           yearCommissioned: Number(row.yearCommissioned) || 0,
           yearDecommissioned: Number(row.yearDecommissioned) || 0
-        });
+        };
+        item.capabilities = extractPlatformCapabilityFamily(item);
+        results.push(item);
       }
     }
     return results;
@@ -297,7 +299,7 @@ export function createCmoDatabaseService({ root, configPath }) {
       LIMIT 1
     `).get(id);
     if (!row) return null;
-    return {
+    const platform = {
       domain,
       cmoId: Number(row.cmoId) || 0,
       name: String(row.name || ""),
@@ -307,6 +309,8 @@ export function createCmoDatabaseService({ root, configPath }) {
       yearDecommissioned: Number(row.yearDecommissioned) || 0,
       comments: String(row.comments || "").slice(0, 200)
     };
+    platform.capabilities = extractPlatformCapabilityFamily(platform);
+    return platform;
   }
 
   /**

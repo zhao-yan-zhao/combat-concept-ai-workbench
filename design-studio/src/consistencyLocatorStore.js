@@ -19,7 +19,8 @@ export const VIEW_TARGET_CONFIG = {
   scenario: { label: "想定态势与实体", viewId: "scenario" },
   validation: { label: "设计验证与对抗闭环", viewId: "validation" },
   "phase-action": { label: "阶段与行动链", viewId: "phase-action" },
-  "force-mission": { label: "力量与任务编成", viewId: "force-mission" }
+  "force-mission": { label: "力量与任务编成", viewId: "force-mission" },
+  ov6: { label: "OV-6 运行规则与时序", viewId: "ov6" }
 };
 
 /**
@@ -147,6 +148,16 @@ export function enrichIssuesWithLocatorAndRepair(issues, models = {}) {
       targetView = "ov1";
       const ov1Node = ov1NodeMap.get(targetElementId);
       targetElementName = ov1Node?.label || ov1Node?.id || "OV-1 概念节点";
+    } else if (issue.title.includes("平台") || issue.title.includes("兵力") || issue.title.includes("能力族")) {
+      targetView = "force-mission";
+      targetElementName = `作战兵力 (${targetElementId})`;
+    } else if (issue.title.includes("OV-6b") || issue.title.includes("死锁") || issue.title.includes("状态机")) {
+      targetView = "ov6";
+      targetElementName = `OV-6b 状态节点 (${targetElementId})`;
+    } else if (issue.title.includes("因果逆序") || issue.title.includes("时序因果")) {
+      targetView = "ov5";
+      const act = activityMap.get(targetElementId);
+      targetElementName = act?.title || act?.id || `逆序活动 (${targetElementId})`;
     }
 
     return {

@@ -1,4 +1,5 @@
 import { escapeHtml } from "./app/domUtils.js";
+import { isStepGenerated } from "./app/workflowGate.js";
 
 /**
  * Renders the unified branch pipeline bar for:
@@ -21,6 +22,14 @@ export function renderForceResourceSubflowBar(state = {}, currentViewId = "force
 
   const ov3 = state.ov3 || {};
   const ov3ExchangesCount = (ov3.exchanges || []).length;
+
+  const ov6aReady = isStepGenerated("ov6a", state, { mainViewId: "force-mission" });
+  const ov6bReady = isStepGenerated("ov6b", state, { mainViewId: "force-mission" });
+  const ov6cReady = isStepGenerated("ov6c", state, { mainViewId: "force-mission" });
+
+  const ov6aRulesCount = (state.ov6a?.rules || []).filter((r) => (r.forceBindings || []).length || (r.taskBindings || []).length || (r.rule?.forceRefs || []).length).length;
+  const ov6bMachinesCount = (state.ov6b?.stateMachines || []).filter((m) => m.subjectType === "force" || m.subjectType === "task").length;
+  const ov6cSeqsCount = (state.ov6c?.sequences || state.ov6c?.sequenceDiagrams || []).filter((s) => (s.diagramType === "force" && !String(s.id || "").startsWith("sequence-side-")) || s.diagramType === "task").length;
 
   const isMainline = currentViewId === "force-mission";
 
@@ -81,14 +90,17 @@ export function renderForceResourceSubflowBar(state = {}, currentViewId = "force
             <span class="subflow-pill-meta">${ov3ExchangesCount ? `${ov3ExchangesCount} 矩阵项` : "待投影"}</span>
           </button>
           <span class="subflow-pipeline-arrow" aria-hidden="true">|</span>
-          <button type="button" class="subflow-pipeline-pill is-ready" data-related-model="true" data-view="ov6a" title="作战兵力规则库 (OV-6a)">
+          <button type="button" class="subflow-pipeline-pill ${ov6aReady ? "is-ready" : "is-pending"}" data-related-model="true" data-view="ov6a" title="作战兵力规则库 (OV-6a)">
             <span class="subflow-pill-name">兵力规则 OV-6a</span>
+            <span class="subflow-pill-meta">${ov6aRulesCount ? `${ov6aRulesCount} 规则` : "待生成"}</span>
           </button>
-          <button type="button" class="subflow-pipeline-pill is-ready" data-related-model="true" data-view="ov6b" title="作战兵力状态机 (OV-6b)">
+          <button type="button" class="subflow-pipeline-pill ${ov6bReady ? "is-ready" : "is-pending"}" data-related-model="true" data-view="ov6b" title="作战兵力状态机 (OV-6b)">
             <span class="subflow-pill-name">兵力状态机 OV-6b</span>
+            <span class="subflow-pill-meta">${ov6bMachinesCount ? `${ov6bMachinesCount} 状态机` : "待生成"}</span>
           </button>
-          <button type="button" class="subflow-pipeline-pill is-ready" data-related-model="true" data-view="ov6c" title="作战兵力协同时序 (OV-6c)">
+          <button type="button" class="subflow-pipeline-pill ${ov6cReady ? "is-ready" : "is-pending"}" data-related-model="true" data-view="ov6c" title="作战兵力协同时序 (OV-6c)">
             <span class="subflow-pill-name">协同时序 OV-6c</span>
+            <span class="subflow-pill-meta">${ov6cSeqsCount ? `${ov6cSeqsCount} 时序` : "待生成"}</span>
           </button>
         </div>
         <div class="subflow-pipeline-actions">

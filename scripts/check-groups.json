@@ -56,7 +56,8 @@
     "check-m8-wargame-recycle-bridge.mjs",
     "check-m8-abstract-grid-des.mjs",
     "check-m8-tactical-deployment-layout.mjs",
-    "check-m8-composite-scheme-scoring.mjs"
+    "check-m8-composite-scheme-scoring.mjs",
+    "check-subflow-step-gate-conditions.mjs"
   ],
   "dodaf": [
     "check-dodaf-consistency-snapshot-import.mjs",
@@ -76,7 +77,8 @@
     "check-ov4-responsibility.mjs",
     "check-ov6-product-model.mjs",
     "check-ov6-workbench.mjs",
-    "check-ov6c-event-trace.mjs"
+    "check-ov6c-event-trace.mjs",
+    "check-m8-dodaf-behavioral-consistency.mjs"
   ],
   "ov5": [
     "check-ooda-ov5-restructuring.mjs",
@@ -96,7 +98,8 @@
     "check-force-resource-subflow.mjs",
     "check-organization-resource-topology.mjs",
     "check-task-first-force-flow.mjs",
-    "check-task-force-ov6-generation.mjs"
+    "check-task-force-ov6-generation.mjs",
+    "check-m8-cmo-capability-alignment.mjs"
   ],
   "rules": [
     "check-inspiration-advice.mjs",

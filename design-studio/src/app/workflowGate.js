@@ -112,6 +112,148 @@ export function canCompleteWorkflowStage(state, stage) {
   return getWorkflowStageIncompleteReasons(state, stage, { forAdvancement: true }).length === 0;
 }
 
+export function getStepIncompleteReasons(viewId, state = {}, context = {}) {
+  if (!viewId) return [];
+  const mainViewId = context?.mainViewId || state?.relatedModelReturnContext?.mainViewId || "";
+
+  // 1. 若是六步主线主要步骤，委托 getWorkflowStageIncompleteReasons
+  const steps = workflowSteps();
+  const phaseIndex = steps.findIndex((s) => s.id === viewId);
+  if (phaseIndex >= 0) {
+    return getWorkflowStageIncompleteReasons(state, phaseIndex, { forAdvancement: false });
+  }
+
+  // 2. 关联子步骤与模型视图
+  const reasons = [];
+
+  switch (viewId) {
+    case "operational-task": {
+      if (state.forceMissionStorage?.stale) reasons.push("复核已过期的作战任务");
+      if (!state.forceMission?.tasks?.length) reasons.push("作战任务分解清单");
+      else if (!state.forceMission?.tasksConfirmedAt) reasons.push("确认作战任务与区域核定");
+      break;
+    }
+    case "ov1b": {
+      if (state.forceMissionStorage?.stale) reasons.push("复核已过期的任务整理");
+      const groups = state.ov1b?.taskGroups || state.ov1b?.groups || [];
+      if (!groups.length) reasons.push("作战任务层级归集与任务群编组 (OV-1b)");
+      break;
+    }
+    case "ov6a": {
+      if (mainViewId === "force-mission" || mainViewId === "operational-task") {
+        if (state.forceMissionStorage?.stale) reasons.push("复核已过期的兵力战法规则");
+        const rules = state.ov6a?.rules || [];
+        const hasBindings = rules.some((r) => (r.taskBindings || []).length || (r.forceBindings || []).length || (r.rule?.forceRefs || []).length);
+        const hasProposal = (state.ov6a?.ruleChangeSet?.source === "force-mission" || state.ov6a?.ruleChangeSet?.source === "operational-task") && (state.ov6a?.ruleChangeSet?.changes || []).length > 0;
+        if (!hasBindings && !hasProposal && !rules.length) {
+          reasons.push("作战任务与兵力规则库 (OV-6a)");
+        }
+      } else if (mainViewId === "phase-action") {
+        if (state.phaseActionStorage?.stale) reasons.push("复核已过期的阶段战法规则");
+        if (!state.ov6a?.rules?.length) reasons.push("作战阶段战法语义规则库 (OV-6a)");
+      } else {
+        if (!state.ov6a?.rules?.length) reasons.push("战法语义规则与约束知识库 (OV-6a)");
+      }
+      if ((state.ov6a?.ruleChangeSet?.changes || []).some((item) => item.status === "pending")) {
+        reasons.push("合并待处理规则变更提案");
+      }
+      break;
+    }
+    case "ov6b": {
+      const machines = state.ov6b?.stateMachines || [];
+      if (mainViewId === "force-mission" || mainViewId === "operational-task") {
+        if (state.forceMissionStorage?.stale) reasons.push("复核已过期的状态转移模型");
+        const hasForceTask = machines.some((m) => m.subjectType === "force" || m.subjectType === "task");
+        if (!hasForceTask && !machines.length) {
+          reasons.push("任务与装备状态转移自动机 (OV-6b)");
+        }
+      } else if (mainViewId === "phase-action") {
+        if (state.phaseActionStorage?.stale) reasons.push("复核已过期的状态转移模型");
+        const hasPhase = machines.some((m) => !m.subjectType || m.subjectType === "phase");
+        if (!hasPhase && !machines.length) {
+          reasons.push("阶段状态转移自动机 (OV-6b)");
+        }
+      } else if (!machines.length) {
+        reasons.push("状态转移自动机 (OV-6b)");
+      }
+      break;
+    }
+    case "ov6c": {
+      const seqs = state.ov6c?.sequences || state.ov6c?.sequenceDiagrams || [];
+      if (mainViewId === "force-mission" || mainViewId === "operational-task") {
+        if (state.forceMissionStorage?.stale) reasons.push("复核已过期的协同时序模型");
+        const hasForceTask = seqs.some((s) => (s.diagramType === "force" && !String(s.id || "").startsWith("sequence-side-")) || s.diagramType === "task");
+        if (!hasForceTask && !seqs.length) {
+          reasons.push("任务协同与事件因果时序图 (OV-6c)");
+        }
+      } else if (mainViewId === "phase-action") {
+        if (state.phaseActionStorage?.stale) reasons.push("复核已过期的阶段时序模型");
+        const hasPhase = seqs.some((s) => !s.diagramType || s.diagramType === "phase");
+        if (!hasPhase && !seqs.length) {
+          reasons.push("阶段行动因果时序追踪图 (OV-6c)");
+        }
+      } else if (!seqs.length) {
+        reasons.push("因果时序追踪图 (OV-6c)");
+      }
+      break;
+    }
+    case "ov4": {
+      if (state.forceMissionStorage?.stale) reasons.push("复核已过期的组织编制关系");
+      const hasOv4 = Boolean(
+        state.ov4?.relations?.length ||
+        state.ov4?.commandNodes?.length ||
+        state.ov4?.roles?.length ||
+        state.ov4?.relationships?.length ||
+        state.ov4?.diagrams?.length
+      );
+      if (!hasOv4) reasons.push("编制指挥与协同组织关系 (OV-4)");
+      break;
+    }
+    case "ov2": {
+      if (state.forceMissionStorage?.stale) reasons.push("复核已过期的资源流模型");
+      const hasOv2 = Boolean(state.ov2?.exchanges?.length || state.ov2?.nodes?.length);
+      if (!hasOv2) reasons.push("作战节点信息与资源流 (OV-2)");
+      break;
+    }
+    case "ov3": {
+      if (state.forceMissionStorage?.stale) reasons.push("复核已过期的资源流矩阵");
+      const hasOv3 = Boolean(state.ov3?.exchanges?.length || state.ov3?.messages?.length);
+      if (!hasOv3) reasons.push("作战资源交互矩阵 (OV-3)");
+      break;
+    }
+    case "ov5a": {
+      if (state.ov5Storage?.stale) reasons.push("复核已过期的活动分解");
+      const hasOv5a = Boolean(state.ov5a?.decomposition?.length || state.ov5?.activities?.length);
+      if (!hasOv5a) reasons.push("层次化作战活动分解模型 (OV-5a)");
+      break;
+    }
+    case "ov1c": {
+      if (state.forceMissionStorage?.stale || state.ov5Storage?.stale) reasons.push("复核已过期的任务活动映射");
+      if (!state.ov1c?.mappings?.length) reasons.push("任务与活动映射关系 (OV-1c)");
+      break;
+    }
+    case "ov7": {
+      if (state.ov5Storage?.stale || state.ov6bStorage?.stale) reasons.push("复核已过期的状态活动映射");
+      if (!state.ov7?.mappings?.length) reasons.push("状态与活动映射矩阵 (OV-7)");
+      break;
+    }
+    case "concept-map": {
+      if (state.conceptMapStorage?.stale) reasons.push("复核已过期的概念图");
+      const hasMap = Boolean(state.conceptMap?.document?.items?.length || state.conceptMap?.elements?.length);
+      if (!hasMap) reasons.push("作战概念图总体图面");
+      break;
+    }
+    default: {
+      if (!isStepGenerated(viewId, state, context)) {
+        reasons.push(`${relatedViewLabel(viewId)}阶段成果`);
+      }
+      break;
+    }
+  }
+
+  return reasons;
+}
+
 function stepShortLabel(view) {
   return productShortLabel(view?.id, String(view?.label || view?.id || "").slice(0, 8));
 }
@@ -557,6 +699,9 @@ function resolveRelatedWorkflowGateContext(state, { freeMode, steps, completedTh
   const capsuleAction = formatCapsuleAction(baseLabel, nextGenerated, nextStale);
   const quickActions = resolveCurrentStepQuickActions(state);
 
+  const currentIncomplete = getStepIncompleteReasons(state.activeView, state, { mainViewId });
+  const currentReady = currentIncomplete.length === 0;
+
   return {
     freeMode,
     mode: "related-next-step",
@@ -564,27 +709,32 @@ function resolveRelatedWorkflowGateContext(state, { freeMode, steps, completedTh
     nextStep,
     mainViewId,
     completedThrough,
-    ready: true,
+    incompleteReasons: currentIncomplete,
+    ready: currentReady,
     completing: Boolean(state.workflowCompleting),
     open: Boolean(state.workflowGateOpen),
     action: "advance-related-workflow",
     capsuleTitle: "下一步",
-    capsuleAction,
+    capsuleAction: currentReady ? capsuleAction : `待生成 (${currentIncomplete.length})`,
     nextGenerated,
     nextStale,
     isStale: nextGenerated && nextStale,
     quickActions,
-    actionLabel: `进入${nextStep.label}`,
+    actionLabel: currentReady ? `进入${nextStep.label}` : `进入${nextStep.label}（当前待补充）`,
     headLabel: "当前关联步骤",
     headTitle: currentLabel,
-    hint: nextGenerated && nextStale
-      ? `上游内容有更新，建议重新生成“${nextStep.label}”，或直接跳过查看。`
-      : nextGenerated
-        ? `“${nextStep.label}”已就绪，可跳过直接查看成果，或重新生成。`
-        : nextStep.related
-          ? `继续关联流程，进入“${nextStep.label}”。`
-          : `当前关联流程已走完，进入主流程“${nextStep.label}”。`,
-    detailHtml: `<p class="workflow-gate-detail-note">下一项：${escapeHtml(nextStep.label)}${nextStep.related ? "（关联流程）" : "（主流程）"}。</p>`
+    hint: !currentReady
+      ? `当前“${currentLabel}”尚未产出成果，建议先在此完成生成；也可直接进入“${nextStep.label}”。`
+      : nextGenerated && nextStale
+        ? `上游内容有更新，建议重新生成“${nextStep.label}”，或直接跳过查看。`
+        : nextGenerated
+          ? `“${nextStep.label}”已就绪，可跳过直接查看成果，或重新生成。`
+          : nextStep.related
+            ? `继续关联流程，进入“${nextStep.label}”。`
+            : `当前关联流程已走完，进入主流程“${nextStep.label}”。`,
+    detailHtml: currentIncomplete.length
+      ? `<ul class="workflow-gate-detail">${currentIncomplete.map((item) => `<li>待产出：${escapeHtml(item)}</li>`).join("")}</ul>`
+      : `<p class="workflow-gate-detail-note">下一项：${escapeHtml(nextStep.label)}${nextStep.related ? "（关联流程）" : "（主流程）"}。</p>`
   };
 }
 
@@ -647,13 +797,14 @@ export function renderWorkflowGate(state) {
   const open = Boolean(ctx.open);
   const completing = Boolean(ctx.completing);
   const isBusy = Boolean(completing || state.ov5Generating || state.ov5aPregenerating || state.ov1cPregenerating || state.ov7Pregenerating);
-  const shellState = ctx.mode === "complete-phase" && !ready
+  const shellState = !ready
     ? "is-pending"
     : (ctx.isStale ? "is-stale" : "is-ready");
 
   const viewId = state.activeView || ctx.current?.id || "";
-  const targetOutput = resolveStepTargetOutput(viewId, ctx.current);
-  const incomplete = ctx.incompleteReasons || [];
+  const mainViewId = ctx.mainViewId || state?.relatedModelReturnContext?.mainViewId || "";
+  const targetOutput = resolveStepTargetOutput(viewId, ctx.current, { mainViewId, state });
+  const incomplete = ctx.incompleteReasons !== undefined ? ctx.incompleteReasons : getStepIncompleteReasons(viewId, state, { mainViewId });
 
   const outputTooltip = targetOutput ? `\n本步产出：${targetOutput}` : "";
   const conditionTooltip = ready
@@ -704,19 +855,81 @@ export function renderWorkflowGate(state) {
   </div>`;
 }
 
-export function resolveStepTargetOutput(viewId, current) {
+export function resolveStepTargetOutput(viewId, current, context = {}) {
+  const mainViewId = context?.mainViewId || (typeof context === "string" ? context : "");
+  const state = context?.state || {};
+
+  if (viewId === "force-mission") {
+    const layer = state.forceMissionLayer || "overview";
+    if (layer === "task") return "作战任务分解清单与任务区域核定";
+    if (layer === "concept") return "概念兵力编成与战术行动映射方案";
+    if (layer === "combat") return "作战兵力平台选型与编成编组方案";
+    if (layer === "deployment") return "作战兵力抽象网格战术部署与阵位方案";
+    return "作战任务清单与平台兵力编组方案";
+  }
+
+  if (viewId === "ov6a") {
+    if (mainViewId === "force-mission" || mainViewId === "operational-task") {
+      return "作战任务与兵力战法语义规则库 (OV-6a)";
+    }
+    if (mainViewId === "phase-action") {
+      return "作战阶段战法语义规则与约束 (OV-6a)";
+    }
+    return "战法语义规则与约束知识库 (OV-6a)";
+  }
+
+  if (viewId === "ov6b") {
+    if (mainViewId === "force-mission" || mainViewId === "operational-task") {
+      return "任务与平台装备状态转换自动机 (OV-6b)";
+    }
+    if (mainViewId === "phase-action") {
+      return "作战阶段状态转移自动机 (OV-6b)";
+    }
+    return "平台/任务状态转移自动机 (OV-6b)";
+  }
+
+  if (viewId === "ov6c") {
+    if (mainViewId === "force-mission" || mainViewId === "operational-task") {
+      return "作战任务协同与事件因果时序追踪图 (OV-6c)";
+    }
+    if (mainViewId === "phase-action") {
+      return "阶段行动事件因果时序追踪图 (OV-6c)";
+    }
+    return "交互事件因果时序追踪图 (OV-6c)";
+  }
+
+  if (viewId === "operational-task") {
+    return "作战任务分解清单与任务区域核定";
+  }
+
+  if (viewId === "ov1b") {
+    return "作战任务层级归集与任务群编组 (OV-1b)";
+  }
+
+  if (viewId === "ov4") {
+    return "作战部队编制指挥与协同组织关系 (OV-4)";
+  }
+
+  if (viewId === "ov2") {
+    return "作战节点间信息交互与作战资源流 (OV-2)";
+  }
+
+  if (viewId === "ov3") {
+    return "作战资源交互矩阵与频次时序约束 (OV-3)";
+  }
+
   const outputs = {
     brief: "作战概念研究简报六要素（意图、目标、路线、假设、效果、风险）",
     "phase-action": "作战阶段划分与蓝红两军关键行动构想",
     "force-mission": "作战任务清单与平台兵力编组方案",
-    "operational-task": "作战任务分解与任务输入输出规格",
+    "operational-task": "作战任务分解清单与任务区域核定",
     ov5: "作战活动因果网络与动力学协同抗毁机理",
     ov5a: "层次化作战活动分解模型",
     ov1: "DoDAF OV-1 总体概念图与核心要素拓扑",
-    ov1b: "任务层级分解与任务组关系",
-    ov2: "作战节点间信息与资源交换流",
-    ov3: "作战资源流交互矩阵与频次约束",
-    ov4: "指挥编制与协同组织关系",
+    ov1b: "作战任务层级归集与任务群编组 (OV-1b)",
+    ov2: "作战节点间信息交互与作战资源流 (OV-2)",
+    ov3: "作战资源交互矩阵与频次时序约束 (OV-3)",
+    ov4: "作战部队编制指挥与协同组织关系 (OV-4)",
     ov6a: "战法语义规则与约束知识库",
     ov6b: "平台/任务状态转移自动机",
     ov6c: "交互事件因果时序追踪图",
@@ -739,8 +952,9 @@ export function renderStepNextBar(state) {
   if (!ctx || ctx.mode === "hidden") return "";
 
   const viewId = state.activeView || ctx.current?.id || "";
-  const targetOutput = resolveStepTargetOutput(viewId, ctx.current);
-  const incomplete = ctx.incompleteReasons || [];
+  const mainViewId = ctx.mainViewId || state?.relatedModelReturnContext?.mainViewId || "";
+  const targetOutput = resolveStepTargetOutput(viewId, ctx.current, { mainViewId, state });
+  const incomplete = ctx.incompleteReasons !== undefined ? ctx.incompleteReasons : getStepIncompleteReasons(viewId, state, { mainViewId });
   const isReady = Boolean(ctx.ready);
 
   // 1. 产出目标

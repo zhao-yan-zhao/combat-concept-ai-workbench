@@ -9,6 +9,8 @@ import { buildOv5aModel, buildOv6aModel, buildOv6bModel } from "./dodafOperation
 import { enrichIssuesWithLocatorAndRepair } from "./consistencyLocatorStore.js";
 import { evaluateAssumptionImpact, normalizeArgumentChain } from "./argumentChainStore.js";
 import { isCountermeasureClosed, calculateCountermeasureClosure } from "./redTeamStore.js";
+import { checkForcePlatformAlignment, cmoMissionTypeLabel, getCapabilityFamilyLabel } from "../../shared/cmoMissionTypes.js";
+import { inspectOv6bStateMachine, inspectCausalEventOrdering } from "../../shared/dodaf/consistency.js";
 
 export function hasPersistedValidation(ov5Model, oodaModel, scenario, ov1Model) {
   try {
@@ -105,9 +107,23 @@ export function generateValidation(ov5Model, oodaModel, scenario, ov1Model, cont
   issues.push(...traceabilityDiagnostics.issues);
   const flowDiagnostics = inspectActivityFlow(ov5Model, scenario, ov3Model);
   issues.push(...flowDiagnostics.issues);
-  issues.push(...inspectEventTrace(buildOv6cModel({ ooda: oodaModel, scenario })));
+  const ov6cModel = buildOv6cModel({ ooda: oodaModel, scenario });
+  issues.push(...inspectEventTrace(ov6cModel));
+  const causalOrderCheck = inspectCausalEventOrdering(ov5Model, ov6cModel);
+  causalOrderCheck.inversions.forEach((inv) => {
+    issues.push(createIssue(
+      "high",
+      "时序因果逆序",
+      `下游活动“${inv.targetTitle}”（序号 #${inv.targetSequence}）早于上游前提活动“${inv.sourceTitle}”（序号 #${inv.sourceSequence}）触发，违背 OV-5b 因果偏序契约。${inv.reason}`,
+      inv.targetActivityId
+    ));
+  });
   issues.push(...inspectOv4Responsibilities(ov4Model));
-  const derivedOperationalDiagnostics = inspectDerivedOperationalViews(ov5Model, oodaModel);
+  const derivedOperationalDiagnostics = inspectDerivedOperationalViews(
+    ov5Model,
+    oodaModel,
+    context?.ov6b || context?.architecture?.products?.ov6b
+  );
   issues.push(...derivedOperationalDiagnostics.issues);
   const simulationDiagnostics = buildSimulationDiagnostics(scenario);
   issues.push(...inspectLocalAbstractSimulation(simulationDiagnostics, scenario));
@@ -161,6 +177,28 @@ export function generateValidation(ov5Model, oodaModel, scenario, ov1Model, cont
     });
   }
 
+  // M8-T8.9 作战兵力任务与挂载平台能力族匹配度校核
+  const combatForces = Array.isArray(forceMission?.combatForces)
+    ? forceMission.combatForces
+    : Array.isArray(forceMission?.forces)
+      ? forceMission.forces
+      : [];
+  combatForces.forEach((force) => {
+    const platforms = Array.isArray(force.platforms) ? force.platforms : [];
+    if (!platforms.length) return;
+    const alignment = checkForcePlatformAlignment(force);
+    if (!alignment.aligned && alignment.requiredFamilies.length > 0) {
+      const reqLabels = alignment.requiredFamilies.map((f) => getCapabilityFamilyLabel(f)).join("、");
+      const actLabels = alignment.actualFamilies.map((f) => getCapabilityFamilyLabel(f)).join("、") || "无特定匹配能力";
+      issues.push(createIssue(
+        "medium",
+        "作战兵力任务与挂载平台能力族失配",
+        `作战兵力“${force.name || force.id}”任务类型为[${cmoMissionTypeLabel(force.missionType)}]，所需能力族为[${reqLabels}]，但挂载平台能力画像[${actLabels}]未覆盖该任务要求。`,
+        force.id
+      ));
+    }
+  });
+
   const enrichedIssues = enrichIssuesWithLocatorAndRepair(issues, { ov5Model, oodaModel, scenario, ov1Model });
 
   const result = {
@@ -199,10 +237,12 @@ export function generateValidation(ov5Model, oodaModel, scenario, ov1Model, cont
 
 // Seed-quality checks for OV-5a/6a/6b when products are empty or not yet saved.
 // Researchers may edit those products directly after seeding; OV-5b/OODA remain primary seed sources.
-export function inspectDerivedOperationalViews(ov5Model, oodaModel) {
+export function inspectDerivedOperationalViews(ov5Model, oodaModel, ov6bCustom = null) {
   const ov5a = buildOv5aModel({ ov5: ov5Model });
   const ov6a = buildOv6aModel({ ov5: ov5Model });
-  const ov6b = buildOv6bModel({ ooda: oodaModel });
+  const ov6b = ov6bCustom && Array.isArray(ov6bCustom.states) && ov6bCustom.states.length
+    ? ov6bCustom
+    : buildOv6bModel({ ooda: oodaModel });
   const issues = [];
   const activities = Array.isArray(ov5Model?.activities) ? ov5Model.activities : [];
   const hierarchyConfigured = (ov5a.decompositions || []).length > 0;
@@ -215,10 +255,25 @@ export function inspectDerivedOperationalViews(ov5Model, oodaModel) {
   if (!ov6b.transitions.length) {
     issues.push(createIssue("low", "OV-6b 状态转换待补充", "尚未从 OODA 种子出状态转换；请补充 OODA 后种子，或直接编辑 OV-6b。", ""));
   }
+
+  // M8-T8.10: OV-6b 状态机行为形式化校验（死锁黑洞与不可达孤立态）
+  const ov6bStateAnalysis = inspectOv6bStateMachine(ov6b);
+  ov6bStateAnalysis.unreachableStates.forEach((st) => {
+    issues.push(createIssue("medium", "OV-6b 存在不可达孤立状态", `状态“${st.label || st.id}”除初始状态外没有任何输入转换（入度为 0），属于不可达孤立状态。`, st.id));
+  });
+  ov6bStateAnalysis.deadlockStates.forEach((st) => {
+    issues.push(createIssue("high", "OV-6b 存在状态死锁黑洞", `状态“${st.label || st.id}”非战术终止态，但没有任何离开的状态转换（出度为 0），将导致状态机陷入死锁。`, st.id));
+  });
+
   return {
     ov5a: { activityCount: activities.length, hierarchyConfigured },
     ov6a: { ruleCount: ov6a.rules.length },
-    ov6b: { stateCount: ov6b.states.length, transitionCount: ov6b.transitions.length },
+    ov6b: {
+      stateCount: ov6b.states.length,
+      transitionCount: ov6b.transitions.length,
+      unreachableCount: ov6bStateAnalysis.unreachableStates.length,
+      deadlockCount: ov6bStateAnalysis.deadlockStates.length
+    },
     issues
   };
 }
