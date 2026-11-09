@@ -5,6 +5,7 @@ import { renderCollaborationLoginGate } from "../collaborationView.js";
 import { renderAiConfigPanel } from "../aiConfigView.js";
 import { renderAiPromptPanel } from "../aiPromptView.js";
 import { renderTacticsLibraryModal } from "../tacticsLibraryView.js";
+import { renderReviewWorkflowBar, renderFinalizedReadonlyDialog } from "../reviewWorkflowView.js";
 
 /**
  * Render Studio Shell chrome elements (trees, headers, footers, buttons, and system panels).
@@ -161,6 +162,22 @@ export function renderStudioShell(ctx) {
   if (tacticsLibraryElem && tacticsLibraryElem.dataset.renderedMarkup !== tacticsLibraryMarkup) {
     tacticsLibraryElem.innerHTML = tacticsLibraryMarkup;
     tacticsLibraryElem.dataset.renderedMarkup = tacticsLibraryMarkup;
+  }
+
+  // M7-T7.10 评审与签批流程状态栏与只读弹窗
+  const activeProject = (state.projectDirectory?.projects || []).find((p) => p.id === state.activeProjectId) || state.project;
+  const reviewWorkflowMarkup = renderReviewWorkflowBar(activeProject, { session: state.collaboration?.session });
+  const reviewWorkflowElem = $("#reviewWorkflowRoot");
+  if (reviewWorkflowElem && reviewWorkflowElem.dataset.renderedMarkup !== reviewWorkflowMarkup) {
+    reviewWorkflowElem.innerHTML = reviewWorkflowMarkup;
+    reviewWorkflowElem.dataset.renderedMarkup = reviewWorkflowMarkup;
+  }
+
+  const reviewReadonlyDialogMarkup = state.reviewReadonlyDialogOpen ? renderFinalizedReadonlyDialog(activeProject) : "";
+  const reviewReadonlyDialogElem = $("#reviewReadonlyDialogRoot");
+  if (reviewReadonlyDialogElem && reviewReadonlyDialogElem.dataset.renderedMarkup !== reviewReadonlyDialogMarkup) {
+    reviewReadonlyDialogElem.innerHTML = reviewReadonlyDialogMarkup;
+    reviewReadonlyDialogElem.dataset.renderedMarkup = reviewReadonlyDialogMarkup;
   }
 
   renderOv1ToolboxFloatHost();

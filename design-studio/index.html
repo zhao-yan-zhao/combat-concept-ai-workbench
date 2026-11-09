@@ -113,6 +113,8 @@
           <button class="quiet-button danger-quiet" id="resetProjectBtn" type="button" data-action="reset-project-content" title="清空当前项目的全部设计内容并重置到阶段1">清空当前项目</button>
         </div>
       </header>
+
+          <div id="reviewWorkflowRoot" class="review-workflow-root"></div>
       <div id="workflowModeOverlay" class="workflow-mode-overlay" hidden aria-live="polite" aria-atomic="true">
         <div class="workflow-mode-overlay-card">
           <span class="workflow-mode-spinner" aria-hidden="true"></span>
@@ -178,6 +180,7 @@
     <div id="aiConfigRoot"></div>
     <div id="aiPromptRoot"></div>
     <div id="tacticsLibraryRoot"></div>
+    <div id="reviewReadonlyDialogRoot"></div>
     <dialog id="contextPanelDialog" class="context-panel-dialog" aria-label="知识与上下文" hidden>
       <div class="context-panel-shell">
         <header class="context-panel-header">

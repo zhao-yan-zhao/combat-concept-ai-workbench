@@ -265,7 +265,7 @@
 | **T7.7 推演日志与时间线** | 回合推演流水线记录与 what-if 分支派生 | **已完成** | 时序时间轴流水线（`Turn Timeline`）、情报迷雾脱敏过滤、任选历史回合一键纯深拷贝派生 What-If 项目 | `design-studio/src/wargameTimelineStore.js`, `scenarioView.js`, `main.js` | **已完成**（2026-11-09） |
 | **T7.8 复盘生成** | 根据推演日志自动起草复盘报告（`wargame-review`） | **已完成** | 串联回合流水线日志、攻防意图、导调事件与裁决因果机理，支持 Markdown/XML 双向导出与推演视口一键接驳 | `design-studio/src/reportBuilder.js`, `wargameTimelineStore.js`, `main.js` | **已完成**（2026-11-09） |
 | **T7.9 上下文 AI 研讨助手** | 研讨助手感知当前步骤模型与引用，生成候选并事务应用 | **已完成** | 研讨面板自动感知当前步骤视图的模型摘要与引用依据，AI 生成建议仅作为“建议候选”，由人工审定并走 M1 `applyWithRecoveryPoint` 事务包装安全应用，绝不直接静默改动主模型 | `design-studio/src/researchChat/contextAwareAssistant.js`, `researchChatView.js`, `main.js` | **已完成**（2026-11-09） |
-| **T7.10 评审与签批流程** | 草稿→送审（冻结快照）→修改→定稿（只读） | **雏形** | 已有项目状态字段与快照冻结（`modelSnapshotStore.js`），但无正规工作流流转与定稿只读守卫 | `design-studio/src/projectStorageStore.js`, `modelSnapshotStore.js` | **补全增强**：补齐工作流状态流转与界面门禁 |
+| **T7.10 评审与签批流程** | 草稿→送审（冻结快照）→修改→定稿（只读） | **已完成** | 四态工作流状态机（`draft/submitted/revising/finalized`）、送审自动触发模型快照冻结、定稿成果开启全工作台只读守卫保护、支持基于定稿方案纯深拷贝解耦派生新修订分支（`forkRevisedProject`） | `design-studio/src/reviewWorkflowStore.js`, `reviewWorkflowView.js`, `main.js`, `server/projectRepository.mjs` | **已完成**（2026-11-09） |
 | **T7.11 全局搜索** | 跨项目要素、战法与日志搜索，集成至命令面板 | **雏形** | T3.7 已落地命令面板（`commandPaletteView.js`），但仅支持视图导航与内置动作，未索引要素与推演记录 | `design-studio/src/commandPaletteController.js`, `commandPaletteView.js` | **补全增强**：扩展命令面板数据源，支持要素与知识全文搜索 |
 
 #### A. 战法设计线
@@ -1117,6 +1117,35 @@ node scripts/smoke-ui.mjs
   - `node scripts/check-m7-context-aware-research-chat.mjs`：100% PASS
   - `node scripts/run-checks.mjs ui-static`：47/47 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+### 2026-11-09 T7.10 真实落地：两条线共用（评审与签批流程、快照冻结与定稿只读守卫）
+
+- **实施内容**：
+  1. 评审与签批流程仓储与状态机 (`design-studio/src/reviewWorkflowStore.js`)：
+     - 状态流转四态契约：`草稿 (draft)` ➔ `送审 (submitted)` ➔ `需修改 (revising)` ➔ `已定稿 (finalized)`；
+     - 细粒度操作门禁 (`canPerformReviewTransition`)：草稿/需修改态支持送审，送审态支持审阅员/负责人退回修改或正式签批定稿，定稿态完全锁定；
+     - 派生新修订分支 (`buildRevisedProjectPayload`)：基于已定稿项目生成纯深拷贝解耦新项目，继承当前全部模型资源与 Brief，状态重置为 `draft`，清空旧签批信息，彻底杜绝跨版本数据污染；
+  2. 评审签批横幅与只读守卫组件 (`design-studio/src/reviewWorkflowView.js` & `workflow.css`)：
+     - 全局横幅呈现当前方案评审阶段徽章（草稿 / 送审中 / 需修改 / 已定稿）、说明文字、签批人与时间备忘；
+     - 提供【📤 提交送审】、【📝 退回修改】、【✅ 签批定稿】与【🌿 派生新修订分支】动态上下文按钮；
+     - 定稿状态提供全屏拦截模态框 (`renderFinalizedReadonlyDialog`) 与警示微标，拦截非授权的原地改写；
+  3. 服务端持久化与接口支持 (`server/projectRepository.mjs` & `server/routes/projectResources.mjs`)：
+     - SQLite `project_catalog` 表无缝迁移扩展 `review_status` 与 `approval_json` 列；
+     - `normalizeProjectMeta` 与 `updateProject` 纳入合法状态白名单验证；
+     - `handleProjectMeta` 对 `finalized` 签批动作实施审阅员/负责人角色鉴权校验；
+  4. 前端调度与送审自动冻结模型快照 (`design-studio/src/main.js` & `shellRenderer.js`)：
+     - 提交送审操作自动调用 `saveModelSnapshot` 冻结生成“送审基线快照 (M...)”；
+     - 破坏性模型编辑操作（如 `apply-research-candidate`）对定稿方案实施前置只读拦截守卫；
+  5. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m7-review-workflow.mjs`：5 项专项断言 100% 全部通过；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
+- **验证命令与结果**：
+  - `node scripts/check-m7-review-workflow.mjs`：100% PASS
+  - `node scripts/run-checks.mjs storage`：12/12 PASS (100%)
+  - `node scripts/run-checks.mjs server`：23/23 PASS (100%)
+  - `node scripts/run-checks.mjs ui-static`：48/48 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 
 
 

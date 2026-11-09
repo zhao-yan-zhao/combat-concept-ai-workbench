@@ -29,6 +29,12 @@ import { getCmoCatalogStatus } from "./cmoCatalogClient.js";
 import { applyTheme, getThemeConfig } from "./themeConfigClient.js";
 import { createProject, deleteProject, loadProjects, resetProjectContent, updateProject } from "./projectBriefClient.js";
 import {
+  REVIEW_STATUSES,
+  isProjectFinalized,
+  buildRevisedProjectPayload
+} from "./reviewWorkflowStore.js";
+import { saveModelSnapshot, snapshotContextFromState } from "./modelSnapshotStore.js";
+import {
   fetchTacticsLibrary,
   saveCurrentProjectToLibrary,
   deleteTacticFromLibrary,
@@ -991,7 +997,107 @@ async function handleAction(action, source = null) {
     showToast("已基于推演流水线切换至【推演复盘报告 (wargame-review)】");
     return;
   }
+  if (action === "workflow-submit-review") {
+    const activeProject = (state.projectDirectory?.projects || []).find((p) => p.id === state.activeProjectId) || state.project;
+    try {
+      // 1. 自动冻结当前模型快照
+      const snapshotCtx = snapshotContextFromState(state, activeProject);
+      state.modelSnapshots = saveModelSnapshot({
+        ...snapshotCtx,
+        label: `送审基线快照 (${new Date().toLocaleTimeString()})`
+      }, state.modelSnapshots || []);
+
+      // 2. 更新项目评审状态
+      await updateProject(state.activeProjectId, { reviewStatus: REVIEW_STATUSES.SUBMITTED });
+      if (activeProject) activeProject.reviewStatus = REVIEW_STATUSES.SUBMITTED;
+      if (state.project) state.project.reviewStatus = REVIEW_STATUSES.SUBMITTED;
+
+      showToast("方案已成功提交送审，并自动冻结当前模型基线快照！");
+      render({ skipViewRoot: true });
+    } catch (err) {
+      showToast("提交送审失败: " + err.message);
+    }
+    return;
+  }
+  if (action === "workflow-request-changes") {
+    const activeProject = (state.projectDirectory?.projects || []).find((p) => p.id === state.activeProjectId) || state.project;
+    const note = window.prompt("请输入需修改的审阅意见：", "请强化制胜机理中反辐射中继活动的因果链条");
+    if (note === null) return;
+    try {
+      const actorLabel = state.collaboration?.session?.actor?.label || "审阅人员";
+      const approval = {
+        reviewer: actorLabel,
+        decidedAt: new Date().toISOString(),
+        note: note.trim() || "需退回修改完善"
+      };
+      await updateProject(state.activeProjectId, { reviewStatus: REVIEW_STATUSES.REVISING, approval });
+      if (activeProject) {
+        activeProject.reviewStatus = REVIEW_STATUSES.REVISING;
+        activeProject.approval = approval;
+      }
+      if (state.project) {
+        state.project.reviewStatus = REVIEW_STATUSES.REVISING;
+        state.project.approval = approval;
+      }
+      showToast("方案已退回修改，进入需修改状态。");
+      render({ skipViewRoot: true });
+    } catch (err) {
+      showToast("退回修改操作失败: " + err.message);
+    }
+    return;
+  }
+  if (action === "workflow-finalize-approval") {
+    const activeProject = (state.projectDirectory?.projects || []).find((p) => p.id === state.activeProjectId) || state.project;
+    if (!window.confirm("确定签批定稿吗？定稿后全工作台将开启只读保护，后续修改需派生新修订分支。")) return;
+    try {
+      const actorLabel = state.collaboration?.session?.actor?.label || "审阅负责人";
+      const approval = {
+        reviewer: actorLabel,
+        decidedAt: new Date().toISOString(),
+        note: "审阅合格，予以签批定稿"
+      };
+      await updateProject(state.activeProjectId, { reviewStatus: REVIEW_STATUSES.FINALIZED, approval });
+      if (activeProject) {
+        activeProject.reviewStatus = REVIEW_STATUSES.FINALIZED;
+        activeProject.approval = approval;
+      }
+      if (state.project) {
+        state.project.reviewStatus = REVIEW_STATUSES.FINALIZED;
+        state.project.approval = approval;
+      }
+      showToast("方案已正式签批定稿，已开启只读保护！");
+      render({ skipViewRoot: true });
+    } catch (err) {
+      showToast("签批定稿失败: " + err.message);
+    }
+    return;
+  }
+  if (action === "workflow-fork-revision") {
+    const activeProject = (state.projectDirectory?.projects || []).find((p) => p.id === state.activeProjectId) || state.project;
+    try {
+      const payload = buildRevisedProjectPayload(activeProject, state);
+      const result = await createProject(payload);
+      state.reviewReadonlyDialogOpen = false;
+      showToast(`已成功基于定稿方案派生新修订分支【${result.project.title}】！`);
+      switchProject(result.project.id, getProjectCtx());
+    } catch (err) {
+      showToast("派生新修订分支失败: " + err.message);
+    }
+    return;
+  }
+  if (action === "close-readonly-dialog") {
+    state.reviewReadonlyDialogOpen = false;
+    render({ skipViewRoot: true });
+    return;
+  }
   if (action === "apply-research-candidate") {
+    const activeProject = (state.projectDirectory?.projects || []).find((p) => p.id === state.activeProjectId) || state.project;
+    if (isProjectFinalized(activeProject)) {
+      state.reviewReadonlyDialogOpen = true;
+      render({ skipViewRoot: true });
+      showToast("当前方案已签批定稿（只读保护），如需修改请派生新修订分支！");
+      return;
+    }
     const candidateId = source?.dataset?.candidateId;
     const sessions = [
       state.inspirationChatSession,

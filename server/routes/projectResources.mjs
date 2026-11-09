@@ -26,6 +26,9 @@ export function createProjectResourceHandlers(runtime) {
       const input = await readJson(request);
       const actor = await localIdentity.authenticate(request);
       if ((input.archived !== undefined || input.title !== undefined || input.description !== undefined) && !actor.roles.includes("lead")) { const error = new Error("Only a lead can change project metadata or archive a project"); error.statusCode = 403; throw error; }
+      if (input.reviewStatus === "finalized" && Array.isArray(actor.roles) && actor.roles.length > 0 && !actor.roles.some((r) => ["reviewer", "lead"].includes(r))) {
+        const error = new Error("Only a reviewer or lead can finalize a project"); error.statusCode = 403; throw error;
+      }
       sendJson(response, 200, await projectRepository.updateProject(projectId, input));
     } catch (error) {
       sendJson(response, error.statusCode || 400, { error: error.message || "Project update is invalid" });

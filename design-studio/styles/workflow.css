@@ -897,3 +897,93 @@
   min-height: 0;
 }
 
+
+
+/* --- M7-T7.10 评审与签批流程横幅样式 --- */
+.review-workflow-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 14px;
+  margin: 6px 0 10px 0;
+  border-radius: 6px;
+  background: rgba(18, 26, 23, 0.88);
+  border: 1px solid rgba(86, 115, 101, 0.35);
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.review-workflow-bar.status-submitted {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(14, 28, 36, 0.92);
+}
+.review-workflow-bar.status-revising {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(34, 25, 14, 0.92);
+}
+.review-workflow-bar.status-finalized {
+  border-color: rgba(52, 211, 153, 0.45);
+  background: rgba(13, 30, 24, 0.92);
+}
+.review-workflow-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+.review-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.review-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+}
+.review-status-badge.status-submitted {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+.review-status-badge.status-revising {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.review-status-badge.status-finalized {
+  background: rgba(52, 211, 153, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+}
+.review-status-desc {
+  color: #94a3b8;
+  font-size: 12px;
+}
+.review-approval-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: #a7f3d0;
+  padding-left: 8px;
+  border-left: 1px solid rgba(110, 231, 183, 0.25);
+}
+.review-readonly-badge {
+  color: #6ee7b7;
+  font-weight: 500;
+  font-size: 12px;
+}
+.review-workflow-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
