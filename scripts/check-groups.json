@@ -147,7 +147,8 @@
     "check-m7-wargame-timeline.mjs",
     "check-m7-wargame-review-report.mjs",
     "check-m7-context-aware-research-chat.mjs",
-    "check-m7-review-workflow.mjs"
+    "check-m7-review-workflow.mjs",
+    "check-m7-global-search.mjs"
   ],
   "misc": [
     "check-brief-expected-effects-downstream.mjs",

@@ -34,7 +34,7 @@ export const ACTION_COMMANDS = [
 ];
 
 /**
- * 从当前 state 动态提取搜索要素
+ * 从当前 state 动态提取搜索要素 (项目要素、成熟战法库、推演日志与知识文档)
  */
 export function extractProjectElements(state = {}) {
   const elements = [];
@@ -71,7 +71,7 @@ export function extractProjectElements(state = {}) {
     });
   }
 
-  // 3. 兵力单元
+  // 3. 兵力单元与作战力量
   const conceptForces = Array.isArray(state.forceMission?.conceptForces) ? state.forceMission.conceptForces : [];
   for (const f of conceptForces) {
     if (!f?.id) continue;
@@ -86,8 +86,22 @@ export function extractProjectElements(state = {}) {
       keywords: `force 兵力 ${f.name || ""} ${f.id} ${f.role || ""}`
     });
   }
+  const combatForces = Array.isArray(state.forceMission?.combatForces) ? state.forceMission.combatForces : [];
+  for (const cf of combatForces) {
+    if (!cf?.id) continue;
+    elements.push({
+      id: `elem-combat-force-${cf.id}`,
+      title: `编组力量: ${cf.name || cf.id}`,
+      subtitle: `${cf.category || "作战力量"} · ${cf.serviceBranch || "多域"}`,
+      category: "项目要素",
+      type: "element",
+      view: "force-mission",
+      elementId: cf.id,
+      keywords: `combat force 作战力量 编组 ${cf.name || ""} ${cf.id}`
+    });
+  }
 
-  // 4. OV-5 活动节点
+  // 4. OV-5 活动节点与制胜论证假设
   const activities = Array.isArray(state.ov5?.activities)
     ? state.ov5.activities
     : (Array.isArray(state.architectureModel?.activities) ? state.architectureModel.activities : []);
@@ -95,17 +109,44 @@ export function extractProjectElements(state = {}) {
     if (!a?.id) continue;
     elements.push({
       id: `elem-act-${a.id}`,
-      title: `活动: ${a.name || a.id}`,
+      title: `活动: ${a.name || a.title || a.id}`,
       subtitle: `${a.domain || "通用"} · ${a.autonomyLevel || "HITL"}`,
       category: "项目要素",
       type: "element",
       view: "ov5",
       elementId: a.id,
-      keywords: `activity 活动 ov5 ${a.name || ""} ${a.id} ${a.domain || ""}`
+      keywords: `activity 活动 ov5 ${a.name || a.title || ""} ${a.id} ${a.domain || ""}`
+    });
+  }
+  const assumptions = Array.isArray(state.ov5?.argumentChain?.assumptions) ? state.ov5.argumentChain.assumptions : [];
+  for (const as of assumptions) {
+    if (!as?.id) continue;
+    elements.push({
+      id: `elem-assumption-${as.id}`,
+      title: `论证假设: ${as.text || as.id}`,
+      subtitle: `置信度: ${as.confidence || "中"} · 制胜论证链关键假设`,
+      category: "项目要素",
+      type: "element",
+      view: "ov5",
+      elementId: as.id,
+      keywords: `assumption 假设 论证链 ${as.text || ""} ${as.confidence || ""}`
     });
   }
 
-  // 5. 状态机
+  // 5. 简报核心意图与目标
+  if (state.brief?.objective) {
+    elements.push({
+      id: "elem-brief-objective",
+      title: `研究目标: ${state.brief.objective}`,
+      subtitle: `概念简报核心作战目标`,
+      category: "项目要素",
+      type: "element",
+      view: "brief",
+      keywords: `brief objective 目标 意图 ${state.brief.objective}`
+    });
+  }
+
+  // 6. 状态机
   const machines = Array.isArray(state.ov6b?.machines) ? state.ov6b.machines : [];
   for (const m of machines) {
     if (!m?.id) continue;
@@ -125,19 +166,85 @@ export function extractProjectElements(state = {}) {
 }
 
 /**
- * 过滤与排序候选命令
+ * 提取跨项目战法库条目
+ */
+export function extractTacticsLibraryElements(state = {}) {
+  const tactics = Array.isArray(state.tacticsLibraryList) ? state.tacticsLibraryList : [];
+  return tactics.map((t) => ({
+    id: `tactic-${t.id}`,
+    title: `战法: ${t.name}`,
+    subtitle: `${t.category || "战法"} · ${t.applicableScenario || t.summary || ""}`,
+    category: "战法库",
+    type: "tactic",
+    action: "open-tactics-library",
+    elementId: t.id,
+    keywords: `tactic 战法 ${t.name} ${t.category || ""} ${(t.tags || []).join(" ")} ${t.summary || ""}`
+  }));
+}
+
+/**
+ * 提取推演日志与历史回合
+ */
+export function extractWargameTimelineElements(state = {}) {
+  const turns = Array.isArray(state.scenario?.wargame?.turns) ? state.scenario.wargame.turns : [];
+  const entries = [];
+
+  for (const turn of turns) {
+    const num = turn.turnNumber || 1;
+    if (turn.intents?.red?.text) {
+      entries.push({
+        id: `turn-${num}-red`,
+        title: `第 ${num} 回合红方意图: ${turn.intents.red.text.slice(0, 40)}`,
+        subtitle: `阶段: ${turn.phaseName || "推演"} · 红方对抗意图`,
+        category: "推演日志",
+        type: "timeline",
+        view: "scenario",
+        keywords: `wargame timeline turn 回合 红方 意图 ${turn.intents.red.text}`
+      });
+    }
+    if (turn.intents?.blue?.text) {
+      entries.push({
+        id: `turn-${num}-blue`,
+        title: `第 ${num} 回合蓝方意图: ${turn.intents.blue.text.slice(0, 40)}`,
+        subtitle: `阶段: ${turn.phaseName || "推演"} · 蓝方对抗意图`,
+        category: "推演日志",
+        type: "timeline",
+        view: "scenario",
+        keywords: `wargame timeline turn 回合 蓝方 意图 ${turn.intents.blue.text}`
+      });
+    }
+    if (turn.adjudication?.outcome) {
+      entries.push({
+        id: `turn-${num}-adjudication`,
+        title: `第 ${num} 回合导调裁决: ${turn.adjudication.outcome.slice(0, 40)}`,
+        subtitle: `态势裁决结论与因果机理建议`,
+        category: "推演日志",
+        type: "timeline",
+        view: "scenario",
+        keywords: `wargame timeline turn 回合 导调 裁决 ${turn.adjudication.outcome}`
+      });
+    }
+  }
+
+  return entries;
+}
+
+/**
+ * 过滤与排序候选命令 (全局搜索：跨项目要素、战法库与推演日志)
  */
 export function filterCommands(query = "", state = {}) {
   const q = String(query || "").trim().toLowerCase();
   const allCommands = [
     ...VIEW_COMMANDS,
     ...ACTION_COMMANDS,
-    ...extractProjectElements(state)
+    ...extractProjectElements(state),
+    ...extractTacticsLibraryElements(state),
+    ...extractWargameTimelineElements(state)
   ];
 
   if (!q) {
     // 默认展示导航与常用动作
-    return allCommands.filter((c) => c.category !== "项目要素");
+    return allCommands.filter((c) => c.category === "步骤与视图" || c.category === "常用操作");
   }
 
   const terms = q.split(/\s+/).filter(Boolean);
@@ -160,7 +267,7 @@ export function renderCommandPaletteHtml({ query = "", selectedIndex = 0, state 
     groupedHtml = `
       <div class="command-palette-empty">
         <p>未找到匹配 “<b>${escapeHtml(query)}</b>” 的命令或要素。</p>
-        <small>支持检索步骤、视图、任务、兵力、活动及系统操作</small>
+        <small>支持全局检索步骤、视图、模型要素、成熟战法库与推演日志</small>
       </div>
     `;
   } else {
@@ -179,6 +286,9 @@ export function renderCommandPaletteHtml({ query = "", selectedIndex = 0, state 
         if (item.type === "nav") badge = `<span class="command-badge nav">跳转</span>`;
         else if (item.type === "action") badge = `<span class="command-badge act">执行</span>`;
         else if (item.type === "element") badge = `<span class="command-badge elem">要素</span>`;
+        else if (item.type === "tactic") badge = `<span class="command-badge tactic">战法</span>`;
+        else if (item.type === "timeline") badge = `<span class="command-badge timeline">推演</span>`;
+        else if (item.type === "knowledge") badge = `<span class="command-badge knowledge">知识</span>`;
 
         groupedHtml += `
           <li class="command-palette-item ${isActive ? "is-active" : ""}"

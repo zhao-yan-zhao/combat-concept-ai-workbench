@@ -104,6 +104,12 @@ export function createCommandPaletteController({
       if (view) {
         await navigateToResearchView(view);
       }
+    } else if (type === "tactic") {
+      await handleAction("open-tactics-library");
+    } else if (type === "timeline") {
+      await navigateToResearchView("scenario");
+    } else if (type === "knowledge") {
+      await handleAction("open-context-panel");
     }
   }
 

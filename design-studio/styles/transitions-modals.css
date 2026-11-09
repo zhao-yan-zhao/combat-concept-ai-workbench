@@ -606,6 +606,18 @@ dialog.command-palette-dialog::backdrop {
   background: rgba(251, 146, 60, .18);
   color: #fb923c;
 }
+.command-badge.tactic {
+  background: rgba(167, 139, 250, .18);
+  color: #a78bfa;
+}
+.command-badge.timeline {
+  background: rgba(244, 114, 182, .18);
+  color: #f472b6;
+}
+.command-badge.knowledge {
+  background: rgba(45, 212, 191, .18);
+  color: #2dd4bf;
+}
 .command-palette-empty {
   padding: 28px 16px;
   text-align: center;

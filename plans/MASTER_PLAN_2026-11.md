@@ -266,7 +266,7 @@
 | **T7.8 复盘生成** | 根据推演日志自动起草复盘报告（`wargame-review`） | **已完成** | 串联回合流水线日志、攻防意图、导调事件与裁决因果机理，支持 Markdown/XML 双向导出与推演视口一键接驳 | `design-studio/src/reportBuilder.js`, `wargameTimelineStore.js`, `main.js` | **已完成**（2026-11-09） |
 | **T7.9 上下文 AI 研讨助手** | 研讨助手感知当前步骤模型与引用，生成候选并事务应用 | **已完成** | 研讨面板自动感知当前步骤视图的模型摘要与引用依据，AI 生成建议仅作为“建议候选”，由人工审定并走 M1 `applyWithRecoveryPoint` 事务包装安全应用，绝不直接静默改动主模型 | `design-studio/src/researchChat/contextAwareAssistant.js`, `researchChatView.js`, `main.js` | **已完成**（2026-11-09） |
 | **T7.10 评审与签批流程** | 草稿→送审（冻结快照）→修改→定稿（只读） | **已完成** | 四态工作流状态机（`draft/submitted/revising/finalized`）、送审自动触发模型快照冻结、定稿成果开启全工作台只读守卫保护、支持基于定稿方案纯深拷贝解耦派生新修订分支（`forkRevisedProject`） | `design-studio/src/reviewWorkflowStore.js`, `reviewWorkflowView.js`, `main.js`, `server/projectRepository.mjs` | **已完成**（2026-11-09） |
-| **T7.11 全局搜索** | 跨项目要素、战法与日志搜索，集成至命令面板 | **雏形** | T3.7 已落地命令面板（`commandPaletteView.js`），但仅支持视图导航与内置动作，未索引要素与推演记录 | `design-studio/src/commandPaletteController.js`, `commandPaletteView.js` | **补全增强**：扩展命令面板数据源，支持要素与知识全文搜索 |
+| **T7.11 全局搜索** | 跨项目要素、战法与日志搜索，集成至命令面板 | **已完成** | 全局多维跨项目要素（Brief/Force/OV-5/Assumptions/ROE/Machines）、成熟战法库与推演历史日志全文索引，无缝集成至命令面板（`Ctrl+K`），具备专属分类徽章与直达跳转调度 | `design-studio/src/commandPaletteView.js`, `commandPaletteController.js` | **已完成**（2026-11-09） |
 
 #### A. 战法设计线
 
@@ -1145,6 +1145,29 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs server`：23/23 PASS (100%)
   - `node scripts/run-checks.mjs ui-static`：48/48 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
+### 2026-11-09 T7.11 真实落地：两条线共用（跨项目要素、成熟战法库与推演日志全局搜索）与 M7 全量圆满收官
+
+- **实施内容**：
+  1. 多维全局数据源提取与索引引擎 (`design-studio/src/commandPaletteView.js`)：
+     - `extractProjectElements`：全面覆盖概念简报核心目标、参演作战编组力量（`combatForces`）、活动与制胜论证链关键假设（`assumptions`）、状态机（`machines`）与作战任务（`tasks`）；
+     - `extractTacticsLibraryElements`：跨项目索引战法复用库全部成熟战法，按名称、分类、适用场景与标签全文匹配，打标 `category: "战法库"`, `type: "tactic"`；
+     - `extractWargameTimelineElements`：索引回合推演历史流水线日志，涵盖红方意图、蓝方对抗意图与导调裁决结论，打标 `category: "推演日志"`, `type: "timeline"`；
+  2. 搜索过滤与快捷调度 (`design-studio/src/commandPaletteView.js` & `commandPaletteController.js`)：
+     - `filterCommands` 实现全字段与多词组合分词匹配；
+     - 空关键词默认聚焦常用步骤与操作，有关键词时实时动态呈现项目要素、战法库与推演日志；
+     - `executeItem` 支持直达对应模型视图（如 `brief`、`ov5`、`scenario`）及一键唤起战法库弹窗与上下文抽屉；
+  3. 专属视觉设计与徽章标签 (`design-studio/styles/transitions-modals.css`)：
+     - 为不同搜索结果呈现直观徽章：`[战法]`（紫色）、`[推演]`（粉色）、`[要素]`（橙色）、`[跳转]`（蓝色）、`[执行]`（绿色）；
+  4. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m7-global-search.mjs`：5 项专项断言 100% 全部通过；
+     - 纳入 `scripts/check-groups.json` 的 `ui-static` 分组。
+- **验证命令与结果**：
+  - `node scripts/check-m7-global-search.mjs`：100% PASS
+  - `node scripts/check-command-palette.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ui-static`：49/49 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 
 
 
