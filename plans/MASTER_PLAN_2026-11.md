@@ -263,7 +263,7 @@
 | **T7.5 红蓝分立与信息隔离** | 导演部/红方/蓝方视角与信息过滤，协同权限映射 | **已完成** | 协同角色映射（`lead` -> 导演部全知，`researcher` -> 红方，`reviewer` -> 蓝方）、情报迷雾脱敏过滤管道与防覆写保存 | `design-studio/src/wargamePerspectiveFilter.js`, `scenarioView.js`, `scenarioController.js` | **已完成**（2026-11-09） |
 | **T7.6 推演回合与导调** | 回合制推进（意图提交、事件注入卡库、导调裁决建议、进入下回合） | **已完成** | 回合状态机、6类预置事件卡库、因果机理导调裁决建议（`ai.wargame.adjudication`），绝无数值化杀伤计算 | `design-studio/src/wargameTurnStore.js`, `wargameClient.js`, `scenarioView.js` | **已完成**（2026-11-09） |
 | **T7.7 推演日志与时间线** | 回合推演流水线记录与 what-if 分支派生 | **已完成** | 时序时间轴流水线（`Turn Timeline`）、情报迷雾脱敏过滤、任选历史回合一键纯深拷贝派生 What-If 项目 | `design-studio/src/wargameTimelineStore.js`, `scenarioView.js`, `main.js` | **已完成**（2026-11-09） |
-| **T7.8 复盘生成** | 根据推演日志自动起草复盘报告（`wargame-review`） | **可用** | M4 报告引擎与 M6-T6.3 已支持 `wargame-review` 模板、阶段成效表格与活动执行偏差回填，契约已全闭环 | `design-studio/src/reportBuilder.js`, `simulationRecycleStore.js` | **无缝接驳**：直接串联回合日志即可，无需重建 |
+| **T7.8 复盘生成** | 根据推演日志自动起草复盘报告（`wargame-review`） | **已完成** | 串联回合流水线日志、攻防意图、导调事件与裁决因果机理，支持 Markdown/XML 双向导出与推演视口一键接驳 | `design-studio/src/reportBuilder.js`, `wargameTimelineStore.js`, `main.js` | **已完成**（2026-11-09） |
 | **T7.9 上下文 AI 研讨助手** | 研讨助手感知当前步骤模型与引用，生成候选并事务应用 | **雏形** | `researchChat/` 目录有完整对话流、上下文同步，但未自动感知当前步骤视图的模型摘要与证据注入，缺少事务安全候选框 | `design-studio/src/researchChat/` 全套控制器与视图 | **补全增强**：为研讨助手注入当前步骤上下文与安全候选事务框 |
 | **T7.10 评审与签批流程** | 草稿→送审（冻结快照）→修改→定稿（只读） | **雏形** | 已有项目状态字段与快照冻结（`modelSnapshotStore.js`），但无正规工作流流转与定稿只读守卫 | `design-studio/src/projectStorageStore.js`, `modelSnapshotStore.js` | **补全增强**：补齐工作流状态流转与界面门禁 |
 | **T7.11 全局搜索** | 跨项目要素、战法与日志搜索，集成至命令面板 | **雏形** | T3.7 已落地命令面板（`commandPaletteView.js`），但仅支持视图导航与内置动作，未索引要素与推演记录 | `design-studio/src/commandPaletteController.js`, `commandPaletteView.js` | **补全增强**：扩展命令面板数据源，支持要素与知识全文搜索 |
@@ -311,9 +311,9 @@
 - 自动记录每个回合的意图、注入、裁决和关键决策，形成可回看的时间线（Turn Timeline）。
 - 在时间线的任意回合可以"从此处派生分支"（what-if），通过纯深拷贝截断生成解耦分支项目，携带战术假设并重置起点裁决。
 
-**T7.8 复盘生成**
+- [x] **T7.8 复盘生成**（2026-11-09 已落地）
 - 根据推演日志自动起草复盘报告，使用 M4 的 `wargame-review` 模板。
-- 内容包括关键决策点、偏差与原因、改进建议，并带上引用和日志回链。
+- 内容包括回合演进流水线表格、关键决策点与攻防因果机理、扰动事件剖析与时间戳回链，支持 XML/Markdown 双向导出，推演流水线一键快速跳转导出。
 
 #### C. 两条线共用
 
