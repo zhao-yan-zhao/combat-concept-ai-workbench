@@ -29,6 +29,7 @@ export const ACTION_COMMANDS = [
   { id: "act-ai-prompts", title: "AI 提示词目录", subtitle: "查看、编辑与调试系统级提示词模板", category: "常用操作", type: "action", action: "open-ai-prompts", keywords: "ai prompt 提示词 模板" },
   { id: "act-account", title: "协同账号管理", subtitle: "切换身份、密码重置与安全事件审计", category: "常用操作", type: "action", action: "open-account-management", keywords: "account user 账号 协同 审阅" },
   { id: "act-save-version", title: "保存当前概念版本", subtitle: "为当前研究项目创建不可变快照版本", category: "常用操作", type: "action", action: "save-report-version", keywords: "save version 报告 版本 快照 归档" },
+  { id: "act-delete-project", title: "删除当前研究项目", subtitle: "永久删除当前打开的研究项目及其全部数据", category: "常用操作", type: "action", action: "delete-current-project", keywords: "delete remove project 删除 项目 销毁 清理" },
   { id: "act-example-tactic", title: "载入战法设计示例", subtitle: "导入完整的 6 步防空压制战法示例项目", category: "常用操作", type: "action", action: "load-example-project", exampleKind: "tactic", keywords: "example tactic 战法 示例 样本" },
   { id: "act-example-scenario", title: "载入想定推演示例", subtitle: "导入完整的 6 步多域封控想定推演示例项目", category: "常用操作", type: "action", action: "load-example-project", exampleKind: "scenario", keywords: "example scenario 想定 示例 样本" }
 ];

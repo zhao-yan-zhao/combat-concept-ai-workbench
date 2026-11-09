@@ -315,6 +315,12 @@ export const GLOSSARY = Object.freeze({
     full: "Deviation",
     name: "推演执行偏差",
     desc: "作战概念推演或仿真实验中，实际执行指标与预设计划基准之间的差异差距。"
+  },
+  "CPM": {
+    term: "CPM",
+    full: "Critical Path Method",
+    name: "关键路径法",
+    desc: "在杀伤网有向无环图 (DAG) 中通过前向与后向拓扑遍历，解算决定全链路最短时敏响应时限的瓶颈路径与时延预算。"
   }
 });
 

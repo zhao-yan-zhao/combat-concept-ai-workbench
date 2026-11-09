@@ -4,7 +4,7 @@
  */
 const EPOCH_KEY = "combat-concept-client-storage-epoch";
 /** Bump this when intentionally wiping all local workbench drafts. */
-export const CLIENT_STORAGE_EPOCH = "wipe-2026-11-09-full-3";
+export const CLIENT_STORAGE_EPOCH = "wipe-2026-11-09-full-4";
 
 const KEY_PREFIXES = [
   "concept-studio-",

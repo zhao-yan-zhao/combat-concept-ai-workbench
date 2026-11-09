@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   resolveStepTargetOutput,
   renderStepNextBar,
+  renderWorkflowGate,
   resolveWorkflowGateContext
 } from "../design-studio/src/app/workflowGate.js";
 import { renderView } from "../design-studio/src/ui.js";
@@ -76,10 +77,15 @@ assert(!barComplete.includes('disabled'), "就绪时主按钮不得处于禁用�
 assert(barComplete.includes('data-action="complete-workflow-stage"'), "主按钮必须绑定阶段确认动作");
 console.log("✓ 3. 就绪状态下固定条三部分流转验证通过");
 
-// 4. 测试在 renderView 中的集成挂载
+// 4. 测试方案2（合并至顶栏）：主视图释放纵向空间，顶栏门禁面板集成向导条与门禁指标
 const renderedHtml = renderView("brief", stateComplete);
-assert(renderedHtml.includes('data-step-next-bar'), "renderView 必须在顶部集成步骤推进向导条");
+assert(!renderedHtml.includes('class="step-next-bar"'), "方案2：renderView 不得再前置插入侵占垂直高度的向导条");
 assert(renderedHtml.includes('class="brief-conversation"'), "页面原本内容布局必须完整保留");
-console.log("✓ 4. renderView 顶层集成验证通过");
+
+const gateHtml = renderWorkflowGate(stateComplete);
+assert(gateHtml.includes('data-step-next-bar'), "顶栏工作流门禁面板必须包含 data-step-next-bar 区域");
+assert(gateHtml.includes('作战概念研究简报六要素'), "顶栏门禁面板必须呈现当前步骤的明确产出目标");
+assert(gateHtml.includes('已就绪 (0项待补充)'), "顶栏门禁面板必须呈现完成条件指标");
+console.log("✓ 4. 方案2顶栏合并与主视图空间释放验证通过");
 
 console.log("\n=== T3.2 所有断言 100% 全部通过 ===");

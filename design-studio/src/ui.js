@@ -177,9 +177,8 @@ export function renderView(viewId, state) {
     "account-management": renderAccountManagement
   };
   const page = (pages[viewId] || renderReport)(state);
-  const stepBar = renderStepNextBar({ ...state, activeView: viewId });
-  const content = stepBar ? `${stepBar}${page}` : page;
-  return renderSubflowPage(viewId, content, state);
+  // 方案2：步骤推进向导与门禁已完全合并至顶栏工作流导航（renderWorkflowGate），主视图区不再单独前置插入向导条以释放完整垂直工作区
+  return renderSubflowPage(viewId, page, state);
 }
 
 export function renderInspector(selection, context = {}) {

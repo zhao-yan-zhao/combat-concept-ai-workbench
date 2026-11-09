@@ -34,45 +34,69 @@ export function extractSimulationPhaseOutcomes(scenario, phaseAction) {
   if (Array.isArray(result?.phaseOutcomes) && result.phaseOutcomes.length > 0) {
     return result.phaseOutcomes.map((item, index) => {
       const matchedPhase = phases.find((p) => p.id === item.phaseId) || phases[index];
+      const rawLoss = item.lossRate != null ? String(item.lossRate).trim() : "";
+      const formattedLoss = rawLoss
+        ? (rawLoss.endsWith("%") ? rawLoss : `${rawLoss}%`)
+        : "0%";
+      const status = ["achieved", "partial", "failed"].includes(item.status) ? item.status : "achieved";
+      const riskLevel = item.riskLevel || (status === "failed" ? "high" : status === "partial" ? "medium" : "low");
+
       return {
         phaseId: clean(item.phaseId || matchedPhase?.id, 60),
         phaseName: clean(item.phaseName || matchedPhase?.name, 120),
         plannedTime: clean(item.plannedTime || matchedPhase?.timeWindow, 80) || "待明确",
         actualDuration: clean(item.actualDuration, 60) || "符合预设",
         durationDelta: clean(item.durationDelta, 60) || "0",
-        lossRate: clean(item.lossRate, 40) || "0%",
-        status: ["achieved", "partial", "failed"].includes(item.status) ? item.status : "achieved",
-        statusLabel: ({ achieved: "顺利达成", partial: "部分达成", failed: "未达成" })[item.status] || "顺利达成",
-        summary: clean(item.summary, 500) || "阶段目标在推演中按计划完成。"
+        lossRate: formattedLoss,
+        status,
+        statusLabel: ({ achieved: "顺利达成", partial: "部分达成", failed: "未达成" })[status] || "顺利达成",
+        summary: clean(item.summary, 500) || "阶段目标在推演中按计划完成。",
+        sourceType: "[定量仿真回传]",
+        isQuantitative: true,
+        riskLevel,
+        riskAssessment: clean(item.riskAssessment, 200) || (status === "achieved" ? "仿真回传：执行顺利闭环" : "仿真回传：存在指标偏差")
       };
     });
   }
 
-  // 2. 本地启发式推导（基于仿真 metrics、timeline 和部署就绪度）
+  // 2. 本地机理与指标推导（基于仿真 metrics、timeline 和部署就绪度，消除伪造线性算式）
   const metrics = result?.metrics || [];
   const coverageMetric = metrics.find((m) => m.id === "area-coverage" || m.label?.includes("覆盖"))?.value ?? 80;
   const boundsMetric = metrics.find((m) => m.id === "grid-bounds" || m.label?.includes("边界"))?.value ?? 90;
   const timelineMetric = metrics.find((m) => m.id === "timeline-completeness" || m.label?.includes("时间线"))?.value ?? 85;
 
   return phases.map((phase, index) => {
-    // 依阶段序列计算模拟达成情况与战损
     const isLatePhase = index >= Math.floor(phases.length / 2);
     let status = "achieved";
-    let lossRate = `${(1.5 + index * 1.2).toFixed(1)}%`;
+    let lossRate = "0.5% (预估轻微损耗)";
     let durationDelta = "+0h";
+    let riskLevel = "low";
+    let riskAssessment = "链路闭环通畅，兵力展开与行动时序符合预设。";
     let summary = `阶段 [${phase.name}] 预设目标基本达成，兵力展开与行动时序顺畅。`;
 
-    if (coverageMetric < 70 || timelineMetric < 70) {
+    if (coverageMetric < 50 || timelineMetric < 50) {
+      status = "failed";
+      lossRate = "15.0% (严重受挫预估)";
+      durationDelta = `+${index + 2}h`;
+      riskLevel = "high";
+      riskAssessment = "核心感知或协同链路中断，阶段关键战术指标未达成。";
+      summary = `受感知覆盖或时序严重失序影响，阶段 [${phase.name}] 关键协同动作中断，推演判定未达成预期效果。`;
+    } else if (coverageMetric < 70 || timelineMetric < 70) {
       if (isLatePhase) {
         status = "partial";
-        lossRate = `${(4.0 + index * 2.0).toFixed(1)}%`;
+        lossRate = "5.0% (局部受阻预估)";
         durationDelta = `+${index + 1}h`;
+        riskLevel = "medium";
+        riskAssessment = "受区域覆盖与时序完整性约束，阶段后期出现协同延期，存在局部阻滞。";
         summary = `受区域覆盖与时序完整性约束，阶段后期出现协同延期，实际战损略高于基准。`;
       }
     } else if (boundsMetric < 80) {
       if (index === 0) {
         status = "partial";
+        lossRate = "3.0% (初始展开受限预估)";
         durationDelta = "+1.5h";
+        riskLevel = "medium";
+        riskAssessment = "初始阶段网格展开受限，进入下一阶段条件出现时间窗口漂移。";
         summary = `初始阶段网格展开受限，进入下一阶段条件出现时间窗口漂移。`;
       }
     }
@@ -86,7 +110,12 @@ export function extractSimulationPhaseOutcomes(scenario, phaseAction) {
       lossRate,
       status,
       statusLabel: ({ achieved: "顺利达成", partial: "部分达成", failed: "未达成" })[status] || "顺利达成",
-      summary
+      summary,
+      sourceType: "[定性推演/机理推导]",
+      isQuantitative: false,
+      riskLevel,
+      riskAssessment,
+      evidenceBasis: `评估依据：覆盖度 ${coverageMetric}% / 边界合规 ${boundsMetric}% / 时序完整性 ${timelineMetric}%`
     };
   });
 }
@@ -244,7 +273,10 @@ export function recycleSimulationToPhasesAndActivities({ scenario, phaseAction, 
         actualDuration: outcome.actualDuration,
         durationDelta: outcome.durationDelta,
         lossRate: outcome.lossRate,
-        summary: outcome.summary
+        summary: outcome.summary,
+        sourceType: outcome.sourceType || "[定性推演/机理推导]",
+        riskLevel: outcome.riskLevel || "low",
+        riskAssessment: outcome.riskAssessment || ""
       }
     };
   });

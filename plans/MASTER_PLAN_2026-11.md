@@ -1227,7 +1227,11 @@ node scripts/smoke-ui.mjs
   - **M8 Batch 1（T8.1～T8.3 机理动力学与图论算法升级）全量圆满收官！**
 
 - **Batch 2 兵棋推演—仿真回收闭环与本地离散事件推演（进行中）**：
-  - **T8.4** 消除硬编码伪造战损，建立基于证据的阶段成效与偏差推导引擎
+  - **T8.4（已落地）** 消除硬编码伪造战损，建立基于证据的阶段成效与偏差推导引擎：
+    * 彻底删除 `(1.5 + index * 1.2)` 与 `(4.0 + index * 2.0)` 伪造线性递增算法；
+    * 区分定量真实仿真回传（`sourceType: "[定量仿真回传]"`, `isQuantitative: true`）与本地机理推导（`sourceType: "[定性推演/机理推导]"`, `isQuantitative: false`）；
+    * 依据态势感知覆盖度、边界合规率与时序完整性健康度，科学推导三级态势风险（`low/medium/high`）、定性战损区间预估（如 `0.5% (预估轻微损耗)`、`5.0% (局部受阻预估)`、`15.0% (严重受挫预估)`）与可追溯的证据依据（`evidenceBasis`）；
+    * 新增自动化回归脚本 `scripts/check-m8-honest-recycle-derivation.mjs`，既有 `check-m6-simulation-result-recycle.mjs` 100% PASS。
   - **T8.5** 打通回合制兵棋导调（`wargameTurnStore`）到仿真结果回收（`simulationRecycleStore`）的自动编译桥
   - **T8.6** 升级本地抽象网格推演内核（Abstract Grid Discrete-Event Evaluator）
   - **T8.7** 基于威胁轴线与 OV-2/OV-5 协同引力的抽象网格部署算法

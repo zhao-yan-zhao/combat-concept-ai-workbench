@@ -650,7 +650,16 @@ export function renderWorkflowGate(state) {
   const shellState = ctx.mode === "complete-phase" && !ready
     ? "is-pending"
     : (ctx.isStale ? "is-stale" : "is-ready");
-  const title = isBusy ? "正在推进与AI生成中…" : `${ctx.capsuleTitle} · ${ctx.capsuleAction}（点击展开）`;
+
+  const viewId = state.activeView || ctx.current?.id || "";
+  const targetOutput = resolveStepTargetOutput(viewId, ctx.current);
+  const incomplete = ctx.incompleteReasons || [];
+
+  const outputTooltip = targetOutput ? `\n本步产出：${targetOutput}` : "";
+  const conditionTooltip = ready
+    ? `\n完成条件：✓ 已就绪 (0项待补充)`
+    : `\n完成条件：还差 ${incomplete.length} 项（${incomplete.join("、")}）`;
+  const title = isBusy ? "正在推进与AI生成中…" : `${ctx.capsuleTitle} · ${ctx.capsuleAction}（点击展开面板）${outputTooltip}${conditionTooltip}`;
 
   return `<div class="workflow-gate-shell ${shellState}${open ? " is-open" : ""}${isBusy ? " is-advancing" : ""}" data-workflow-gate-shell data-gate-mode="${escapeHtml(ctx.mode)}">
     <div class="workflow-gate-panel" role="region" aria-label="工作流推进" id="workflowGatePanel"${open ? "" : " inert"}${open ? "" : ' aria-hidden="true"'}>
@@ -660,6 +669,10 @@ export function renderWorkflowGate(state) {
           <strong class="workflow-gate-phase">${escapeHtml(ctx.headTitle || "")}</strong>
           <small class="workflow-gate-hint">${escapeHtml(ctx.hint || "")}</small>
         </div>
+      </div>
+      <div class="workflow-gate-step-info" data-step-next-bar role="region" aria-label="本步产出与完成条件">
+        <div class="step-next-bar-target"><span class="step-bar-label">本步产出：</span><strong class="step-bar-target-text">${escapeHtml(targetOutput)}</strong></div>
+        <div class="step-next-bar-status"><span class="step-bar-label">完成条件：</span><span class="step-condition-pill ${ready ? "is-ready" : "is-pending"}" title="${escapeHtml(incomplete.join("、"))}">${ready ? "✓ 已就绪 (0项待补充)" : `还差 ${incomplete.length} 项（${escapeHtml(incomplete.slice(0, 3).join("、"))}${incomplete.length > 3 ? "…" : ""}）`}</span></div>
       </div>
       ${ctx.quickActions && ctx.quickActions.length ? `
         <div class="workflow-gate-quick-box" role="region" aria-label="快捷门禁">

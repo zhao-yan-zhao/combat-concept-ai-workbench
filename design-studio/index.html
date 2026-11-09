@@ -44,74 +44,99 @@
 
         <nav class="menubar-menus" aria-label="功能菜单">
           <details class="menubar-menu">
-            <summary>研究</summary>
+            <summary>架构与视图</summary>
             <div class="menubar-panel">
-              <button type="button" data-view="brief">概念简报</button>
-              <button type="button" data-view="ov1">高层作战概念图</button>
-              <button type="button" data-view="ov5">作战活动模型</button>
-              <button type="button" data-view="ooda">OODA 循环</button>
-              <button type="button" data-view="structure-review">结构核对台</button>
-              <button type="button" data-action="open-tactics-library">跨项目战法复用库</button>
-            </div>
-          </details>
-          <details class="menubar-menu">
-            <summary>工具</summary>
-            <div class="menubar-panel">
-              <button type="button" data-action="open-ai-config">AI 服务配置</button>
-              <button type="button" data-action="open-ai-prompts">AI 提示词</button>
-              <button type="button" data-action="open-collaboration">协同审阅</button>
-              <button type="button" data-action="open-account-management">账号管理</button>
-              <button type="button" data-view="validate">设计验证</button>
-              <button type="button" data-view="scenario">自动想定</button>
-              <button type="button" data-view="report">成果报告</button>
+              <div class="menubar-section-label">研究主线 (01~06)</div>
+              <button type="button" data-view="brief">01 概念简报</button>
+              <button type="button" data-view="phase-action">02 阶段与行动</button>
+              <button type="button" data-view="force-mission">03 任务与兵力</button>
+              <button type="button" data-view="ov5">04 活动机理 (OV-5b)</button>
+              <button type="button" data-view="ov1">05 总体概念 (OV-1a)</button>
+              <button type="button" data-view="scenario">06 仿真推演与验证</button>
               <hr>
-              <button type="button" data-action="reset-project-content" class="menubar-danger-btn">清空当前项目全部内容</button>
-              <a id="adminEntry" class="menubar-link" href="./admin.html" hidden>系统管理</a>
+              <div class="menubar-section-label">DoDAF 关联产品</div>
+              <button type="button" data-view="ov5a" data-related-model="true">OV-5a 作战活动分解</button>
+              <button type="button" data-view="ooda" data-related-model="true">OODA 动态闭环透镜</button>
+              <button type="button" data-view="ov2" data-related-model="true">OV-2 作战资源流描述</button>
+              <button type="button" data-view="ov3" data-related-model="true">OV-3 作战资源流矩阵</button>
+              <button type="button" data-view="ov4" data-related-model="true">OV-4 作战组织关系</button>
+              <button type="button" data-view="ov6a" data-related-model="true">OV-6a 作战规则库</button>
+              <button type="button" data-view="ov6b" data-related-model="true">OV-6b 状态转换模型</button>
+              <button type="button" data-view="ov6c" data-related-model="true">OV-6c 事件时序跟踪</button>
+              <hr>
+              <div class="menubar-section-label">核对与检验</div>
+              <button type="button" data-view="structure-review">结构核对台</button>
+              <button type="button" data-view="validate">设计一致性验证</button>
             </div>
           </details>
           <details class="menubar-menu">
-            <summary>知识</summary>
+            <summary>知识与战法</summary>
             <div class="menubar-panel">
-              <button type="button" data-action="open-context-panel">打开知识与上下文</button>
-              <button type="button" data-action="connect-knowledge">连接 Obs 知识库</button>
-              <button type="button" data-view="brief">回到简报引用证据</button>
+              <div class="menubar-section-label">知识库与证据</div>
+              <button type="button" data-action="open-context-panel">知识与上下文面板</button>
+              <button type="button" data-action="connect-knowledge">连接 Obsidian 知识库</button>
+              <hr>
+              <div class="menubar-section-label">战法与战例资产</div>
+              <button type="button" data-action="open-tactics-library">跨项目战法复用库</button>
+              <button type="button" data-view="brief">战例借鉴与研讨</button>
+              <hr>
+              <div class="menubar-section-label">交付与成果</div>
+              <button type="button" data-view="report">成果报告与导出</button>
+            </div>
+          </details>
+          <details class="menubar-menu">
+            <summary>设置与工具</summary>
+            <div class="menubar-panel">
+              <div class="menubar-section-label">AI 智能中枢</div>
+              <button type="button" data-action="open-ai-config">AI 服务配置</button>
+              <button type="button" data-action="open-ai-prompts">AI 提示词目录与版本</button>
+              <hr>
+              <div class="menubar-section-label">研讨与协同</div>
+              <button type="button" data-action="open-collaboration">协同审阅与意见看板</button>
+              <button type="button" data-action="open-account-management">切换协作身份</button>
+              <hr>
+              <div class="menubar-section-label">辅助工具</div>
+              <button type="button" data-action="open-command-palette">命令面板 (Ctrl+K)</button>
+              <button type="button" data-action="save-report-version">保存当前版本快照</button>
+              <a id="adminEntry" class="menubar-link" href="./admin.html" hidden>系统管理</a>
             </div>
           </details>
         </nav>
 
-        <div class="menubar-status">
-          <div class="sync-state" id="projectStorageState"><span></span> 正在检查</div>
-        </div>
+        <div class="menubar-sys-group">
+          <div class="menubar-status">
+            <div class="sync-state" id="projectStorageState"><span></span> 正在检查</div>
+          </div>
 
-                <!-- 顶部消息通知中心与历史抽屉 (方案一) -->
-        <div class="notification-capsule-wrap" id="notificationCapsuleWrap">
-          <button class="notification-capsule-btn" id="notificationCapsuleBtn" type="button" title="点击查看消息记录与后台任务" aria-expanded="false">
-            <span class="capsule-bell">🔔</span>
-            <span class="capsule-label">消息</span>
-            <span class="capsule-badge" id="capsuleBadge" hidden>0</span>
-          </button>
-          <div class="notification-drawer" id="notificationDrawer" hidden aria-label="消息历史面板">
-            <div class="notification-drawer-head">
-              <div class="drawer-title"><span class="drawer-icon">🔔</span><strong>消息中心</strong><span class="drawer-count" id="drawerMsgCount">0</span></div>
-              <div class="drawer-actions">
-                <button class="quiet-button danger-quiet" id="clearNotificationsBtn" type="button" title="清空历史记录">清空</button>
-                <button class="quiet-button" id="closeNotificationDrawerBtn" type="button" title="收起面板">收起</button>
+          <!-- 顶部消息通知中心与历史抽屉 -->
+          <div class="notification-capsule-wrap" id="notificationCapsuleWrap">
+            <button class="notification-capsule-btn" id="notificationCapsuleBtn" type="button" title="点击查看消息记录与后台任务" aria-expanded="false">
+              <span class="capsule-bell">🔔</span>
+              <span class="capsule-label">消息</span>
+              <span class="capsule-badge" id="capsuleBadge" hidden>0</span>
+            </button>
+            <div class="notification-drawer" id="notificationDrawer" hidden aria-label="消息历史面板">
+              <div class="notification-drawer-head">
+                <div class="drawer-title"><span class="drawer-icon">🔔</span><strong>消息中心</strong><span class="drawer-count" id="drawerMsgCount">0</span></div>
+                <div class="drawer-actions">
+                  <button class="quiet-button danger-quiet" id="clearNotificationsBtn" type="button" title="清空历史记录">清空</button>
+                  <button class="quiet-button" id="closeNotificationDrawerBtn" type="button" title="收起面板">收起</button>
+                </div>
               </div>
-            </div>
-            <div class="notification-drawer-body" id="notificationDrawerBody">
-              <div class="notification-empty">暂无历史消息</div>
+              <div class="notification-drawer-body" id="notificationDrawerBody">
+                <div class="notification-empty">暂无历史消息</div>
+              </div>
             </div>
           </div>
         </div>
 
         <div class="menubar-actions">
-          <button id="commandPaletteBtn" class="quiet-button command-palette-trigger" type="button" data-action="open-command-palette" title="快速查找与跳转 (Ctrl+K)"><span>⌘ 搜索 / 命令</span><kbd>Ctrl K</kbd></button>
+          <button id="commandPaletteBtn" class="quiet-button command-palette-trigger" type="button" data-action="open-command-palette" title="快速查找与跳转 (Ctrl+K)"><span>🔍 搜索</span><kbd>Ctrl K</kbd></button>
           <button id="undoTransactionBtn" class="quiet-button undo-transaction-btn" type="button" data-action="undo-last-transaction" disabled title="暂无可撤销的操作">撤销</button>
-          <button id="reducedMotionBtn" class="reduced-motion-toggle" type="button" role="switch" data-action="toggle-reduced-motion" aria-checked="false" title="开启减少动效模式，禁用非必要动画与转场"><span class="reduced-motion-track" aria-hidden="true"></span><span>减少动效</span></button>
-          <button id="workflowTestModeBtn" class="workflow-test-mode-toggle" type="button" role="switch" data-action="toggle-workflow-test-mode" aria-checked="false" title="启用测试模式，所有阶段可自由访问"><span class="workflow-test-mode-track" aria-hidden="true"></span><span>测试模式</span></button>
+          <button id="reducedMotionBtn" class="reduced-motion-toggle" type="button" role="switch" data-action="toggle-reduced-motion" aria-checked="false" title="开启减少动效模式，禁用非必要动画与转场"><span class="reduced-motion-track" aria-hidden="true"></span><span>动效</span></button>
+          <button id="workflowTestModeBtn" class="workflow-test-mode-toggle" type="button" role="switch" data-action="toggle-workflow-test-mode" aria-checked="false" title="启用测试模式，所有阶段可自由访问"><span class="workflow-test-mode-track" aria-hidden="true"></span><span>测试</span></button>
           <button id="collaborationIdentityBtn" class="quiet-button collaboration-identity-button" type="button" data-action="open-account-management">账号管理</button>
           <button class="quiet-button" id="saveVersionBtn" title="保存当前概念版本" data-action="save-report-version">保存版本</button>
-          <button class="quiet-button danger-quiet" id="resetProjectBtn" type="button" data-action="reset-project-content" title="清空当前项目的全部设计内容并重置到阶段1">清空当前项目</button>
         </div>
       </header>
 

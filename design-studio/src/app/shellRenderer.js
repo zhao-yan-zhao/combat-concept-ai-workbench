@@ -6,6 +6,7 @@ import { renderAiConfigPanel } from "../aiConfigView.js";
 import { renderAiPromptPanel } from "../aiPromptView.js";
 import { renderTacticsLibraryModal } from "../tacticsLibraryView.js";
 import { renderReviewWorkflowBar, renderFinalizedReadonlyDialog } from "../reviewWorkflowView.js";
+import { resolveStepTargetOutput } from "./workflowGate.js";
 
 /**
  * Render Studio Shell chrome elements (trees, headers, footers, buttons, and system panels).
@@ -31,7 +32,9 @@ export function renderStudioShell(ctx) {
   }
   $("#viewEyebrow").textContent = meta.subtitle;
   $("#viewTitle").textContent = meta.label;
-  $("#viewContext").title = `${currentProjectTitle()} / ${meta.label}`;
+  const targetOutput = resolveStepTargetOutput(state.activeView);
+  const targetOutputTooltip = targetOutput ? `\n本步产出：${targetOutput}` : "";
+  $("#viewContext").title = `${currentProjectTitle()} / ${meta.label}${targetOutputTooltip}`;
 
   const projectStorageMarkup = renderProjectStorageFooter(state.projectStorage);
   const projectStorageElem = $("#projectStorageState");
