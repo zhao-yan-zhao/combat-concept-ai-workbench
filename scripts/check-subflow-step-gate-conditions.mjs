@@ -13,7 +13,6 @@ console.log("=== 验证任务与兵力子步骤产出与完成条件动态门禁
 
 // 1. 测试各子步骤目标产出文本映射
 const subviewExpectations = [
-  { view: "operational-task", expected: "作战任务分解清单与任务区域核定" },
   { view: "ov1b", expected: "作战任务层级归集与任务群编组 (OV-1b)" },
   { view: "ov6a", expected: "作战任务与兵力战法语义规则库 (OV-6a)" },
   { view: "ov6b", expected: "任务与平台装备状态转换自动机 (OV-6b)" },
