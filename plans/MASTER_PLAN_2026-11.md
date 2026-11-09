@@ -1175,9 +1175,38 @@ node scripts/smoke-ui.mjs
 
 承接已全量收官的 M0～M7（168 项自动化测试全绿），围绕**机理计算科学性、图论拓扑严谨性、推演数据闭环度、仿真器接驳能力**四个专业维度推进 10 项核心任务：
 - **Batch 1 机理动力学与图论算法升级**：
-  - **T8.1** 杀伤网 DAG 关键路径（CPM）时延解算与时敏窗口校核
-  - **T8.2** 基于节点移除可达性的拓扑级 SPOF 单点故障与杀伤网韧性量化
+  - **T8.1** 杀伤网 DAG 关键路径（CPM）时延解算与时敏窗口校核 (已完成，commit `6b2c8f5`)
+  - **T8.2** 基于节点移除可达性的拓扑级 SPOF 单点故障与杀伤网韧性量化 (已完成)
   - **T8.3** OODA 泳道三级语义分类器（显式属性 + 任务类型映射 + 扩展词表）
+
+### 2026-11-09 T8.1 真实落地：杀伤网 DAG 关键路径 (CPM) 时延解算与时敏窗口校核
+- **实施内容**：
+  1. 有向图破环与 DAG 前向提取 (`design-studio/src/oodaStore.js`)：`filterForwardDagEdges` 自动识别并破除反哺边（`Feedback ➔ Observe/Decide`），杜绝循环死锁；
+  2. CPM 关键路径与最短杀伤链求解 (`oodaStore.js`)：`solveDagPaths` 记忆化求解感知端（Observe）到行动端（Act）最长关键路径 `criticalPathSeconds`、最短可行杀伤链 `fastestKillChainSeconds` 与并行总工时 `parallelSumSeconds`；
+  3. 时敏目标窗口 (TST) 超限告警：支持读取 `targetWindowSeconds`（默认 1800s，高时敏 300s），超限触发 `KILL_CHAIN_LATENCY_EXCEEDED` 诊断告警并高亮关键路径序列；
+  4. 界面渲染升级 (`design-studio/src/ov5MechanismView.js`)：顶栏与右侧动力学面板联动呈现关键路径耗时、最短链、目标窗口与瓶颈链。
+- **验证命令与结果**：
+  - `node scripts/check-m8-dag-latency-budget.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ov5`：8/8 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：0 未捕获异常。
+
+### 2026-11-09 T8.2 真实落地：基于节点移除可达性的拓扑级 SPOF 单点故障与杀伤网韧性量化
+- **实施内容**：
+  1. 拓扑级抗毁韧性与 SPOF 量化分析器 (`design-studio/src/oodaStore.js`)：
+     - `analyzeNetworkResilience`：统计感知端至打击端基准连通链对数 $N_{\text{base}}$，逐一模拟移除承前启后的中间环节节点，量化剩余可达杀伤链对数 $N(v)$ 与断链率 `impactRate = (N_base - N(v)) / N_base`；
+     - 彻底突破旧算法依赖“决策/控制/中继”关键词的脆弱局限，只要战损导致杀伤链减少（$\Delta N(v) > 0$）即判定为拓扑必经割点；
+  2. 备用旁路与受控降级状态机 (`oodaStore.js`)：
+     - 若割点未配置 `resilienceFallback`，归为高危单点故障（`criticalSpofs`，致命割点扣 35 分，局部割点扣 15 分）；
+     - 若配置了有效备用旁路，自动转为受控降级节点（`mitigatedBottlenecks`，仅扣 5 分），韧性评分自动大幅恢复；
+  3. 界面卡片与微标增强 (`design-studio/src/ov5MechanismView.js`)：呈现断链率百分比、备用旁路说明及受控降级备用支撑统计；
+  4. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m8-topological-spof.mjs`：构造无任何“决策/控制/中继”关键字的唯一桥接节点，验证其被 100% 准确识别为致命 SPOF，且配置备用旁路后评分由 65 恢复至 95 分；
+     - 纳入 `scripts/check-groups.json` 的 `ov5` 组。
+- **验证命令与结果**：
+  - `node scripts/check-m8-topological-spof.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ov5`：9/9 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+
 - **Batch 2 兵棋推演—仿真回收闭环与本地离散事件推演**：
   - **T8.4** 消除硬编码伪造战损，建立基于证据的阶段成效与偏差推导引擎
   - **T8.5** 打通回合制兵棋导调（`wargameTurnStore`）到仿真结果回收（`simulationRecycleStore`）的自动编译桥

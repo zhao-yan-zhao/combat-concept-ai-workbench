@@ -213,19 +213,27 @@ export function renderOv5Workbench(state, context = {}) {
           <!-- 单点脆弱性 SPOF 诊断 -->
           ${oodaHealth.bottlenecks?.length ? `
             <div class="spof-alert-box">
-              <div class="spof-head">⚠️ 检测到 ${oodaHealth.bottlenecks.length} 个单点断链风险 (SPOF)</div>
+              <div class="spof-head">⚠️ 检测到 ${oodaHealth.bottlenecks.length} 个拓扑单点断链风险 (SPOF)</div>
               <div class="spof-list">
                 ${oodaHealth.bottlenecks.map((b) => `
                   <div class="spof-item" data-activity="${escapeHtml(b.id)}">
-                    <strong>${escapeHtml(b.title)}</strong>
-                    <small>缺少抗毁降级旁路，若遭干扰将阻断后续链路</small>
+                    <div style="display:flex;justify-content:space-between;align-items:baseline;">
+                      <strong>${escapeHtml(b.title)}</strong>
+                      ${b.impactRate ? `<span style="font-size:10px;color:#f87171;font-weight:700;">断链率 ${Math.round(b.impactRate * 100)}%</span>` : ""}
+                    </div>
+                    <small>${b.hasFallback ? `已配置备用旁路: ${escapeHtml(b.resilienceFallback)}` : "缺少抗毁降级旁路，战损将阻断后续杀伤链"}</small>
                   </div>
                 `).join("")}
               </div>
+              ${oodaHealth.resilienceAnalysis?.mitigatedBottlenecks?.length ? `
+                <div style="font-size:11px;color:#34d399;margin-top:6px;padding:3px 6px;background:rgba(52,211,153,0.1);border-radius:4px;">
+                  ✓ 已形成 ${oodaHealth.resilienceAnalysis.mitigatedBottlenecks.length} 处受控降级备用支撑
+                </div>
+              ` : ""}
               <button type="button" class="quiet-button" data-action="auto-fill-fallbacks">一键自动补全抗毁备用机制</button>
             </div>
           ` : `
-            <div class="spof-clean-box">核心决策与控制节点均具备协同旁路支撑</div>
+            <div class="spof-clean-box">核心决策与控制节点均具备协同旁路支撑 ${oodaHealth.resilienceAnalysis?.resilienceScore ? `(抗毁韧性 ${oodaHealth.resilienceAnalysis.resilienceScore}分)` : ""}</div>
           `}
 
           <!-- 红方质询记录（若触发） -->

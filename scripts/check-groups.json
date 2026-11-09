@@ -81,7 +81,8 @@
     "check-ov5a-decomposition-restructuring.mjs",
     "check-ov5a-ov5b-architecture-sync.mjs",
     "check-citation-ov5-pilot.mjs",
-    "check-m8-dag-latency-budget.mjs"
+    "check-m8-dag-latency-budget.mjs",
+    "check-m8-topological-spof.mjs"
   ],
   "force-mission": [
     "check-cmo-force-mission.mjs",

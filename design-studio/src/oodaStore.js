@@ -126,7 +126,22 @@ export function evaluateOodaLoopHealth(ov5Model = {}, options = {}) {
     });
   }
 
-  // 5. 计算综合健康度得分 (0 - 100)
+  // 5. 拓扑级抗毁韧性与单点故障(SPOF)深度量化分析
+  const resilienceAnalysis = analyzeNetworkResilience(activities, edges, categorized);
+  const bottlenecks = resilienceAnalysis.criticalSpofs;
+
+  if (bottlenecks.length > 0) {
+    const maxImpact = Math.max(...bottlenecks.map((b) => b.impactRate || 0));
+    diagnostics.push({
+      level: "warn",
+      code: "TOPOLOGICAL_SPOF_DETECTED",
+      label: `检测到 ${bottlenecks.length} 个拓扑单点断链风险 (SPOF)`,
+      message: `节点 [${bottlenecks.map((b) => b.title).join(", ")}] 是杀伤网的必经拓扑枢纽且缺少抗毁旁路，战损将导致杀伤链断裂（最高断链率达 ${Math.round(maxImpact * 100)}%）。`,
+      quickFixAction: "auto-fill-fallbacks"
+    });
+  }
+
+  // 6. 计算综合健康度得分 (0 - 100)
   let score = 100;
   for (const d of diagnostics) {
     if (d.level === "critical_gap") score -= 30;
@@ -136,7 +151,6 @@ export function evaluateOodaLoopHealth(ov5Model = {}, options = {}) {
   if (!activities.length) score = 0;
   const healthScore = Math.max(0, Math.min(100, score));
 
-  const bottlenecks = findSinglePointsOfFailure(activities, edges);
   const autonomyStats = calculateAutonomyStats(activities);
   const domainCoverage = [...new Set(activities.map((a) => a.domain || "综合").filter(Boolean))];
 
@@ -155,6 +169,7 @@ export function evaluateOodaLoopHealth(ov5Model = {}, options = {}) {
     },
     latencyBudget,
     bottlenecks,
+    resilienceAnalysis,
     autonomyStats,
     domainCoverage
   };
@@ -511,21 +526,164 @@ export function calculateLatencyBudget(activities = [], edges = [], options = {}
   };
 }
 
-function findSinglePointsOfFailure(activities = [], edges = []) {
-  if (activities.length < 3) return [];
+/**
+ * 拓扑级杀伤网抗毁韧性与单点故障(SPOF)量化分析器
+ * 基于节点战损移除后的端到端 (Observe -> Act) 杀伤链对数衰减分析
+ * @param {Array} activities 活动节点列表
+ * @param {Array} edges 拓扑连接边列表
+ * @param {object} categorized OODA 分类对象 (包含 observe, act 等)
+ * @returns {object} 抗毁韧性分析报告
+ */
+export function analyzeNetworkResilience(activities = [], edges = [], categorized = null) {
+  if (activities.length < 3) {
+    return {
+      baseConnectivity: 0,
+      totalPossiblePairs: 0,
+      connectivityRate: 0,
+      criticalSpofs: [],
+      mitigatedBottlenecks: [],
+      resilienceScore: 100,
+      bottlenecks: []
+    };
+  }
+
+  const actMap = new Map(activities.map((a) => [a.id, a]));
+  const nodeIds = new Set(activities.map((a) => a.id));
+  const validEdges = edges.filter((e) => nodeIds.has(e.sourceId) && nodeIds.has(e.targetId) && e.sourceId !== e.targetId);
+
   const inDegree = new Map(activities.map((a) => [a.id, 0]));
   const outDegree = new Map(activities.map((a) => [a.id, 0]));
-  edges.forEach((e) => {
+  validEdges.forEach((e) => {
     inDegree.set(e.targetId, (inDegree.get(e.targetId) || 0) + 1);
     outDegree.set(e.sourceId, (outDegree.get(e.sourceId) || 0) + 1);
   });
 
-  return activities.filter((a) => {
-    const isMidpoint = (inDegree.get(a.id) || 0) >= 1 && (outDegree.get(a.id) || 0) >= 1;
-    const isCrucial = String(a.type).includes("决策") || String(a.type).includes("控制") || String(a.title).includes("中继");
-    const hasNoFallback = !a.resilienceFallback;
-    return isMidpoint && isCrucial && hasNoFallback;
-  });
+  const catObsIds = new Set((categorized?.observe || []).map((a) => a.id));
+  const catActIds = new Set((categorized?.act || []).map((a) => a.id));
+
+  let sources = activities.filter((a) => catObsIds.has(a.id) || (inDegree.get(a.id) || 0) === 0);
+  if (!sources.length) sources = activities.filter((a) => (inDegree.get(a.id) || 0) === 0);
+  if (!sources.length) sources = activities;
+
+  let targets = activities.filter((a) => catActIds.has(a.id) || (outDegree.get(a.id) || 0) === 0);
+  if (!targets.length) targets = activities.filter((a) => (outDegree.get(a.id) || 0) === 0);
+  if (!targets.length) targets = activities;
+
+  const targetIds = new Set(targets.map((t) => t.id));
+
+  // 辅助函数：计算在指定保留节点集 activeNodeIds 下，从 sources 到 targets 的可达对数
+  function computeReachablePairs(activeNodeIds) {
+    const activeAdj = new Map();
+    for (const id of activeNodeIds) activeAdj.set(id, []);
+    for (const e of validEdges) {
+      if (activeNodeIds.has(e.sourceId) && activeNodeIds.has(e.targetId)) {
+        activeAdj.get(e.sourceId).push(e.targetId);
+      }
+    }
+
+    let pairs = 0;
+    const activeTargets = new Set([...targetIds].filter((id) => activeNodeIds.has(id)));
+
+    for (const s of sources) {
+      if (!activeNodeIds.has(s.id)) continue;
+      const visited = new Set([s.id]);
+      const queue = [s.id];
+      while (queue.length > 0) {
+        const curr = queue.shift();
+        const neighbors = activeAdj.get(curr) || [];
+        for (const n of neighbors) {
+          if (!visited.has(n)) {
+            visited.add(n);
+            queue.push(n);
+          }
+        }
+      }
+      for (const tId of activeTargets) {
+        if (tId !== s.id && visited.has(tId)) {
+          pairs += 1;
+        }
+      }
+    }
+    return pairs;
+  }
+
+  // 1. 计算初始基准连通链对数 N_base
+  const allActiveIds = new Set(activities.map((a) => a.id));
+  const baseConnectivity = computeReachablePairs(allActiveIds);
+  const totalPossiblePairs = Math.max(1, sources.length * targets.length);
+
+  // 2. 逐一模拟节点战损失效（仅针对承前启后的中间环节节点：入度>=1 且 出度>=1）
+  const criticalSpofs = [];
+  const mitigatedBottlenecks = [];
+
+  for (const act of activities) {
+    const inDeg = inDegree.get(act.id) || 0;
+    const outDeg = outDegree.get(act.id) || 0;
+    const isIntermediate = inDeg >= 1 && outDeg >= 1;
+    if (!isIntermediate) continue;
+
+    const reducedIds = new Set(allActiveIds);
+    reducedIds.delete(act.id);
+
+    const remainingPairs = computeReachablePairs(reducedIds);
+    const lostPairs = baseConnectivity - remainingPairs;
+
+    // 只要移除该中间节点导致杀伤链条数减少 (lostPairs > 0)，即为拓扑割点/必经瓶颈
+    const isBridge = baseConnectivity > 0 ? lostPairs > 0 : true;
+
+    if (isBridge) {
+      const impactRate = baseConnectivity > 0 ? (lostPairs / baseConnectivity) : 0.5;
+      const hasFallback = Boolean(act.resilienceFallback && String(act.resilienceFallback).trim());
+
+      const enrichedNode = {
+        ...act,
+        isTopologicalSpof: true,
+        impactRate,
+        lostPairs,
+        remainingPairs,
+        baseConnectivity,
+        hasFallback
+      };
+
+      if (hasFallback) {
+        mitigatedBottlenecks.push(enrichedNode);
+      } else {
+        criticalSpofs.push(enrichedNode);
+      }
+    }
+  }
+
+  // 3. 全网抗毁韧性得分 (0 - 100)
+  let resilienceScore = 100;
+  for (const spof of criticalSpofs) {
+    if (spof.impactRate >= 0.99) {
+      resilienceScore -= 35; // 致命割点（全网瘫痪）
+    } else {
+      resilienceScore -= Math.round(15 + spof.impactRate * 15);
+    }
+  }
+  for (const mit of mitigatedBottlenecks) {
+    resilienceScore -= 5; // 已配置旁路的受控降级节点轻微扣分
+  }
+  resilienceScore = Math.max(10, Math.min(100, resilienceScore));
+
+  return {
+    baseConnectivity,
+    totalPossiblePairs,
+    connectivityRate: baseConnectivity / totalPossiblePairs,
+    criticalSpofs,
+    mitigatedBottlenecks,
+    resilienceScore,
+    bottlenecks: [...criticalSpofs, ...mitigatedBottlenecks]
+  };
+}
+
+/**
+ * 获取单点故障 (SPOF) 列表（向后兼容接口）
+ */
+export function findSinglePointsOfFailure(activities = [], edges = [], categorized = null) {
+  const analysis = analyzeNetworkResilience(activities, edges, categorized);
+  return analysis.criticalSpofs;
 }
 
 function calculateAutonomyStats(activities = []) {
