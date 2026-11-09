@@ -1276,6 +1276,17 @@ async function handleAction(action, source = null) {
   if (action === "open-ai-config" || action === "open-ai-prompts") {
     closeMenubarMenus();
   }
+  if (action === "delete-current-project") {
+    closeMenubarMenus();
+    const activeProject = (state.projectDirectory?.projects || []).find((p) => p.id === state.activeProjectId);
+    const title = activeProject?.title || currentProjectTitle();
+    if (state.activeProjectId === "default" && !activeProject) {
+      showToast("当前无自定义项目可删除");
+      return;
+    }
+    void handleDeleteProject(state.activeProjectId, title, getProjectCtx());
+    return;
+  }
   if (action === "reset-project-content") {
     if (state.resettingProject) return;
     closeMenubarMenus();
