@@ -927,6 +927,7 @@ function renderCombatCompositionTables(forces = [], options = {}) {
     tasks = [],
     missionTypes = [],
     conceptForces = [],
+    phases = [],
     picker = {},
     catalogOpen = false,
     editable = false,
