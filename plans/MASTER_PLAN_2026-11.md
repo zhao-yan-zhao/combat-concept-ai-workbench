@@ -1249,7 +1249,7 @@ node scripts/smoke-ui.mjs
     * 引入力导向松弛与协同引力修正：防区最小疏散斥力（规避面杀伤聚集）+ OV-2 通信引力收拢（防范失联孤立）；
     * 严守 `[5, 95]` 抽象网格安全边界；新增 `scripts/check-m8-tactical-deployment-layout.mjs` 100% PASS。
   - **M8 Batch 2（T8.4～T8.7 兵棋推演—仿真回收闭环与本地离散推演）全量圆满收官！**
-- **Batch 3 空间拓扑布局、复合评分与 DoDAF 深度校核（正在推进）**：
+- **Batch 3 空间拓扑布局、复合评分与 DoDAF 深度校核（全量圆满收官）**：
   - **T8.8（已落地）** 融合“机理动力学 + 假设脆弱性 + 推演成效”的多方案定量评分引擎：
     * 彻底根治 G08 虚高数量分：消除纯依赖节点数的线性算式，转为考察 OODA 四阶段全要素闭环、输入输出完备性与兵力承接度（`calculateReadinessScore`）；
     * 接入 T8.1 DAG CPM 关键路径耗时与时敏目标预算比率，动态解算时间窗口适配度（`timeWindow`）；
@@ -1257,8 +1257,20 @@ node scripts/smoke-ui.mjs
     * 建立假设前提脆弱性评估引擎（`evaluateAssumptionFragility`），科学扣除未经证实/高风险假设风险分（`riskControl`）；
     * 融合本地 DES 离散推演 6 项实测指标与兵棋阶段成效达成率（40% 权重），驱动多方案科学加权排行榜（`rankMultiSchemeSnapshots`）；
     * 新增验收脚本 `scripts/check-m8-composite-scheme-scoring.mjs` 100% PASS。
-  - **T8.9（待推进）** CMO 装备库定性能力画像提取与“任务—平台能力”匹配度校核
-  - **T8.10（待推进）** DoDAF 跨视图行为形式化校验（OV-6b 状态机死锁检测 + OV-6c/OV-5b 因果时序逆序检测）
+  - **T8.9（已落地）** CMO 装备库定性能力画像提取与“任务—平台能力”匹配度校核：
+    * 在 `shared/cmoMissionTypes.js` 中建立标准定性能力族常数字典（13 种定性能力标签，绝不引入杀伤威力与真实参数红线）；
+    * 实现 `extractPlatformCapabilityFamily`：从平台 domain/category/name/comments 特征词提取定性能力族画像；
+    * 实现 `checkForcePlatformAlignment`：校核作战兵力任务所需能力与挂载平台的实际能力族交集；
+    * 在 `server/cmoDatabase.mjs` 的 `searchPlatforms` 和 `getPlatform` 返回对象中注入定性能力画像；
+    * 在 `design-studio/src/validationStore.js` 中加入失配告警，并支持在 `consistencyLocatorStore.js` 一键定位至 Step 04 兵力卡片；
+    * 新增验收脚本 `scripts/check-m8-cmo-capability-alignment.mjs` 100% PASS。
+  - **T8.10（已落地）** DoDAF 跨视图行为形式化校验（OV-6b 状态机死锁检测 + OV-6c/OV-5b 因果偏序逆序检测）：
+    * 实现 `inspectOv6bStateMachine`：形式化解析状态机拓扑，精准识别不可达孤立状态（入度为 0 且非初始态）与死锁黑洞状态（出度为 0、有输入且非战术终止态）；
+    * 实现 `inspectCausalEventOrdering`：校验 OV-5b 活动依赖前向边在 OV-6c/想定时间线中的发生先后次序，排除反馈边，精准检出时序因果逆序（Causal Inversion）；
+    * 深度集成至 `shared/dodaf/consistency.js` 与 `design-studio/src/validationStore.js`，支持一键定位目标视图；
+    * 新增验收脚本 `scripts/check-m8-dodaf-behavioral-consistency.mjs` 100% PASS。
+  - **M8 Batch 3（T8.8～T8.10 评估与架构形式化校核）全量圆满收官！**
+  - **《M8 军事仿真深化与机理定量校核执行方案》（T8.1～T8.10 全量十个任务卡）大圆满收官！**
 
 
 
