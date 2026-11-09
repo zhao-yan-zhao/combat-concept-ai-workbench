@@ -15,6 +15,154 @@ export function hasPersistedOodaModel() {
   }
 }
 
+const OODA_LANES = ["observe", "orient", "decide", "act", "feedback"];
+
+// 任务类型到 OODA 泳道映射表
+const MISSION_TYPE_TO_OODA = {
+  // 感知 / 侦察
+  recon: "observe",
+  ae_recon: "observe",
+  naval_recon: "observe",
+  surveillance: "observe",
+  aew: "observe",
+  patrol_aaw: "observe",
+  patrol_asuw: "observe",
+  patrol_asw: "observe",
+  sar: "observe",
+  sensor: "observe",
+  early_warning: "observe",
+
+  // 融合 / 判决
+  orient: "orient",
+  fusion: "orient",
+  tracking: "orient",
+  target_id: "orient",
+  intelligence: "orient",
+
+  // 决策 / 指控
+  command: "decide",
+  c2: "decide",
+  support: "decide",
+  escort: "decide",
+  planning: "decide",
+  coordination: "decide",
+
+  // 打击 / 行动
+  strike: "act",
+  standoff_strike: "act",
+  sead: "act",
+  dead: "act",
+  bai_cas: "act",
+  intercept: "act",
+  air_superiority: "act",
+  asw_attack: "act",
+  ecm: "act",
+  mining: "act",
+  mcm: "act",
+  landing: "act",
+  area_defense: "act",
+  fire_strike: "act",
+
+  // 评估 / 反馈
+  bda: "feedback",
+  battle_damage_assessment: "feedback",
+  feedback: "feedback"
+};
+
+// 扩充现代军事概念词表 (增补40+常用词)
+const OODA_LANE_KEYWORDS = {
+  feedback: [
+    "战损评估", "战果确认", "效果评估", "态势更新", "回传", "毁伤评估", "毁伤", "战果核验", "重构", "反哺", "重组", "修正", "归航", "阵地转移", "撤收"
+  ],
+  act: [
+    "打击", "突击", "交战", "发射", "拦截", "干扰", "硬摧毁", "压制", "破网", "机动", "突防", "布雷", "扫雷", "投送", "投弹", "制空", "封锁", "察打一体", "察打", "火力打击", "蜂群突击", "电磁打击", "饱和打击", "行动"
+  ],
+  decide: [
+    "决策", "指控", "协同", "筹划", "任务分配", "指挥", "授权", "下达", "火力筹划", "航路规划", "资源调度", "行动协同", "交战授权", "协同规划", "协同意图分配", "动态重组决策"
+  ],
+  orient: [
+    "识别", "融合", "态势理解", "态势对齐", "威胁评估", "分批", "跟踪", "航迹关联", "目标解算", "判决", "属性判别", "意图推断", "作战环境研判", "目标识别", "电磁指纹分析", "分析", "判断"
+  ],
+  observe: [
+    "感知", "侦察", "监视", "探测", "预警", "巡逻", "搜潜", "雷达", "凝视", "截获", "测向", "目指", "遥感", "声学侦听", "光学搜索", "红外凝视", "雷达搜索", "广域搜索", "前出侦搜", "态势获取", "侦测"
+  ]
+};
+
+/**
+ * OODA 泳道三级语义分类器
+ * 1. 显式字段 oodaLane (最高优先)
+ * 2. 上游关联任务 missionType 映射
+ * 3. 扩充军事概念词表与权重打分消歧 (单一主泳道归类，绝不重复计数)
+ * @param {object} activity 作战活动对象
+ * @returns {"observe" | "orient" | "decide" | "act" | "feedback"} 归类主泳道
+ */
+export function classifyActivityToOodaLane(activity = {}) {
+  // 1. 显式属性 oodaLane
+  const explicitLane = String(activity?.oodaLane || "").trim().toLowerCase();
+  if (OODA_LANES.includes(explicitLane)) {
+    return explicitLane;
+  }
+
+  // 2. 任务类型映射
+  const missionType = String(activity?.missionType || activity?.taskType || "").trim().toLowerCase();
+  if (missionType && MISSION_TYPE_TO_OODA[missionType]) {
+    return MISSION_TYPE_TO_OODA[missionType];
+  }
+
+  // 3. 扩充词表打分消歧
+  const text = [
+    activity?.type,
+    activity?.title,
+    activity?.text,
+    activity?.input,
+    activity?.output
+  ].filter(Boolean).join(" ");
+
+  const laneScores = {
+    feedback: 0,
+    act: 0,
+    decide: 0,
+    orient: 0,
+    observe: 0
+  };
+
+  const laneMultipliers = {
+    feedback: 1.25,
+    act: 1.2,
+    decide: 1.1,
+    orient: 1.05,
+    observe: 1.0
+  };
+
+  for (const lane of OODA_LANES) {
+    const kws = OODA_LANE_KEYWORDS[lane] || [];
+    for (const kw of kws) {
+      if (text.includes(kw)) {
+        laneScores[lane] += kw.length * (laneMultipliers[lane] || 1);
+      }
+    }
+  }
+
+  let bestLane = null;
+  let maxScore = 0;
+  for (const lane of OODA_LANES) {
+    if (laneScores[lane] > maxScore) {
+      maxScore = laneScores[lane];
+      bestLane = lane;
+    }
+  }
+
+  if (bestLane && maxScore > 0) {
+    return bestLane;
+  }
+
+  // 缺省启发式降级
+  if (String(activity?.type).includes("感知") || String(activity?.title).includes("侦察")) return "observe";
+  if (String(activity?.type).includes("打击") || String(activity?.title).includes("行动")) return "act";
+  if (String(activity?.type).includes("决策") || String(activity?.title).includes("指挥")) return "decide";
+  return "orient";
+}
+
 /**
  * 动态 OODA 闭环健康度诊断引擎（只读透镜）
  * 根据 OV-5b 活动流拓扑与语义，实时评估杀伤网与决策闭环的完整度与因果闭合性。
@@ -26,24 +174,22 @@ export function evaluateOodaLoopHealth(ov5Model = {}, options = {}) {
   const edges = Array.isArray(ov5Model?.edges) ? ov5Model.edges : [];
   const activityMap = new Map(activities.map((a) => [a.id, a]));
 
-  const matchKeywords = (activity, keywords) => {
-    const text = [
-      activity.type,
-      activity.title,
-      activity.text,
-      activity.input,
-      activity.output
-    ].filter(Boolean).join(" ");
-    return keywords.some((kw) => text.includes(kw));
+  const categorized = {
+    observe: [],
+    orient: [],
+    decide: [],
+    act: [],
+    feedback: []
   };
 
-  const categorized = {
-    observe: activities.filter((a) => matchKeywords(a, ["感知", "侦察", "监视", "探测", "预警", "巡逻", "搜潜", "雷达"])),
-    orient: activities.filter((a) => matchKeywords(a, ["识别", "融合", "评估", "判断", "分析", "分批", "跟踪", "解算", "判决"])),
-    decide: activities.filter((a) => matchKeywords(a, ["决策", "协同", "规划", "任务分配", "指挥", "授权", "下达", "指控"])),
-    act: activities.filter((a) => matchKeywords(a, ["打击", "干扰", "机动", "发射", "防护", "拦截", "突击", "压制", "控制", "行动"])),
-    feedback: activities.filter((a) => matchKeywords(a, ["战损评估", "战果确认", "态势更新", "回传", "毁伤", "效果评估", "反馈", "重组"]))
-  };
+  for (const act of activities) {
+    const lane = classifyActivityToOodaLane(act);
+    if (categorized[lane]) {
+      categorized[lane].push(act);
+    } else {
+      categorized.orient.push(act);
+    }
+  }
 
   const diagnostics = [];
 

@@ -1207,7 +1207,26 @@ node scripts/smoke-ui.mjs
   - `node scripts/run-checks.mjs ov5`：9/9 PASS (100%)
   - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
 
-- **Batch 2 兵棋推演—仿真回收闭环与本地离散事件推演**：
+### 2026-11-09 T8.3 真实落地：OODA 泳道三级语义分类器与 Batch 1 全量收官
+- **实施内容**：
+  1. 三级判定分类引擎 (`design-studio/src/oodaStore.js`)：
+     - `classifyActivityToOodaLane`：
+       * 第一优先级：显式字段 `oodaLane`（`observe/orient/decide/act/feedback`）最高优先；
+       * 第二优先级：上游关联任务类型 `missionType` 映射（`recon/aew ➔ observe`, `command ➔ decide`, `sead/strike ➔ act`, `bda ➔ feedback` 等）；
+       * 第三优先级：扩充 40+ 现代军事概念词表（凝视、测向、目指、态势对齐、火力筹划、蜂群交战、战果核验等），配合作战重要度加权打分消歧；
+  2. 单一主泳道唯一归类原则 (`oodaStore.js`)：
+     - 彻底消除多泳道重复计数缺陷（例如“察打一体突击”依据核心作战动向归入 `act` 泳道，不再双重归类）；
+     - `evaluateOodaLoopHealth` 汇总统计保证 5 个泳道活动总数与模型总活动数精确一致；
+  3. 专用自动化回归测试与基线纳入：
+     - 新建 `scripts/check-m8-ooda-semantic-classifier.mjs`：覆盖显式指定、任务类型映射、复合词打分消歧与新型军事词汇全部用例，验证泳道活动无重复无遗漏；
+     - 纳入 `scripts/check-groups.json` 的 `ov5` 组。
+- **验证命令与结果**：
+  - `node scripts/check-m8-ooda-semantic-classifier.mjs`：100% PASS
+  - `node scripts/run-checks.mjs ov5`：10/10 PASS (100%)
+  - `node scripts/smoke-ui.mjs`：无头 Edge CDP 冒烟测试 0 未捕获异常。
+  - **M8 Batch 1（T8.1～T8.3 机理动力学与图论算法升级）全量圆满收官！**
+
+- **Batch 2 兵棋推演—仿真回收闭环与本地离散事件推演（进行中）**：
   - **T8.4** 消除硬编码伪造战损，建立基于证据的阶段成效与偏差推导引擎
   - **T8.5** 打通回合制兵棋导调（`wargameTurnStore`）到仿真结果回收（`simulationRecycleStore`）的自动编译桥
   - **T8.6** 升级本地抽象网格推演内核（Abstract Grid Discrete-Event Evaluator）
